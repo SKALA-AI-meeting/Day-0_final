@@ -5,7 +5,7 @@ from app.models import Base
 from sqlalchemy import text
 
 TABLES = {
-    "companies", "admins", "positions", "invites",
+    "companies", "admins", "positions", "invites", "voice_states", "speech_jobs", "speech_quotas",
     "sessions", "messages", "message_intents", "options", "stances", "slots", "proposals",
     "agent_runs", "connection_gaps", "material_views", "assistant_calls", "debrief_surveys",
     "session_cards", "observations", "evaluation_runs", "evaluations", "reports",

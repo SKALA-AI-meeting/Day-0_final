@@ -39,3 +39,7 @@ docker compose -f infra/docker-compose.yml --env-file infra/.env exec -T postgre
 ## 나중에
 
 공유 DB나 운영 DB가 생기면 볼륨을 지울 수 없으므로 마이그레이션 규칙을 도입한다. 그때 정할 것: 변경 SQL 위치와 이름 규칙(예: `infra/db/migrations/NNNN_<설명>.sql`), 적용 이력 테이블, 적용 도구, `schema.sql`과의 관계, 백필·되돌리기 절차. 도입하면 이 문서와 [contributing.md](contributing.md) "DB 변경"을 함께 고친다.
+
+## 음성 테이블 최초 추가
+
+기존 테이블 변경 없이 voice_states·speech_jobs·speech_quotas만 없는 로컬 DB는 pg_dump 백업 후 schema.sql 마지막 음성 구간의 CREATE TABLE·CREATE INDEX를 한 트랜잭션으로 적용할 수 있다. 세 테이블이 모두 없음을 먼저 확인하고 일부만 존재하면 자동 적용을 중단한다. 기존 세션·채용 건은 삭제하지 않는다. 음성 정책은 새 채용 건에서만 고정되므로 기존 채용 건을 음성용으로 덮어쓰지 않는다. 이 절차는 범용 마이그레이션 도구를 도입한 것이 아니다.

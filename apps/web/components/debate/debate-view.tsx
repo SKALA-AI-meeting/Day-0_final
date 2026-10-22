@@ -4,16 +4,16 @@
 // 남은 시간과 오피스 시각을 한 줄에 쓰지 않는다(R7). 종료되면 입력을 모두 잠그고 [나가기]로 디브리핑.
 import { Dialog } from "@base-ui/react/dialog";
 import { CircleCheck, Clock3, HelpCircle, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Button, Tabs, Wordmark, cn } from "@/components/ui";
 import { resolutionLabel } from "@/lib/resolution";
 
-import { ChatRoom } from "./chat";
+import { VoiceRoom } from "./voice/voice-room";
 import { DecisionPanel } from "./decision-panel";
 import { SessionGuide } from "./link-screens";
 import { ProposalEditor } from "./proposal-editor";
-import { phaseRemaining, typingSeats, type PanelTab } from "./reducer";
+import { phaseRemaining, type PanelTab } from "./reducer";
 import { AssistantPanel, MaterialsPanel } from "./side-panels";
 import { PHASE_LABEL, clock, warnSeconds } from "./state";
 import { PHASES, type EndReason, type StateSnapshot } from "./types";
@@ -122,6 +122,7 @@ export function DebateView({
   const { view, now } = session;
   const snap = view.snap;
   const locked = !!view.ended || view.replaced;
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const remaining = view.ended ? null : phaseRemaining(view, now);
 
   const tabs: { value: PanelTab; label: string; count?: number }[] = [
@@ -136,7 +137,7 @@ export function DebateView({
       <DecisionPanel
         snap={snap}
         flash={view.flash}
-        locked={locked}
+        locked={locked || voiceBusy}
         keywordOptions={snap.keyword_options.map((o) => ({ key: o.option_key, label: o.label }))}
         onConfirm={session.confirmSlot}
       />
@@ -187,13 +188,13 @@ export function DebateView({
         </div>
       </header>
       <div className="flex min-h-0 flex-1">
-        <ChatRoom
+        <VoiceRoom
+          auth={auth}
           snap={snap}
-          pending={view.pending}
-          typing={typingSeats(view)}
+          connected={session.connection === "open"}
           locked={locked}
-          onSend={session.sendMessage}
-          onTyping={session.sendTyping}
+          onSend={session.sendVoice}
+          onBusy={setVoiceBusy}
         />
         <aside
           className="flex w-[38%] max-w-[520px] min-w-[360px] shrink-0 flex-col border-l border-line bg-surface"

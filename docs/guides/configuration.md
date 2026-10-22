@@ -81,3 +81,18 @@ env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값�
 | `PLAYTEST_PORT` | playtest 드라이버 | 드라이버 서버 포트, 기본 9400 |
 
 `.env.example`에 없는 키를 코드에 더하면 `.env.example`과 이 표를 함께 고친다.
+
+
+## 음성 모드
+
+기본 `VOICE_PROVIDER=azure`는 F0만 허용한다. `AZURE_SPEECH_KEY`·`AZURE_SPEECH_REGION`·`AZURE_SPEECH_RESOURCE_ID`와 DefaultAzureCredential용 관리 ID 또는 서비스 계정 설정은 `.env`에만 둔다. F0 자원 조회·listKeys 권한이 필요하며 요금제 변경 권한은 주지 않는다. `VOICE_QUOTA_PERIOD`는 공급자 잔여 무료량·리셋 경계를 확인한 기간 ID다. 값이 없으면 음성 호출이 차단된다. `VOICE_USER_TURN_SECONDS` 기본 60(1~60)은 새 채용 건에 고정된다.
+
+격리 e2e override는 API에 FakeSpeech·FakeLLM·테스트 API를 강제한다. 새 음성 스키마는 기존 볼륨에 자동 적용되지 않으므로 테스트/개발 DB를 구분하고 DB 가이드를 따른다. 실제 Azure 설정이 없어도 Fake 기반 검증은 가능하지만 음질·인식 정확도 검증과 구분한다.
+
+### Azure 서비스 계정 값 입력
+
+Azure Portal → Microsoft Entra ID → 앱 등록 → 만든 앱의 개요에서 디렉터리(테넌트) ID를 `AZURE_TENANT_ID`, 애플리케이션(클라이언트) ID를 `AZURE_CLIENT_ID`에 넣는다. 인증서 및 암호 → 새 클라이언트 암호를 생성한 뒤 **값(Value)**을 `AZURE_CLIENT_SECRET`에 넣는다. 비밀 ID를 넣지 않는다. 생성 직후 값 복사가 필요하다([Microsoft 공식 절차](https://learn.microsoft.com/en-us/entra/identity-platform/howto-create-service-principal-portal)).
+
+서비스 계정은 Speech F0 리소스 범위에서 `Microsoft.CognitiveServices/accounts/read`와 `Microsoft.CognitiveServices/accounts/listKeys/action`을 허용하는 사용자 지정 역할을 부여한다. 요금제 변경·생성·삭제 권한은 필요 없다. [사용자 지정 역할 작성](https://learn.microsoft.com/en-us/azure/role-based-access-control/custom-roles-portal), [작업 이름](https://learn.microsoft.com/en-us/azure/role-based-access-control/permissions/ai-machine-learning)을 따른다. 계정 생성과 리소스 역할 할당은 별개다.
+
+`AZURE_SPEECH_KEY`는 Speech 리소스의 키이며 서비스 계정 암호와 별개다. `AZURE_SPEECH_REGION`에는 리소스 위치 코드, `AZURE_SPEECH_RESOURCE_ID`에는 `/subscriptions/.../resourceGroups/.../providers/Microsoft.CognitiveServices/accounts/...` 형식 리소스 ID를 넣는다. `VOICE_QUOTA_PERIOD`는 운영자가 무료 잔여량·갱신 경계를 확인한 기간 이름으로 지정한다. 예시 값으로 원장을 임의 초기화하지 않는다. 실제 값은 로컬 `infra/.env`에만 입력한다.

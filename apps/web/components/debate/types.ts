@@ -197,5 +197,8 @@ export type ServerFrame = {
 }[keyof ServerPayloads];
 
 export type SendFrame =
-  | { type: "message.send"; payload: { client_msg_id: string; content: string } }
+  | {
+      type: "message.send";
+      payload: { client_msg_id: string; content: string; voice_turn_id?: string; epoch?: string };
+    }
   | { type: "typing"; payload: { state: "start" | "stop" } };

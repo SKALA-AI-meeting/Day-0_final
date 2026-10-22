@@ -10,7 +10,16 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, ForeignKeyConstraint, Integer, Numeric, Text, text
+from sqlalchemy import (
+    Boolean,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    LargeBinary,
+    Numeric,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -24,6 +33,33 @@ EMPTY_ARRAY = text("'{}'")
 
 class Base(DeclarativeBase):
     pass
+
+
+class VoiceState(Base):
+    __tablename__ = "voice_states"
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), primary_key=True
+    )
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=EMPTY_JSON)
+
+
+class SpeechJob(Base):
+    __tablename__ = "speech_jobs"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    audio: Mapped[bytes | None] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(TZ, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(TZ, nullable=False)
+
+
+class SpeechQuota(Base):
+    __tablename__ = "speech_quotas"
+    scope: Mapped[str] = mapped_column(Text, primary_key=True)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=EMPTY_JSON)
 
 
 def _pk() -> Mapped[uuid.UUID]:

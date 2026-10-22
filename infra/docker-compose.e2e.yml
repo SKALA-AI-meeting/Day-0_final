@@ -12,6 +12,12 @@ services:
     env_file: !override [.env.e2e]
   api:
     env_file: !override [.env.e2e]
+    environment:
+      VOICE_PROVIDER: fake
+      VOICE_QUOTA_PERIOD: isolated-e2e
+      LLM_FAKE: "1"
+      ENABLE_TEST_API: "1"
+      AGENT_RUNNER: session
     ports: !override
       - "${API_PORT:-8100}:8000"
       - "127.0.0.1:8101:8001"   # 내부 API(테스트 API 포함). 로컬 전용

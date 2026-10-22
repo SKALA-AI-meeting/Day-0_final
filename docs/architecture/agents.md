@@ -1,5 +1,7 @@
 # 에이전트 설계 (api 안의 LangGraph 모듈)
 
+음성 토론의 현재 구현은 [음성 구현](voice.md)을 따른다.
+
 토론 그래프(턴 매니저 + 페르소나 에이전트 3)·의도 분류·어시스턴트·guard·평가 에이전트의 구조다. 결정 근거는 [decisions.md](../decisions.md) "2026-10-21 토론형 전환"(D10·D11·D12·D16·D17, R1~R7). 요소 id는 `persuasion, listening, inclusion, flexibility, honesty`, 카드 id는 `persuasion_keyword, flexibility_majority, listening_pressure, inclusion_silence, persuasion_solution, honesty_credit`, 페르소나 유형 id는 `stubborn, quiet, critic, agreeable, divergent`다(정본 [product/scenario.md](../product/scenario.md)). MVP 세션 자리는 **고정**이다(R2): `p1` 고집형 강한결(`stubborn`), `p2` 소극형 윤하람(`quiet`), `p3` 비판형 서지안(`critic`). 동조형·발산형은 MVP 이후 확장이며 아래 규칙의 우선순위 목록에 남아 있어도 MVP 세션에는 나오지 않는다. 참여자 id는 `candidate`·`p1`·`p2`·`p3`·`system`. 칸 결과는 `resolution: consensus | timeout`. 지원자 호칭은 "지원자", 대화 속에서는 표시 이름 + "님"이다.
 
 모듈: `app/agent/{debate, assistant, intent, guard, llm, mcp_client}`, `runner.py`. `mcp_client`는 env `DEBATE_MCP_URL`·`RAG_MCP_URL`·`ASSESSMENT_MCP_URL`(+`ASSESSMENT_MCP_TOKEN`)로 접속한다([contracts/mcp.md](../contracts/mcp.md) "MCP 도구"). 평가(차원별 수준 판단)는 세션 후 report-worker 안의 평가 에이전트 몫이다(아래 "평가 에이전트", 실행 흐름은 [services/report-worker.md](../services/report-worker.md)).

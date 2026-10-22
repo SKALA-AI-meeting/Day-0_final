@@ -297,6 +297,8 @@ async def test_llm_fake_runs_graph_to_draft_without_key(h):
     assert usage["llm_calls"] == 5 and usage["element_retries"] == 0
     assert not any(d["no_record_reason"] == "evaluate_failed" for d in draft["dimensions"])
     assert {d["level"] for d in draft["dimensions"]} == {3}
+    credit = next(d for d in draft["dimensions"] if d["dimension_id"] == "hon_credit_record")
+    assert credit["evidence_refs"] == ["proposal:idea_credit"]
 
 
 async def test_llm_fake_not_confused_by_rewrite_header_in_candidate_message(h):

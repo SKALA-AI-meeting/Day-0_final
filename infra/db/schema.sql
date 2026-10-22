@@ -343,3 +343,24 @@ CREATE TABLE material_chunks (               -- rag-mcp만 접근
   UNIQUE (catalog_version, material_id, chunk_no)
 );
 CREATE INDEX material_chunks_filter ON material_chunks (catalog_version, keyword_key);
+
+-- 음성 발언권과 임시 자산. API만 쓰고 세션 삭제에 종속된다.
+CREATE TABLE voice_states (
+  session_id uuid PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+  data jsonb NOT NULL DEFAULT '{}'
+);
+CREATE TABLE speech_jobs (
+  id uuid PRIMARY KEY,
+  session_id uuid NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  kind text NOT NULL CHECK (kind IN ('tts', 'stt')),
+  data jsonb NOT NULL,
+  audio bytea,
+  created_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL
+);
+CREATE INDEX speech_jobs_session ON speech_jobs(session_id);
+CREATE INDEX speech_jobs_expiry ON speech_jobs(expires_at);
+CREATE TABLE speech_quotas (
+  scope text PRIMARY KEY,
+  data jsonb NOT NULL DEFAULT '{}'
+);

@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Material
+from app.voice.policy import pinned_policy
 
 DEFAULT_MISSION = "debate"
 PHASES = ("keyword", "problem", "solution", "proposal")
@@ -135,6 +136,7 @@ def assemble(
     invite = mission["silence_invite"]
     return {
         "mission_id": mission_id,
+        "voice_policy": pinned_policy(),
         "catalog_version": catalog_version(scenarios_dir, mission_id),
         "session_minutes": session_minutes,
         "name": mission["name"],

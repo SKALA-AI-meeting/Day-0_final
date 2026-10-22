@@ -56,7 +56,9 @@ class FakeClassifier:
 
 
 def make_ctx(engine, clock, runner: RecordingRunner, classifier: FakeClassifier) -> AppContext:
-    settings = replace(get_settings(), enable_test_api=True, agent_runner="fake")
+    settings = replace(
+        get_settings(), enable_test_api=True, agent_runner="fake", voice_enabled=False
+    )
     ctx = AppContext(
         settings=settings,
         session_factory=make_session_factory(engine),

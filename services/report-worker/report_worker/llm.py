@@ -130,6 +130,7 @@ class FakeEvaluatorLLM:
     """`LLM_FAKE=1`: 호출 없이 요소 척도의 차원마다 고정 출력(비용 0, 키 불필요).
 
     세션 기록에 지원자 메시지가 있으면 첫 지원자 메시지를 근거로 수준 3·medium, 없으면 no_activity.
+    기여 기록 차원은 작성된 idea_credit 필드를 근거로 삼는다.
     요약 재작성 호출에는 고정 summary를 낸다.
     워커 검증(근거 형식·개수·금지어)을 그대로 통과하고, 같은 입력에는 같은 출력을 낸다.
     """
@@ -149,7 +150,18 @@ class FakeEvaluatorLLM:
         )
         dimensions = []
         for dimension in scale["dimensions"]:
-            if evidence:
+            credit = dimension["dimension_id"] == "hon_credit_record" and (
+                (record.get("proposal") or {}).get("sections") or {}
+            ).get("idea_credit")
+            if credit:
+                row = {
+                    "level": 3,
+                    "no_record_reason": None,
+                    "evidence_refs": ["proposal:idea_credit"],
+                    "rationale": "고정 출력: 제출한 기여 기록을 근거로 중간 수준으로 둔다.",
+                    "confidence": "medium",
+                }
+            elif evidence:
                 row = {
                     "level": 3,
                     "no_record_reason": None,

@@ -121,6 +121,18 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
     socketRef.current?.send({ type: "typing", payload: { state } });
   }, []);
 
+  const sendVoice = useCallback((id: string, content: string, turn: string, epoch: string) => {
+    socketRef.current?.send({
+      type: "message.send",
+      payload: {
+        client_msg_id: id,
+        content,
+        voice_turn_id: turn,
+        epoch,
+      },
+    });
+  }, []);
+
   const confirmSlot = useCallback(
     async (phase: SlotPhase, value: string, optionKey?: string) => {
       try {
@@ -268,6 +280,7 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
     connection,
     setTab: (tab: PanelTab) => dispatch({ type: "tab", tab }),
     sendMessage,
+    sendVoice,
     sendTyping,
     confirmSlot,
     openMaterial,

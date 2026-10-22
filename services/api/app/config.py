@@ -65,6 +65,7 @@ class Settings:
     web_base_url: str = "http://localhost:3000"
     public_port: int = 8000
     internal_port: int = 8001
+    voice_enabled: bool = True
 
 
 @lru_cache

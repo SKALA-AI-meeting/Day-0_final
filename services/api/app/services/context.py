@@ -50,11 +50,16 @@ class AppContext:
     spawned: set[asyncio.Task] = field(default_factory=set)
     record_frames: bool = False
     engine: AsyncEngine | None = None
+    speech: Any = None
     order_locks: dict[uuid.UUID, asyncio.Lock] = field(
         default_factory=lambda: defaultdict(asyncio.Lock)
     )
 
     def __post_init__(self) -> None:
+        if self.speech is None:
+            from app.voice.speech import provider
+
+            self.speech = provider()
         if self.hub is None:
             self.hub = Hub(self.clock.now, record=self.record_frames)
         if self.hub.on_drop is None:

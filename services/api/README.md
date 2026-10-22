@@ -1,5 +1,7 @@
 # api
 
+현재 음성 회의·Azure F0 설정·오류 복구는 [음성 구현](../../docs/architecture/voice.md), 공개 인터페이스는 [음성 계약](../../docs/contracts/voice.md)을 따른다. 공용 채팅 입력창과 말풍선은 음성 회의 UI로 대체한다. 내부 메시지 기록과 기존 합의·평가 경로는 유지한다.
+
 토론형 세션의 상태·단계·칸·메일박스·스케줄러와 토론 에이전트(턴 매니저·페르소나·어시스턴트·의도 분류)를 한 프로세스에서 돌리고, 공개(8000)·내부(8001) REST와 WebSocket을 낸다.
 
 ## 한눈에
@@ -120,6 +122,7 @@ debate-mcp·assessment-mcp도 떠 있어야 토론 그래프와 리포트 평가
 | POST | `/internal/sessions/{session_id}/report_failed` | 리포트 생성 실패 기록 |
 | POST | `/internal/test/sessions` | 단계 시드 세션 생성(ENABLE_TEST_API=1) |
 | POST | `/internal/test/sessions/{session_id}/advance` | 세션 시간 당기기(ENABLE_TEST_API=1) |
+| POST | `/internal/test/voice-transcript` | FakeSpeech 전사 대본 설정(테스트 전용) |
 <!-- /gen:api -->
 
 요청·응답 형식은 [`docs/contracts/api.md`](../../docs/contracts/api.md)(공개), [`docs/contracts/internal.md`](../../docs/contracts/internal.md)(내부), [`docs/contracts/ws.md`](../../docs/contracts/ws.md)(WebSocket)에 있다.
@@ -146,7 +149,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 204개(live 3개 포함, `make test`는 live를 뺀다).
+총 209개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -457,6 +460,16 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_ended_seed_submits_and_publishes`
 - `test_advance_to_deadline_and_card`
 - `test_test_api_is_404_when_disabled`
+
+</details>
+
+<details><summary><code>tests/test_voice.py</code> (5)</summary>
+
+- `test_voice_playback_barrier_and_single_message`
+- `test_voice_zero_speakers_stale_and_audio_validation`
+- `test_voice_quota_refuses_before_provider_and_other_session`
+- `test_pcm_rejects_truncated_and_long_audio`
+- `test_azure_paid_sku_rejected_before_synthesis`
 
 </details>
 

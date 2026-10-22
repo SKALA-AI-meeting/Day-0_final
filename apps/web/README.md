@@ -1,5 +1,7 @@
 # web
 
+현재 음성 회의·Azure F0 설정·오류 복구는 [음성 구현](../../docs/architecture/voice.md), 공개 인터페이스는 [음성 계약](../../docs/contracts/voice.md)을 따른다. 공용 채팅 입력창과 말풍선은 음성 회의 UI로 대체한다. 내부 메시지 기록과 기존 합의·평가 경로는 유지한다.
+
 지원자 토론방·기획안·디브리핑 화면과 담당자 관리자 화면(채용 건·지원자 목록·리포트·전체 기록)을 내는 Next.js 앱.
 
 ## 한눈에
@@ -77,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 62개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 64개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -192,6 +194,13 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
+<details><summary><code>components/debate/voice/recorder.test.ts</code> (2)</summary>
+
+- 버튼과 타이머가 겹쳐도 녹음 종료는 한 번만 실행한다
+- 완성 오디오를 mono 16kHz PCM WAV로 만들고 클리핑을 제한한다
+
+</details>
+
 <details><summary><code>components/debate/wording.test.ts</code> (3)</summary>
 
 - 디브리핑 전 지원자 화면·mock에 페르소나 유형 이름이 없다
@@ -251,7 +260,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-**단계별 화면 테스트(Playwright, `make e2e-stages`)**: 테스트 제목 9개(정적 파싱)
+**단계별 화면 테스트(Playwright, `make e2e-stages`)**: 테스트 제목 10개(정적 파싱)
 
 <details><summary><code>e2e/admin-capture.spec.ts</code> (0)</summary>
 
@@ -299,6 +308,12 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - AI 합의 채우기: 공지 메시지 → 결정 사항 칸 확정 → 기획안 단계
 - silent: 침묵하면 idle 뒤 비판형 초대 메시지가 1건
 - solo_confirm: 반대가 남아도 지원자가 혼자 확정하면 칸이 확정된다
+
+</details>
+
+<details><summary><code>e2e/stages/voice.spec.ts</code> (1)</summary>
+
+- 음성 회의: 채팅 UI 없음·AI 종료 뒤 녹음·60초 자동 제출 1회
 
 </details>
 <!-- /gen:tests -->

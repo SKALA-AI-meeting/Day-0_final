@@ -54,7 +54,9 @@ Reader = Annotated[Principal, Depends(require_debrief_reader)]
 def entry_notice(minutes: int, contact: str) -> str:
     return (
         f"{minutes}분 동안 이어서 진행되며 중간 휴식이 없습니다. PC를 권장합니다. "
-        "AI 동료 3명과 채팅으로 키워드 → 문제 상황 → 해결책을 정하고, "
+        "AI 동료 3명과 음성으로 키워드 → 문제 상황 → 해결책을 정하고, "
+        "마이크 발언은 Azure Speech에서 전사하며 최종 텍스트를 기록합니다. "
+        "원음은 임시 처리 후 삭제합니다. "
         "기획안은 혼자 작성해 제출합니다. "
         "토론 결과가 내 제안과 다를 수 있고, 안의 질이 아니라 과정의 태도를 봅니다. "
         "연결이 끊겨도 시간은 흐릅니다. 외부 도구는 막지 않지만 안의 AI 어시스턴트 요청·응답은 "
@@ -146,6 +148,8 @@ async def resume(token: str, ctx: Ctx) -> dict[str, str]:
 @router.post("/s/{token}/start")
 async def start_session(token: str, ctx: Ctx, creds: Bearer) -> dict[str, Any]:
     principal = _principal(creds)
+    if ctx.settings.voice_enabled:
+        await ctx.speech.verify()
     fx = Effects()
     # 세션 id는 후보자 토큰의 subject(아니면 아래에서 403)
     async with ctx.ordered(principal.subject):
@@ -159,6 +163,19 @@ async def start_session(token: str, ctx: Ctx, creds: Bearer) -> dict[str, Any]:
                 if session.consented_at is None:
                     raise conflict("conflict", "consent first")
                 await session_service.start(db, session, position, ctx.clock, fx)
+                if ctx.settings.voice_enabled:
+                    from app.voice import quota
+
+                    if not position.scenario.get("voice_policy"):
+                        raise conflict("position_outdated", "새 음성 채용 건으로 초대해 주세요")
+                    from app.voice.policy import pinned_policy
+
+                    if position.scenario["voice_policy"]["provider"] != pinned_policy()["provider"]:
+                        raise conflict("voice_policy_mismatch")
+                    await quota.admission(db, session, ctx.clock.now())
+                    from app.voice.controller import row
+
+                    await row(db, session.id)
                 invite.used_at = ctx.clock.now()
                 await db.commit()
             elif session.status != "in_progress":
@@ -210,6 +227,16 @@ async def confirm(
     async with ctx.ordered(session_id):
         async with ctx.session_factory() as db:
             session, position, _invite = await load_context(db, session_id, lock=True)
+            if ctx.settings.voice_enabled:
+                from app.models import VoiceState
+
+                voice = await db.get(VoiceState, session_id)
+                if voice and voice.data.get("state") in (
+                    "USER_SPEAKING",
+                    "TRANSCRIBING",
+                    "PROCESSING",
+                ):
+                    raise conflict("voice_turn_conflict", "발언 제출을 마친 뒤 정해 주세요")
             if phase not in ("keyword", "problem", "solution"):
                 raise conflict("phase_not_open", "unknown phase")
             result = await debate.confirm_slot(

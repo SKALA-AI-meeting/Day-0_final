@@ -19,7 +19,7 @@ import websockets
 from dotenv import dotenv_values
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SECRET_FIELDS = {"token", "session_token", "debrief_token"}
+SECRET_FIELDS = {"token", "session_token", "debrief_token", "audio_base64"}
 
 
 def env() -> dict[str, str]:
@@ -163,7 +163,7 @@ Connector = Callable[[str], Awaitable[Any]]
 
 
 async def _websockets_connect(url: str) -> Any:
-    return await websockets.connect(url, max_size=None)
+    return await websockets.connect(url, max_size=None, proxy=None)
 
 
 class Socket:
@@ -241,15 +241,19 @@ class Socket:
     async def typing(self, state: str) -> None:
         await self._send({"type": "typing", "payload": {"state": state}})
 
-    async def send_message(self, content: str, timeout: float = 30) -> dict[str, Any] | None:
+    async def send_message(
+        self, content: str, timeout: float = 30, *, voice: dict | None = None
+    ) -> dict[str, Any] | None:
         """message.send 후 ack payload(없으면 None)."""
         self._counter += 1
-        client_msg_id = f"e2e-{self._counter}-{int(time.time() * 1000)}"
+        client_msg_id = (
+            voice["client_msg_id"] if voice else f"e2e-{self._counter}-{int(time.time() * 1000)}"
+        )
         since = len(self.frames)
         await self._send(
             {
                 "type": "message.send",
-                "payload": {"client_msg_id": client_msg_id, "content": content},
+                "payload": {"client_msg_id": client_msg_id, "content": content, **(voice or {})},
             }
         )
         ack = await self.wait_for(

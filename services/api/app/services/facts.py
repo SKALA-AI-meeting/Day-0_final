@@ -156,7 +156,7 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
         if m.is_invite and m.phase in silence:
             silence[m.phase] += 1
     total = len(mine)
-    return {
+    result = {
         "message_count": {"total": total, **{p: counts.get(p, 0) for p in sc.PHASES}},
         "spontaneous_count": spontaneous,
         "invited_count": invited,
@@ -211,3 +211,35 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
         ],
         "connection_gaps": await gaps(db, session),
     }
+
+    from app.models import SpeechJob, VoiceState
+
+    if await db.get(VoiceState, session.id):
+        jobs = (await db.scalars(select(SpeechJob).where(SpeechJob.session_id == session.id))).all()
+        result["voice_usage"] = {
+            "tts_characters": sum(
+                sum(a["quantity"] for a in j.data.get("usage_attempts", []))
+                for j in jobs
+                if j.kind == "tts"
+            ),
+            "stt_seconds": sum(
+                sum(a["quantity"] for a in j.data.get("usage_attempts", []))
+                for j in jobs
+                if j.kind == "stt"
+            ),
+            "unheard_messages": [
+                j.data.get("message_id")
+                for j in jobs
+                if j.kind == "tts" and j.data.get("status") != "heard"
+            ],
+            "technical_failures": sum(
+                j.data.get("status") in ("error", "canceled", "empty") for j in jobs
+            ),
+            "billing_unknown": sum(j.data.get("billing_status") == "unknown" for j in jobs),
+            "net_cost_usd": 0,
+            "notice": (
+                "음성 전달·전사 장애와 처리 지연은 지원자 행동의 근거가 아니다. "
+                "음색·발음·속도는 판단하지 않는다."
+            ),
+        }
+    return result

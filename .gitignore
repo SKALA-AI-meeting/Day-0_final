@@ -28,3 +28,4 @@ tests/playtest/records/**/server.pid
 # 로컬 도구 산출물
 .playwright-mcp/
 output/
+.tools/

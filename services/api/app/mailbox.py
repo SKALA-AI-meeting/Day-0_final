@@ -130,6 +130,10 @@ class Mailboxes:
         while True:
             stimulus, run_id = await queue.get()
             try:
+                from app.voice.controller import blocked
+
+                while await blocked(self.ctx, session_id):
+                    await asyncio.sleep(0.25)
                 await self.process(session_id, stimulus, run_id)
             except Exception:
                 log.exception("mailbox run %s failed", run_id)

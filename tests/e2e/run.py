@@ -133,6 +133,8 @@ class Runner:
         self.step_marks: list[int] = []
         self.materials_before: dict[str, Any] = {}
         self.started_wall = time.time()
+        self.voice_mode = False
+        self.voice_task = None
 
     # ---- 준비 -----------------------------------------------------------------------------
 
@@ -179,6 +181,95 @@ class Runner:
             "GET", f"/sessions/{self.sid}/materials", token=self.jwt
         )
         await self.connect()
+        if self.voice_mode:
+            self.voice_task = asyncio.create_task(self.voice_pump())
+
+    async def voice_pump(self):
+        # API 러너의 재생 확인은 합성한다. 실제 media ended는 Playwright가 검증한다.
+        base = f"/sessions/{self.sid}/voice"
+        while not self.ended():
+            try:
+                state = await self.api.json("GET", base, token=self.jwt, log=False)
+                if state["state"] == "AI_SPEAKING" and state["items"]:
+                    item = state["items"][0]
+                    body = {
+                        "turn_id": state["turn_id"],
+                        "epoch": state["epoch"],
+                        "job_id": item["id"],
+                    }
+                    if item["status"] == "ready":
+                        await self.api.json(
+                            "POST",
+                            base + "/playback",
+                            token=self.jwt,
+                            json_body={**body, "outcome": "start"},
+                        )
+                        await asyncio.sleep(item["duration_ms"] / 1000)
+                        await self.api.json(
+                            "POST",
+                            base + "/playback",
+                            token=self.jwt,
+                            json_body={**body, "outcome": "ended"},
+                        )
+            except ApiError:
+                pass  # 단계 전환·재연결 fence는 다음 스냅샷으로 복구
+            await asyncio.sleep(self.poll)
+
+    async def say_voice(self, text):
+        import base64
+        import io
+        import wave
+
+        base = f"/sessions/{self.sid}/voice"
+        # 이 대본은 FakeSpeech 스택 전용이다. 실 Azure 품질 검증으로 해석하지 않는다.
+        await self.api.json(
+            "POST", "/internal/test/voice-transcript", internal=True, json_body={"content": text}
+        )
+        end = time.time() + 90
+        while time.time() < end:
+            state = await self.api.json("GET", base, token=self.jwt, log=False)
+            if state["state"] == "USER_READY" and state.get("epoch"):
+                break
+            await asyncio.sleep(self.poll)
+        else:
+            raise TimeoutError("voice turn not ready")
+        turn = {"turn_id": state["turn_id"], "epoch": state["epoch"]}
+        capture = await self.api.json("POST", base + "/capture", token=self.jwt, json_body=turn)
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(16000)
+            wav.writeframes(b"\0\0" * 1600)
+        await self.api.json(
+            "POST",
+            base + "/audio",
+            token=self.jwt,
+            json_body={
+                **turn,
+                "utterance_id": capture["utterance_id"],
+                "audio_base64": base64.b64encode(output.getvalue()).decode(),
+                "stop_reason": "button",
+            },
+        )
+        while time.time() < end:
+            state = await self.api.json("GET", base, token=self.jwt, log=False)
+            utterance = state.get("utterance") or {}
+            if utterance.get("status") == "ready":
+                ack = await self.sock.send_message(
+                    utterance["transcript"],
+                    voice={
+                        "client_msg_id": utterance["id"],
+                        "voice_turn_id": turn["turn_id"],
+                        "epoch": turn["epoch"],
+                    },
+                )
+                if ack is None:
+                    self.step_errors.append("voice say: no ack")
+                await self.settle()
+                return
+            await asyncio.sleep(self.poll)
+        raise TimeoutError("voice transcript not ready")
 
     async def connect(self) -> None:
         self.segments.append(len(self.sock.frames))
@@ -241,6 +332,9 @@ class Runner:
     # ---- 동작 -----------------------------------------------------------------------------
 
     async def say(self, text: str) -> None:
+        if self.voice_mode:
+            await self.say_voice(text)
+            return
         if not self.sock.open:
             await self.reconnect()
         started = time.time()
@@ -564,6 +658,10 @@ class Runner:
                 self.review_result = await self.review(draft)
             return await self.collect(draft)
         finally:
+            if self.voice_task:
+                self.voice_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self.voice_task
             with contextlib.suppress(Exception):
                 await self.sock.close()
             await self.api.aclose()
@@ -588,7 +686,12 @@ def detect_llm_fake(live: bool) -> tuple[bool, str]:
 async def run_script(name: str, target: Target, out: Path, clock: str, live: bool) -> bool:
     script = scripts.load(name)
     fake, source = detect_llm_fake(live)
-    bundle = await Runner(script, target, clock=clock, llm_fake=fake).run()
+    runner = Runner(script, target, clock=clock, llm_fake=fake)
+    runner.voice_mode = True
+    bundle = await runner.run()
+    bundle["voice_validation"] = (
+        "FakeSpeech / synthetic playback ack; browser media tested separately"
+    )
     bundle["llm_mode_source"] = source
     bundle["results"] = asserts.check(bundle)
     records.write(bundle, out)

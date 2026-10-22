@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO = join(import.meta.dirname, "..", "..", "..", "..");
+const RUN_ID = new Date().toISOString().replace(/[:.]/g, "-");
 export const RECORDS = join(REPO, "tests", "e2e", "records", "stages");
 export const INTERNAL = process.env.E2E_INTERNAL_URL ?? "http://localhost:8101";
 export const ADMIN = { email: "e2e@example.com", password: "e2e-password" };
@@ -76,17 +77,37 @@ export function internalGet<T>(sessionId: string, path = ""): Promise<T> {
   return internal<T>("GET", `/internal/sessions/${sessionId}${path}`);
 }
 
+export async function setTranscript(content: string): Promise<void> {
+  await internal("POST", "/internal/test/voice-transcript", { content });
+}
+
 export async function shot(page: Page, stage: string, name: string): Promise<void> {
-  const dir = join(RECORDS, stage);
+  const dir = join(RECORDS, ".artifacts", "screenshots", RUN_ID, stage);
   mkdirSync(dir, { recursive: true });
   await page.screenshot({ path: join(dir, `${name}.png`) });
 }
 
-/** 토론방에 지원자 메시지를 보내고 내 말풍선이 나타날 때까지 기다린다 */
+/** 실제 녹음·완성 파일 업로드를 거치고 STT 결과만 FakeSpeech로 고정한다. */
 export async function say(page: Page, text: string): Promise<void> {
-  await page.getByLabel("메시지 입력").fill(text);
-  await page.getByRole("button", { name: "보내기" }).click();
-  await expect(page.getByRole("log").getByText(text)).toBeVisible();
+  await internal("POST", "/internal/test/voice-transcript", { content: text });
+  const entry = await page.request.get(
+    `${process.env.E2E_API_URL ?? "http://localhost:8100"}${new URL(page.url()).pathname}`,
+  );
+  const sessionId = (await entry.json()).session_id;
+  const enable = page.getByRole("button", { name: "음성 참여 시작" });
+  if (await enable.isVisible()) await enable.click();
+  await expect(page.getByRole("button", { name: "발언 완료" })).toBeVisible({ timeout: 45000 });
+  await page.waitForTimeout(350);
+  await page.getByRole("button", { name: "발언 완료" }).click();
+  await expect
+    .poll(
+      async () =>
+        (await internalGet<{ sender: string; content: string }[]>(sessionId, "/messages")).some(
+          (m) => m.sender === "candidate" && m.content === text,
+        ),
+      { timeout: 45000 },
+    )
+    .toBeTruthy();
 }
 
 export async function tab(page: Page, label: string): Promise<void> {
@@ -94,7 +115,7 @@ export async function tab(page: Page, label: string): Promise<void> {
 }
 
 /** 토론방(말풍선 영역) */
-export const room = (page: Page) => page.getByRole("log");
+export const room = (page: Page) => page.getByRole("region", { name: "음성 회의" });
 
 /** AI 동료 응답이 가라앉을 때까지(메시지 수가 2.4초 동안 그대로). 연속 전송은 앞 응답을 버리게 하므로 사이에 쓴다 */
 export async function settle(sessionId: string): Promise<void> {

@@ -191,6 +191,13 @@ export function CandidateFlow({ token }: { token: string }) {
           onStart={async () => {
             setStage({ ...stage, pending: true, error: null });
             try {
+              if (!MOCK) {
+                const microphone = await navigator.mediaDevices.getUserMedia({
+                  audio: true,
+                  video: false,
+                });
+                microphone.getTracks().forEach((track) => track.stop());
+              }
               await api(`/s/${token}/start`, { method: "POST", token: sessionToken.current });
               setStage({
                 kind: "session",

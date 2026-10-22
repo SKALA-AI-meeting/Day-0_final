@@ -347,6 +347,19 @@ async def post_observation(session_id: uuid.UUID, body: ObservationIn, ctx: Ctx)
 
 
 async def observations_view(db, session: Session, scenario: dict) -> list[dict[str, Any]]:
+    from app.models import SpeechJob, VoiceState
+
+    voice = await db.get(VoiceState, session.id)
+    heard = {}
+    if voice:
+        for job in (
+            await db.scalars(
+                select(SpeechJob).where(SpeechJob.session_id == session.id, SpeechJob.kind == "tts")
+            )
+        ).all():
+            if job.data.get("status") == "heard":
+                for card_id in job.data.get("card_ids", []):
+                    heard.setdefault(card_id, set()).add(job.data["seat"])
     rows = (
         await db.scalars(
             select(Observation)
@@ -365,6 +378,8 @@ async def observations_view(db, session: Session, scenario: dict) -> list[dict[s
         card_def = sc.card(scenario, o.card_id)
         need = sc.card_required_count(card_def)
         delivered_seats = cards[o.card_id].delivered_seats if o.card_id in cards else []
+        if voice and need:
+            delivered_seats = list(heard.get(o.card_id, set()))
         out.append(
             {
                 "observation_id": str(o.id),
@@ -632,3 +647,18 @@ class AdvanceIn(BaseModel):
 async def test_advance(session_id: uuid.UUID, body: AdvanceIn, ctx: Ctx) -> dict[str, Any]:
     """시간 당기기. 시간 초과·카드·침묵 초대·자동 제출은 다음 스케줄러 틱이 평소대로 처리한다."""
     return await test_sessions.advance(ctx, session_id, body.model_dump())
+
+
+class FakeTranscriptIn(BaseModel):
+    content: str
+
+
+@router.post("/test/voice-transcript", dependencies=TestApi)
+async def fake_transcript(body: FakeTranscriptIn, ctx: Ctx) -> dict[str, bool]:
+    """FakeSpeech 전사 대본 설정. 내부 테스트 API·가짜 공급자에서만 허용."""
+    from app.voice.speech import FakeSpeech
+
+    if not isinstance(ctx.speech, FakeSpeech):
+        raise not_found()
+    ctx.speech.transcript = body.content
+    return {"ok": True}

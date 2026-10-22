@@ -40,7 +40,8 @@ test("디바운스 저장 → 제출 확인 → 잠김 → 디브리핑", async 
 
   await expect(page.getByText("제출했어요. 세션이 끝났습니다.")).toBeVisible();
   await expect(sections.locator("[data-section='rationale']")).toBeDisabled();
-  await expect(page.getByLabel("메시지 입력")).toBeDisabled();
+  await expect(page.getByLabel("메시지 입력")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "발언 완료" })).toHaveCount(0);
   await shot(page, "proposal", "04-잠김");
   const session = await internalGet<{ status: string }>(s.sessionId);
   expect(["completed", "report_ready"]).toContain(session.status);
