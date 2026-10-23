@@ -243,6 +243,13 @@ async def test_quote_check_drops_rows_whose_span_is_not_in_the_draft(harness):
     assert post["meta"]["quote_check"] == "pass" and len(h.persona.calls) == 1
 
 
+async def test_quote_check_covers_the_candidate_called_by_role(harness):
+    h = harness("keyword", persona=[say("지원자님은 침수를 강조하셨는데요. 그래도 불이에요.")])
+    h.runner.llms.quote = quote_llm("supported", span="지원자님은 침수를 강조하셨는데요")
+    await h.run("phase_started")  # 답할 메시지 없음: 역할 호칭만으로 대상이 된다
+    assert len(h.runner.llms.quote.calls) == 1
+
+
 async def test_quote_check_is_skipped_without_targets(harness):
     h = harness("keyword", persona=[say("불이 맞아요.", SUPPORT_FIRE)])
     h.runner.llms.quote = quote_llm("contradicted")

@@ -512,6 +512,8 @@ def quote_targets(
         if participant == seat or not name:
             continue
         forms = {name, name[1:]} if len(name) >= 3 else {name}
+        if participant == "candidate":
+            forms.add("지원자")  # 표시 이름 대신 역할로 부른 귀속("지원자님은 ~하셨는데")
         if any(form and form in content for form in forms):
             found.append(participant)
     target = situation.get("reply_to") or {}
