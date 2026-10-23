@@ -260,6 +260,8 @@ export function VoiceRoom(props: Props) {
     async (snap: VoiceSnapshot) => {
       if (busy.current || !snap.items.length) return;
       const item = snap.items[0];
+      // 서버는 맨 앞 발언이 준비되면 재생 상태가 된다. 다음 발언을 아직 만드는 중이면 기다린다.
+      if (item.status === "queued" || item.status === "processing") return;
       if (item.status !== "ready") {
         setError("음성 재생을 준비하지 못했어요. 다시 시도해 주세요.");
         return;

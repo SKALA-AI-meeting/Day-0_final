@@ -185,7 +185,11 @@ async def sync(db, session, position, now):
             "epoch": data.get("epoch"),
             "ready_at": iso(now),
         }
-    if runs or any(j.data["status"] in ("queued", "processing") for j in jobs):
+    if jobs and jobs[0].data["status"] == "ready":
+        # 맨 앞 발언이 준비되면 뒤 발언·실행이 남아 있어도 먼저 재생한다(대기 최대 약 14초 단축).
+        # 남은 발언이나 실행이 있는 동안은 아래 조건으로 내 차례(USER_READY)가 되지 않는다.
+        data["state"] = "AI_SPEAKING"
+    elif runs or any(j.data["status"] in ("queued", "processing") for j in jobs):
         data["state"] = "AI_GENERATING"
     elif jobs:
         data["state"] = "AI_SPEAKING"

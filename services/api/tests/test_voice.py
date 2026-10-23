@@ -120,6 +120,28 @@ async def test_voice_heard_ids_follow_playback_end(api, voice_ctx):
     assert snap["heard_message_ids"] == [first["id"]]
 
 
+async def test_voice_plays_first_ready_while_next_is_made(api, voice_ctx):
+    """맨 앞 발언이 준비되면 뒤 발언을 만드는 중이어도 재생하고, 다 들을 때까지 내 차례는 없다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    await api.post_ai(sess, "p1", "물 부족을 생각해 봐요")
+    snap = await snapshot(api, ctx, sess)  # p1 합성까지 끝냄
+    await api.post_ai(sess, "p3", "다른 의견도 있어요")
+    r = await api.public.get(f"/sessions/{sess.id}/voice", headers=sess.auth)
+    snap = r.json()
+    assert [i["status"] for i in snap["items"]] == ["ready", "queued"]
+    assert snap["state"] == "AI_SPEAKING"
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    first = snap["items"][0]["id"]
+    for outcome in ("start", "ended"):
+        body = {**turn, "job_id": first, "outcome": outcome}
+        assert (await post(api, sess, "playback", body)).status_code == 200
+    await ctx.drain_spawned()
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "AI_SPEAKING"  # 둘째 발언 차례, 아직 내 차례 아님
+    assert len(snap["items"]) == 1
+
+
 async def test_voice_think_time_holds_turn(api, voice_ctx, clock):
     """내 차례에는 생각 시간(기본 30초) + 여유 10초 동안 차례를 반납하지 않는다."""
     sess = await setup(api, voice_ctx)
