@@ -1,10 +1,11 @@
 """내부 REST(8001): 계약 예시 형태, 멱등, 평가 저장 검증, 사실 지표, 기록 ref."""
 
 import uuid
+from datetime import timedelta
 
-from app.models import EvaluationRun
+from app.models import EvaluationRun, Message, Slot
 from kit import bearer, finish, high, to_phase
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 
 async def test_session_messages_tail_and_rubric_window(api, classifier):
@@ -188,6 +189,30 @@ async def test_facts_and_record_refs(api, ctx, classifier):
     # 카드 예정 시각 전에 지원자가 확정해 생기지 않은 카드(선결정, 결정 A3)
     assert problem["preempted_cards"] == ["flexibility_majority", "listening_pressure"]
     assert problem["candidate_option_adopted"] is False  # 지원자 확정이지만 서지안 안
+    # 예정 시각은 스케줄러가 읽는 단계 시작(전환 시각 = 앞 칸 확정 시각)으로 정한다. 단계 시작 안내
+    # 메시지의 저장 시각이 달라도 결과는 같고, 전환 시각이 10분 앞당겨지면 문제 상황 칸 확정은 예정
+    # 시각 뒤라 선결정이 아니다
+    async with ctx.session_factory() as db:
+        await db.execute(
+            update(Message)
+            .where(Message.session_id == sess.id, Message.meta["kind"].astext == "stage_start")
+            .values(created_at=Message.created_at - timedelta(minutes=10))
+        )
+        await db.commit()
+
+    async def problem_preempted():
+        got = (await api.internal.get(f"/internal/sessions/{sess.id}/facts")).json()
+        return next(d for d in got["decisions"] if d["phase"] == "problem")["preempted_cards"]
+
+    assert await problem_preempted() == ["flexibility_majority", "listening_pressure"]
+    async with ctx.session_factory() as db:
+        await db.execute(
+            update(Slot)
+            .where(Slot.session_id == sess.id, Slot.phase == "keyword")
+            .values(confirmed_at=Slot.confirmed_at - timedelta(minutes=10))
+        )
+        await db.commit()
+    assert await problem_preempted() == []
     first, second = facts["message_facts"]
     assert first["reply_to"] is None and first["decided_before"] == []
     assert second["reply_to"] is not None  # 직전 AI 동료(서지안) 초대 메시지

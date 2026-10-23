@@ -7,6 +7,7 @@ from app.services.facts import (
     evaluator_facts,
     message_facts,
     paste_overlap,
+    phase_starts,
 )
 
 
@@ -147,3 +148,19 @@ def test_paste_suspect_needs_prior_answer_and_long_overlap():
     assert same_minute["message_facts"][0]["paste_suspect"] is None
     assert rows["c2"]["call_id"] == "ac-1" and rows["c2"]["overlap"] >= PASTE_OVERLAP
     assert facts["decisions"] == []
+
+
+def test_phase_starts_follow_transition_times_like_the_card_scheduler():
+    from datetime import UTC, datetime, timedelta
+
+    t0 = datetime(2026, 10, 21, 1, 0, tzinfo=UTC)
+    confirmed = {"keyword": t0 + timedelta(minutes=2), "problem": t0 + timedelta(minutes=6)}
+    # 지나간 단계는 앞 칸 확정(단계 전환) 시각, 진행 중인 단계는 phase_started_at(시간 당기기 반영)
+    shifted = t0 + timedelta(minutes=5)
+    starts = phase_starts(t0, confirmed, "solution", shifted)
+    assert starts == {
+        "keyword": t0,
+        "problem": t0 + timedelta(minutes=2),
+        "solution": shifted,  # 앞 칸 확정 시각(6분)이 아니라 스케줄러가 읽는 값
+    }
+    assert phase_starts(t0, {}, None, None) == {"keyword": t0}

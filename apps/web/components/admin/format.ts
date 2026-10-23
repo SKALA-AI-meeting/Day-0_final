@@ -72,9 +72,10 @@ export const stateOf = (reason: NoRecordReason) => RECORD_STATE_TEXT[RECORD_STAT
 
 /**
  * 평가 문장(판단 이유·요약)의 내부 용어 "차원"을 화면 용어 "세부 행동"으로(결정 A4).
- * 두 말 모두 받침으로 끝나 뒤 조사가 그대로 맞는다
+ * 평가 단위로 쓰인 낱말만 바꾼다: 앞에 한글이 붙은 말("다차원")과 "차원적"은 그대로 둔다.
+ * 두 말 모두 받침으로 끝나 뒤 조사("은·이·을·별" 등)가 그대로 맞는다
  */
-export const displayTerms = (text: string) => text.replace(/차원/g, "세부 행동");
+export const displayTerms = (text: string) => text.replace(/(?<![가-힣])차원(?!적)/g, "세부 행동");
 
 /** 리포트 머리의 용어 설명(rubric.md 8장) */
 export const REPORT_TERMS: { term: string; text: string }[] = [

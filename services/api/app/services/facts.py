@@ -72,7 +72,7 @@ def decision_facts(
     slots는 SessionRecord `slots` 행(확정된 칸, 확정 시각 `at`(초)이 있으면 함께), options는
     Contributions `options` 행, lead_option_ids는 카드가 잠근 기준안
     (`session_cards.locked_option_id`),
-    card_schedule은 카드 예정 시각 `{card_id, phase, at?, t_min, fired}`(단계 실제 시작 + 카드
+    card_schedule은 카드 예정 시각 `{card_id, phase, at?, t_min, fired}`(`phase_starts` + 카드
     `offset_min`, `fired`는 관찰 기록이 있는지).
     `candidate_backed`: 정해진 안을 지원자가 처음 냈거나, 기준안이 아닌데 확정 시점에 지원자가
     지지함.
@@ -192,6 +192,33 @@ def message_facts(
                 "paste_suspect": best,
             }
         )
+    return out
+
+
+def phase_starts(
+    started_at: Any,
+    confirmed_at: dict[str, Any],
+    current_phase: str | None,
+    current_started_at: Any,
+) -> dict[str, Any]:
+    """단계마다 실제 시작 시각. 카드 스케줄러가 읽는 `sessions.phase_started_at`과 같은 값을 쓴다.
+
+    스케줄러는 지금 단계의 `phase_started_at`(단계 전환 때 `enter_phase`가 그 순간으로 둠)에
+    카드 `offset_min`을 더해 카드 예정 시각을 정한다. 지나간 단계의 그 값은 남지 않으므로 같은
+    전환 시각에서 다시 얻는다: 키워드는 세션 시작(`start`가 같은 순간 키워드 단계에 들어감), 그 뒤
+    단계는 앞 단계 칸이 확정된 시각(칸 확정과 단계 전환이 한 요청 안에서 일어남), 지금 진행 중인
+    단계는 `phase_started_at` 그대로. 단계 시작 안내 메시지의 저장 시각은 쓰지 않는다(전환과 별도
+    저장이라 어긋날 수 있다). 테스트 API의 시간 당기기는 그 단계의 `phase_started_at`만 옮기므로
+    지나간 단계에는 반영되지 않는다.
+    """
+    out: dict[str, Any] = {}
+    if started_at is not None:
+        out[sc.PHASES[0]] = started_at
+    for before, phase in zip(sc.PHASES, sc.PHASES[1:], strict=False):
+        if confirmed_at.get(before) is not None:
+            out[phase] = confirmed_at[before]
+    if current_phase and current_started_at is not None:
+        out[current_phase] = current_started_at
     return out
 
 
@@ -372,9 +399,15 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
             )
         ).all()
     )
+    starts = phase_starts(
+        session.started_at,
+        {s.phase: s.confirmed_at for s in confirmed},
+        session.phase,
+        session.phase_started_at,
+    )
     card_schedule = []
     for card in scenario.get("cards", []):
-        start = phase_start.get(card.get("stage_id"))
+        start = starts.get(card.get("stage_id"))
         if start is None or card.get("offset_min") is None or not card.get("actor"):
             continue
         due = start + timedelta(minutes=card["offset_min"])
