@@ -32,7 +32,7 @@ apps/web/
 |---|---|
 | `entry.json`·`entry_completed.json` | GET /s/{token} 응답(진행 전·완료 후) |
 | `state_keyword`·`state_problem`·`state_solution`·`state_proposal.json` | State 스냅샷 4벌. 캡처 지점을 바로 연다 |
-| `debate_script.json` | 15분 데모 재생 대본(R3): 모든 프레임에 세션 단위 `seq`, `message.new`(강한결·윤하람·서지안·system, 침묵 초대 `is_invite` 포함, R7 시간 초과 문구 1건), `typing` start/stop, `slot.confirmed`(consensus 1·timeout 1), `phase.changed`·`timer`, `materials.opened`, `session.ended`. 시각은 `t_min`. `slot.filled`는 없다 |
+| `debate_script.json` | 15분 데모 재생 대본(R3): 모든 프레임에 세션 단위 `seq`, `message.new`(강한결·윤하람·서지안·system, 침묵 초대 `is_invite` 포함, 시간 초과 시스템 안내 1건), `typing` start/stop, `slot.confirmed`(consensus 1·timeout 1), `phase.changed`·`timer`, `materials.opened`, `session.ended`. 시각은 `t_min`. `slot.filled`는 없다 |
 | `materials.json`·`material.json` | 자료 목록(잠김·열림)과 Markdown 본문 |
 | `assistant_response.json` | 어시스턴트 응답(인용 자료 포함) |
 | `proposal.json`·`proposal_submit.json` | Proposal과 제출 응답 |

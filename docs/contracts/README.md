@@ -56,7 +56,8 @@ empty ──지원자 확정 / AI 합의 채우기 / api 시간 초과 채우기
 | status | `empty` ∣ `confirmed` |
 | value | 확정 값(짧은 문장) |
 | option_id | 확정 값과 같은 안. 지원자 확정 값이 어느 안과도 연결되지 않으면 null |
-| filled_by | `candidate` ∣ `p1`∣`p2`∣`p3` (시간 초과 채우기도 공지한 자리 id. `system` 값은 없다) |
+| filled_by | `candidate` ∣ `p1`∣`p2`∣`p3` ∣ `system`(시간 초과 채우기) |
+| timeout_rule | 시간 초과 칸에 적용된 선택 규칙 `candidate_support` ∣ `most_support` ∣ `earliest` ∣ `default`([product/scenario.md](../product/scenario.md) 1.4 "시간 초과 규칙"). 시간 초과가 아니면 null. 내부 칸 조회·SessionRecord·평가자 사실(`decisions[]`)에 실린다 |
 | resolution | `consensus` ∣ `timeout` |
 | support | 확정 순간의 지지 현황 스냅샷 `[{option_id, supporters: [participant]}]` |
 | confirmed_at, t_min | 확정 시각 |

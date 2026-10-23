@@ -11,9 +11,9 @@
 | type | payload |
 |---|---|
 | message.ack | {client_msg_id, message_id, run_id}. 메시지 저장 커밋 직후, 의도 분류 전에 보낸다 |
-| message.new | Message = {id, sender: candidate∣p1∣p2∣p3∣system, content, phase, is_invite, t_min, created_at}. 합의·시간 초과 채우기 공지는 `slot.confirmed` 바로 앞에 온다 |
+| message.new | Message = {id, sender: candidate∣p1∣p2∣p3∣system, content, phase, is_invite, t_min, created_at}. 합의·시간 초과 채우기 공지는 `slot.confirmed` 바로 앞에 온다(시간 초과 안내는 `sender = system`) |
 | typing | {participant: p1∣p2∣p3, state: "start"∣"stop"}. 화면 "OO님이 입력 중…". start 뒤 30초 안에 stop이 없으면 화면이 끈다 |
-| slot.confirmed | {phase, value, filled_by, resolution: "consensus"∣"timeout", outcome: "consensus"∣"candidate_decision"∣"timeout", t_min} |
+| slot.confirmed | {phase, value, filled_by: candidate∣p1∣p2∣p3∣system(시간 초과), resolution: "consensus"∣"timeout", outcome: "consensus"∣"candidate_decision"∣"timeout", t_min} |
 | phase.changed | {phase, previous_phase, reason: "start"∣"confirmed"∣"timeout", phase_started_at, phase_deadline_at, t_min} |
 | timer | {phase, phase_deadline_at, phase_remaining_seconds, session_remaining_seconds}. 단계 전환 때와 60초마다(시계 보정). 화면은 로컬로 카운트다운 |
 | materials.opened | {keyword, materials: [{material_id, title}]} |

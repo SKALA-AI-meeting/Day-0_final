@@ -130,7 +130,7 @@
 - 현재 단계의 정할 항목(SlotInput)만 입력과 [이걸로 정하기]가 있다. 칸 상태는 `empty | confirmed` 두 개뿐이고 입력 중인 값은 서버에 저장하지 않는다(`PUT slots`·`slot.filled` 없음, R5-5). [이걸로 정하기]는 확인 창(아래 "UX 결정" 2) 뒤 `POST .../confirm{value}`. 빈 값이면 버튼 비활성.
 - keyword 항목은 후보 4개 분절 버튼 중 하나를 골라 옵션 키로 정한다. 방어용으로 422 `invalid_keyword`가 오면 항목 아래 한 줄로 보인다. problem·solution은 짧은 글 입력이다(서버는 LLM 없이 안과 연결).
 - AI 동료가 정하거나 시간 초과로 정해지면 WS `slot.confirmed`로 항목이 잠기고 결과 줄이 쌓인다. 화면에만 있던 입력 값은 버린다. AI 합의 채우기는 칸 확정과 채운 자리의 공지("그럼 X로 정리할게요.")가 서버에서 함께 저장되므로 공지 `message.new`가 먼저 오고 이어서 `slot.confirmed` → `phase.changed` → `timer`가 온다. 공지 없이 칸만 잠기는 경우는 없다.
-- 시간 초과 안내 문구(R7, api 고정 문장): "시간이 다 돼서 대화에서 가장 많이 모인 의견인 X로 할게요." 우선순위 자리(서지안)의 메시지로 온다.
+- 시간 초과 안내(api 고정 문장): 실제 적용된 선택 규칙의 문장이 시스템 메시지로 온다(예: "시간 안에 정하지 못해 OO님이 지지한 X로 다음 단계로 넘어가요." 규칙별 문장은 [scenario.md](scenario.md) 1.4 "시간 초과 규칙").
 - 오류: 409 `phase_not_open`·`slot_confirmed`면 `/state`를 다시 읽고 "이미 정해진 항목이에요" 한 줄.
 
 **자료 (MaterialList + MarkdownViewer)**
