@@ -6,7 +6,7 @@ import { Avatar, Button } from "@/components/ui";
 import { ChatRoom } from "../chat";
 import type { StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
-import { captionAt, sentences } from "./caption";
+import { sentences, spokenCount } from "./caption";
 import { finishOnce, normalize } from "./recorder";
 
 type Item = {
@@ -85,7 +85,8 @@ export function VoiceRoom(props: Props) {
   const [remaining, setRemaining] = useState(60);
   const [level, setLevel] = useState(0);
   const [heardIds, setHeardIds] = useState<string[]>([]);
-  const [caption, setCaption] = useState("");
+  // 지금 재생 중인 동료 발언과, 대화 기록에 보여 줄 문장들(재생 위치까지)
+  const [speaking, setSpeaking] = useState<{ id: string; text: string } | null>(null);
   // [이대로 제출]을 누른 발언 id. 확인 시간이 남아도 바로 제출한다(ref는 polling용, state는 화면용)
   const confirmed = useRef("");
   const [confirmedId, setConfirmedId] = useState("");
@@ -282,12 +283,20 @@ export function VoiceRoom(props: Props) {
         const sound = new Audio(url);
         player.current = sound;
         setActive(item.seat);
-        // 재생 위치에 맞춰 지금 말하는 문장 하나만 자막으로 보인다
+        // 재생 위치에 맞춰 대화 기록의 말풍선에 문장을 하나씩 더한다
         const message = latest.current.snap.messages.find((m) => m.id === item.message_id);
         const parts = sentences(message?.content ?? "");
-        setCaption(parts[0] ?? "");
+        const show = (count: number) => {
+          const text = parts.slice(0, count).join(" ");
+          setSpeaking((prev) =>
+            prev?.id === item.message_id && prev.text === text
+              ? prev
+              : { id: item.message_id, text },
+          );
+        };
+        show(1);
         sound.ontimeupdate = () => {
-          if (sound.duration) setCaption(captionAt(parts, sound.currentTime / sound.duration));
+          if (sound.duration) show(spokenCount(parts, sound.currentTime / sound.duration));
         };
         await result("start");
         await new Promise<void>((resolve, reject) => {
@@ -319,7 +328,7 @@ export function VoiceRoom(props: Props) {
         if (op === operation.current) {
           busy.current = false;
           setActive(null);
-          setCaption("");
+          setSpeaking(null);
           player.current = null;
         }
       }
@@ -463,15 +472,19 @@ export function VoiceRoom(props: Props) {
       ? voice.utterance
       : null;
 
-  // 동료 발언은 재생이 끝난 것만 대화 기록에 남는다(재생 중에는 자막, V5 들은 범위).
-  // 지원자 발언과 시스템 안내는 바로 보인다.
+  // 동료 발언은 재생이 끝난 것만 대화 기록에 전부 보이고, 재생 중인 발언은 말한 문장까지만
+  // 보인다(목소리보다 글이 앞서지 않게, V5 들은 범위). 지원자 발언과 시스템 안내는 바로 보인다.
   const heard = useMemo(() => {
     const ids = new Set(heardIds);
     return {
       ...props.snap,
-      messages: props.snap.messages.filter((m) => !SEATS.has(m.sender) || ids.has(m.id)),
+      messages: props.snap.messages
+        .filter((m) => !SEATS.has(m.sender) || ids.has(m.id) || m.id === speaking?.id)
+        .map((m) =>
+          m.id === speaking?.id && !ids.has(m.id) ? { ...m, content: speaking.text } : m,
+        ),
     };
-  }, [props.snap, heardIds]);
+  }, [props.snap, heardIds, speaking]);
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="음성 회의">
@@ -510,10 +523,6 @@ export function VoiceRoom(props: Props) {
             </div>
           ))}
         </div>
-        {/* 자막 자리를 늘 비워 두어 문장이 바뀌어도 아래 대화 기록이 움직이지 않게 한다 */}
-        <p className="min-h-14 max-w-2xl text-center text-title3" aria-label="동료 발언 자막">
-          {caption}
-        </p>
         {!props.locked &&
           !error &&
           voice?.state === "USER_READY" &&

@@ -226,6 +226,8 @@ export function ChatRoom({
   const [seen] = useState(() => new Set(snap.messages.map((m) => m.id)));
   const count = snap.messages.length + pending.length;
   const lastCount = useRef(count);
+  // 음성 회의에서는 말풍선이 한 문장씩 길어지므로 마지막 글 길이가 바뀌어도 맨 아래를 따라간다
+  const tailLength = snap.messages.at(-1)?.content.length ?? 0;
 
   const fresh = useMemo(() => {
     const set = new Set<string>();
@@ -242,7 +244,7 @@ export function ChatRoom({
     // 맨 아래를 보고 있을 때만 따라간다. 위를 보고 있으면 "새 메시지 n개"
     if (atBottom.current) el.scrollTop = el.scrollHeight;
     else if (added > 0) setUnread((n) => n + added);
-  }, [count, typing.length]);
+  }, [count, typing.length, tailLength]);
 
   const onScroll = () => {
     const el = scroller.current;

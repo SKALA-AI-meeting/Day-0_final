@@ -197,7 +197,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <details><summary><code>components/debate/voice/caption.test.ts</code> (2)</summary>
 
 - 문장 끝 뒤 공백에서 나누고 빈 문장은 버린다
-- 재생 위치에 맞는 문장을 고른다(글자 수 비율)
+- 재생 위치까지 말한 문장 수를 센다(글자 수 비율)
 
 </details>
 
