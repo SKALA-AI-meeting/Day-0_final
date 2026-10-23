@@ -3,6 +3,7 @@
 # api가 채용 건 생성 때 positions.scenario.rubric으로 복사하고 assessment-mcp get_rubric이 그 복사본을 내준다.
 # get_rubric의 cards[{card_id, element, window}]는 cards.yaml에서 만든다. no_record_reasons.priority는 겹칠 때 앞선 순서(1이 먼저).
 # aux_scenes는 관찰 장면 표의 보조 행을 단계(phases)·카드 창(cards)으로 옮긴 보조 장면 구간이다(id는 차원 안에서 고유).
+# fields는 그 보조 장면에서 근거로 달 수 있는 제출 기획안 필드(proposal:<field>)다.
 # decision_timing(before∣after)은 핵심 카드 단계의 칸 결정 전·후 행동만 보는 차원이다(rubric.md 3.4). 평가 워커가 핵심 장면을 그 칸 결정 전·후(메시지 단계)로 자른다.
 rubric_version: debate-bars-2026-10-21-draft1
 draft: true
@@ -432,7 +433,7 @@ elements:
     aux_scenes:
     - { id: keyword_stage, label: "키워드 단계(채택 안 된 키워드에 대한 반응, 칸 확정 방식)", phases: [keyword] }
     - { id: solution_stage, label: "해결책 단계(반론 뒤 자기 안 보완·통합)", phases: [solution] }
-    - { id: proposal_stage, label: "기획안 단계(제출본 problem 필드)", phases: [proposal] }
+    - { id: proposal_stage, label: "기획안 단계(제출본 problem 필드)", phases: [proposal], fields: [problem] }
     levels:
     - level: 5
       anchor: 다수안의 근거를 구체적으로 짚어 인정하고, 자기 안과 비교한 뒤 통합안 또는 근거 있는 입장 조정을 스스로 내놓는다
@@ -465,7 +466,7 @@ elements:
     core_scene: flexibility_majority 카드 시각 ~ 해결책 단계 끝
     aux_scenes:
     - { id: keyword_stage, label: "키워드 단계(채택 안 된 키워드에 대한 반응, 칸 확정 방식)", phases: [keyword] }
-    - { id: proposal_stage, label: "기획안 단계(제출본 problem 필드)", phases: [proposal] }
+    - { id: proposal_stage, label: "기획안 단계(제출본 problem 필드)", phases: [proposal], fields: [problem] }
     levels:
     - level: 5
       anchor: 결정 방법을 제안하거나 반대 의견을 명시적으로 확인한 뒤, 자기 안이 아니어도 합의된 안으로 확정·정리한다
@@ -499,7 +500,7 @@ elements:
     decision_timing: after
     aux_scenes:
     - { id: keyword_decided, label: "키워드 결정 뒤 문제 상황 단계(채택 안 된 키워드에 대한 반응)", phases: [problem] }
-    - { id: proposal_stage, label: "기획안 단계(해결책 결정 뒤, 제출본 problem 필드)", phases: [proposal] }
+    - { id: proposal_stage, label: "기획안 단계(해결책 결정 뒤, 제출본 problem 필드)", phases: [proposal], fields: [problem] }
     levels:
     - level: 5
       anchor: 결과를 분명히 받아들이고 자기 안의 쓸 만한 요소를 결정된 안에 연결해 팀이 쓸 수 있게 넘긴다. 재론 없음
@@ -533,7 +534,7 @@ elements:
     decision_timing: after
     aux_scenes:
     - { id: keyword_decided, label: "키워드 결정 뒤 문제 상황 단계(채택 안 된 키워드에 대한 반응)", phases: [problem] }
-    - { id: proposal_stage, label: "기획안 단계(해결책 결정 뒤, 제출본 problem 필드)", phases: [proposal] }
+    - { id: proposal_stage, label: "기획안 단계(해결책 결정 뒤, 제출본 problem 필드)", phases: [proposal], fields: [problem] }
     levels:
     - level: 5
       anchor: 결정된 문제를 전제로 해결책을 근거와 함께 내고, 다른 참여자 안과 연결하거나 논의를 정리해 결론으로 이끈다

@@ -296,3 +296,55 @@ def test_output_shapes_with_one_meaning_are_read():
     # 예전 형식 evidence_refs(문자열)도 핵심 장면 근거로 읽는다
     legacy = {k: v for k, v in level_row("listen_engage", "msg:m-15").items() if k != "evidence"}
     assert check({**legacy, "evidence_refs": ["msg:m-15"]}) is None
+
+
+# ---- 보조 장면 근거의 수준 상한·기획안 필드 -------------------------------------------------
+
+
+async def test_level5_from_auxiliary_scene_evidence_only_is_capped_to_4_low():
+    out = copy.deepcopy(element_outputs()["listening"])
+    row = dim(out, "listen_engage")
+    row.update(level=5, confidence="high")
+    row["evidence"] = [
+        {"ref": "msg:m-15", "scene": "session"},
+        {"ref": "msg:m-17", "scene": "session"},
+    ]
+    rows, _, _, usage = await run("listening", out)
+    assert usage["element_retries"] == 0
+    capped = rows["listen_engage"]
+    assert capped["level"] == 4 and capped["confidence"] == "low"
+    assert capped["rationale"].endswith("(보조 장면 근거만이라 수준 상한 4 적용)")
+    # 핵심 장면 근거가 하나라도 있으면 5 그대로
+    row["evidence"][0]["scene"] = "core"
+    rows, _, _, _ = await run("listening", out)
+    assert rows["listen_engage"]["level"] == 5
+
+
+def _undecided_problem():
+    record = copy.deepcopy(RECORD)
+    record["slots"] = [s for s in record["slots"] if s["phase"] != "problem"]
+    return record
+
+
+async def test_proposal_field_tagged_with_aux_scene_counts_as_scene_evidence():
+    record = _undecided_problem()  # 결정 뒤 핵심 장면 없음
+    scenes = build_scenes(record, RUBRIC)
+    refs = RefIndex(record, load("internal_contributions"))
+
+    def check_on(row):
+        return check_dimension(tidy(row), refs, FORBIDDEN, scenes["flex_acceptance"])
+
+    tagged = level_row("flex_acceptance", ("proposal:problem", "proposal_stage"))
+    assert check_on(tagged) is None
+    wrong = level_row("flex_acceptance", ("proposal:idea_credit", "proposal_stage"))
+    assert check_on(wrong).startswith("out_of_scene:")
+    out = copy.deepcopy(element_outputs()["flexibility"])
+    dim(out, "flex_acceptance")["evidence"] = [
+        {"ref": "proposal:problem", "scene": "proposal_stage"}
+    ]
+    dim(out, "flex_forward")["evidence"] = [{"ref": "proposal:problem"}]  # 장면 id 없음 = 핵심
+    rows, _, _, usage = await run("flexibility", out, record=record)
+    assert usage["element_retries"] == 0
+    assert rows["flex_acceptance"]["level"] is not None  # 보조 장면 근거라 변환하지 않음
+    assert rows["flex_acceptance"]["confidence"] == "low"
+    assert rows["flex_forward"]["no_record_reason"] == "event_not_fired"

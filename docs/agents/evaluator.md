@@ -13,6 +13,10 @@
 - 요소마다 차원 행(수준 또는 기록 없음 사유·근거 참조·확신도) (근거마다 장면 id, 대표 행동 한 구절 `summary_line`) → 검증 → 최종 차원 행에서 코드가 조립한 요소 요약(결정 A2) → assessment-mcp `save_evaluation`(형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave)
 - `prompt_versions`(공통·요소 프롬프트 파일별 해시), `rubric_version`, `model`
 
+## 장면 검증의 범위
+
+워커는 근거가 단 장면(핵심 `core` 또는 척도 `aux_scenes`의 보조 장면) 안에 **위치하는지**만 검증한다. 메시지가 그 차원에 관련된 행동인지는 평가자의 판단이고 워커는 내용을 보지 않는다. 범위가 세션 전체인 장면(경청·배려·정직의 `session` 보조 장면, 핵심 카드가 없는 차원의 핵심 장면)에서는 `out_of_scene`이 지원자 메시지를 하나도 막지 않고, 다른 사람의 메시지(`peer_evidence`)와 그 차원에 없는 장면 id(`unknown_scene`)만 막는다. 보조 장면 근거만인 수준은 확신도 최대 `low`, 수준 5는 4로 깎는다. 보조 장면이 받는 기획안 필드(`fields`)는 그 장면 id를 달아 근거로 쓸 수 있다. 정본 [product/rubric.md](../product/rubric.md) 7.3.
+
 ## 데이터 파일 (`scenarios/missions/debate/`, 모두 채용 건 복사본으로 읽음)
 
 | 파일 | 쓰는 내용 |

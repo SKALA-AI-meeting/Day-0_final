@@ -762,6 +762,7 @@ RUBRIC = {
                             "label": str,
                             "phases?": [PHASE],
                             "cards?": [CARD],
+                            "fields?": [str],
                         }
                     ],
                     "levels": [{"level": LEVEL, "anchor": str, "reviewer_hint": str}],

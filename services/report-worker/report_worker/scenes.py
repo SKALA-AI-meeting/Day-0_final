@@ -15,7 +15,7 @@
 평가 프롬프트의 `[사실]` 블록과 워커 검증(`evaluate.check_facts`)이 같은 값을 쓴다.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 PHASES = ("keyword", "problem", "solution", "proposal")
@@ -52,6 +52,7 @@ class Scene:
     exists: bool
     members: frozenset[str]  # 장면에 드는 메시지 id(보낸 자리 무관)
     candidate_ids: tuple[str, ...]  # 그중 지원자 메시지(저장 순서)
+    fields: frozenset[str] = frozenset()  # 이 장면 근거로 달 수 있는 기획안 필드
 
     def contains(self, message_id: str) -> bool:
         return message_id in self.members
@@ -192,7 +193,8 @@ def build_scenes(record: dict[str, Any], rubric: dict[str, Any]) -> dict[str, Di
                 for card in spec.get("cards") or []:
                     spec_members |= fired.get(card, set())
                 spec_exists = bool(phases) or any(c in fired for c in spec.get("cards") or [])
-                aux.append(_scene(spec["id"], spec["label"], spec_exists, spec_members, messages))
+                scene = _scene(spec["id"], spec["label"], spec_exists, spec_members, messages)
+                aux.append(replace(scene, fields=frozenset(spec.get("fields") or [])))
             out[dimension_id] = DimensionScenes(
                 dimension_id=dimension_id,
                 session_wide=not core_cards,
@@ -216,6 +218,7 @@ def _scene_row(scene: Scene) -> dict[str, Any]:
         "exists": scene.exists,
         "candidate_messages": [f"msg:{i}" for i in scene.candidate_ids],
         "candidate_message_count": len(scene.candidate_ids),
+        **({"proposal_fields": sorted(scene.fields)} if scene.fields else {}),
     }
 
 

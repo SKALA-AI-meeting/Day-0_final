@@ -563,7 +563,8 @@
             {
               "id": "proposal_stage",
               "label": "기획안 단계(제출본 problem 필드)",
-              "phases": ["proposal"]
+              "phases": ["proposal"],
+              "fields": ["problem"]
             }
           ],
           "levels": [
@@ -609,7 +610,8 @@
             {
               "id": "proposal_stage",
               "label": "기획안 단계(제출본 problem 필드)",
-              "phases": ["proposal"]
+              "phases": ["proposal"],
+              "fields": ["problem"]
             }
           ],
           "levels": [
@@ -655,7 +657,8 @@
             {
               "id": "proposal_stage",
               "label": "기획안 단계(해결책 결정 뒤, 제출본 problem 필드)",
-              "phases": ["proposal"]
+              "phases": ["proposal"],
+              "fields": ["problem"]
             }
           ],
           "levels": [
@@ -701,7 +704,8 @@
             {
               "id": "proposal_stage",
               "label": "기획안 단계(해결책 결정 뒤, 제출본 problem 필드)",
-              "phases": ["proposal"]
+              "phases": ["proposal"],
+              "fields": ["problem"]
             }
           ],
           "levels": [

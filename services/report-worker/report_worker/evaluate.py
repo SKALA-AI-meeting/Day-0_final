@@ -58,6 +58,7 @@ FAILED_RATIONALE = (
     "원문 기록 확인을 권장합니다. (사유: {code})"
 )
 CAPPED_MARK = " (근거 1개로 수준 상한 3 적용)"
+AUX_CAPPED_MARK = " (보조 장면 근거만이라 수준 상한 4 적용)"
 NOT_FIRED_MARK = " (핵심 장면 없음·보조 장면 근거 없음으로 이벤트 미발생 처리)"
 REF_PATTERN = re.compile(r"^(msg|slot|proposal|contribution):(.+)$")
 
@@ -327,12 +328,25 @@ def check_facts(row: dict[str, Any], refs: "RefIndex", dim: DimensionScenes | No
             f"{hint} 남은 지원자 근거가 하나도 없을 때만 기록 없음 사유를 쓴다"
         )
     tags = {f"msg:{i}": scene_of(row, f"msg:{i}") for i in msgs}
-    unknown = sorted({t for t in tags.values() if dim.get(t) is None})
+    field_tags = {  # 보조 장면 id를 단 기획안 필드 근거(장면 id가 없으면 기존처럼 핵심)
+        r: scene_of(row, r)
+        for r in row["evidence_refs"]
+        if r.startswith("proposal:") and scene_of(row, r) != CORE
+    }
+    unknown = sorted({t for t in [*tags.values(), *field_tags.values()] if dim.get(t) is None})
     if unknown:
         return (
             f"unknown_scene: 장면 id {unknown}는 이 차원에 없다. [사실]의 이 차원 scenes id"
             f"({', '.join(dim.ids)}) 중 하나를 근거마다 단다"
         )
+    for ref, tag in field_tags.items():
+        field = ref.split(":", 1)[1]
+        if field not in dim.get(tag).fields:
+            allowed = [f"{x.scene_id}: {sorted(x.fields)}" for x in dim.aux if x.fields]
+            return (
+                f"out_of_scene: 사실 — {ref}는 장면 {tag}가 근거로 받는 기획안 필드가 아니다. "
+                f"기획안 필드를 받는 보조 장면: {', '.join(allowed) or '없음'}"
+            )
     if not core.exists and all(t == CORE for t in tags.values()):
         return None  # 핵심 장면 없이 핵심 장면 근거만: not_fired가 event_not_fired로 바꾼다
     for ref, tag in tags.items():
@@ -526,10 +540,18 @@ def failed_row(dimension_id: str, code: str = "format") -> dict[str, Any]:
 # ---- 확신도 상한 (rubric.md 2.4) ---------------------------------------------------------------
 
 
+def scene_refs(row: dict[str, Any], refs: RefIndex) -> list[str]:
+    """장면이 정해지는 근거: 지원자 메시지와, 보조 장면 id를 단 기획안 필드."""
+    tagged_fields = [
+        r for r in row["evidence_refs"] if r.startswith("proposal:") and scene_of(row, r) != CORE
+    ]
+    return candidate_msgs(row, refs) + tagged_fields
+
+
 def aux_only(row: dict[str, Any], refs: RefIndex) -> bool:
-    """지원자 메시지 근거가 있고 모두 보조 장면 id가 달렸다."""
-    msgs = candidate_msgs(row, refs)
-    return bool(msgs) and all(scene_of(row, r) != CORE for r in msgs)
+    """장면이 정해지는 근거가 있고 모두 보조 장면 id가 달렸다."""
+    scoped = scene_refs(row, refs)
+    return bool(scoped) and all(scene_of(row, r) != CORE for r in scoped)
 
 
 def confidence_cap(
@@ -556,7 +578,7 @@ def not_fired(row: dict[str, Any], dim: DimensionScenes | None, refs: RefIndex) 
     """핵심 장면이 없는데(핵심 카드 미발생·결정 뒤 없음) 보조 장면 근거 없이 수준을 낸 행."""
     if row["level"] is None or dim is None or dim.core.exists:
         return False
-    return not any(scene_of(row, r) != CORE for r in candidate_msgs(row, refs))
+    return not any(scene_of(row, r) != CORE for r in scene_refs(row, refs))
 
 
 def _lower(a: str, b: str) -> str:
@@ -593,7 +615,10 @@ def element_summary(element: str, rows: list[dict[str, Any]], summary: str) -> d
 
 def first_sentence(rationale: str) -> str:
     """판단 이유의 첫 문장(워커가 붙인 상한·변환 표시는 뺀다). summary_line이 없을 때 쓴다."""
-    text = rationale.replace(CAPPED_MARK, "").replace(NOT_FIRED_MARK, "").strip()
+    text = rationale
+    for mark in (CAPPED_MARK, AUX_CAPPED_MARK, NOT_FIRED_MARK):
+        text = text.replace(mark, "")
+    text = text.strip()
     return re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0] if text else ""
 
 
@@ -820,6 +845,8 @@ async def evaluate_element(
                 }
             )
             continue
+        if row["level"] == 5 and aux_only(row, ctx.refs):  # 보조 장면만으로 5를 주지 않는다
+            row = {**row, "level": 4, "rationale": row["rationale"] + AUX_CAPPED_MARK}
         units = ctx.refs.counted_units(row["evidence_refs"], dimension_id)
         if row["level"] is not None and row["level"] >= 4 and units < 2:
             row = {**row, "level": 3, "rationale": row["rationale"] + CAPPED_MARK}

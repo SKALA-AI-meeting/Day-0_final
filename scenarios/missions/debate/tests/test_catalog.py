@@ -435,6 +435,7 @@ def test_rubric_scene_data(rubric, cards):
                 assert scene["label"] and (scene.get("phases") or scene.get("cards"))
                 assert set(scene.get("phases") or []) <= phases
                 assert set(scene.get("cards") or []) <= card_ids
+                assert all(isinstance(f, str) and f for f in scene.get("fields") or [])
     assert timed == {
         "flex_openness": "before",
         "flex_acceptance": "after",

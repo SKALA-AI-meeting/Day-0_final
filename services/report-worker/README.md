@@ -67,7 +67,7 @@ make test                                               # 전체
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 72개(live 2개 포함, `make test`는 live를 뺀다).
+총 74개(live 2개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/test_evaluate.py</code> (29)</summary>
 
@@ -97,7 +97,7 @@ make test                                               # 전체
 
 </details>
 
-<details><summary><code>tests/test_facts_checks.py</code> (19)</summary>
+<details><summary><code>tests/test_facts_checks.py</code> (21)</summary>
 
 - `test_core_scene_follows_card_window_rule_by_order_and_phase`
 - `test_rounded_minutes_do_not_move_a_message_across_the_decision`
@@ -116,6 +116,8 @@ make test                                               # 전체
 - `test_core_missing_with_only_core_tagged_evidence_becomes_event_not_fired`
 - `test_tidy_fixes_only_single_meaning_shapes`
 - `test_output_shapes_with_one_meaning_are_read`
+- `test_level5_from_auxiliary_scene_evidence_only_is_capped_to_4_low`
+- `test_proposal_field_tagged_with_aux_scene_counts_as_scene_evidence`
 
 </details>
 

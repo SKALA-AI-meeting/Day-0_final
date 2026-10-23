@@ -120,7 +120,7 @@ JSON 하나만 낸다. 차원마다 정확히 한 행, 척도에 있는 `dimensi
 ```
 
 - `result`: 수준 1~5 정수, 또는 기록 없음 사유 코드 문자열(`no_activity`·`not_applicable`·`event_not_fired`·`auto_submitted_blank`) 하나. 기록 없음이면 `confidence`는 null.
-- `evidence`: `{ref, scene}` 목록. 메시지 근거는 세션 기록에서 `sender`가 `candidate`인 메시지만 된다(AI 동료·시스템 메시지는 `context_refs`로). `ref`는 세션 기록의 `ref` 문자열(지원자 `msg:`·`slot:`·`proposal:`, 맥락 `contribution:`), `scene`은 지원자 메시지가 드는 장면 id(`core` 또는 보조 장면 id). 칸·기획안·대조표 참조는 `scene`을 생략한다.
+- `evidence`: `{ref, scene}` 목록. 메시지 근거는 세션 기록에서 `sender`가 `candidate`인 메시지만 된다(AI 동료·시스템 메시지는 `context_refs`로). `ref`는 세션 기록의 `ref` 문자열(지원자 `msg:`·`slot:`·`proposal:`, 맥락 `contribution:`), `scene`은 지원자 메시지가 드는 장면 id(`core` 또는 보조 장면 id). 칸·대조표 참조와 핵심 장면의 기획안 필드는 `scene`을 생략한다. 보조 장면이 받는 기획안 필드(`[사실]` 그 장면의 `proposal_fields`)를 그 보조 장면 근거로 쓸 때는 그 장면 id를 단다.
 - `context_refs`: 선택. 장면을 만든 AI 동료·시스템 메시지를 `msg:<메시지 id>`로. 근거로 세지 않고 저장하지 않는다.
 - `rationale`: 어떤 앵커에 맞췄는지, 핵심/보조 장면, ±1 조정·상한 적용, 경계표 측면을 1~3문장으로 적는다.
 - `summary_line`: `result`가 수준인 차원만. 이 행의 `rationale`에 쓴 대표 행동을 한 구절로(40자 안팎, 수준 숫자·판정 형용사 없이). 워커가 요소 요약을 이 구절과 기록 없음 사유로 조립한다.
