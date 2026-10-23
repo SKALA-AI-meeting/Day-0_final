@@ -83,7 +83,7 @@ export function LevelChips({ c }: { c: Candidate }) {
         {!!c.low_confidence_count && (
           <span
             className="inline-flex items-center gap-1 text-warning"
-            title="확신도 low로 판단한 차원 수"
+            title="확신도 low로 판단한 세부 행동 수"
           >
             <CircleAlert aria-hidden className="size-3.5" />
             근거 약함 {c.low_confidence_count}

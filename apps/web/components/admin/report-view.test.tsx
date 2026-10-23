@@ -1,5 +1,6 @@
 // 완료 기준(리포트): 머리 안내·설계된 장면, 요약표 "수준 N (1~5)"(합계 없음), 타임라인, 차원 수준·확신도·근거,
-// low 표시, 사유 5종, 기여 대조표, 사실 지표, 기획안, AI 활용, 차원 단위 조정(메모 필수)·요소 재계산·검토 완료·final 메모,
+// low 표시, 기록 상태 3종(장면 없음·반응 없음·판단 보류)과 사유 6종, 용어 설명, 화면 용어 "세부 행동"(결정 A3·A4),
+// 기여 대조표, 사실 지표, 기획안, AI 활용, 차원 단위 조정(메모 필수)·요소 재계산·검토 완료·final 메모,
 // "기록에서 보기" 하이라이트, 인쇄 때 차원 전부 펼침. 샘플 리포트 픽스처 요건.
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, test } from "vitest";
@@ -8,13 +9,14 @@ import sampleJson from "@/fixtures/sample-report.json";
 import { adminMockRequest as mockRequest, resetAdminMock } from "@/mocks/admin";
 import recordJson from "@/mocks/fixtures/admin_record.json";
 
-import { NO_RECORD_TEXT } from "./format";
+import { NO_RECORD_TEXT, RECORD_STATE_TEXT, REPORT_TERMS } from "./format";
 import { RecordView } from "./record-view";
 import {
   AI_HEADER,
   DESIGNED_SCENE_NOTICE,
   FACTS_NOTE,
   PARTIAL_DELIVERY,
+  PREEMPTED_CARD,
   REPORT_NOTICE,
   ReportView,
 } from "./report-view";
@@ -30,7 +32,7 @@ const TOTAL = /총점|합계|점수/;
 // 고정 안내문("합격·불합격·순위는 판정하지 않습니다")을 뺀 나머지에 판정 표현이 없어야 한다
 const judged = (html: string) => /합격|(?<!우선)순위/.test(html.replace(REPORT_NOTICE, ""));
 
-test("샘플 리포트 픽스처: 5요소·19차원, 사유 5종, 미발생 카드 1장, 조정 1개, 확신도 3종, 근거 4종", () => {
+test("샘플 리포트 픽스처: 5요소·19차원, 사유 6종, 미발생 카드 1장, 조정 1개, 확신도 3종, 근거 4종", () => {
   expect(sample.elements).toHaveLength(5);
   expect(sample.dimensions).toHaveLength(19);
   const reasons = new Set(sample.dimensions.map((d) => d.no_record_reason).filter(Boolean));
@@ -58,12 +60,12 @@ test("샘플 리포트 픽스처: 5요소·19차원, 사유 5종, 미발생 카�
   expect(JSON.stringify(sample)).not.toMatch(/"total_score"|"sum"/);
 });
 
-test("샘플 리포트 화면: 사유 문장 5종, 미발생 카드, 담당자 조정 나란히, 조정·검토 UI 없음", () => {
+test("샘플 리포트 화면: 사유 문장 6종, 미발생 카드, 담당자 조정 나란히, 조정·검토 UI 없음", () => {
   const html = renderToStaticMarkup(<ReportView report={sample} recordHref={href} sample />);
   for (const text of Object.values(NO_RECORD_TEXT)) expect(html).toContain(text);
   expect(html).toContain("이벤트 미발생");
   // 요약표 표시 설명, 판단 보류 개수, 판단 보류 차원 행의 원문 기록 링크
-  expect(html).toContain("확신도 low로 판단한 차원 수");
+  expect(html).toContain("확신도 low로 판단한 세부 행동 수");
   // 픽스처의 판단 보류 차원은 flexibility 하나뿐이다
   expect(html.match(/판단 보류 \d/g)).toEqual(["판단 보류 1"]);
   expect(html).toMatch(/href="\/r"[^>]*>원문 기록/);
@@ -120,7 +122,8 @@ test("리포트 draft 렌더: 안내·요약·타임라인·차원·근거·사�
 
   // 인쇄 미리보기: 19개 차원 전부 펼침, 조정 버튼은 no-print
   const printed = renderToStaticMarkup(<ReportView report={draft} recordHref={href} printing />);
-  expect(printed.match(/<details[^>]* open=""/g)).toHaveLength(19);
+  expect(printed.match(/<details id="dim-[^"]*"[^>]* open=""/g)).toHaveLength(19);
+  expect(printed).toMatch(/<details id="terms"[^>]* open=""/); // 용어 설명도 펼침
 });
 
 test("차원 조정은 메모 필수, 요소 수준 재계산, 검토 완료 → 확정 중 → final → 메모 추가", async () => {
@@ -220,4 +223,80 @@ test("사실 지표에 제출 때 빈 칸과 빈칸 경고 확인이 나오고, 
   expect(html).toContain("근거 · 아이디어 기여");
   expect(html).toContain("자동 제출");
   expect(html).toContain("지원자 결정");
+});
+
+test("기록 상태: 기록 없음 차원마다 장면 없음·반응 없음·판단 보류 표식과 사유, 요약표는 상태별 개수", () => {
+  const html = renderToStaticMarkup(<ReportView report={sample} recordHref={href} sample />);
+  for (const state of Object.values(RECORD_STATE_TEXT)) expect(html).toContain(state);
+  // 표식 칩(상태)과 사유 문장이 함께 보인다
+  expect(html).toMatch(/>장면 없음<\/span><span>선결정 · 카드 전에 지원자가 칸을 확정</);
+  expect(html).toMatch(/>반응 없음<\/span><span>지원자 활동 없음</);
+  expect(html).toMatch(/>판단 보류<\/span><span>판단 보류 · 근거 부족/);
+  expect(html).toContain("근거 없음 · 장면 없음 · 이벤트 미발생");
+  // 설득: 기록 없음 2(장면 없음 2), 정직: 장면 없음 1·반응 없음 1
+  expect(html).toMatch(/2\/4 세부 행동<span class="block text-xs">장면 없음 2<\/span>/);
+  expect(html).toMatch(
+    /2\/3 세부 행동<span class="block text-xs">장면 없음 1<\/span><span class="block text-xs">반응 없음 1<\/span>/,
+  );
+  expect(html).not.toContain(">기록 없음</span><span>"); // 기록 없음 하나로 뭉치지 않는다
+});
+
+test("용어 설명과 화면 용어: 세부 행동·수준·확신도·상태·선결정·설계된 장면, 차원은 보이지 않는다", async () => {
+  const draft = await get();
+  const withTerm: Report = {
+    ...draft,
+    elements: draft.elements.map((e, i) =>
+      i === 0 ? { ...e, summary: `${e.summary} 이 차원은 장면이 없었습니다.` } : e,
+    ),
+    dimensions: draft.dimensions.map((d, i) =>
+      i === 0 ? { ...d, rationale: "이 차원의 핵심 장면에서 두 번 답함(앵커 4)." } : d,
+    ),
+  };
+  const html = renderToStaticMarkup(
+    <ReportView report={withTerm} recordHref={href} onReview={() => {}} />,
+  );
+  expect(html).toContain("용어 설명");
+  for (const t of REPORT_TERMS) {
+    expect(html).toContain(t.term);
+    expect(html).toContain(t.text);
+  }
+  for (const t of [
+    "세부 행동",
+    "수준 1~5",
+    "확신도",
+    "장면 없음",
+    "반응 없음",
+    "선결정",
+    "설계된 장면",
+  ]) {
+    expect(REPORT_TERMS.map((x) => x.term)).toContain(t);
+  }
+  expect(html).toContain("이 세부 행동의 핵심 장면에서 두 번 답함.");
+  expect(html).toContain("이 세부 행동은 장면이 없었습니다.");
+  expect(html).not.toContain("차원");
+  expect(html).not.toMatch(TOTAL);
+  expect(judged(html)).toBe(false);
+});
+
+test("카드 장면: 지원자 선확정으로 생기지 않은 카드는 이벤트 미발생 대신 선결정", () => {
+  const preempted: Report = {
+    ...sample,
+    cards: sample.cards.map((c) =>
+      c.card_id === "persuasion_solution" ? { ...c, fired_at: null, preempted: true } : c,
+    ),
+  };
+  const html = renderToStaticMarkup(<ReportView report={preempted} recordHref={href} sample />);
+  expect(html).toContain(`>${PREEMPTED_CARD}</span>`);
+  // 이전 리포트(preempted 필드 없음)는 이벤트 미발생
+  const old: Report = {
+    ...sample,
+    cards: sample.cards.map((c) => {
+      const copy = { ...c };
+      delete copy.preempted;
+      return copy;
+    }),
+  };
+  const oldHtml = renderToStaticMarkup(<ReportView report={old} recordHref={href} sample />);
+  expect(oldHtml).not.toContain(`>${PREEMPTED_CARD}</span>`);
+  expect(oldHtml).toContain(">이벤트 미발생</span>");
 });

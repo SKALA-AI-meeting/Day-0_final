@@ -1,7 +1,9 @@
 "use client";
 
-// 리포트 화면(한 열 문서): 머리 → 요약표 → ① 토론 흐름 → ② 요소 섹션(차원 접힘) → ③ 사실 지표 → ④ 제출 기획안 → ⑤ AI 활용 → 검토.
+// 리포트 화면(한 열 문서): 머리(용어 설명 포함) → 요약표 → ① 토론 흐름 → ② 요소 섹션(차원 접힘) → ③ 사실 지표 → ④ 제출 기획안 → ⑤ AI 활용 → 검토.
 // 총점·합계는 어디에도 없다. 인쇄(printing)에서는 차원을 전부 펼치고 근거 앞뒤 맥락은 근거 메시지만 보인다.
+// 화면에 보이는 말은 "차원" 대신 "세부 행동"이고(결정 A4), 기록 없음은 상태(장면 없음·반응 없음·판단 보류)와
+// 사유를 함께 보인다(결정 A3). 코드의 이름은 계약 그대로 dimension이다.
 import { CircleCheck, Clock3, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
@@ -23,6 +25,7 @@ import {
   DIMENSION_DEFINITION,
   formatDateTime,
   materialTitle,
+  displayTerms,
   NO_RECORD_TEXT,
   officeClock,
   ORIGIN_TEXT,
@@ -32,6 +35,10 @@ import {
   proposalFieldLabel,
   purgeText,
   nameOf,
+  RECORD_STATE,
+  RECORD_STATE_TEXT,
+  REPORT_TERMS,
+  stateOf,
 } from "./format";
 import { resolutionLabel } from "@/lib/resolution";
 import {
@@ -55,6 +62,7 @@ import type {
   MessageEvidence,
   NoRecordReason,
   RecordRef,
+  RecordState,
   Report,
   ReportCard,
   ReviewBody,
@@ -62,7 +70,7 @@ import type {
 } from "./types";
 
 export const REPORT_NOTICE =
-  "이 리포트는 담당자가 평가할 때 보는 참고 자료입니다. 수준은 세션 뒤 AI 평가 에이전트가 공개된 척도로 근거를 들어 판단한 값이며, 담당자가 원문을 보고 차원 단위로 조정해 최종 평가합니다. 합격·불합격·순위는 판정하지 않습니다.";
+  "이 리포트는 담당자가 평가할 때 보는 참고 자료입니다. 수준은 세션 뒤 AI 평가 에이전트가 공개된 척도로 근거를 들어 판단한 값이며, 담당자가 원문을 보고 세부 행동 단위로 조정해 최종 평가합니다. 합격·불합격·순위는 판정하지 않습니다.";
 export const DESIGNED_SCENE_NOTICE =
   "동료의 반대·압박·머뭇거림 같은 장면은 같은 채용 건의 모든 지원자에게 같게 설계된 장면입니다. 지원자 안이 채택되지 않은 것은 설계의 결과일 수 있습니다.";
 export const REVIEW_CONFIRM =
@@ -72,9 +80,12 @@ export const AI_HEADER = "판단 기준 없음, 면접 확인용";
 // 발동했지만 담당 동료 전원이 카드 발언을 게시하지 못한 카드(delivered=false). 평가는 핵심 장면으로 세지 않는다
 export const PARTIAL_DELIVERY = "일부 동료만 전달됨";
 export const SAMPLE_NOTICE =
-  "예시 데이터로 만든 샘플 리포트입니다. 화면의 모든 표시 상태(기록 없음 사유 5종, 미발생 카드, 담당자 조정)를 한 번에 보이도록 꾸민 값입니다.";
+  "예시 데이터로 만든 샘플 리포트입니다. 화면의 모든 표시 상태(기록 상태 3종과 사유 6종, 미발생 카드, 담당자 조정)를 한 번에 보이도록 꾸민 값입니다.";
+// 카드 장면이 지원자 선확정으로 생기지 않았을 때(Report cards[].preempted)
+export const PREEMPTED_CARD = "선결정";
 
 const REASONS = Object.keys(NO_RECORD_TEXT) as NoRecordReason[];
+const STATES = Object.keys(RECORD_STATE_TEXT) as RecordState[];
 const LEVELS: Level[] = [1, 2, 3, 4, 5];
 
 const BUBBLE: Record<Sender, string> = {
@@ -94,8 +105,8 @@ type Ctx = {
   printing: boolean;
 };
 
-/** 평가 출력의 "(앵커 N)" 표기는 내부 용어라 화면에서 지운다 */
-const cleanRationale = (text: string) => text.replace(/\s*\(앵커 \d\)/g, "");
+/** 평가 출력의 "(앵커 N)" 표기와 "차원"은 내부 용어라 화면에서 지우거나 화면 용어로 바꾼다 */
+const cleanRationale = (text: string) => displayTerms(text.replace(/\s*\(앵커 \d\)/g, ""));
 
 function levelChip(level: Level | null, reason: NoRecordReason | null, adjusted?: boolean) {
   return level != null ? (
@@ -103,9 +114,39 @@ function levelChip(level: Level | null, reason: NoRecordReason | null, adjusted?
   ) : (
     <LevelChip
       level={null}
+      state={reason ? stateOf(reason) : undefined}
       reason={reason ? NO_RECORD_TEXT[reason] : "기록 없음"}
       adjusted={adjusted}
     />
+  );
+}
+
+/** 발동하지 않은 카드 표시: 선결정이면 "선결정", 아니면 "이벤트 미발생" */
+const unfiredText = (card: ReportCard) => (card.preempted ? PREEMPTED_CARD : "이벤트 미발생");
+
+/** 머리의 용어 설명. 기본은 접힘, 인쇄에서는 펼친다 */
+function TermsGuide({ printing }: { printing: boolean }) {
+  return (
+    <details
+      id="terms"
+      open={printing || undefined}
+      className="group rounded-lg border border-line bg-surface px-4 py-3 text-sm"
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-2 font-medium">
+        <span className="text-subtle transition-transform group-open:rotate-90" aria-hidden>
+          ›
+        </span>
+        용어 설명
+      </summary>
+      <dl className="mt-3 grid gap-x-4 gap-y-2 sm:grid-cols-[6.5rem_1fr]">
+        {REPORT_TERMS.map((t) => (
+          <div key={t.term} className="contents">
+            <dt className="font-medium">{t.term}</dt>
+            <dd className="text-muted">{t.text}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }
 
@@ -292,7 +333,7 @@ function CardScene({ ctx, card }: { ctx: Ctx; card: ReportCard }) {
     <li className="flex flex-wrap items-center gap-2 text-sm">
       <DesignedChip />
       <span className="text-muted tabular-nums">
-        {card.fired_at != null ? ctx.clock(card.fired_at) : "이벤트 미발생"}
+        {card.fired_at != null ? ctx.clock(card.fired_at) : unfiredText(card)}
       </span>
       {card.fired_at != null && !card.delivered && <Chip tone="warning">{PARTIAL_DELIVERY}</Chip>}
       <span className={cn(card.fired_at == null && "text-muted")}>{card.scene}</span>
@@ -342,10 +383,14 @@ function AdjustPanel({ dimension, edit, editable, onSave, onClear }: AdjustProps
               className="w-fit rounded-md border border-line bg-surface px-3 py-2 text-ink"
             >
               <option value="">사유 선택</option>
-              {REASONS.map((r) => (
-                <option key={r} value={r}>
-                  {NO_RECORD_TEXT[r]}
-                </option>
+              {STATES.map((state) => (
+                <optgroup key={state} label={RECORD_STATE_TEXT[state]}>
+                  {REASONS.filter((r) => RECORD_STATE[r] === state).map((r) => (
+                    <option key={r} value={r}>
+                      {NO_RECORD_TEXT[r]}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>
@@ -492,7 +537,10 @@ function DimensionRow({
           </div>
         ) : (
           <p className="text-sm text-muted">
-            근거 없음 · {final.reason ? NO_RECORD_TEXT[final.reason] : "기록 없음"}
+            근거 없음 ·{" "}
+            {final.reason
+              ? `${stateOf(final.reason)} · ${NO_RECORD_TEXT[final.reason]}`
+              : "기록 없음"}
             {final.reason === "evaluate_failed" && (
               <>
                 {" "}
@@ -720,6 +768,7 @@ export function ReportView({
           </span>
           {DESIGNED_SCENE_NOTICE}
         </p>
+        <TermsGuide printing={printing} />
         <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
           <li className="inline-flex items-center gap-1.5">
             <Avatar seat="candidate" name={candidate?.display_name ?? report.alias} size={20} />
@@ -763,7 +812,12 @@ export function ReportView({
                 const level = adjusted ? elementLevel(dims, el.element) : el.level;
                 const noRecord = dims.filter(
                   (d) => d.element === el.element && finalOf(d).level == null,
-                ).length;
+                );
+                const byState = (state: RecordState) =>
+                  noRecord.filter((d) => {
+                    const reason = finalOf(d).reason;
+                    return reason != null && RECORD_STATE[reason] === state;
+                  }).length;
                 return (
                   <tr key={el.element} className="align-top">
                     <td className="py-3 pr-3 font-medium whitespace-nowrap">
@@ -781,7 +835,7 @@ export function ReportView({
                         ) : (
                           <LevelChip
                             level={null}
-                            reason="모든 차원 기록 없음"
+                            reason="모든 세부 행동 기록 없음"
                             adjusted={adjusted}
                           />
                         )}
@@ -792,13 +846,20 @@ export function ReportView({
                         )}
                       </div>
                     </td>
-                    <td className="py-3 pr-3">{el.summary}</td>
+                    <td className="py-3 pr-3">{displayTerms(el.summary)}</td>
                     <td className="py-3 pr-3 text-right text-muted tabular-nums whitespace-nowrap">
-                      {noRecord}/{el.dimension_count} 차원
+                      {noRecord.length}/{el.dimension_count} 세부 행동
+                      {(["no_scene", "no_response"] as const)
+                        .filter((state) => byState(state) > 0)
+                        .map((state) => (
+                          <span key={state} className="block text-xs">
+                            {RECORD_STATE_TEXT[state]} {byState(state)}
+                          </span>
+                        ))}
                     </td>
                     <td className="py-3 text-right tabular-nums whitespace-nowrap">
                       {lowCount(el.element) > 0 ? (
-                        <span className="text-warning" title="확신도 low로 판단한 차원 수">
+                        <span className="text-warning" title="확신도 low로 판단한 세부 행동 수">
                           {lowCount(el.element)}
                         </span>
                       ) : (
@@ -807,7 +868,7 @@ export function ReportView({
                       {heldCount(el.element) > 0 && (
                         <span
                           className="block text-muted"
-                          title="AI 평가가 실패해 판단을 보류한 차원 수"
+                          title="AI 평가가 실패해 판단을 보류한 세부 행동 수"
                         >
                           판단 보류 {heldCount(el.element)}
                         </span>
@@ -820,8 +881,9 @@ export function ReportView({
           </table>
         </div>
         <p className="mt-2 text-xs text-muted">
-          근거 약함은 확신도 low로 판단한 차원 수, 판단 보류는 AI 평가가 실패해 수준을 정하지 못한
-          차원 수예요. 둘 다 원문 기록을 확인해 주세요.
+          기록 없음은 수준을 매기지 않은 세부 행동 수이고 장면 없음·반응 없음으로 나눠 보입니다.
+          근거 약함은 확신도 low로 판단한 세부 행동 수, 판단 보류는 AI 평가가 실패해 수준을 정하지
+          못한 세부 행동 수예요. 둘 다 원문 기록을 확인해 주세요.
         </p>
       </Section>
 
@@ -881,7 +943,7 @@ export function ReportView({
                     </span>
                     {dc && <span className="text-xs text-muted">{PHASE_TEXT[dc.phase]}</span>}
                     <DesignedChip />
-                    {card.fired_at == null && <Chip tone="neutral">이벤트 미발생</Chip>}
+                    {card.fired_at == null && <Chip tone="neutral">{unfiredText(card)}</Chip>}
                     {card.fired_at != null && !card.delivered && (
                       <Chip tone="warning">{PARTIAL_DELIVERY}</Chip>
                     )}
@@ -935,10 +997,10 @@ export function ReportView({
                 {level != null ? (
                   <LevelChip level={level} adjusted={adjusted} />
                 ) : (
-                  <LevelChip level={null} reason="모든 차원 기록 없음" adjusted={adjusted} />
+                  <LevelChip level={null} reason="모든 세부 행동 기록 없음" adjusted={adjusted} />
                 )}
               </div>
-              <p className="text-sm">{el.summary}</p>
+              <p className="text-sm">{displayTerms(el.summary)}</p>
               <div className="rounded-lg border border-line bg-surface px-4">
                 {dims
                   .filter((d) => d.element === el.element)
@@ -1072,7 +1134,8 @@ export function ReportView({
           {phase === "draft" && (
             <div className="no-print flex flex-col gap-4">
               <p className="text-sm text-muted">
-                조정한 차원 {adjustments.length}개 · 조정하지 않은 차원은 AI 판단 값으로 확정됩니다.
+                조정한 세부 행동 {adjustments.length}개 · 조정하지 않은 세부 행동은 AI 판단 값으로
+                확정됩니다.
               </p>
               <div className="max-w-sm">
                 <Input
