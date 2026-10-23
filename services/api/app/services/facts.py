@@ -8,6 +8,7 @@
 import re
 import statistics
 from collections.abc import Iterable
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -18,6 +19,7 @@ from app.models import (
     MaterialView,
     Message,
     MessageIntent,
+    Observation,
     Option,
     Position,
     Proposal,
@@ -49,23 +51,41 @@ def decision_path(slot: dict[str, Any]) -> str:
     return "candidate_confirm" if slot.get("filled_by") == "candidate" else "ai_consensus_fill"
 
 
+def _earlier(a: dict[str, Any], b: dict[str, Any]) -> bool | None:
+    """a가 b보다 먼저인지. 둘 다 `at`(세션 시작부터의 초, 반올림 없음)이 있으면 그 값, 아니면
+    `t_min`으로 비교한다. 비교할 값이 없으면 None."""
+    for key in ("at", "t_min"):
+        if a.get(key) is not None and b.get(key) is not None:
+            return a[key] < b[key]
+    return None
+
+
 def decision_facts(
     slots: list[dict[str, Any]],
     options: list[dict[str, Any]],
     lead_option_ids: Iterable[str] = (),
+    card_schedule: Iterable[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
-    """확정 칸마다 결정 시각·경로·채운 자리·적용 규칙·확정 시점 지지 현황·지원자 안 채택 여부.
+    """확정 칸마다 결정 시각·경로·채운 자리·적용 규칙·확정 시점 지지 현황·지원자 안 채택 여부·
+    선결정한 카드.
 
-    slots는 SessionRecord `slots` 행(확정된 칸), options는 Contributions `options` 행,
-    lead_option_ids는 카드가 잠근 기준안(`session_cards.locked_option_id`).
+    slots는 SessionRecord `slots` 행(확정된 칸, 확정 시각 `at`(초)이 있으면 함께), options는
+    Contributions `options` 행, lead_option_ids는 카드가 잠근 기준안
+    (`session_cards.locked_option_id`),
+    card_schedule은 카드 예정 시각 `{card_id, phase, at?, t_min, fired}`(단계 실제 시작 + 카드
+    `offset_min`, `fired`는 관찰 기록이 있는지).
     `candidate_backed`: 정해진 안을 지원자가 처음 냈거나, 기준안이 아닌데 확정 시점에 지원자가
     지지함.
-    `candidate_option_adopted`: 현재 규칙(rubric.md 3.4 R1) 그대로 — 지원자 안이고, AI 합의 채움·
-    시간 초과이거나 지원자 확정이면 지원자 포함 지지 3명 이상. `timeout_rule`은 시간 초과 칸에
-    적용 규칙이 기록돼 있을 때만 값이 있다.
+    `candidate_option_adopted`(rubric.md 3.4, 결정 A5): 지원자 안이고, AI 동료 합의 채움이거나
+    지원자 확정이면 지원자 포함 지지 3명 이상. 시간 초과로 정해진 칸은 합의에 이르지 못한
+    것이라 채택으로 보지 않는다. `timeout_rule`은 시간 초과 칸에 적용 규칙이 기록돼 있을 때만
+    값이 있다.
+    `preempted_cards`(결정 A3): 지원자가 직접 확정한 칸이고, 그 단계의 카드 중 발동하지 않은
+    카드의 예정 시각보다 먼저 확정됨(그 카드는 단계가 끝나 생기지 않았다).
     """
     first = {o["option_id"]: o.get("first_proposer") for o in options}
     leads = set(lead_option_ids)
+    schedule = list(card_schedule)
     order = {p: i for i, p in enumerate(sc.PHASES)}
     out = []
     for s in sorted(slots, key=lambda s: order.get(s["phase"], 99)):
@@ -80,6 +100,14 @@ def decision_facts(
         backed = first.get(chosen) == "candidate" or (
             "candidate" in backers and chosen not in leads
         )
+        preempted = [
+            c["card_id"]
+            for c in schedule
+            if path == "candidate_confirm"
+            and c.get("phase") == s["phase"]
+            and not c.get("fired")
+            and _earlier(s, c)
+        ]
         out.append(
             {
                 "phase": s["phase"],
@@ -92,7 +120,9 @@ def decision_facts(
                 "support": support,
                 "candidate_backed": backed,
                 "candidate_option_adopted": backed
+                and path != "timeout"
                 and (path != "candidate_confirm" or len(backers) >= 3),
+                "preempted_cards": preempted,
             }
         )
     return out
@@ -171,10 +201,11 @@ def evaluator_facts(
     options: list[dict[str, Any]],
     calls: list[dict[str, Any]],
     lead_option_ids: Iterable[str] = (),
+    card_schedule: Iterable[dict[str, Any]] = (),
 ) -> dict[str, Any]:
     """`facts`에 더하는 평가자 사실 두 가지. 입력은 SessionRecord 모양 dict."""
     return {
-        "decisions": decision_facts(slots, options, lead_option_ids),
+        "decisions": decision_facts(slots, options, lead_option_ids, card_schedule),
         "message_facts": message_facts(messages, slots, calls),
     }
 
@@ -330,9 +361,32 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
             "resolution": s.resolution,
             "support": s.support or [],
             "t_min": t_min(session, s.confirmed_at),
+            "at": _seconds(session, s.confirmed_at),
         }
         for s in confirmed
     ]
+    fired_cards = set(
+        (
+            await db.scalars(
+                select(Observation.card_id).where(Observation.session_id == session.id)
+            )
+        ).all()
+    )
+    card_schedule = []
+    for card in scenario.get("cards", []):
+        start = phase_start.get(card.get("stage_id"))
+        if start is None or card.get("offset_min") is None or not card.get("actor"):
+            continue
+        due = start + timedelta(minutes=card["offset_min"])
+        card_schedule.append(
+            {
+                "card_id": card["card_id"],
+                "phase": card["stage_id"],
+                "t_min": t_min(session, due),
+                "at": _seconds(session, due),
+                "fired": card["card_id"] in fired_cards,
+            }
+        )
     evaluator = evaluator_facts(
         [
             {
@@ -370,6 +424,7 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
                 )
             ).all()
         ],
+        card_schedule,
     )
     silence: dict[str, int] = {p: 0 for p in sc.DEBATE_PHASES}
     for m in room:

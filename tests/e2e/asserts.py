@@ -37,6 +37,7 @@ NO_RECORD = {
     "no_activity",
     "evaluate_failed",
     "not_applicable",
+    "preempted",
     "event_not_fired",
     "auto_submitted_blank",
 }

@@ -856,26 +856,50 @@
       ]
     }
   ],
+  "record_states": [
+    {
+      "state": "no_scene",
+      "label": "장면 없음"
+    },
+    {
+      "state": "no_response",
+      "label": "반응 없음"
+    },
+    {
+      "state": "failed",
+      "label": "판단 보류"
+    }
+  ],
   "no_record_reasons": [
     {
       "code": "no_activity",
-      "label": "지원자 활동 없음"
+      "label": "지원자 활동 없음",
+      "state": "no_response"
     },
     {
       "code": "evaluate_failed",
-      "label": "판단 보류 · 근거 부족 — 원문 기록 확인 권장"
+      "label": "판단 보류 · 근거 부족 — 원문 기록 확인 권장",
+      "state": "failed"
     },
     {
       "code": "not_applicable",
-      "label": "해당 없음"
+      "label": "해당 없음",
+      "state": "no_scene"
+    },
+    {
+      "code": "preempted",
+      "label": "선결정 · 카드 전에 지원자가 칸을 확정",
+      "state": "no_scene"
     },
     {
       "code": "event_not_fired",
-      "label": "이벤트 미발생"
+      "label": "이벤트 미발생",
+      "state": "no_scene"
     },
     {
       "code": "auto_submitted_blank",
-      "label": "자동 제출로 기여 칸 미작성"
+      "label": "자동 제출로 기여 칸 미작성",
+      "state": "no_response"
     }
   ],
   "cards": [

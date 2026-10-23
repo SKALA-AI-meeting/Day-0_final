@@ -185,6 +185,9 @@ async def test_facts_and_record_refs(api, ctx, classifier):
     assert {d["path"] for d in facts["decisions"]} == {"candidate_confirm"}
     problem = next(d for d in facts["decisions"] if d["phase"] == "problem")
     assert problem["filled_by"] == "candidate" and problem["timeout_rule"] is None
+    # 카드 예정 시각 전에 지원자가 확정해 생기지 않은 카드(선결정, 결정 A3)
+    assert problem["preempted_cards"] == ["flexibility_majority", "listening_pressure"]
+    assert problem["candidate_option_adopted"] is False  # 지원자 확정이지만 서지안 안
     first, second = facts["message_facts"]
     assert first["reply_to"] is None and first["decided_before"] == []
     assert second["reply_to"] is not None  # 직전 AI 동료(서지안) 초대 메시지

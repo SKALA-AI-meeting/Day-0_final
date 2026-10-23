@@ -52,7 +52,7 @@
  "contribution_check":[{"phase":"problem","option_id":"...","label":"도심 폭우·침수 피해 증가","first_proposer":"p3","credited_in_proposal":["p3"],"credit_quote":"문제 상황: 서지안 제안"}],
  "slots":[{"phase":"keyword","value":"물","option_id":"...","filled_by":"candidate","resolution":"consensus","outcome":"consensus","t_min":8.2,
            "first_proposer":"p3","support":[{"option_id":"...","label":"물","supporters":["candidate","p2","p3"]}]}],
- "cards":[{"card_id":"listening_pressure","element":"listening","fired_at":13.0,"delivered":true,"scene":"고집형 동료가 문제 상황 단계에서 자기 안을 강하게 밀어붙인 장면"}],
+ "cards":[{"card_id":"listening_pressure","element":"listening","fired_at":13.0,"delivered":true,"preempted":false,"scene":"고집형 동료가 문제 상황 단계에서 자기 안을 강하게 밀어붙인 장면"}],
  "debrief":{"cards":[{"card_id":"listening_pressure","element":"listening","phase":"problem","fired":true,"fired_t_min":13.0,"window":{"start_min":13.0,"end_min":28.0}}],
             "survey":{"natural":4,"fair":3,"free_comment":null}},
  "proposal":{"submitted_at":"...","auto_submitted":false,"sections":{"keyword":"...","problem":"...","solution":"...","rationale":"...","expected_effect":"...",
@@ -67,7 +67,7 @@
 | evaluation | | 이 리포트가 읽은 평가 실행(`evaluation_runs` 행)의 `run_id`·`rubric_version`·`prompt_versions`(`{common: 해시, <element>: 해시}`)·`model` |
 | elements[] | `level`, `summary` | 5요소마다 한 행(`evaluation_runs.elements`). level = 수준이 있는 차원 평균을 반올림(.5 올림), 모두 기록 없음이면 null. 워커가 결정적으로 계산. summary는 평가 에이전트가 쓴 1~2줄(기록 없음 차원이 있으면 함께 밝힘). `dimension_count`·`no_record_count`·`low_confidence_count`. **요소 수준끼리 더한 총점·합계는 없다** |
 | elements[] | `adjusted_level` | api가 GET 때 조정을 병합해 다시 계산한 요소 수준. 조정이 없으면 null. 자동 summary는 그대로 두고 화면이 "담당자 조정됨"을 표시 |
-| dimensions[] | `level`, `no_record_reason`, `confidence`, `rationale`, `evidence_refs` | `evaluations` 행 그대로(`save_evaluation` 입력 형식). level과 no_record_reason은 둘 중 하나만. 기록 없음이면 confidence null. 사유 표시 문장은 [product/rubric.md](../product/rubric.md) 5장. `confidence = low`는 화면에 "근거 약함, 원문 확인 권장" |
+| dimensions[] | `level`, `no_record_reason`, `confidence`, `rationale`, `evidence_refs` | `evaluations` 행 그대로(`save_evaluation` 입력 형식). level과 no_record_reason은 둘 중 하나만. 기록 없음이면 confidence null. 사유 표시 문장과 사유가 속한 기록 상태(장면 없음 ∣ 반응 없음 ∣ 판단 보류, 결정 A3)는 [product/rubric.md](../product/rubric.md) 5장이고 화면은 기록 없음 차원에 상태 표식과 표시 문장을 함께 보인다. `confidence = low`는 화면에 "근거 약함, 원문 확인 권장" |
 | dimensions[] | `name`, `reviewer_hint` | 차원 이름과 그 수준 행의 담당자 참고 문구(`positions.scenario`의 척도 복사본). 기록 없음이면 reviewer_hint 없음 |
 | dimensions[] | `evidence[]` | `evidence_refs`마다 한 항목. `kind`: `message`(quote·speaker·origin·phase·t_min) ∣ `slot`(phase·value·resolution·filled_by·support) ∣ `proposal`(field·발췌) ∣ `contribution`(Contributions 행). `counted`는 근거 개수에 드는지(지원자 행동 단위만 true, AI 동료 메시지·contribution은 false, `hon_credit_record` 예외는 [product/rubric.md](../product/rubric.md) 3.5). message 근거의 `context`는 `get_transcript_span`(앞 5·뒤 3)으로 만든 **앞뒤 맥락 표시용** 메시지다. 모두 `record_ref {type, id, t_min}`. 오피스 시각은 web이 `t_min`으로 변환 |
 | dimensions[] | `adjusted_level`, `adjusted_no_record_reason`, `adjust_memo` | api가 GET 때 `rubric_adjustments`의 그 차원 마지막 행을 병합. 없으면 null. 최종값 = 조정 값이 있으면 그것, 없으면 자동 값 |
@@ -75,7 +75,7 @@
 | contribution_check | | 채택된 칸 중 최초 제안자가 AI 동료인 안(사실 지표 `ai_adopted_units`)마다 실제 최초 제안자와 기획안 `idea_credit`에 적힌 기여자(`credited_in_proposal`, 워커 추출)·발췌. 정직 요소의 대조표이며 판단은 `hon_credit_record` 차원이 한다 |
 | seats | | 첫 항목은 지원자 `{seat: "candidate", display_name}`, 나머지는 AI 자리 `{seat, display_name, avatar_url, persona_type}` |
 | slots | `first_proposer` | 확정 안의 최초 제안자(`get_contributions`). option_id null이면 null |
-| cards[] | `card_id`, `element`, `fired_at`, `delivered`, `scene` | 카드 6장마다 한 행. `fired_at`은 첫 카드 발언 게시 시각(세션 시작 기준 분, web이 오피스 시각으로 변환), 미발생이면 null. `delivered`는 담당 화자 전원이 게시했는지. false면 평가는 그 카드를 핵심 장면으로 세지 않고([product/rubric.md](../product/rubric.md) 2.4), 화면은 발동한 카드에 "일부 동료만 전달됨"을 표시한다. 화면은 이 절에 담당자용 "설계된 장면" 표시를 붙인다(같은 채용 건 모든 지원자가 겪는 장면). `scene`은 카드의 고정 문장 `report_template`(`positions.scenario` 복사본) 그대로이며 **LLM이 만들지 않는다**. 판단이 아닌 장면 설명이라 화면의 "관련 카드 장면"·타임라인 카드 표시에 쓴다 |
+| cards[] | `card_id`, `element`, `fired_at`, `delivered`, `preempted`, `scene` | 카드 6장마다 한 행. `preempted`는 발동하지 않은 카드가 선결정(지원자가 예정 시각 전에 그 단계 칸을 직접 확정, 사실 지표 `decisions[].preempted_cards`)이었는지이고 화면은 "이벤트 미발생" 대신 "선결정"으로 보인다. 이 필드가 생기기 전에 만든 리포트에는 없고 화면은 false로 읽는다. `fired_at`은 첫 카드 발언 게시 시각(세션 시작 기준 분, web이 오피스 시각으로 변환), 미발생이면 null. `delivered`는 담당 화자 전원이 게시했는지. false면 평가는 그 카드를 핵심 장면으로 세지 않고([product/rubric.md](../product/rubric.md) 2.4), 화면은 발동한 카드에 "일부 동료만 전달됨"을 표시한다. 화면은 이 절에 담당자용 "설계된 장면" 표시를 붙인다(같은 채용 건 모든 지원자가 겪는 장면). `scene`은 카드의 고정 문장 `report_template`(`positions.scenario` 복사본) 그대로이며 **LLM이 만들지 않는다**. 판단이 아닌 장면 설명이라 화면의 "관련 카드 장면"·타임라인 카드 표시에 쓴다 |
 | debrief | `cards`, `survey` | 발동 카드(`observations`)와 카드의 `window` 규칙([product/scenario.md](../product/scenario.md))으로 워커가 계산한 관찰 창(미발생 카드는 `fired: false`), 종료 설문 답(없으면 null) |
 | ai_usage | | 판단 기준 없음, 면접 확인용. 시간순 사실만 |
 

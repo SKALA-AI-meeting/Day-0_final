@@ -270,7 +270,7 @@ CREATE TABLE evaluations (                   -- 평가 에이전트의 차원별
   dimension_id text NOT NULL,
   level int CHECK (level BETWEEN 1 AND 5),
   no_record_reason text CHECK (no_record_reason IN
-    ('no_activity','evaluate_failed','not_applicable','event_not_fired','auto_submitted_blank')),
+    ('no_activity','evaluate_failed','not_applicable','preempted','event_not_fired','auto_submitted_blank')),
   evidence_refs jsonb NOT NULL DEFAULT '[]'::jsonb,
   rationale text NOT NULL DEFAULT '',
   confidence text CHECK (confidence IN ('high','medium','low')),
@@ -300,7 +300,7 @@ CREATE TABLE rubric_adjustments (            -- 담당자 차원 단위 조정(a
   dimension_id text NOT NULL,
   level int CHECK (level BETWEEN 1 AND 5),
   no_record_reason text CHECK (no_record_reason IN
-    ('no_activity','evaluate_failed','not_applicable','event_not_fired','auto_submitted_blank')),
+    ('no_activity','evaluate_failed','not_applicable','preempted','event_not_fired','auto_submitted_blank')),
   memo text NOT NULL,
   adjusted_by uuid NOT NULL REFERENCES admins(id),
   reviewer_name text NOT NULL,

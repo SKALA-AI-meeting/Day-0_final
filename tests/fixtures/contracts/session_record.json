@@ -734,7 +734,8 @@
           }
         ],
         "candidate_backed": true,
-        "candidate_option_adopted": false
+        "candidate_option_adopted": false,
+        "preempted_cards": []
       },
       {
         "phase": "problem",
@@ -755,7 +756,8 @@
           }
         ],
         "candidate_backed": false,
-        "candidate_option_adopted": false
+        "candidate_option_adopted": false,
+        "preempted_cards": []
       },
       {
         "phase": "solution",
@@ -780,7 +782,8 @@
           }
         ],
         "candidate_backed": true,
-        "candidate_option_adopted": true
+        "candidate_option_adopted": false,
+        "preempted_cards": []
       }
     ],
     "message_facts": [

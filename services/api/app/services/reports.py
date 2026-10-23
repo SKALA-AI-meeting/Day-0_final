@@ -89,9 +89,16 @@ def rubric_view(scenario: dict) -> dict[str, Any]:
             }
             for e in rubric["elements"]
         ],
+        # state(기록 상태, 결정 A3)는 이 값이 생기기 전에 복사된 척도에는 없다
         "no_record_reasons": [
-            {"code": r["code"], "label": r["label"]} for r in rubric["no_record_reasons"]
+            {
+                "code": r["code"],
+                "label": r["label"],
+                **({"state": r["state"]} if "state" in r else {}),
+            }
+            for r in rubric["no_record_reasons"]
         ],
+        **({"record_states": rubric["record_states"]} if "record_states" in rubric else {}),
         "cards": [
             # window는 cards.yaml 값 그대로(관찰 창, 평가 입력 경계가 아님)
             {
