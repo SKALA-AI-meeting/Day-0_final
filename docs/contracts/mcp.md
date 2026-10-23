@@ -53,8 +53,8 @@
 
 | 주체 | 허용 도구 | 호출 방식 |
 |---|---|---|
-| 턴 매니저 결정적 노드(load·cards·apply·fill) | debate-mcp 전부, assessment-mcp `record_observation` | 코드가 직접 호출 |
-| 턴 매니저 turn(LLM) | 없음 | 주입된 DebateState만 |
+| 진행 매니저 결정적 노드(load·cards·apply·fill) | debate-mcp 전부, assessment-mcp `record_observation` | 코드가 직접 호출 |
+| 진행 매니저 turn(LLM) | 없음 | 주입된 DebateState만 |
 | 페르소나 respond | `get_transcript`, `get_draft`(proposal 단계에서만 바인딩), `search_materials`, `get_material` | 모델 도구 호출, 응답당 3회. `get_debate_state`는 바인딩하지 않는다(DebateState는 load가 `card_progress`·`cost_left`를 걸러 컨텍스트에 주입). 최근 대화도 미리 들어가므로 `get_transcript`는 보통 부르지 않는다 |
 | 어시스턴트 | `search_materials`, `get_material` | 모델 tool-calling 루프, 요청당 최대 3회, 답에 인용 자료 id |
 | report-worker | `get_rubric`, `get_session_record`, `get_transcript_span`, `get_contributions`, `save_evaluation` | 코드가 직접 호출(평가 에이전트 LLM에는 도구를 바인딩하지 않고 입력 묶음을 주입). 평가 결과 재조회(`GET /evaluations`)·리포트 저장은 내부 REST |

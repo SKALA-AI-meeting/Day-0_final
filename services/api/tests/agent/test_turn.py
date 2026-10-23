@@ -1,4 +1,4 @@
-"""턴 매니저 규칙, 합의 채우기(fill), typing·generation, 재실행 멱등."""
+"""진행 매니저 규칙, 합의 채우기(fill), typing·generation, 재실행 멱등."""
 
 import uuid
 

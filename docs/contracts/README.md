@@ -7,7 +7,7 @@
 | 이 문서 | 공통 규칙(베이스 URL·오류·CORS·인증 헤더·시각·멱등), 칸 객체와 표시 규칙, 인증 생명주기 |
 | [api.md](api.md) | 공개 REST: 관리자(`/admin`)·지원자(`/s`, `/sessions`), Report·Proposal·State 스냅샷 |
 | [ws.md](ws.md) | WebSocket 프레임 |
-| [internal.md](internal.md) | 내부 REST(`/internal`), DebateState·Contributions·SessionRecord·EvaluationSave, 의도 분류·턴 매니저 결정 스키마 |
+| [internal.md](internal.md) | 내부 REST(`/internal`), DebateState·Contributions·SessionRecord·EvaluationSave, 의도 분류·진행 매니저 결정 스키마 |
 | [mcp.md](mcp.md) | MCP 도구 3서버와 도구 허용 목록 |
 | [queue.md](queue.md) | RabbitMQ 큐 메시지 |
 

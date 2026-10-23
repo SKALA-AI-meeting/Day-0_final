@@ -1,6 +1,6 @@
 # api
 
-토론형 세션의 상태·단계·칸·메일박스·스케줄러와 토론 에이전트(턴 매니저·페르소나·어시스턴트·의도 분류)를 한 프로세스에서 돌리고, 공개(8000)·내부(8001) REST와 WebSocket을 낸다.
+토론형 세션의 상태·단계·칸·메일박스·스케줄러와 토론 에이전트(진행 매니저·페르소나·어시스턴트·의도 분류)를 한 프로세스에서 돌리고, 공개(8000)·내부(8001) REST와 WebSocket을 낸다.
 
 ## 한눈에
 
@@ -28,8 +28,8 @@ env의 의미·기본값은 `config.py`(`get_settings`)와 `agent/llm/roles.py`,
 | 어시스턴트(도구 호출 최대 3회, 세션당 60회) | `agent/assistant/` | [F-16](../../PRD.md) |
 | 기획안 저장·제출·자동 제출 | `routers/candidate.py`, `scheduler.py` | [F-17](../../PRD.md) |
 | 디브리핑·설문 | `routers/candidate.py` | [F-18](../../PRD.md) |
-| 턴 조절, 고정 입장·근거 발언, 침묵 초대 | `agent/debate/`(그래프·페르소나·규칙) | [F-21, F-22, F-25](../../PRD.md) |
-| 카드 실행(고정 시각) | `scheduler.py`, `agent/debate/` | [F-23](../../PRD.md) |
+| 턴 조절, 고정 입장·근거 발언, 침묵 초대 | `agent/debate/`(그래프), `agent/manager/`(진행 매니저 규칙), `agent/persona/`(토론 동료) | [F-21, F-22, F-25](../../PRD.md) |
+| 카드 실행(고정 시각) | `scheduler.py`, `agent/debate/`, `agent/manager/` | [F-23](../../PRD.md) |
 | 판정·유도 발언 금지(결정적 검사 → 재생성 → 안전 문구) | `agent/guard/` | [F-24](../../PRD.md) |
 | 실시간 의도 분류 | `agent/intent/`, `mailbox.py` | [F-27](../../PRD.md) |
 | 관찰·AI 활용 기록, 사실 지표, 기여 대조 자료 | `routers/internal.py`, `services/facts.py` | [F-30, F-31, F-37, F-35](../../PRD.md) |
@@ -128,7 +128,7 @@ debate-mcp·assessment-mcp도 떠 있어야 토론 그래프와 리포트 평가
 
 - `services/session.py`·`phases.py`: 상태·단계 전이(SessionService), 누적 마감, 전환 프레임.
 - `services/debate.py`: 지원자 메시지 저장·generation, 의도 분류 반영, 안·입장, 칸 확정·합의 채우기, DebateState. `services/consensus.py`는 순수 판정 함수, `services/timeout.py`는 마감 채우기.
-- `agent/`: `debate/`(턴 매니저 그래프·페르소나·규칙), `assistant/`, `intent/`, `guard/`(금지 문구 검사), `llm/`(역할별 모델·fake), `mcp_client/`.
+- `agent/`: 역할 폴더 `manager/`(진행 매니저 규칙), `persona/`(토론 동료), `intent/`(의도 분류), `assistant/`(어시스턴트)와 역할을 잇는 `debate/`(토론 그래프·AgentRunner), 공용 `guard/`(금지 문구 검사), `llm/`(역할별 모델·fake), `mcp_client/`, `catalog.py`. 역할 폴더의 `README.md`가 그 역할이 읽는 데이터 파일을 적는다.
 - `mailbox.py`: 세션별 직렬 메일박스(agent_runs 상태로 멱등). `scheduler.py`: 5초 틱(마감·임박 안내·idle·card_due·자동 제출·run 재실행·outbox·purge).
 - `services/test_sessions.py`: 테스트 API. 단계 시드 `scenarios/e2e/stages/<이름>.yaml`을 서비스 함수로 재생한다.
 - 테스트 도구: `tests/kit.py`(가짜 시계·기록 runner·고정 의도 분류·httpx ASGI 클라이언트).
@@ -473,7 +473,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 - [`docs/services/api.md`](../../docs/services/api.md): 모듈 구성과 처리 흐름
 - [`docs/architecture/session-lifecycle.md`](../../docs/architecture/session-lifecycle.md): 세션 상태와 전이
-- [`docs/architecture/agents.md`](../../docs/architecture/agents.md): 턴 매니저·페르소나·어시스턴트
+- [`docs/architecture/agents.md`](../../docs/architecture/agents.md): 진행 매니저·토론 동료·어시스턴트. 역할별 문서는 `docs/agents/<역할>.md`(예: [`docs/agents/manager.md`](../../docs/agents/manager.md))
 - [`docs/architecture/security.md`](../../docs/architecture/security.md): 인증과 권한 경계
 - [`docs/guides/configuration.md`](../../docs/guides/configuration.md): env와 실행 모드
 - [`docs/guides/testing.md`](../../docs/guides/testing.md): 테스트 종류와 실행법

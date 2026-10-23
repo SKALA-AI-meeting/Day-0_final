@@ -8,6 +8,7 @@
 2. [docs/README.md](docs/README.md): 목적별 문서 색인과 정본 관계
 3. 작업할 서비스의 README: `services/<이름>/README.md`, [apps/web/README.md](apps/web/README.md), [scripts/README.md](scripts/README.md)
 4. 관련 계약: [docs/contracts/](docs/contracts/README.md)(REST·WS·내부 API·MCP 도구·큐)
+5. AI 역할을 고칠 때: `docs/agents/`의 역할 문서([진행 매니저](docs/agents/manager.md) `manager`·[토론 동료](docs/agents/persona.md) `persona`·[의도 분류](docs/agents/intent.md) `intent`·[어시스턴트](docs/agents/assistant.md) `assistant`·[평가자](docs/agents/evaluator.md) `evaluator`). 프롬프트는 `scenarios/missions/debate/prompts/<역할>/`, 여러 역할이 함께 쓰는 고정 문장·금지 패턴은 `prompts/shared/`
 
 ## 정본
 
@@ -22,8 +23,8 @@
 
 ## 고정 제약
 
-- LLM 기본은 `gpt-4o-mini`. 역할 5개(페르소나 `MODEL_PERSONA`·턴 매니저 `MODEL_TURN`·의도 분류 `MODEL_INTENT`·어시스턴트 `MODEL_ASSISTANT`·평가 `MODEL_EVALUATOR`)는 env로 따로 정한다. 키는 모델 id로 고르는 규칙 하나뿐이고 자동 대체 모델은 없다. 역할별 타임아웃·재시도·실패 시 동작은 [docs/architecture/harness.md](docs/architecture/harness.md) "역할별 모델" 표가 정본이다. 프롬프트·규칙 수정으로 안 되는 역할만 모델을 올리고, 그 결정은 decisions.md에 남긴다.
-- 평가표 필수 요소: State·Graph 기반 에이전트(턴 매니저 + 페르소나 에이전트 3), MCP 3개(debate-mcp·rag-mcp·assessment-mcp), Harness 8요소(Instructions, Tools, Context, State·Memory, Agent Loop, Guardrails, Recovery, Observability), 인증, 대기열과 재시도.
+- LLM 기본은 `gpt-4o-mini`. 역할 5개(토론 동료 `MODEL_PERSONA`·진행 매니저 `MODEL_TURN`·의도 분류 `MODEL_INTENT`·어시스턴트 `MODEL_ASSISTANT`·평가자 `MODEL_EVALUATOR`)는 env로 따로 정한다. env 이름은 역할 이름을 바꾸기 전 그대로다. 키는 모델 id로 고르는 규칙 하나뿐이고 자동 대체 모델은 없다. 역할별 타임아웃·재시도·실패 시 동작은 [docs/architecture/harness.md](docs/architecture/harness.md) "역할별 모델" 표가 정본이다. 프롬프트·규칙 수정으로 안 되는 역할만 모델을 올리고, 그 결정은 decisions.md에 남긴다.
+- 평가표 필수 요소: State·Graph 기반 에이전트(진행 매니저 + 토론 동료 3), MCP 3개(debate-mcp·rag-mcp·assessment-mcp), Harness 8요소(Instructions, Tools, Context, State·Memory, Agent Loop, Guardrails, Recovery, Observability), 인증, 대기열과 재시도.
 - 같은 채용 건의 지원자는 같은 시나리오(키워드 후보, 페르소나 3명, 동료별 단계 고정 입장, 카드 시각·규칙)와 같은 프롬프트(평가 프롬프트·금지 패턴 포함)를 받는다. 채용 건 생성 때 이것을 복사해 고정하고 세션 실행과 평가는 그 복사본을 읽는다. MVP는 5요소·카드 6장·페르소나 3명(고집형 강한결·소극형 윤하람·비판형 서지안) 고정이고 기업의 요소 선택은 없다(decisions.md R2).
 - 시나리오는 데이터(`scenarios/missions/<id>/`)이고 코드는 해석만 한다. 누가 어떤 안을 밀지·합의 판정·시간 초과·칸 채우기 허용은 결정적 코드가, 말투만 LLM이 정한다.
 - 페르소나 에이전트는 assessment-mcp에 접근하지 못한다(허용 목록과 토큰 모두에서 차단). 평가 기준을 보고 행동을 맞추지 못하게 하기 위해서다.

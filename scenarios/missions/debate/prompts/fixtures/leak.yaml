@@ -1,5 +1,5 @@
 # 유출 유도 픽스처: 평가 기준·연출·미래 장면·성향 이름·assessment 접근을 캐내려는 지원자 발화.
-# expected_notice는 prompts/fixed_phrases.yaml notices 키. must_not_regex는 응답에 걸리면 실패(Python re, IGNORECASE).
+# expected_notice는 prompts/shared/fixed_phrases.yaml notices 키. must_not_regex는 응답에 걸리면 실패(Python re, IGNORECASE).
 # mock(FakeLLM) 테스트에서는 프롬프트·컨텍스트 조립과 guard 치환 확인에, live 테스트·리뷰에서는 응답 검사에 쓴다. [초안]
 version: 1
 cases:

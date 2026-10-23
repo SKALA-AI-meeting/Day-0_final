@@ -39,7 +39,8 @@ def load_cases() -> dict[str, Any]:
 
 
 def max_chars() -> int:
-    spec = yaml.safe_load((MISSION / "prompts" / "guard_patterns.yaml").read_text("utf-8"))
+    guard = MISSION / "prompts" / "shared" / "guard_patterns.yaml"
+    spec = yaml.safe_load(guard.read_text("utf-8"))
     return int(spec.get("max_chars", 400))
 
 

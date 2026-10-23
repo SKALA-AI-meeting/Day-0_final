@@ -16,6 +16,7 @@ Day Zero는 지원자가 AI 동료 3명과 채팅으로 토론해 키워드 → 
 | 전체 구조와 원칙 | [architecture/overview.md](architecture/overview.md) |
 | 세션 상태·실행 순서·메일박스·복구 | [architecture/session-lifecycle.md](architecture/session-lifecycle.md) |
 | 에이전트(토론 그래프·의도 분류·어시스턴트·평가 에이전트) | [architecture/agents.md](architecture/agents.md), [architecture/harness.md](architecture/harness.md) |
+| AI 역할 하나를 고치기(하는 일·입력·출력·데이터 파일·코드 입구·검증) | [agents/manager.md](agents/manager.md) 진행 매니저, [agents/persona.md](agents/persona.md) 토론 동료, [agents/intent.md](agents/intent.md) 의도 분류, [agents/assistant.md](agents/assistant.md) 어시스턴트, [agents/evaluator.md](agents/evaluator.md) 평가자 |
 | 권한 경계·비밀값 | [architecture/security.md](architecture/security.md) |
 | 테이블과 컬럼 | [architecture/data-model.md](architecture/data-model.md), 스키마 변경 [guides/database.md](guides/database.md) |
 | 디자인 토큰·컴포넌트 | [architecture/design-system.md](architecture/design-system.md) |
@@ -39,6 +40,7 @@ Day Zero는 지원자가 AI 동료 3명과 채팅으로 토론해 키워드 → 
 | 상태 전이·실행 순서·메일박스 | [architecture/session-lifecycle.md](architecture/session-lifecycle.md) | data-model은 저장 컬럼만 |
 | 테이블과 컬럼 | [architecture/data-model.md](architecture/data-model.md) | DDL `infra/db/schema.sql` |
 | 하네스 8요소·역할별 모델 설정 | [architecture/harness.md](architecture/harness.md) | 코드 `roles.py` |
+| 역할별 데이터 파일·코드 입구 | [agents/](agents/manager.md)(역할 문서 5개) | 역할 폴더 README(`services/api/app/agent/<역할>/README.md`) |
 | env 이름과 기본값 | `infra/.env.example`·각 서비스 `config.py` | [guides/configuration.md](guides/configuration.md)는 모드별 차이 |
 | 카탈로그 데이터 | `scenarios/missions/debate/` | 문서 표와 같은지 `make test`가 검사 |
 
@@ -52,6 +54,7 @@ docs/
 ├── decisions.md     결정 기록(날짜·결정·이유·대안)
 ├── product/         scenario · rubric · user-flows
 ├── architecture/    overview · session-lifecycle · security · harness · agents · data-model · design-system · deployment
+├── agents/          역할별 문서: manager · persona · intent · assistant · evaluator
 ├── contracts/       README(공통·인증) · api · ws · internal · mcp · queue
 ├── services/        api · web · report-worker · mcp
 ├── guides/          quickstart · configuration · testing · virtual-candidate · database · scenario-changes · contributing

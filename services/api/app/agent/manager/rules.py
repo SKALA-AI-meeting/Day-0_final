@@ -1,4 +1,4 @@
-"""토론 그래프의 결정적 규칙(docs/architecture/agents.md "턴 매니저 규칙"·"카드별
+"""진행 매니저의 결정적 규칙(docs/architecture/agents.md "진행 매니저 규칙"·"카드별
 실행"·"stance_plan").
 
 LLM 없는 순수 함수만 둔다. 입력은 DebateState(docs/contracts/internal.md, load가 읽은
@@ -349,7 +349,7 @@ def preempt_bans(
     return bans
 
 
-# ---- 턴 매니저 -------------------------------------------------------------------------------
+# ---- 진행 매니저 -------------------------------------------------------------------------------
 def fill_seat(ds: dict[str, Any], option_id: str, catalog: Catalog) -> str | None:
     """합의 안 지지자 중 우선순위(critic > quiet > stubborn) 첫 자리."""
     priority = (catalog.mission.get("consensus_fill") or {}).get(

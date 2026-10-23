@@ -1,4 +1,4 @@
-"""토론 그래프(docs/architecture/agents.md "토론 그래프"): 턴 매니저 + 페르소나 3.
+"""토론 그래프(docs/architecture/agents.md "토론 그래프"): 진행 매니저 + 페르소나 3.
 
 ```
 load → cards → turn ─┬─ (화자마다) respond → guard → stance_check → wait_typing → apply ─┐
@@ -27,11 +27,12 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.runtime import Runtime
 
 from app.agent import intent as intent_mod
+from app.agent import persona
 from app.agent.catalog import DEBATE_PHASES, Catalog, render
-from app.agent.debate import persona, rules
-from app.agent.debate.rules import PlanContext, StancePlan
 from app.agent.guard import guard_from_prompts
 from app.agent.llm import BaseLLM, LLMUnavailable, Trace, Usage, parse_json_object
+from app.agent.manager import rules
+from app.agent.manager.rules import PlanContext, StancePlan
 from app.agent.mcp_client import RunTools, error_code, error_message
 from app.ports import SessionPorts
 

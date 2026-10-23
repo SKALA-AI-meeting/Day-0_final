@@ -1,8 +1,8 @@
 # 에이전트 설계 (api 안의 LangGraph 모듈)
 
-토론 그래프(턴 매니저 + 페르소나 에이전트 3)·의도 분류·어시스턴트·guard·평가 에이전트의 구조다. 결정 근거는 [decisions.md](../decisions.md) "2026-10-21 토론형 전환"(D10·D11·D12·D16·D17, R1~R7). 요소 id는 `persuasion, listening, inclusion, flexibility, honesty`, 카드 id는 `persuasion_keyword, flexibility_majority, listening_pressure, inclusion_silence, persuasion_solution, honesty_credit`, 페르소나 유형 id는 `stubborn, quiet, critic, agreeable, divergent`다(정본 [product/scenario.md](../product/scenario.md)). MVP 세션 자리는 **고정**이다(R2): `p1` 고집형 강한결(`stubborn`), `p2` 소극형 윤하람(`quiet`), `p3` 비판형 서지안(`critic`). 동조형·발산형은 MVP 이후 확장이며 아래 규칙의 우선순위 목록에 남아 있어도 MVP 세션에는 나오지 않는다. 참여자 id는 `candidate`·`p1`·`p2`·`p3`·`system`. 칸 결과는 `resolution: consensus | timeout`. 지원자 호칭은 "지원자", 대화 속에서는 표시 이름 + "님"이다.
+토론 그래프(진행 매니저 + 토론 동료 3)·의도 분류·어시스턴트·guard·평가 에이전트의 구조다. 역할 이름은 진행 매니저(manager)·토론 동료(persona)·의도 분류(intent)·어시스턴트(assistant)·평가자(evaluator)이고(결정 E1), 역할마다 하는 일·입력·출력·데이터 파일·코드 입구·검증은 `docs/agents/` 역할 문서([manager](../agents/manager.md)·[persona](../agents/persona.md)·[intent](../agents/intent.md)·[assistant](../agents/assistant.md)·[evaluator](../agents/evaluator.md))에 모았다. 이 문서의 "페르소나 에이전트"는 토론 동료, "평가 에이전트"는 평가자다. 결정 근거는 [decisions.md](../decisions.md) "2026-10-21 토론형 전환"(D10·D11·D12·D16·D17, R1~R7). 요소 id는 `persuasion, listening, inclusion, flexibility, honesty`, 카드 id는 `persuasion_keyword, flexibility_majority, listening_pressure, inclusion_silence, persuasion_solution, honesty_credit`, 페르소나 유형 id는 `stubborn, quiet, critic, agreeable, divergent`다(정본 [product/scenario.md](../product/scenario.md)). MVP 세션 자리는 **고정**이다(R2): `p1` 고집형 강한결(`stubborn`), `p2` 소극형 윤하람(`quiet`), `p3` 비판형 서지안(`critic`). 동조형·발산형은 MVP 이후 확장이며 아래 규칙의 우선순위 목록에 남아 있어도 MVP 세션에는 나오지 않는다. 참여자 id는 `candidate`·`p1`·`p2`·`p3`·`system`. 칸 결과는 `resolution: consensus | timeout`. 지원자 호칭은 "지원자", 대화 속에서는 표시 이름 + "님"이다.
 
-모듈: `app/agent/{debate, assistant, intent, guard, llm, mcp_client}`, `runner.py`. `mcp_client`는 env `DEBATE_MCP_URL`·`RAG_MCP_URL`·`ASSESSMENT_MCP_URL`(+`ASSESSMENT_MCP_TOKEN`)로 접속한다([contracts/mcp.md](../contracts/mcp.md) "MCP 도구"). 평가(차원별 수준 판단)는 세션 후 report-worker 안의 평가 에이전트 몫이다(아래 "평가 에이전트", 실행 흐름은 [services/report-worker.md](../services/report-worker.md)).
+모듈: 역할 폴더 `app/agent/{manager, persona, intent, assistant}`(진행 매니저 규칙 `manager/rules.py`, 토론 동료 respond `persona/`), 여러 역할을 잇는 토론 그래프 `debate/`(`graph.py` 노드 배선·`runner.py` AgentRunner), 공용 `guard`·`llm`·`mcp_client`·`catalog.py`, `runner.py`. 그래프 노드는 여러 역할을 차례로 부르므로 `debate/`에 두고 역할 폴더로 나누지 않는다. `mcp_client`는 env `DEBATE_MCP_URL`·`RAG_MCP_URL`·`ASSESSMENT_MCP_URL`(+`ASSESSMENT_MCP_TOKEN`)로 접속한다([contracts/mcp.md](../contracts/mcp.md) "MCP 도구"). 평가(차원별 수준 판단)는 세션 후 report-worker 안의 평가 에이전트 몫이다(아래 "평가 에이전트", 실행 흐름은 [services/report-worker.md](../services/report-worker.md)).
 
 ## AgentRunner 인터페이스와 SessionPorts
 
@@ -25,7 +25,7 @@ class AgentRunner(Protocol):
 
 ## 토론 그래프 (`app/agent/debate/`)
 
-MVP 구조는 **턴 매니저 + 페르소나 에이전트 3**(D10). 그래프는 체크포인터 없이 컴파일한다(`app/agent/factory.py` `build_debate_runner(..., checkpointer=None)`). 실행 기록은 `agent_runs`, 토론 상태는 DB가 원천이고 매 실행의 `load`가 다시 읽으므로 재시작 복구는 같은 자극을 처음부터 다시 실행하는 방식이다.
+MVP 구조는 **진행 매니저 + 토론 동료(페르소나 에이전트) 3**(D10). 그래프는 체크포인터 없이 컴파일한다(`app/agent/factory.py` `build_debate_runner(..., checkpointer=None)`). 실행 기록은 `agent_runs`, 토론 상태는 DB가 원천이고 매 실행의 `load`가 다시 읽으므로 재시작 복구는 같은 자극을 처음부터 다시 실행하는 방식이다.
 
 ```
 load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → stance_check → wait_typing → apply ─┬─ 다음 화자 → respond
@@ -42,7 +42,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 - `generation`: 실행 시작 때 읽은 `sessions.generation`. 화자마다 게시 직전 SessionPorts 값과 비교한다.
 - `ds`: debate-mcp `get_debate_state` 결과(DebateState + seats). 페르소나 컨텍스트에 미리 넣는다(R5-12, 조회 도구 왕복 줄이기). 페르소나에게 줄 때 `card_progress`·`cost_left`를 뺀다.
 - `names`·자리 정보: 내부 `GET /internal/sessions/{id}`의 `seats`에서 만든다. 지원자 `{seat: candidate, display_name}`과 AI 자리 `{seat, display_name, avatar_url, persona_type}`(D13-3). `persona_type`은 그래프 안에서만 쓰고 페르소나 프롬프트에는 자기 성향 설명으로만 들어간다.
-- 자리 기억: 별도 State 필드 없이 `transcript`(최근 대화 30개) 중 그 자리의 최근 발언 3개(`persona.py` `MEMORY_MESSAGES`)를 `[내 기억]`으로 넣는다. 밀었던 안·설득 이동·압박 횟수는 DB의 입장 이력과 메시지에서 매 실행 계산한다. 토큰 한도에 따른 요약 접기는 없다.
+- 자리 기억: 별도 State 필드 없이 `transcript`(최근 대화 30개) 중 그 자리의 최근 발언 3개(`app/agent/persona` `MEMORY_MESSAGES`)를 `[내 기억]`으로 넣는다. 밀었던 안·설득 이동·압박 횟수는 DB의 입장 이력과 메시지에서 매 실행 계산한다. 토큰 한도에 따른 요약 접기는 없다.
 - `brief`: 이번 실행에서 말할 카드 담당과 고정 내용(`cards` 노드 결과). 카드 진행(`ds.card_progress`: 발동한 카드, 담당 화자별 `delivered`, 잠긴 기준안)은 api 기록이 원천이고 그래프는 읽기만 한다.
 
 ### 노드
@@ -51,7 +51,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 |---|---|---|
 | load | 결정적 | debate-mcp `get_debate_state`·`get_transcript(phase, limit 30)`, SessionPorts로 generation. 낡은 자극이면 `skipped`로 END. 이미 `finished`인 run_id는 api 메일박스가 `agent_runs.status`를 보고 실행하지 않는다 |
 | cards | 결정적 | `stimulus=card_due`면 그 카드와 **예정 시각이 지난 같은 단계의 미전달 카드**를 함께 발동 대상으로(공동 처리, `delivered_seats`에 이미 든 자리는 다시 넣지 않음), 그 밖의 자극이면 **이미 발동했지만 `delivered`가 아닌 담당 화자**를 이어서 말할 대상으로 정한다(R5-4). 결과는 이번 실행의 `card_brief`(누가 어떤 고정 내용을 말할지). `flexibility_majority`면 여기서 기준안을 계산해 잠근다(아래). 관찰 기록은 이 노드가 아니라 apply가 첫 카드 발언 게시 뒤에 한다 |
-| turn | 결정적 규칙 + LLM(`MODEL_TURN`) | 화자 0~2명과 목적을 정한다(아래 규칙). 출력은 계약의 턴 매니저 결정 스키마 그대로 `agent_runs.decision`에 저장 |
+| turn | 결정적 규칙 + LLM(`MODEL_TURN`) | 화자 0~2명과 목적을 정한다(아래 규칙). 출력은 계약의 진행 매니저 결정 스키마 그대로 `agent_runs.decision`에 저장 |
 | respond | LLM(`MODEL_PERSONA`) + 도구 | 자리의 페르소나 에이전트가 발언을 만든다(아래). 구조화 출력 |
 | guard | 결정적 | 금지 문구 검사 → 재생성 1회 → 자리별 안전 문구(아래) |
 | stance_check | 결정적 | 게시 문장과 입장이 `stance_plan`과 맞는지 검증. 계획 밖이면 응답 전체 1회 재생성 → 그래도 밖이면 계획과 맞는 고정 문구로 교체(R5-8, 아래) |
@@ -59,7 +59,9 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 | apply | 결정적 | `post_message`(카드 발언이면 `card_ids` 포함, 두 카드를 겸하면 둘 다 → api가 카드마다 그 화자 `delivered` 기록) → (안을 처음 밀면) `propose_option` → (입장 표현) `set_stance`. 카드의 첫 발언이 게시된 직후 카드마다 assessment-mcp `record_observation{card_id, phase, trigger_message_id, run_id}` |
 | fill | 결정적 | apply가 이번 발언의 입장을 저장한 뒤 `get_debate_state`로 지지를 **다시 읽어** 합의(지원자 포함 3/4, 지원자 지지)가 있으면 같은 run에서 채운다(`decision.fill`이 없었어도). 이 노드 전용 분기가 `decision.fill = {option_id, seat}`(또는 재판정 결과)로 공지 고정 문장을 만들고 `fill_slot{session_id, option_id, seat, content, run_id}` 한 번에 넘긴다(respond·apply를 거치지 않음). api가 한 트랜잭션에서 합의 재검사 → 칸 confirmed → 공지 메시지 저장(seq 5, `meta.kind=consensus_fill`) → generation +1을 하고 WS는 `message.new`(공지) → `slot.confirmed` → `phase.changed` → `timer` 순서로 보낸다. 별도 `post_message`는 없다. 409 `no_consensus`·`slot_confirmed`·`phase_not_open`이면 아무것도 저장되지 않고 run을 끝낸다 |
 
-### 턴 매니저 규칙 (turn)
+### 진행 매니저 규칙 (turn)
+
+규칙 코드는 `app/agent/manager/rules.py`, LLM 지침은 `prompts/manager/turn_manager.md`.
 
 규칙을 위에서부터 적용한다. 결정·합의·채우기는 규칙이 하고 LLM은 "누가 자연스럽게 말할지"만 고른다(원칙 "결정은 결정적 코드가, 말투는 LLM이"). 시간 초과 채우기는 api가 결정적으로 하므로 그래프 규칙에 없다(R5-2).
 
@@ -74,7 +76,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 
 ### 페르소나 에이전트 (respond)
 
-- 입력(Context, [architecture/harness.md](harness.md)): 자기 자리의 성향 프롬프트(`prompts/persona_<type>.md`의 말투·행동 규칙), 공통 규칙, 이번 목적과 대상 안, 자기 고정 입장(`stance_plan`), 카드 brief(해당 자리만), 자리 기억(자기 최근 발언 3개), **미리 넣은 DebateState**(지지 현황·확정된 칸·단계 남은 시간), 최근 대화 30개, 지원자 표시 이름(대화에서 "OO님"), 다른 자리 이름. 시간은 단계 남은 시간으로만 말한다.
+- 입력(Context, [architecture/harness.md](harness.md)): 자기 자리의 성향 프롬프트(`prompts/persona/persona_<type>.md`의 말투·행동 규칙), 공통 규칙, 이번 목적과 대상 안, 자기 고정 입장(`stance_plan`), 카드 brief(해당 자리만), 자리 기억(자기 최근 발언 3개), **미리 넣은 DebateState**(지지 현황·확정된 칸·단계 남은 시간), 최근 대화 30개, 지원자 표시 이름(대화에서 "OO님"), 다른 자리 이름. 시간은 단계 남은 시간으로만 말한다.
 - 도구(허용 목록, 응답당 3회): `get_transcript`(30개보다 앞 대화가 필요할 때), `search_materials`, `get_material`, `get_draft`(proposal 단계에서만 바인딩). `get_debate_state`는 컨텍스트에 이미 있으므로 바인딩하지 않는다. 자료는 확정 키워드 것만 열려 있고 키워드 단계에서는 상식 수준으로만 말한다.
 - 출력(구조화): `{content, proposes?: {scenario_option_key∣label}, stance?: {option_id, stance: support∣oppose}}`. `content`는 1~3문장, 200자 이내 권장(guard 상한 400자).
 - `stance_plan`은 결정적으로 계산한다: 단계별 고정 입장 표, 수용 카드 담당(고집형 1명 확정 전 불변 + 다른 1명 설득 가능, R1), 설득 가능 규칙(지원자가 그 자리 안에 반대·대안 제안을 두 번 하면 지원자 안으로 단계당 1회 이동, `stubborn`은 확정 전 불변).
@@ -133,7 +135,7 @@ D16·R4·R5-6. api 메일박스가 `message` 자극마다 들어온 순서대로
 - 입력: 메시지, **저장된 `messages.phase`**(현재 단계가 아님), 그 단계의 **카탈로그 안 전체**(아직 발언되지 않은 것 포함, `scenario_option_key`·라벨), 이미 생긴 안 목록 `[{option_id, label}]`, 직전 메시지 5개, 자리 이름 목록.
 - 메일박스가 밀린 사이 단계가 바뀌어도 분류와 안·입장 반영은 메시지의 단계에 한다. 현재 단계와 다른지는 턴 선택·발언 생성을 생략할지 판단하는 데만 쓴다.
 - 출력: 계약의 의도 분류 스키마(`intent`, 대상 안(생긴 안이면 option_id, 아직 안 생긴 카탈로그 안이면 `scenario_option_key`), `new_option_label`, `addressed_to`, `confidence: high|low`). 허용 값 밖·없는 option_id·스키마 위반은 폴백 `{intent: other, ...}`, `fallback=true`.
-- 쓰임: 안별 지지자 누적(high인 agree·propose만 지지), 카탈로그 안의 최초 제안자 귀속, 턴 매니저 규칙 3, 합의 판정, 침묵 초대 조건, 설득 가능 규칙, stance_check의 문장 판정. **평가 수준에 직접 쓰지 않는다.** 평가 에이전트에는 참고 입력(사실 지표 `intent_counts`, 메시지별 의도)으로만 가고, 원문과 다르면 원문을 따른다([product/rubric.md](../product/rubric.md) 1.2).
+- 쓰임: 안별 지지자 누적(high인 agree·propose만 지지), 카탈로그 안의 최초 제안자 귀속, 진행 매니저 규칙 3, 합의 판정, 침묵 초대 조건, 설득 가능 규칙, stance_check의 문장 판정. **평가 수준에 직접 쓰지 않는다.** 평가 에이전트에는 참고 입력(사실 지표 `intent_counts`, 메시지별 의도)으로만 가고, 원문과 다르면 원문을 따른다([product/rubric.md](../product/rubric.md) 1.2).
 - 지원자 칸 확정 값의 안 연결에는 쓰지 않는다. 확정 경로에는 LLM이 없다(R5-5, [services/api.md](../services/api.md)).
 - 실 모델 정확도 목표는 픽스처 20문장에서 0.85이고 최근 측정은 0.90이다(2026-10-22, gpt-4o-mini, [harness.md](harness.md) "실측 기준선"). MVP 통과 조건은 아니다.
 
@@ -153,22 +155,27 @@ agent(LLM, 도구 바인딩) ⇄ tools(search_materials·get_material) … 최�
 ## guard (`app/agent/guard/`)
 
 모든 LLM 생성 텍스트(페르소나·어시스턴트)에 코드에서 무조건 실행한다.
-- 패턴(`positions.scenario`의 `guard_patterns`, 카탈로그 `prompts/guard_patterns.yaml`): 점수·합격·순위·평가·연출 언급, 평가 기준 질문 응답, 지원자 판정 표현("OO님은 경청을 잘하시네요" 류), 결론 대리 선언("이걸로 확정할게요" 류, 칸 채우기 공지 제외), 다른 자리 성향 이름, 미래 카드 암시.
-- 처리: 걸리면 같은 입력으로 재생성 1회 → 그래도 걸리면 자리별 안전 문구(`prompts/safe_<type>.md`, 성향에 맞는 짧은 중립 문장)로 교체. 400자 초과는 자른다. 결과는 `messages.meta.guard`에 기록.
+- 패턴(`positions.scenario`의 `guard_patterns`, 카탈로그 `prompts/shared/guard_patterns.yaml`): 점수·합격·순위·평가·연출 언급, 평가 기준 질문 응답, 지원자 판정 표현("OO님은 경청을 잘하시네요" 류), 결론 대리 선언("이걸로 확정할게요" 류, 칸 채우기 공지 제외), 다른 자리 성향 이름, 미래 카드 암시.
+- 처리: 걸리면 같은 입력으로 재생성 1회 → 그래도 걸리면 자리별 안전 문구(`prompts/persona/safe_<type>.md`, 성향에 맞는 짧은 중립 문장)로 교체. 400자 초과는 자른다. 결과는 `messages.meta.guard`에 기록.
 - 입력 쪽: 지원자 메시지 마스킹은 api가 저장 전에 한다.
 
 ## 프롬프트와 카탈로그 (`scenarios/missions/debate/prompts/`)
 
+역할 폴더별로 둔다. 폴더 이름은 코드 역할 폴더와 같다.
+
 | 파일 | 내용 |
 |---|---|
-| `common_rules.md` | 모든 자리 공통: 동등한 팀원, 짧게 말하기, 시간은 남은 시간으로 말하기, 금지 목록, 기능 설명만 하고 평가 대상 행동을 유도하지 않음, 평가 질문 안내문 |
-| `persona_<type>.md` | 성향·말투·행동 규칙·must_not([product/scenario.md](../product/scenario.md) 2.1). MVP에서 쓰는 것은 `stubborn`·`quiet`·`critic` 3개 |
-| `turn_manager.md` | LLM 화자 선택 지침(규칙 6) |
-| `intent.md` | 의도 분류 지침과 예시(`confidence` 기준 포함) |
-| `assistant.md` | 어시스턴트 지침(도구 선택·인용 규칙) |
-| `evaluator/common.md`, `evaluator/<element>.md` ×5 | 평가 에이전트 공통 지침(판단 순서·근거·출력 형식)과 요소별 특수 지침. 척도·앵커 본문은 [product/rubric.md](../product/rubric.md) 복사본을 `get_rubric`으로 주입 |
-| `safe_<type>.md`, `stance_fallback`(자리·단계별 계획 일치 고정 문구), `guard_patterns.yaml` | 안전 문구, 계획 밖 입장 교체 문구, 금지 패턴 |
-| `fixtures/` | 프롬프트 픽스처(유출·선점·판정 유도 질문, 계획 밖 입장 유도) |
+| `manager/turn_manager.md` | 진행 매니저 LLM 화자 선택 지침(규칙 6) |
+| `persona/common_rules.md` | 모든 자리 공통: 동등한 팀원, 짧게 말하기, 시간은 남은 시간으로 말하기, 금지 목록, 기능 설명만 하고 평가 대상 행동을 유도하지 않음, 평가 질문 안내문 |
+| `persona/persona_<type>.md` | 성향·말투·행동 규칙·must_not([product/scenario.md](../product/scenario.md) 2.1). MVP에서 쓰는 것은 `stubborn`·`quiet`·`critic` 3개 |
+| `persona/safe_<type>.md`, `persona/stance_fallback.yaml` | 자리별 안전 문구, 계획 밖 입장 교체 문구(자리·단계별 계획 일치 고정 문구) |
+| `intent/intent.md` | 의도 분류 지침과 예시(`confidence` 기준 포함) |
+| `assistant/assistant.md` | 어시스턴트 지침(도구 선택·인용 규칙) |
+| `evaluator/common.md`, `evaluator/<element>.md` ×5 | 평가자 공통 지침(판단 순서·근거·출력 형식)과 요소별 특수 지침. 척도·앵커 본문은 [product/rubric.md](../product/rubric.md) 복사본을 `get_rubric`으로 주입 |
+| `shared/fixed_phrases.yaml`, `shared/guard_patterns.yaml` | 여러 역할이 함께 쓰는 고정 문장·안내문과 금지 패턴(동료 guard·어시스턴트 안내 교체·평가 금지어) |
+| `fixtures/` | 프롬프트 픽스처(유출·선점·판정 유도 질문, 계획 밖 입장 유도). 채용 건에 복사하지 않는다 |
+
+**프롬프트 키**: 실행 코드와 채용 건 복사본(`positions.scenario.prompts`)은 파일을 경로가 아니라 키로 찾는다. 키는 역할 폴더를 뗀 이름이고(`manager/turn_manager.md` → `turn_manager.md`, `shared/guard_patterns.yaml` → `guard_patterns.yaml`), 평가자 폴더만 `evaluator/` 앞부분을 남긴다(`evaluator/common.md`). 규칙은 `scenarios/version.py` `PROMPT_KEY_PREFIX`·`prompt_files` 한 곳이고 api 조립(`scenario.assemble`)·`Catalog.from_dir`·워커 `load_prompts`가 함께 쓴다. 등록되지 않은 폴더나 두 파일이 같은 키가 되면 조립이 실패한다. 키 목록은 `scenarios/missions/debate/tests/test_catalog.py`가 고정한다.
 
 프롬프트는 `catalog_version` 해시에 포함되고 본문이 `positions.scenario`에 복사돼 채용 건에 고정된다.
 
@@ -206,19 +213,21 @@ D18·D19 개정과 R5-14. 세션 종료 후 report-worker의 `evaluate` 노드�
 
 **버전**: 평가 프롬프트 파일(`prompts/evaluator/common.md`와 `prompts/evaluator/<element>.md` 5개)마다 개별 해시를 `prompt_versions` 맵(형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave)으로, 세션 척도 버전을 `rubric_version`으로, 실제 모델 id를 `model`로 `save_evaluation`에 함께 저장한다(api가 `evaluation_runs`에 보관). 단일 `prompt_version` 필드는 쓰지 않는다.
 
-**평가 프롬프트 고정**: 채용 건 생성 때 api `scenario.assemble`이 카탈로그 `prompts/` 전체를 `positions.scenario.prompts`에 복사한다(따로 둔 열 없음). 워커는 내부 `GET /internal/sessions/{id}`의 `position.scenario.prompts`에서 `"evaluator/*.md"`(common과 5요소)와 `"guard_patterns.yaml"`의 `evaluator_forbidden`을 읽고, `prompt_versions` 해시(키 `{common, persuasion, listening, inclusion, flexibility, honesty}`)도 이 복사본 내용으로 계산한다. draft의 금지어 검사도 같은 복사본을 쓴다. 복사본에 평가 파일이나 `evaluator_forbidden`이 하나라도 없으면 현재 파일로 채우지 않고 `PinnedCopyMissing`(채용 건 id 포함)으로 실패한다. 재시도해도 같으므로 백오프·재발행 없이 바로 `report.dlq`로 보내 리포트 실패(`failed_stage=report`)가 된다.
+**평가 프롬프트 고정**: 채용 건 생성 때 api `scenario.assemble`이 카탈로그 `prompts/` 전체(픽스처 제외)를 프롬프트 키로 `positions.scenario.prompts`에 복사한다(따로 둔 열 없음). 워커는 내부 `GET /internal/sessions/{id}`의 `position.scenario.prompts`에서 `"evaluator/*.md"`(common과 5요소)와 `"guard_patterns.yaml"`의 `evaluator_forbidden`을 읽고, `prompt_versions` 해시(키 `{common, persuasion, listening, inclusion, flexibility, honesty}`)도 이 복사본 내용으로 계산한다. draft의 금지어 검사도 같은 복사본을 쓴다. 복사본에 평가 파일이나 `evaluator_forbidden`이 하나라도 없으면 현재 파일로 채우지 않고 `PinnedCopyMissing`(채용 건 id 포함)으로 실패한다. 재시도해도 같으므로 백오프·재발행 없이 바로 `report.dlq`로 보내 리포트 실패(`failed_stage=report`)가 된다.
 
 **리포트 요약 문장과의 관계**: 요소 서술(`elements[].summary`)은 이 평가 호출이 쓰고 draft에서 다시 만들지 않는다. 리포트의 카드 장면(`cards[].scene`)은 LLM 없이 카드의 고정 문장 `report_template`을 그대로 쓴다. draft 단계에는 LLM 호출이 없다. 리포트용 요약 호출은 검증으로 차원 행이 바뀐 요소의 summary 재작성 1회뿐이다. 평가 호출이 실패해 요소의 모든 차원이 `evaluate_failed`면 요소 서술은 템플릿 고정 문장으로 대신하고, 차원 수준을 템플릿이나 다른 모델로 메우지 않는다.
 
 ## 역할별 모델
 
+env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`·`turn`·`intent`·`assistant`·`evaluator`)는 역할 이름을 바꾸기 전 그대로다.
+
 | 역할 | env | 쓰는 곳 |
 |---|---|---|
-| 페르소나 | `MODEL_PERSONA` | respond |
-| 턴 매니저 | `MODEL_TURN` | turn 규칙 6(규칙 결과 0명 + message 자극일 때만) |
+| 토론 동료 | `MODEL_PERSONA` | respond |
+| 진행 매니저 | `MODEL_TURN` | turn 규칙 6(규칙 결과 0명 + message 자극일 때만) |
 | 의도 분류 | `MODEL_INTENT` | intent, stance_check 문장 판정 |
 | 어시스턴트 | `MODEL_ASSISTANT` | assistant tool-calling 루프 |
-| 평가 에이전트 | `MODEL_EVALUATOR` | report-worker 평가 에이전트(요소별 차원 수준·근거·요약). 카드 장면 `cards[].scene`은 고정 문장이라 LLM을 쓰지 않는다 |
+| 평가자 | `MODEL_EVALUATOR` | report-worker 평가 에이전트(요소별 차원 수준·근거·요약). 카드 장면 `cards[].scene`은 고정 문장이라 LLM을 쓰지 않는다 |
 
 비어 있으면 `OPENAI_MODEL`(기본 gpt-4o-mini). 키는 모델 id로 고른다(gpt-4o-mini → 제한 키, 그 외 gpt-* → 개인 키, gemini-* → Gemini 키). 규칙은 공용 LLM 래퍼(`app/agent/llm`, 워커는 같은 규칙의 사본) 한 곳이고, 래퍼가 호출마다 토큰과 환산 달러를 `usage.cost_usd`로 낸다(R5-11). 프롬프트·규칙 수정으로 안 되는 역할만 사용자 결정으로 올린다(`docs/decisions.md`). 역할별 타임아웃·재시도·temperature는 [harness.md](harness.md) "역할별 모델" 표가 정본이다.
 

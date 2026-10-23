@@ -1,7 +1,8 @@
 """guard: 모든 LLM 생성 텍스트(페르소나·어시스턴트)에 코드에서 무조건 실행한다(harness.md
 Guardrails).
 
-패턴 정본은 카탈로그 `prompts/guard_patterns.yaml`이고 실행은 채용 건에 고정된 복사본을 읽는다.
+패턴 정본은 카탈로그 `prompts/shared/guard_patterns.yaml`(키 `guard_patterns.yaml`)이고 실행은
+채용 건에 고정된 복사본을 읽는다.
 - 적용 단위는 메시지 전체다. 어느 그룹 패턴이든 걸리면 hit.
 - `allow_exact`: 메시지 전체(앞뒤 공백 제거)가 목록의 문장과 글자 그대로 같으면 어느 그룹도 검사하지
   않는다(정해진 평가 안내문 보존). 부분 포함·변형 문장은 예외가 아니다.

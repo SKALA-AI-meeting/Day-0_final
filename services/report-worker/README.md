@@ -39,7 +39,7 @@ env 이름은 `report_worker/config.py`·`llm.py`·`heartbeat.py`와 `infra/.env
 | `consumer.py` | 메시지 처리 규칙(같은 eval_round만 체크포인트 재개, 재시도 백오프 5·15·45초, attempt≥3 → DLQ, dlq는 api 복구까지 60초 간격)과 aio-pika 연결 |
 | `llm.py` | `MODEL_EVALUATOR`(비면 `OPENAI_MODEL`), temperature 0.1, JSON 출력, 전송 실패 재시도 2회 뒤 예외(저장 없이 큐 재시도) |
 
-평가 프롬프트(`prompts/evaluator/{common,<element>}.md`)와 금지어(`guard_patterns.yaml`의 `evaluator_forbidden`)는 채용 건에 복사된 것을 읽는다. 복사본에 하나라도 없으면 현재 파일로 채우지 않고 재시도 없이 리포트 실패로 둔다. 카탈로그 파일을 읽지 않으므로 `scenarios` 마운트가 필요 없다.
+이 워커가 평가자 역할이다(역할 문서 [docs/agents/evaluator.md](../../docs/agents/evaluator.md)). 평가 프롬프트(카탈로그 `prompts/evaluator/{common,<element>}.md`, 키 `evaluator/{common,<element>}.md`)와 금지어(카탈로그 `prompts/shared/guard_patterns.yaml`, 키 `guard_patterns.yaml`의 `evaluator_forbidden`)는 채용 건에 복사된 것을 읽는다. 복사본에 하나라도 없으면 현재 파일로 채우지 않고 재시도 없이 리포트 실패로 둔다. 카탈로그 파일을 읽지 않으므로 `scenarios` 마운트가 필요 없다.
 
 ## 실행
 

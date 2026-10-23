@@ -11,7 +11,7 @@ Day Zero는 지원자가 AI 동료 3명과 채팅으로 토론하는 과정에�
 | 서비스 | 역할 | 문서 |
 |---|---|---|
 | web | 지원자 토론방·기획안·디브리핑과 담당자 관리자 화면(Next.js) | [apps/web/README.md](apps/web/README.md) |
-| api | 인증·REST·WebSocket·세션 시계, 토론 그래프(턴 매니저 + 페르소나 3)·어시스턴트·의도 분류. DB 쓰기는 api만 한다 | [services/api/README.md](services/api/README.md) |
+| api | 인증·REST·WebSocket·세션 시계, 토론 그래프(진행 매니저 + 페르소나 3)·어시스턴트·의도 분류. DB 쓰기는 api만 한다 | [services/api/README.md](services/api/README.md) |
 | debate-mcp | 토론 상태를 읽고 쓰는 MCP 도구(메시지 게시·안 제안·입장·합의 칸 채우기) | [services/debate-mcp/README.md](services/debate-mcp/README.md) |
 | rag-mcp | 확정된 키워드의 참고 자료 검색·조회(BGE-M3, pgvector) | [services/rag-mcp/README.md](services/rag-mcp/README.md) |
 | assessment-mcp | 평가용 세션 기록 조회와 관찰·평가 저장. 페르소나는 접근하지 못한다 | [services/assessment-mcp/README.md](services/assessment-mcp/README.md) |

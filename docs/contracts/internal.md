@@ -51,7 +51,7 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
  "cost_left":1.79}
 ```
 
-`consensus_option_id`는 합의 판정 결과(없으면 null), `timeout_option_id`는 지금 마감되면 고를 안. 턴 매니저는 이 값을 그대로 쓴다. `card_progress`는 `session_cards` 행(처리가 시작된 카드)의 잠긴 기준안과 전달된 자리이고, 결정적 노드가 아직 전달되지 않은 담당 화자를 다음 run의 화자로 이어서 넣는다. **페르소나 컨텍스트에는 `card_progress`·`cost_left`를 넣지 않는다**(카드 brief와 자기 입장 계획만 그 화자에게). `cost_left` = `SESSION_COST_HARD_USD`(기본 $2) − `sessions.debate_cost_usd`(리포트 비용 제외, `services/budget.py`가 계산)이고 0 이하면 페르소나는 LLM 없이 고정 안전 문구만 게시한다. 그래프 `load`는 위 필드를 걸러 낸 DebateState를 페르소나 컨텍스트에 미리 넣어 조회 도구 왕복을 줄인다.
+`consensus_option_id`는 합의 판정 결과(없으면 null), `timeout_option_id`는 지금 마감되면 고를 안. 진행 매니저는 이 값을 그대로 쓴다. `card_progress`는 `session_cards` 행(처리가 시작된 카드)의 잠긴 기준안과 전달된 자리이고, 결정적 노드가 아직 전달되지 않은 담당 화자를 다음 run의 화자로 이어서 넣는다. **페르소나 컨텍스트에는 `card_progress`·`cost_left`를 넣지 않는다**(카드 brief와 자기 입장 계획만 그 화자에게). `cost_left` = `SESSION_COST_HARD_USD`(기본 $2) − `sessions.debate_cost_usd`(리포트 비용 제외, `services/budget.py`가 계산)이고 0 이하면 페르소나는 LLM 없이 고정 안전 문구만 게시한다. 그래프 `load`는 위 필드를 걸러 낸 DebateState를 페르소나 컨텍스트에 미리 넣어 조회 도구 왕복을 줄인다.
 
 ### Contributions
 
@@ -151,7 +151,7 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 | scenario_option_key | 대상이 아직 행이 없는 카탈로그 안이면 그 키, 아니면 null |
 | new_option_label | intent=propose이고 기존 안·카탈로그 안 어느 것과도 다를 때 짧은 라벨(20자 이내), 아니면 null |
 | confidence | `high` ∣ `low`. 의도와 대상이 분명하면 high |
-| addressed_to | 이름을 부르거나 답한 자리 id 목록(턴 매니저 규칙 입력). 없으면 [] |
+| addressed_to | 이름을 부르거나 답한 자리 id 목록(진행 매니저 규칙 입력). 없으면 [] |
 
 처리(결정적 코드):
 
@@ -160,7 +160,7 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 - 실패·스키마 위반은 `{"intent": "other", "target_option_id": null, "scenario_option_key": null, "new_option_label": null, "confidence": "low", "addressed_to": []}`, `fallback=true`.
 - 분류는 토론 진행용이다. 세션 후 평가 에이전트에는 참고 입력으로만 들어가고 원문과 다르면 원문을 따른다([product/rubric.md](../product/rubric.md) 1.2). 정확도 목표는 `tests/eval/` 의도 분류 20문장 기준 0.85다(최근 측정은 [architecture/harness.md](../architecture/harness.md) "실측 기준선").
 
-## 턴 매니저 결정 스키마
+## 진행 매니저 결정 스키마
 
 토론 그래프 `turn` 노드의 출력. `agent_runs.decision`에 저장한다(관측·테스트용).
 

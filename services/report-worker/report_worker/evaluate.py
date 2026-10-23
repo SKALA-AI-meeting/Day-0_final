@@ -20,6 +20,7 @@
 """
 
 import hashlib
+import importlib.util
 import json
 import logging
 import math
@@ -76,10 +77,13 @@ def _digest(text: str) -> str:
 
 
 def _read_files(scenarios_dir: Path, mission_id: str) -> dict[str, str]:
-    folder = Path(scenarios_dir) / "missions" / mission_id / "prompts"
-    return {
-        name: (folder / name).read_text(encoding="utf-8") for name in (*EVALUATOR_FILES, GUARD_FILE)
-    }
+    """현재 카탈로그 파일을 프롬프트 키로 읽는다(키 규칙은 scenarios/version.py `prompt_files`)."""
+    root = Path(scenarios_dir)
+    spec = importlib.util.spec_from_file_location("scenarios_version", root / "version.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    files = module.prompt_files(root / "missions" / mission_id / "prompts", copied_only=True)
+    return {n: files[n].read_text(encoding="utf-8") for n in (*EVALUATOR_FILES, GUARD_FILE)}
 
 
 def _prompts(texts: dict[str, str]) -> Prompts:

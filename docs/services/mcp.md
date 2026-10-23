@@ -45,7 +45,7 @@
 
 | 도구 | 내부 API | 구분 | 호출자 | 메모 |
 |---|---|---|---|---|
-| record_observation | POST /observations | 변경 | 턴 매니저 결정적 노드 `apply`(첫 카드 발언 게시 직후)·`cards`(발언 없는 `honesty_credit`), 코드 호출 | 카드 발동 기록. 트리거는 시각 기반 `card_due`뿐이고(R5-4) 첫 카드 발언이 실제 게시된 뒤에만 카드마다 기록한다(공동 전달 메시지는 카드마다 1건). 입력은 계약대로 `{session_id, card_id, phase, trigger_message_id?, run_id}`. (session_id, card_id) 멱등 |
+| record_observation | POST /observations | 변경 | 진행 매니저 결정적 노드 `apply`(첫 카드 발언 게시 직후)·`cards`(발언 없는 `honesty_credit`), 코드 호출 | 카드 발동 기록. 트리거는 시각 기반 `card_due`뿐이고(R5-4) 첫 카드 발언이 실제 게시된 뒤에만 카드마다 기록한다(공동 전달 메시지는 카드마다 1건). 입력은 계약대로 `{session_id, card_id, phase, trigger_message_id?, run_id}`. (session_id, card_id) 멱등 |
 | get_rubric | GET /rubric | 조회 | 워커 collect | 세션 `positions.scenario`에 복사된 척도: 5요소 차원 19개의 id·정의·수준 1~5 앵커·기록 없음 사유·카드 창, `rubric_version` |
 | get_session_record | GET /sessions/{id}, /messages(전체, 페이지 반복), /slots, /proposal, /observations, /facts, /contributions | 조회 | 워커 collect | 평가 입력 묶음: 대화 전체(intent·origin 포함)·칸 기록(지지 현황 스냅샷)·기획안 제출본(`auto_submitted`)·카드 발생 observations·사실 지표·Contributions. 전용 엔드포인트 없이 기존 내부 GET을 모아 SessionRecord로 조립. completed 이후만(아니면 `conflict`) |
 | get_transcript_span | GET /transcript_span | 조회 | 워커 draft | 근거 메시지의 앞뒤 맥락(기본 앞 5·뒤 3). **리포트 표시용**이며 평가 판단 입력이 아니다 |

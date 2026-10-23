@@ -6,8 +6,8 @@
 
 | 주체 | debate-mcp | rag-mcp | assessment-mcp | 비고 |
 |---|---|---|---|---|
-| 턴 매니저 결정적 노드(load·cards·apply·fill) | 전부 | — | `record_observation` | 코드가 직접 호출 |
-| 턴 매니저 LLM(turn) | — | — | — | 도구 없음. 주입된 상태만 본다 |
+| 진행 매니저 결정적 노드(load·cards·apply·fill) | 전부 | — | `record_observation` | 코드가 직접 호출 |
+| 진행 매니저 LLM(turn) | — | — | — | 도구 없음. 주입된 상태만 본다 |
 | 페르소나 respond | 조회 2개(`get_transcript`·`get_draft`, `get_debate_state`는 바인딩하지 않고 load가 걸러 주입) | `search_materials`·`get_material` | **불가** | 변경은 결정적 노드만. 평가 기준을 보고 행동을 맞추지 못하게 |
 | 어시스턴트 | — | `search_materials`·`get_material` | — | 모델 도구 호출 루프, 요청당 최대 3회 |
 | report-worker | — | — | `get_rubric`·`get_session_record`·`get_transcript_span`·`get_contributions`·`save_evaluation` | 코드가 직접 호출, 평가 에이전트 LLM에는 도구 없음(입력 묶음 주입). 리포트 저장은 내부 REST |

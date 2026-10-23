@@ -2,7 +2,9 @@
 
 정본 구조는 docs/product/scenario.md 6장. 실행은 채용 건에 고정된 복사본을 읽는다:
 - `scenario["seats"]`: 자리 → 페르소나 유형·이름(고정 p1·p2·p3).
-- `scenario["prompts"]`: `prompts/` 상대 경로 → 본문(guard_patterns.yaml·fixed_phrases.yaml 포함).
+- `scenario["prompts"]`: 프롬프트 키 → 본문(guard_patterns.yaml·fixed_phrases.yaml 포함).
+  키는 역할 폴더를 뗀 이름(`turn_manager.md`, `evaluator/common.md`)이고 규칙은
+  scenarios/version.py `prompt_files`.
 - `scenario["catalog"]`: `{mission, personas, cards, keywords}` = 미션 폴더 YAML 4개를 읽은 dict.
 복사본에 `catalog`(4개)나 `prompts`가 없으면 현재 미션 파일로 채우지 않고 `ScenarioCopyMissing`을
 올린다(세션 시작은 409 `position_outdated`로 먼저 막는다).
@@ -15,6 +17,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from app.services.scenario import prompt_texts
 
 PHASES = ("keyword", "problem", "solution", "proposal")
 DEBATE_PHASES = ("keyword", "problem", "solution")
@@ -103,12 +107,7 @@ class Catalog:
     @classmethod
     def from_dir(cls, mission_dir: Path) -> "Catalog":
         parts = {k: _read_yaml(mission_dir / f) for k, f in _FILES.items()}
-        prompts_dir = mission_dir / "prompts"
-        prompts = {
-            p.relative_to(prompts_dir).as_posix(): p.read_text(encoding="utf-8")
-            for p in sorted(prompts_dir.rglob("*"))
-            if p.is_file()
-        }
+        prompts = prompt_texts(mission_dir.parents[1], mission_dir.name)
         catalog = cls(prompts=prompts, **parts)
         catalog.seats = catalog._default_seats()
         return catalog

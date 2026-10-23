@@ -26,13 +26,17 @@ CONTRACTS = REPO_ROOT / "tests" / "fixtures" / "contracts"
 SCENARIOS = REPO_ROOT / "scenarios"
 
 
+def _version_module():
+    spec = importlib.util.spec_from_file_location("scenarios_version", SCENARIOS / "version.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def prompts_copy(folder) -> dict[str, str]:
-    """api `scenario.assemble`의 `prompts`와 같은 모양(prompts/ 상대 경로 → 본문, fixtures 제외)."""
-    return {
-        p.relative_to(folder).as_posix(): p.read_text(encoding="utf-8")
-        for p in sorted(folder.rglob("*"))
-        if p.is_file() and "fixtures" not in p.parts
-    }
+    """api `scenario.assemble`의 `prompts`와 같은 모양(프롬프트 키 → 본문, fixtures 제외)."""
+    files = _version_module().prompt_files(folder, copied_only=True)
+    return {key: path.read_text(encoding="utf-8") for key, path in files.items()}
 
 
 def load(name: str) -> Any:

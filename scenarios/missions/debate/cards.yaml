@@ -107,7 +107,7 @@ cards:
     debrief: 기획안 작성 단계에서는 동료들이 누가 어떤 아이디어를 냈는지 먼저 말하지 않도록 설정되어 있었습니다.
     report_template: 기획안 작성 단계에서 지원자가 혼자 최종 기획안을 쓰고 아이디어 기여 칸을 작성했습니다. AI 동료는 누가 무엇을 냈는지 먼저 말하지 않도록 설정된 장면입니다.
 
-# 흐름 이벤트(docs/product/scenario.md 3장). 항상 일어나며 관찰 카드가 아니다. 문구는 prompts/fixed_phrases.yaml.
+# 흐름 이벤트(docs/product/scenario.md 3장). 항상 일어나며 관찰 카드가 아니다. 문구는 prompts/shared/fixed_phrases.yaml.
 flow_events:
   - { event_id: stage_start, when: 각 단계 시작, by: system, phrase: stage_start }
   - { event_id: time_warning, when: 단계 마감 L/30 전, by: system, phrase: time_warning }

@@ -422,14 +422,14 @@ def test_rubric_core_cards_exist(rubric, cards):
 # ---------- prompts ----------
 
 PROMPT_FILES = [
-    "prompts/common_rules.md",
-    "prompts/turn_manager.md",
-    "prompts/intent.md",
-    "prompts/assistant.md",
+    "prompts/persona/common_rules.md",
+    "prompts/manager/turn_manager.md",
+    "prompts/intent/intent.md",
+    "prompts/assistant/assistant.md",
     "prompts/evaluator/common.md",
-    "prompts/stance_fallback.yaml",
-    "prompts/guard_patterns.yaml",
-    "prompts/fixed_phrases.yaml",
+    "prompts/persona/stance_fallback.yaml",
+    "prompts/shared/guard_patterns.yaml",
+    "prompts/shared/fixed_phrases.yaml",
 ]
 
 
@@ -437,20 +437,20 @@ def test_prompt_files_exist():
     for rel in PROMPT_FILES:
         assert (MISSION / rel).is_file(), rel
     for t in SESSION_TYPES:
-        assert (MISSION / f"prompts/persona_{t}.md").is_file()
-        assert (MISSION / f"prompts/safe_{t}.md").read_text(encoding="utf-8").strip()
+        assert (MISSION / f"prompts/persona/persona_{t}.md").is_file()
+        assert (MISSION / f"prompts/persona/safe_{t}.md").read_text(encoding="utf-8").strip()
     for el in ELEMENTS:  # prompt_versions = common + 요소 5개
         assert (MISSION / f"prompts/evaluator/{el}.md").is_file()
 
 
 def test_persona_prompts_do_not_name_types():
     for t in SESSION_TYPES:
-        text = (MISSION / f"prompts/persona_{t}.md").read_text(encoding="utf-8")
+        text = (MISSION / f"prompts/persona/persona_{t}.md").read_text(encoding="utf-8")
         assert not re.search(r"고집형|소극형|비판형|동조형|발산형|stubborn|quiet|critic", text), t
 
 
 def test_fixed_phrases_match_doc():
-    fp = load("prompts/fixed_phrases.yaml")
+    fp = load("prompts/shared/fixed_phrases.yaml")
     assert fp["consensus_fill"].replace("{option}", "X") == "그럼 X로 정리할게요."
     assert (
         fp["timeout_fill"].replace("{option}", "X")
@@ -465,7 +465,7 @@ def test_fixed_phrases_match_doc():
 
 
 def test_stance_fallback_covers_seats(personas):
-    sf = load("prompts/stance_fallback.yaml")
+    sf = load("prompts/persona/stance_fallback.yaml")
     persuadable = {p["id"]: bool(p.get("persuadable")) for p in personas["session"]}
     for t in SESSION_TYPES:
         base = {"keyword", "problem_before_card", "problem", "solution", "proposal"}
@@ -479,7 +479,7 @@ def test_stance_fallback_covers_seats(personas):
 
 @pytest.fixture(scope="module")
 def guard():
-    g = load("prompts/guard_patterns.yaml")
+    g = load("prompts/shared/guard_patterns.yaml")
     groups = {
         grp["id"]: [re.compile(p, re.IGNORECASE) for p in grp["patterns"]] for grp in g["groups"]
     }
@@ -499,7 +499,7 @@ def _hits(groups, text):
 
 def test_guard_patterns_examples(guard):
     g, groups = guard
-    notices = set(load("prompts/fixed_phrases.yaml")["notices"])
+    notices = set(load("prompts/shared/fixed_phrases.yaml")["notices"])
     assert g["max_chars"] == 400
     for grp in g["groups"]:
         assert grp["notice"] in notices
@@ -517,8 +517,8 @@ def test_guard_patterns_examples(guard):
 def test_guard_allows_exact_evaluation_notice(guard):
     """정해진 평가 안내문은 정확히 일치할 때만 통과하고, 변형은 여전히 verdict에 걸린다."""
     g, groups = guard
-    notice = load("prompts/fixed_phrases.yaml")["notices"]["evaluation"]
-    rules = (MISSION / "prompts/common_rules.md").read_text(encoding="utf-8")
+    notice = load("prompts/shared/fixed_phrases.yaml")["notices"]["evaluation"]
+    rules = (MISSION / "prompts/persona/common_rules.md").read_text(encoding="utf-8")
     assert f'평가 방식·기준을 물으면: "{notice}"' in rules
     assert g["allow_exact"] == [notice]
     assert _hits(groups, notice) == set()
@@ -530,10 +530,10 @@ def test_guard_allows_exact_evaluation_notice(guard):
 def test_guard_does_not_block_fixed_lines(guard, cards):
     _, groups = guard
     by = {c["card_id"]: c for c in cards["cards"]}
-    sf = load("prompts/stance_fallback.yaml")
+    sf = load("prompts/persona/stance_fallback.yaml")
     lines = [by["inclusion_silence"]["fixed_line"]]
     lines += [
-        (MISSION / f"prompts/safe_{t}.md").read_text(encoding="utf-8").strip()
+        (MISSION / f"prompts/persona/safe_{t}.md").read_text(encoding="utf-8").strip()
         for t in SESSION_TYPES
     ]
     lines += [v["text"].replace("{option}", "물") for t in SESSION_TYPES for v in sf[t].values()]
@@ -549,8 +549,8 @@ def test_fixtures_reference_valid_ids(guard, cards, personas):
     seats = {p["seat"] for p in personas["session"]}
     types = {p["id"] for p in personas["session"]}
     card_ids = {c["card_id"] for c in cards["cards"]}
-    notices = set(load("prompts/fixed_phrases.yaml")["notices"])
-    sf = load("prompts/stance_fallback.yaml")
+    notices = set(load("prompts/shared/fixed_phrases.yaml")["notices"])
+    sf = load("prompts/persona/stance_fallback.yaml")
 
     leak = load("prompts/fixtures/leak.yaml")["cases"]
     assert len(leak) >= 5
@@ -587,3 +587,36 @@ def test_catalog_version_hashable():
     v = mod.catalog_version("debate")
     assert re.fullmatch(r"[0-9a-f]{16}", v)
     assert v == mod.catalog_version("debate")  # 같은 내용이면 같은 해시
+
+
+# ---------- 프롬프트 키 ----------
+
+# 채용 건 복사본(positions.scenario.prompts)과 실행 코드가 쓰는 키.
+# 역할 폴더로 옮겨도 바뀌면 안 된다
+PROMPT_KEYS = {
+    "turn_manager.md",
+    "common_rules.md",
+    "stance_fallback.yaml",
+    *(f"persona_{t}.md" for t in ("stubborn", "quiet", "critic")),
+    *(f"safe_{t}.md" for t in ("stubborn", "quiet", "critic")),
+    "intent.md",
+    "assistant.md",
+    "evaluator/common.md",
+    *(f"evaluator/{e}.md" for e in ELEMENTS),
+    "fixed_phrases.yaml",
+    "guard_patterns.yaml",
+}
+
+
+def test_prompt_keys_stay_stable_across_role_folders():
+    spec = importlib.util.spec_from_file_location(
+        "scenario_version", REPO / "scenarios" / "version.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    copied = mod.prompt_files(MISSION / "prompts", copied_only=True)
+    assert set(copied) == PROMPT_KEYS
+    every = mod.prompt_files(MISSION / "prompts")
+    assert set(every) - set(copied) == {
+        f"fixtures/{n}.yaml" for n in ("leak", "preemption", "stance_offplan", "verdict")
+    }
