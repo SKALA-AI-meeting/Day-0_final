@@ -112,7 +112,10 @@ def test_timeout_tie_or_no_support_takes_earliest():
     nobody = [option("X", "candidate", 0), option("Y", "candidate", 1)]
     assert _timeout(nobody, []) == ("X", "earliest")
     same_time = [option("Y", "candidate", 0), option("X", "candidate", 0)]
-    assert _timeout(same_time, []) == ("Y", "earliest")  # 시각이 같으면 먼저 저장된 행
+    assert _timeout(same_time, []) == ("Y", "earliest")  # 시각이 같고 seq가 없으면 입력 순서
+    # 시각이 같으면 입력 순서와 상관없이 저장 순서(seq)가 앞인 안
+    stored = [{**option("Y", "candidate", 0), "seq": 7}, {**option("X", "candidate", 0), "seq": 3}]
+    assert _timeout(stored, []) == ("X", "earliest")
 
 
 def test_timeout_without_options_uses_default():

@@ -10,7 +10,17 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, ForeignKeyConstraint, Integer, Numeric, Text, text
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Identity,
+    Integer,
+    Numeric,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -160,6 +170,8 @@ class Option(Base):
     scenario_option_key: Mapped[str | None] = mapped_column(Text)
     source_message_id: Mapped[uuid.UUID | None] = _uuid("messages.id")
     created_at: Mapped[datetime] = _created()
+    # 저장 순서(DB가 매김). 생성 시각이 같은 안의 순서를 정한다
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(always=True), nullable=False)
 
 
 class MessageIntent(Base):

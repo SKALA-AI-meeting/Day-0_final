@@ -107,7 +107,8 @@ CREATE TABLE options (
   proposer text NOT NULL CHECK (proposer IN ('candidate','p1','p2','p3','system')),   -- 최초 제안자(system: 시간 초과가 만든 기준안)
   scenario_option_key text,
   source_message_id uuid REFERENCES messages(id),
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  seq bigint GENERATED ALWAYS AS IDENTITY   -- 저장 순서. 생성 시각이 같은 안의 순서를 정한다
 );
 CREATE UNIQUE INDEX options_scenario_key ON options (session_id, phase, scenario_option_key)
   WHERE scenario_option_key IS NOT NULL;

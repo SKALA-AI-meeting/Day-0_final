@@ -26,6 +26,8 @@
     {
       "key": "water",
       "label": "물",
+      "default_problem": "가뭄으로 생활용수 제한이 잦아짐",
+      "default_solution": "센서·데이터 기반 물 관리·경보",
       "materials": [
         {
           "material_id": "water_stats",
@@ -52,6 +54,8 @@
     {
       "key": "fire",
       "label": "불",
+      "default_problem": "노후 주택·전통시장 화재",
+      "default_solution": "IoT 화재 감지·알림 데이터",
       "materials": [
         {
           "material_id": "fire_stats",
@@ -78,6 +82,8 @@
     {
       "key": "tree",
       "label": "나무",
+      "default_problem": "도시 열섬과 녹지 부족",
+      "default_solution": "위성·드론 녹지 모니터링 데이터",
       "materials": [
         {
           "material_id": "tree_green_stats",
@@ -104,6 +110,8 @@
     {
       "key": "wind",
       "label": "바람",
+      "default_problem": "바람길이 막혀 미세먼지가 정체됨",
+      "default_solution": "바람길·대기 데이터 지도와 위험 알림",
       "materials": [
         {
           "material_id": "wind_dust_stats",

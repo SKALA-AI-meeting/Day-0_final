@@ -15,13 +15,13 @@
 
 ## 15분 데모 대본 (`debate_script.json`)
 
-계약 `ws_events.json`(60분 한 세션)을 15분 비율(t_min × 15/60)로 줄인 재생 대본이다. 모든 프레임에 세션 단위 `seq`가 있고, `message.new`(강한결·윤하람·서지안·system, 침묵 초대 `is_invite`, R7 시간 초과 문구), `typing` start/stop(두 명 동시 포함), `slot.confirmed`(키워드: 지원자 확정, 문제 상황: 합의 채우기, 해결책: 시간 초과), `phase.changed`·`timer`, `materials.opened`, 끝의 `session.ended{timeout}`(제출하지 않으면 15:00 자동 제출)이 들어 있다. 시스템 안내의 남은 시간은 15분 기준으로 고쳤다.
+계약 `ws_events.json`(60분 한 세션)을 15분 비율(t_min × 15/60)로 줄인 재생 대본이다. 모든 프레임에 세션 단위 `seq`가 있고, `message.new`(강한결·윤하람·서지안·system, 침묵 초대 `is_invite`, 시간 초과 시스템 안내), `typing` start/stop(두 명 동시 포함), `slot.confirmed`(키워드: 지원자 확정, 문제 상황: 합의 채우기, 해결책: 시간 초과), `phase.changed`·`timer`, `materials.opened`, 끝의 `session.ended{timeout}`(제출하지 않으면 15:00 자동 제출)이 들어 있다. 시스템 안내의 남은 시간은 15분 기준으로 고쳤다.
 
 - `phase`: 그 프레임이 나가기 전 진행 중인 단계. mock은 지금 단계의 프레임만 내고, 단계가 바뀌면 지난 단계 프레임을 버린다.
 - `anchor: "deadline"`: 단계 마감(누적 고정)에 묶인 프레임(마감 30초 전 안내, 시간 초과 채우기, 자동 제출). 그 밖의 프레임은 단계 시작 기준 상대 시각으로 재생해, 지원자가 일찍 정하면 다음 단계 대본이 그 시점부터 이어진다.
 - 지원자가 직접 정하면 mock이 `slot.confirmed`·`phase.changed`·`timer`·`materials.opened`·단계 안내를 만들고, 대본의 같은 전환 프레임은 건너뛴다.
 - 대본의 지원자 발언(ack + `message.new` candidate)도 재생된다(한 세션 전체를 보여 주는 데모). 직접 보낸 메시지는 ack 뒤 같은 모양으로 쌓인다.
-- `keywords`: 카탈로그(`scenarios/missions/debate/keywords.yaml`·`materials/`)의 후보 4개와 자료 본문 복사본. **State 계약에 키워드 후보 목록이 없어** 화면의 키워드 버튼도 여기서 읽는다(열린 문제: 계약에 후보 목록 필드가 필요).
+- `keywords`: 카탈로그(`scenarios/missions/debate/keywords.yaml`·`materials/`)의 후보 4개와 자료 본문 복사본. **State 계약에 키워드 후보 목록이 없어** 화면의 키워드 버튼도 여기서 읽는다(열린 문제: 계약에 후보 목록 필드가 필요). `default_problem`·`default_solution`은 키워드별 첫 문제 상황·해결책 안(P1·S1)이다. mock은 안·지지를 기록하지 않으므로 대본 밖 시간 초과(재입장 링크·조작 패널)는 늘 "나온 안 없음" 규칙으로 단계 기준안을 고르고 그 규칙의 시스템 안내를 낸다.
 - 프로필 이미지: 계약의 `/assets/missions/<id>/avatars/<file>`을 `public/mock-avatars/<file>`로 바꿔 보인다. 파일마다 가로·세로 비율이 달라 원형 크롭을 검증한다.
 
 ## 링크 토큰(지원자)

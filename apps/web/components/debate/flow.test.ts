@@ -90,7 +90,7 @@ test("15분 데모: 표시 이름이 토론방에 쓰이고, 정하기·자료·
   expect(state.slots.map((s) => s.resolution)).toEqual(["consensus", "consensus", "timeout"]);
   expect(
     state.messages.some(
-      (m) => m.sender === "system" && m.content.startsWith("시간 안에 정하지 못해"),
+      (m) => m.sender === "system" && m.content.startsWith("시간 안에 정하지 못"),
     ),
   ).toBe(true);
   expect(state.proposal.sections.keyword).toBe("물");

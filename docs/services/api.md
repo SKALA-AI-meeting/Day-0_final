@@ -105,7 +105,7 @@ services/api/app/
 
 - 현재 지지 = **참여자당 하나**. 다른 안을 support하면 이전 지지를 대체하고, 같은 안에 대한 후속 `oppose`·`withhold`는 그 지지를 철회한다(R5-7·B1, withhold는 반대자로 세지 않음). 지원자 입장은 `confidence: high`이고 유보 표현이 없는 `agree`·`propose`만 지지로 센다(R4·B1).
 - consensus: 지원자 포함 4명 중 3명 이상 지지이고 `confirmed_option_id`가 그 안(지원자의 최신 발언이 그 안의 명시적 동의, B2). 성립 즉시 판정한다(합의 대기 시간 없음, R4).
-- timeout: 지지자 최다 → 동률이면 지원자 지지 안 → 먼저 제안된 안 → 없으면 단계 기준안(키워드는 `default_keyword`, 문제 상황은 잠긴 기준안). 기준안 행이 없으면 채우기 전에 만든다(proposer는 채우는 자리).
+- timeout(B3): 지원자의 현재 지지 안(`candidate_support`) → 지지자 최다가 하나면 그 안(`most_support`) → 최다가 동률이거나 지지자가 없으면 그 안들 중 먼저 제안된 안(`earliest`, 생성 시각이 같으면 저장 순서 `options.seq`) → 안이 없으면 단계 기준안(`default`: 키워드 `default_keyword`, 문제 상황 P1, 해결책 S1). 적용 규칙 id를 함께 돌려준다. 기준안 행이 없으면 채우기 때 만든다(proposer = `system`).
 - 같은 함수가 DebateState와 내부 `POST /slots/fill` 검사에 쓰인다. 그래서 AI는 합의 전에 칸을 채우지 못한다(409 `no_consensus`).
 
 ## 칸 (`confirm`·`fill`·시간 초과)

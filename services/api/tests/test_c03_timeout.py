@@ -122,6 +122,29 @@ async def test_timeout_tie_takes_earliest_option(api, ctx, clock):
     assert (stored["value"], stored["timeout_rule"]) == (P2[1], "earliest")
 
 
+async def test_timeout_tie_with_same_created_at_takes_first_stored(api, ctx, clock):
+    """생성 시각이 같은 동률이면 먼저 저장된 안(options.seq)이다. 두 안의 시각을 같게 맞춘다."""
+    sess = await api.new_session(minutes=60)
+    await to_phase(api, sess, "problem")
+    await api.ai_support(sess, "p1", "problem", *P1)
+    await api.ai_support(sess, "p3", "problem", *P2)
+    async with ctx.session_factory() as db:
+        rows = (
+            await db.scalars(
+                select(Option).where(Option.session_id == sess.id, Option.phase == "problem")
+            )
+        ).all()
+        first, second = sorted(rows, key=lambda o: o.seq)
+        assert first.label == P1[1]
+        # 나중에 저장된 안의 시각을 앞당겨 같게 한다(시각만으로는 순서가 정해지지 않음)
+        first.created_at = second.created_at
+        await db.commit()
+    clock.set(await _deadline(api, sess))
+    await tick(ctx)
+    stored = await _slot(api, sess, "problem")
+    assert (stored["value"], stored["timeout_rule"]) == (P1[1], "earliest")
+
+
 async def test_timeout_without_options_uses_default_keyword(api, ctx, clock):
     """나온 안이 없으면 기준안 행을 system 제안으로 만들고 기준안 규칙을 기록한다."""
     sess = await api.new_session(minutes=15)

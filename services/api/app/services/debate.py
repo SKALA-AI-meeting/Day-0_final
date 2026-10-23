@@ -59,7 +59,7 @@ async def phase_options(db: AsyncSession, session_id: uuid.UUID, phase: str) -> 
     rows = await db.scalars(
         select(Option)
         .where(Option.session_id == session_id, Option.phase == phase)
-        .order_by(Option.created_at)
+        .order_by(Option.created_at, Option.seq)
     )
     return list(rows)
 
@@ -103,7 +103,10 @@ async def judge_phase(
         default_id = next((o.id for o in options if o.scenario_option_key == key), None)
     confirmed = await candidate_confirmed(db, session.id, phase)
     result = consensus.judge(
-        [{"id": o.id, "proposer": o.proposer, "created_at": o.created_at} for o in options],
+        [
+            {"id": o.id, "proposer": o.proposer, "created_at": o.created_at, "seq": o.seq}
+            for o in options
+        ],
         [
             {
                 "participant": s.participant,
@@ -153,7 +156,7 @@ async def candidate_confirmed(
 
 def support_snapshot(options: list[Option], result: dict[str, Any]) -> list[dict[str, Any]]:
     return consensus.support_snapshot(
-        [{"id": o.id, "created_at": o.created_at} for o in options], result
+        [{"id": o.id, "created_at": o.created_at, "seq": o.seq} for o in options], result
     )
 
 

@@ -1,4 +1,4 @@
-// problem: 수용 카드 발언 표시, advance{to: deadline} 뒤 시간 초과 결과(R7 문구)와 입력 잠김
+// problem: 수용 카드 발언 표시, advance{to: deadline} 뒤 시간 초과 결과(적용 규칙별 시스템 안내)와 입력 잠김
 import { expect, test } from "@playwright/test";
 
 import { type Seed, advance, internalGet, room, seed, shot } from "./helpers";

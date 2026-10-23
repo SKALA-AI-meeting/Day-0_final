@@ -15,7 +15,7 @@ DebateState, 내부 `POST /slots/fill` 검사, 시간 초과 채우기가 같은
 - timeout(B3): 지원자의 현재 지지 안(`candidate_support`) → 현재 지지자가 가장 많은 안이 하나면
   그 안(`most_support`) → 최다가 동률이거나 지지자가 아무도 없으면 그 안들 중 먼저 제안된 안
   (`earliest`) → 안이 하나도 없으면 단계 기준안(`default`). 적용 규칙 id를 `timeout_rule`로 함께
-  돌려준다. 제안 시각까지 같으면 입력 순서(안 생성 순)의 앞 안이다.
+  돌려준다. 제안 시각까지 같으면 저장 순서(`options.seq`, 없으면 입력 순서)가 앞인 안이다.
 """
 
 from collections.abc import Iterable
@@ -46,9 +46,9 @@ def judge(
     default_option_id: Any = None,
     confirmed_option_id: Any = None,
 ) -> dict[str, Any]:
-    """options: [{id, proposer, created_at}], stances: 시간순 [{participant, option_id, stance,
-    created_at}]. confirmed_option_id: 지원자의 그 단계 최신 발언이 지지로 세는 발언이면 그 대상
-    안(아니면 None이라 합의가 없다).
+    """options: [{id, proposer, created_at, seq?}], stances: 시간순 [{participant, option_id,
+    stance, created_at}]. confirmed_option_id: 지원자의 그 단계 최신 발언이 지지로 세는 발언이면
+    그 대상 안(아니면 None이라 합의가 없다).
 
     반환: {consensus_option_id, timeout_option_id, timeout_rule, current_support, supporters,
     opposers}.
@@ -106,12 +106,13 @@ def timeout_choice(
     tied = [o for o in options if len(supporters[o["id"]]) == top]
     if top > 0 and len(tied) == 1:
         return tied[0]["id"], "most_support"
-    # min은 같은 값이면 앞 원소를 돌려주므로 제안 시각이 같으면 입력 순서가 정한다
     return min(tied, key=_created)["id"], "earliest"
 
 
-def _created(option: dict[str, Any]) -> datetime:
-    return option["created_at"]
+def _created(option: dict[str, Any]) -> tuple[datetime, int]:
+    """안 순서: 생성 시각, 같으면 저장 순서(`seq`). seq가 없으면 0이라 정렬·min이 안정적이어서
+    입력 순서가 정한다."""
+    return option["created_at"], option.get("seq") or 0
 
 
 def support_snapshot(options: list[dict[str, Any]], result: dict[str, Any]) -> list[dict]:

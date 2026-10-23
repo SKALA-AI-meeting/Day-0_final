@@ -427,7 +427,9 @@ async def transcript_span(
 async def contributions_view(db, session: Session) -> dict[str, Any]:
     options = (
         await db.scalars(
-            select(Option).where(Option.session_id == session.id).order_by(Option.created_at)
+            select(Option)
+            .where(Option.session_id == session.id)
+            .order_by(Option.created_at, Option.seq)
         )
     ).all()
     slots = (await db.scalars(select(Slot).where(Slot.session_id == session.id))).all()

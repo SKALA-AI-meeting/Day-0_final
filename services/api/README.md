@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 247개(live 3개 포함, `make test`는 live를 뺀다).
+총 248개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -330,11 +330,12 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_c03_timeout.py</code> (4)</summary>
+<details><summary><code>tests/test_c03_timeout.py</code> (5)</summary>
 
 - `test_timeout_fills_candidate_supported_option_with_system_notice`
 - `test_timeout_withheld_candidate_falls_to_most_support`
 - `test_timeout_tie_takes_earliest_option`
+- `test_timeout_tie_with_same_created_at_takes_first_stored`
 - `test_timeout_without_options_uses_default_keyword`
 
 </details>
