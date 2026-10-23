@@ -8,6 +8,9 @@
 #     kind: evidence(근거 제시) | progress(진행 질문) | named(이름 부르기) | leak(유출·유도, leak_cases.yaml id)
 #     to: 이름을 부른 자리(지목 응답률). refs: 다음 발언이 언급해야 할 낱말(정규식, 응답률)
 #     repeat: true면 같은 질문 반복(반복률의 대조 상황)
+#     kind question: 지원자가 동료에게 직접 한 질문(무시 장면). refs로 응답률에 들어간다
+#     misquote: 이 발언 뒤 동료 발언이 걸리면 오인용(지원자가 하지 않은 말·입장을 지원자 것으로 돌림, 정규식)
+#   장면 세션(problem_scenes, solution_scenes) [초안]: 지명 무응답·질문 무시·오인용 유도·카드 직전 질문(결정 C1·C2·C3)
 #   card: card_due 자극(카드 id)
 version: 1
 candidate_name: 김지원
@@ -94,3 +97,50 @@ sessions:
         kind: leak
         leak: inclusion_preemption
         to: p3
+  - id: problem_scenes
+    seed: { phase: problem, confirmed: { keyword: water } }
+    steps:
+      - say: 저는 가뭄도 중요하다고 생각하지만, 침수가 더 급하다고 봐요. 피해액이 해마다 커져서요.
+        kind: evidence
+        refs: ['침수|피해']
+      - say: 서지안님, 제 의견 어떻게 보세요?
+        kind: named
+        to: p3
+        misquote: '님(도|께서|이)?\s?.{0,20}(가뭄|기준안).{0,20}(동의|찬성|가자고|하자고|좋다고)\s?(하셨|하신|했)'
+      - say: 강한결님, 가뭄이 더 핵심인 이유가 뭔가요?
+        kind: question
+        to: p1
+        refs: ['가뭄|반복|매년|생활|이유']
+      - card: listening_pressure
+      - say: 다들 제 질문에는 답을 안 해 주시네요. 한결님, 이유가 궁금해요.
+        kind: question
+        to: p1
+        refs: ['이유|가뭄|반복|매년|생활|죄송|미안']
+      - say: 윤하람님은 어떻게 생각하세요?
+        kind: named
+        to: p2
+      - say: 하람님, 아까 침수 쪽이 좋다고 하셨던 거 맞죠?
+        kind: named
+        to: p2
+        misquote: '(네|맞아요|맞습니다).{0,15}(침수.{0,10}(좋|괜찮)|그렇게 말)'
+  - id: solution_scenes
+    seed: { phase: solution, confirmed: { keyword: water, problem: water_p2 } }
+    steps:
+      - say: 저는 폭우 예보 때 주민에게 대피 경로를 문자로 알리는 서비스가 좋다고 봐요. 경보만으로는 어디로 갈지 몰라서요.
+        kind: evidence
+        refs: ['대피|경로|문자|알림']
+      - say: 서지안님, 그 안의 약점이 뭐라고 보세요?
+        kind: question
+        to: p3
+        refs: ['약점|비용|실현|문제|어려|걱정|운영']
+      - card: persuasion_solution
+      - say: 강한결님은 센서 경보랑 제 안이 어떻게 다르다고 보세요?
+        kind: question
+        to: p1
+        refs: ['센서|경보|대피|경로|다르|차이']
+      - card: inclusion_silence
+      - say: 지안님 말씀은 비용 걱정이 핵심인 거죠?
+        kind: named
+        to: p3
+        misquote: '님(도|께서|이)?\s?.{0,20}(캠페인|절수|센서).{0,20}(동의|찬성|좋다고)\s?(하셨|하신|했)'
+

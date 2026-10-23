@@ -19,7 +19,11 @@ def test_scripts_cover_the_four_metrics():
     sessions = pe.load_scripts()["sessions"]
     steps = [s for session in sessions for s in session["steps"] if "say" in s]
     kinds = {s["kind"] for s in steps}
-    assert {"evidence", "progress", "named", "leak"} <= kinds
+    assert {"evidence", "progress", "named", "leak", "question"} <= kinds
+    assert any(s.get("misquote") for s in steps)
+    assert {"listening_pressure", "persuasion_solution"} <= {
+        s["card"] for session in sessions for s in session["steps"] if "card" in s
+    }
     assert all(s["to"] in SEATS for s in steps if s.get("to"))
     assert any(s.get("repeat") for s in steps)
     assert {s.get("to") for s in steps} >= SEATS
@@ -67,6 +71,11 @@ def test_scoring_rules():
     assert got["response"]["evidence"]["rate"] == 0
     assert got["named"]["n"] == 2 and got["named"]["hit"] == 1
     assert got["named"]["card_first"] == {"n": 2, "within_two": 2}  # 카드 화자가 지목자여도
+    quoted = [
+        _event("problem", [("p3", "민지님도 가뭄에 동의하셨죠.")], misquote="가뭄에 동의하셨"),
+        _event("problem", [("p3", "침수 피해가 크다는 말 맞아요.")], misquote="가뭄에 동의하셨"),
+    ]
+    assert pe.misquote(quoted)["misquote"] == 1
 
 
 async def test_runner_follows_the_graph_with_fake_llms():

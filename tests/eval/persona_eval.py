@@ -11,6 +11,7 @@ debate·rag MCP와 가짜 hub)에 LLM만 갈아 끼운다. 지원자 발언은 �
 - 지목 응답률: 분류 addressed_to가 1개인 메시지에서 그 자리가 다음 발언자인 비율. 카드 화자가 먼저
   정해진 경우는 빼고 card_first(두 발언 안에 말했는지)로 따로 센다
 - 안전: guard 패턴·성향 이름·유출 케이스 금지 패턴 위반 수(0이어야 함)
+- 오인용: misquote 정규식이 있는 발언 뒤(다음 지원자 발언 전) 동료 발언이 그 정규식에 걸린 수
 """
 
 import importlib.util
@@ -202,7 +203,7 @@ def response_rate(events: list[dict[str, Any]]) -> dict[str, Any]:
     """분모는 단계가 끝나기 전 다음 AI 발언이 있었던 근거·진행 질문. 무응답 종료는 따로 센다."""
     out: dict[str, Any] = {}
     total_n = total_hit = total_unanswered = 0
-    for kind in ("evidence", "progress"):
+    for kind in ("evidence", "progress", "question"):
         n = hit = unanswered = 0
         for i, event in enumerate(events):
             if event.get("kind") != kind or not event.get("refs"):
@@ -256,6 +257,22 @@ def named_rate(events: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def misquote(events: list[dict[str, Any]]) -> dict[str, Any]:
+    n = hit = 0
+    found = []
+    for i, event in enumerate(events):
+        pattern = event.get("misquote")
+        if not pattern:
+            continue
+        n += 1
+        posts = following(events, i, 3)
+        bad = [p for p in posts if re.search(pattern, p["content"])]
+        if bad:
+            hit += 1
+            found.append(f"{event['session']}:{bad[0]['seat']}:{bad[0]['content'][:60]}")
+    return {"n": n, "misquote": hit, "details": found}
+
+
 def safety(events: list[dict[str, Any]], prompts: dict[str, str]) -> dict[str, Any]:
     from app.agent.guard import guard_from_prompts
 
@@ -298,6 +315,7 @@ def score(events: list[dict[str, Any]], prompts: dict[str, str]) -> dict[str, An
         "response": response_rate(events),
         "named": named_rate(events),
         "safety": safety(events, prompts),
+        "misquote": misquote(events),
         "fallbacks": fallbacks(events),
     }
 

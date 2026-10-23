@@ -111,6 +111,54 @@ def score_intent(cases: list[dict[str, Any]], outputs: list[dict[str, Any]]) -> 
     }
 
 
+def counts_as_support(case: dict[str, Any], output: dict[str, Any], key: str) -> bool:
+    """지지로 세는 것: propose·agree이고 high이며 그 안이 대상(rubric.md 1.2)."""
+    if output["intent"] not in ("propose", "agree") or output["confidence"] != "high":
+        return False
+    if key in case["existing"]:
+        return output["target_option_id"] == option_id(key)
+    return output["scenario_option_key"] == key
+
+
+def decided_problems(case: dict[str, Any], output: dict[str, Any]) -> list[str]:
+    """결정 B1 사례 하나의 실패 이유(빈 목록이면 통과). intent_cases.yaml decided_cases 머리말."""
+    if intent_violations(output):
+        return ["스키마 위반"]
+    check, out = case["check"], []
+    for key in check.get("not_support", []):
+        if counts_as_support(case, output, key):
+            out.append(f"{key}를 지지로 셈")
+    if check.get("support") and not counts_as_support(case, output, check["support"]):
+        out.append(f"{check['support']}를 지지로 세지 않음")
+    if check.get("new_option"):
+        similar = check["new_option"]
+        if output["intent"] != "propose" or not output["new_option_label"]:
+            hit = output["target_option_id"] or output["scenario_option_key"]
+            out.append(f"새 안이 아님({output['intent']}, 대상 {hit or '없음'})")
+        if counts_as_support(case, output, similar):
+            out.append(f"비슷한 안 {similar}로 묶음")
+    if "addressed_to" in check and sorted(output["addressed_to"]) != sorted(check["addressed_to"]):
+        out.append("addressed_to 다름")
+    return out
+
+
+def score_decided(cases: list[dict[str, Any]], outputs: list[dict[str, Any]]) -> dict[str, Any]:
+    groups: dict[str, list[bool]] = {}
+    failed = {}
+    for case, out in zip(cases, outputs, strict=True):
+        problems = decided_problems(case, out)
+        groups.setdefault(case["group"], []).append(not problems)
+        if problems:
+            failed[case["id"]] = problems
+    passed = sum(sum(v) for v in groups.values())
+    return {
+        "n": len(cases),
+        "pass": passed / len(cases) if cases else None,
+        "groups": {g: f"{sum(v)}/{len(v)}" for g, v in groups.items()},
+        "failed": failed,
+    }
+
+
 # ---- BARS -------------------------------------------------------------------------------------
 
 
@@ -164,6 +212,63 @@ def score_bars(
         "exact": sum(d == 0 for d in diffs) / n if n else None,
         "within1": sum(abs(d) <= 1 for d in diffs) / n if n else None,
         "diff_distribution": dict(sorted(Counter(diffs).items())),
+    }
+
+
+AFTER_DECISION = ("flex_acceptance", "flex_forward")  # 결정 후 행동을 보는 차원(rubric.md 3.4)
+FAILED_CODE = re.compile(r"\(사유: ([^)]+)\)")
+
+
+def bars_diagnostics(
+    sessions: list[dict[str, Any]], rows: dict[str, list[dict[str, Any]]]
+) -> dict[str, Any]:
+    """기록된 사실과 모순되는 평가 출력을 센다(결정 A1이 거부할 대상).
+
+    rows[session_id]는 차원 행 목록이다.
+
+    - missed_levels: 사람 라벨은 수준인데 기록 없음(사유별)
+    - activity_missed: 지원자 메시지가 있는 세션에서 no_activity
+    - peer_evidence: 수준을 낸 차원의 근거에 지원자가 아닌 메시지가 섞임
+    - decision_timing: 결정 후 차원(flex_acceptance·flex_forward)의 근거가 칸 확정 전 메시지
+    - evaluate_failed: 실패 사유 코드별
+    """
+    missed: Counter = Counter()
+    activity = peer = timing = 0
+    failed: Counter = Counter()
+    details: list[str] = []
+    for session in sessions:
+        record = session["record"]
+        senders = {m["id"]: m for m in record["messages"]}
+        has_candidate = any(m["sender"] == "candidate" for m in record["messages"])
+        decided = next((s["t_min"] for s in record["slots"] if s["phase"] == "problem"), None)
+        for row in rows.get(session["id"], []):
+            dim, reason = row["dimension_id"], row.get("no_record_reason")
+            want = session["expected"].get(dim)
+            if want and want.get("level") is not None and row["level"] is None:
+                missed[reason] += 1
+                details.append(f"{session['id']}:{dim}:{reason}")
+            if reason == "no_activity" and has_candidate:
+                activity += 1
+            if reason == "evaluate_failed":
+                found = FAILED_CODE.search(row.get("rationale") or "")
+                failed[found.group(1) if found else "unknown"] += 1
+            if row["level"] is None:
+                continue
+            msgs = [senders.get(r.removeprefix("msg:")) for r in row.get("evidence_refs") or []]
+            msgs = [m for m in msgs if m]
+            if any(m["sender"] != "candidate" for m in msgs):
+                peer += 1
+            if dim in AFTER_DECISION and decided is not None:
+                if any(m["sender"] == "candidate" and m["t_min"] < decided for m in msgs):
+                    timing += 1
+                    details.append(f"{session['id']}:{dim}:before_decision")
+    return {
+        "missed_levels": dict(missed),
+        "activity_missed": activity,
+        "peer_evidence": peer,
+        "decision_timing": timing,
+        "evaluate_failed_by_code": dict(failed),
+        "details": details,
     }
 
 
