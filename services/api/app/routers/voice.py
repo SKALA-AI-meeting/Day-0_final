@@ -67,7 +67,7 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
             snap, pending = await controller.sync(db, session, position, ctx.clock.now())
             snap["heard_message_ids"] = await controller.heard_message_ids(db, session_id)
             if snap.get("state") == "USER_READY" and snap.get("ready_at"):
-                # 자동 녹음 시각(손들기 즉시, 강제는 생각 시간 뒤). 일반 차례는 직접 눌러 없음
+                # 자동 녹음 시각(손들기·강제는 생각 시간 뒤). 일반 차례는 직접 눌러 없음
                 auto = controller.auto_start_at(position, snap)
                 if auto:
                     snap["think_deadline_at"] = auto

@@ -486,7 +486,7 @@ async def ready_two(api, ctx, sess, card_second: bool = False):
 
 
 async def test_voice_hand_raise_takes_turn_after_current(api, voice_ctx):
-    """손들면 지금 동료 발언은 끝까지 듣고, 줄 서 있던 발언은 취소된 뒤 바로 내 차례가 된다."""
+    """손들면 지금 발언은 끝까지 듣고, 줄 선 발언은 취소된 뒤 내 차례(생각 시간 뒤 자동 녹음)."""
     ctx = voice_ctx
     sess = await setup(api, ctx)
     first, _second, snap = await ready_two(api, ctx, sess)
@@ -505,6 +505,8 @@ async def test_voice_hand_raise_takes_turn_after_current(api, voice_ctx):
     assert snap["priority"] == "hand"
     assert snap["items"] == []
     assert snap["heard_message_ids"] == [first["id"]]
+    wait = controller.at(snap["think_deadline_at"]) - controller.at(snap["ready_at"])
+    assert wait.total_seconds() == 5  # 손들기도 생각 시간(기본 5초) 뒤 자동 녹음
     start, _ = await record_once(api, ctx, sess, snap)
     async with ctx.session_factory() as db:
         job = await db.get(SpeechJob, uuid.UUID(start["utterance_id"]))

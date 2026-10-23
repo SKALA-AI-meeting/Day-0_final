@@ -40,7 +40,7 @@ export type VoiceSnapshot = {
   rerecorded?: boolean;
   /** 재생이 끝난 동료 발언 id. 상태 조회(GET)에만 있다 */
   heard_message_ids?: string[];
-  /** 녹음을 자동으로 시작할 시각(손들기 즉시, 강제 차례는 잠시 뒤). 일반 차례는 없음(직접 누름) */
+  /** 녹음을 자동으로 시작할 시각(손들기·강제 차례는 생각 시간 뒤). 일반 차례는 없음(직접 누름) */
   think_deadline_at?: string;
   /** 내 차례를 지켜 주는 끝 시각. 지나면 동료가 이어 말한다 */
   turn_until_at?: string;
