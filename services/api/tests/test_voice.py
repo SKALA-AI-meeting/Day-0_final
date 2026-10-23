@@ -135,6 +135,45 @@ async def test_voice_think_time_holds_turn(api, voice_ctx, clock):
     assert snap["release_ready"] is True
 
 
+async def record_once(api, ctx, sess, snap):
+    """발언권을 받아 무음 파일을 올리고 받아 적기까지 마친 상태를 돌려준다."""
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    start = (await post(api, sess, "capture", turn)).json()
+    body = {
+        **turn,
+        "utterance_id": start["utterance_id"],
+        "audio_base64": base64.b64encode(silence()).decode(),
+        "stop_reason": "button",
+    }
+    assert (await post(api, sess, "audio", body)).status_code == 200
+    await ctx.drain_spawned()
+    return start, await snapshot(api, ctx, sess)
+
+
+async def test_voice_rerecord_once_with_fresh_time(api, voice_ctx, clock):
+    """받아 적은 글은 10초 확인 뒤 자동 제출 기준을 주고, 다시 녹음은 한 번만 새 60초로 허용한다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    snap = await snapshot(api, ctx, sess)
+    first, snap = await record_once(api, ctx, sess, snap)
+    u = snap["utterance"]
+    assert u["status"] == "ready"
+    wait = (controller.at(u["confirm_deadline_at"]) - ctx.clock.now()).total_seconds()
+    assert 9.9 < wait <= 10  # 테스트 시계는 호출마다 마이크로초씩 흐른다
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    r = await post(api, sess, "rerecord", {**turn, "job_id": u["id"]})
+    assert r.status_code == 200, r.text
+    assert r.json()["state"] == "USER_READY"
+    clock.advance(seconds=50)  # 앞 녹음 마감과 관계없이 60초를 새로 받는다
+    second, snap = await record_once(api, ctx, sess, r.json())
+    started = controller.at(second["speech_started_at"])
+    assert (controller.at(second["speech_deadline_at"]) - started).total_seconds() == 60
+    assert second["utterance_id"] != first["utterance_id"]
+    r = await post(api, sess, "rerecord", {**turn, "job_id": snap["utterance"]["id"]})
+    assert r.status_code == 409
+    assert r.json()["error"]["code"] == "voice_retry_exhausted"
+
+
 async def test_voice_zero_speakers_stale_and_audio_validation(api, voice_ctx, clock):
     sess = await setup(api, voice_ctx)
     snap = await snapshot(api, voice_ctx, sess)

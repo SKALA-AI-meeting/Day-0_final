@@ -149,7 +149,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 211개(live 3개 포함, `make test`는 live를 뺀다).
+총 212개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -463,11 +463,12 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_voice.py</code> (7)</summary>
+<details><summary><code>tests/test_voice.py</code> (8)</summary>
 
 - `test_voice_playback_barrier_and_single_message`
 - `test_voice_heard_ids_follow_playback_end`
 - `test_voice_think_time_holds_turn`
+- `test_voice_rerecord_once_with_fresh_time`
 - `test_voice_zero_speakers_stale_and_audio_validation`
 - `test_voice_quota_refuses_before_provider_and_other_session`
 - `test_pcm_rejects_truncated_and_long_audio`

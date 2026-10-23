@@ -27,6 +27,11 @@ def think_seconds(position) -> int:
     return position.scenario["voice_policy"].get("think_seconds", 0)
 
 
+def confirm_seconds(position) -> int:
+    """받아 적은 글을 보여 주고 자동 제출하기까지의 시간. 예전 채용 건은 0(바로 제출)."""
+    return position.scenario["voice_policy"].get("confirm_seconds", 0)
+
+
 def ready_hold(position) -> timedelta:
     """내 차례(USER_READY)를 동료 발언·카드에 반납하지 않고 지켜 주는 시간."""
     return timedelta(seconds=think_seconds(position) + READY_GRACE_SECONDS)
@@ -319,6 +324,38 @@ async def accept_audio(db, session, body, audio, now):
     return job
 
 
+async def rerecord(db, session, body, now):
+    """받아 적은 글을 제출하지 않고 버린 뒤, 같은 차례에서 한 번만 새로 녹음하게 한다(60초 새로)."""
+    state = await row(db, session.id)
+    data = dict(state.data)
+    validate(session, data, body.turn_id, body.epoch, now)
+    if data.get("rerecorded"):
+        raise conflict("voice_retry_exhausted")
+    job = await db.get(SpeechJob, body.job_id)
+    if (
+        job is None
+        or job.session_id != session.id
+        or job.kind != "stt"
+        or data.get("utterance_id") != str(job.id)
+        or job.data.get("status") != "ready"
+    ):
+        raise conflict("voice_turn_conflict")
+    job.data = {**job.data, "status": "canceled", "error": "voice_rerecorded"}
+    # 앞 녹음의 마감을 지워야 capture가 발언 시간을 새로 준다
+    for key in ("utterance_id", "speech_started_at", "speech_deadline_at"):
+        data.pop(key, None)
+    data.update(
+        state="USER_READY",
+        ready_at=iso(now),
+        rerecorded=True,
+        capture_count=0,
+        release_ready=False,
+        blocked_reason=None,
+    )
+    state.data = data
+    return data
+
+
 async def submit(db, session, payload, now):
     """기존 message.send 트랜잭션 안에서 전사·턴 fence와 단일 소비를 확인한다."""
     state = await row(db, session.id)
@@ -413,6 +450,7 @@ async def run_job(ctx, job_id):
                 job.audio = result
             elif not error:
                 extra["transcript"] = result
+                extra["ready_at"] = iso(ctx.clock.now())  # 확인 화면 자동 제출 시각의 기준
                 job.audio = None
                 if not result:
                     extra["status"] = "empty"

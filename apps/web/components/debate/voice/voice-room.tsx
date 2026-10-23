@@ -28,12 +28,27 @@ export type VoiceSnapshot = {
   utterance_id?: string;
   speech_deadline_at?: string;
   speech_started_at?: string;
-  utterance?: { id: string; status: string; transcript?: string; message_id?: string };
+  utterance?: {
+    id: string;
+    status: string;
+    transcript?: string;
+    message_id?: string;
+    /** 받아 적은 글을 자동 제출하는 시각. 예전 채용 건이면 없음(바로 제출) */
+    confirm_deadline_at?: string;
+  };
+  /** 이 차례에서 다시 녹음을 이미 썼는지 */
+  rerecorded?: boolean;
   /** 재생이 끝난 동료 발언 id. 상태 조회(GET)에만 있다 */
   heard_message_ids?: string[];
   /** 내 차례(USER_READY)일 때 생각 시간이 끝나는 시각. 예전 채용 건이면 ready_at과 같다 */
   think_deadline_at?: string;
 };
+/** 받아 적은 글 확인 시간이 남은 초(서버 시각 기준). 확인 시간이 없으면 0 */
+function confirmLeft(snap: VoiceSnapshot): number {
+  const deadline = snap.utterance?.confirm_deadline_at;
+  if (!deadline) return 0;
+  return Math.max(0, (Date.parse(deadline) - Date.parse(snap.server_now)) / 1000);
+}
 /** 생각 시간이 남은 초(서버 시각 기준). 생각 시간이 없으면 0 */
 function thinkLeft(snap: VoiceSnapshot): number {
   if (!snap.think_deadline_at) return 0;
@@ -71,6 +86,9 @@ export function VoiceRoom(props: Props) {
   const [level, setLevel] = useState(0);
   const [heardIds, setHeardIds] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
+  // [이대로 제출]을 누른 발언 id. 확인 시간이 남아도 바로 제출한다(ref는 polling용, state는 화면용)
+  const confirmed = useRef("");
+  const [confirmedId, setConfirmedId] = useState("");
   const stream = useRef<MediaStream | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
@@ -327,7 +345,9 @@ export function VoiceRoom(props: Props) {
         // 녹음 종료/업로드 중에는 서버의 직전 USER_SPEAKING 스냅샷을 표시하지 않는다.
         if (!busy.current || player.current) setVoice(next);
         const u = next.utterance;
-        if (u?.status === "ready" && u.transcript) {
+        // 받아 적은 글은 확인 시간 동안 보여 주고, [이대로 제출]을 누르거나 시간이 끝나면 제출한다
+        const reviewed = confirmed.current === u?.id || confirmLeft(next) <= 0;
+        if (u?.status === "ready" && u.transcript && reviewed) {
           pending.current = {
             id: u.id,
             text: u.transcript,
@@ -413,6 +433,36 @@ export function VoiceRoom(props: Props) {
     } else if (voice?.state === "USER_READY") void record(voice);
   };
 
+  const submitNow = (id: string) => {
+    confirmed.current = id;
+    setConfirmedId(id);
+  };
+
+  const rerecord = async (snap: VoiceSnapshot, id: string) => {
+    try {
+      const next = await api<VoiceSnapshot>(`${path}/rerecord`, {
+        method: "POST",
+        token: token(),
+        body: { turn_id: snap.turn_id, epoch: snap.epoch, job_id: id },
+      });
+      lastTurn.current = "";
+      void record({ ...snap, ...next });
+    } catch {
+      setError("다시 녹음하지 못했어요. 단계 마감시간을 확인해 주세요.");
+    }
+  };
+
+  // 받아 적기가 끝나 확인을 기다리는 발언(자동 제출 전)
+  const review =
+    !props.locked &&
+    voice?.utterance?.status === "ready" &&
+    voice.utterance.transcript &&
+    !voice.utterance.message_id &&
+    confirmedId !== voice.utterance.id &&
+    confirmLeft(voice) > 0
+      ? voice.utterance
+      : null;
+
   // 동료 발언은 재생이 끝난 것만 대화 기록에 남는다(재생 중에는 자막, V5 들은 범위).
   // 지원자 발언과 시스템 안내는 바로 보인다.
   const heard = useMemo(() => {
@@ -427,7 +477,11 @@ export function VoiceRoom(props: Props) {
     <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="음성 회의">
       <div className="flex shrink-0 flex-col items-center gap-4 p-5">
         <p role="status" className="text-title3 font-semibold">
-          {props.locked ? "토론이 종료됐어요" : LABEL[voice?.state ?? "AI_GENERATING"]}
+          {props.locked
+            ? "토론이 종료됐어요"
+            : review
+              ? "받아 적은 내용을 확인해 주세요"
+              : LABEL[voice?.state ?? "AI_GENERATING"]}
         </p>
         <div className="grid w-full max-w-3xl grid-cols-4 gap-3">
           {props.snap.participants.map((person) => (
@@ -473,6 +527,24 @@ export function VoiceRoom(props: Props) {
               <p className="text-footnote text-muted">시간이 끝나면 녹음이 자동으로 시작돼요</p>
             </div>
           )}
+        {review && voice && (
+          <div className="flex w-full max-w-2xl flex-col items-center gap-3">
+            <p className="w-full rounded-xl border border-line bg-surface p-4 text-center">
+              {review.transcript}
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={() => submitNow(review.id)}>이대로 제출</Button>
+              {!voice.rerecorded && (
+                <Button variant="secondary" onClick={() => void rerecord(voice, review.id)}>
+                  다시 녹음 (1회)
+                </Button>
+              )}
+            </div>
+            <p className="text-footnote text-muted tabular-nums">
+              {Math.ceil(confirmLeft(voice))}초 뒤 자동으로 제출돼요
+            </p>
+          </div>
+        )}
         {!props.locked && voice?.state === "USER_SPEAKING" && (
           <div className="flex flex-col items-center gap-3">
             <p className="tabular-nums">내 발언 {remaining}초 남음</p>

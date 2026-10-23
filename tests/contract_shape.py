@@ -1218,12 +1218,14 @@ SHAPES["voice_state"] = {
     "speech_deadline_at?": str,
     "heard_message_ids?": [str],
     "think_deadline_at?": str,
+    "rerecorded?": bool,
     "utterance?": {
         "id": str,
         "status": str,
         "transcript": Opt(str),
         "message_id": Opt(str),
         "error": Opt(str),
+        "confirm_deadline_at?": str,
     },
 }
 

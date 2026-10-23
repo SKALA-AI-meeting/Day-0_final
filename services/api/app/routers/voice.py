@@ -67,6 +67,10 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
                             for k in ("status", "transcript", "message_id", "error")
                         },
                     }
+                    if job.data["status"] == "ready" and job.data.get("ready_at"):
+                        wait = timedelta(seconds=controller.confirm_seconds(position))
+                        ready = controller.at(job.data["ready_at"])
+                        snap["utterance"]["confirm_deadline_at"] = iso(ready + wait)
                     if job.data["status"] == "ready":
                         state = await controller.row(db, session_id)
                         state.data = {**state.data, "state": "PROCESSING"}
@@ -110,6 +114,17 @@ async def retry_stt(session_id: uuid.UUID, body: RetryIn, ctx: Ctx, _: Candidate
             await db.commit()
     ctx.spawn(controller.run_job(ctx, job.id))
     return {"ok": True}
+
+
+@router.post("/sessions/{session_id}/voice/rerecord")
+async def rerecord(session_id: uuid.UUID, body: RetryIn, ctx: Ctx, _: Candidate):
+    """받아 적은 글을 제출하지 않고 버린 뒤 같은 차례에서 한 번 다시 녹음한다."""
+    async with ctx.ordered(session_id):
+        async with ctx.session_factory() as db:
+            session, _, _ = await load_context(db, session_id, lock=True)
+            data = await controller.rerecord(db, session, body, ctx.clock.now())
+            await db.commit()
+            return data
 
 
 @router.post("/sessions/{session_id}/voice/capture")
