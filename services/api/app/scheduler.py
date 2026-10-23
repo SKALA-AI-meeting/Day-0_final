@@ -163,7 +163,7 @@ async def _card_retry_allowed(db, session: Session, card_id: str, now) -> bool:
 
 async def _silence(db, session: Session, scenario: dict, now) -> bool:
     """docs/product/scenario.md 3.1: (a) 마지막 지원자 메시지(또는 단계 시작) 후 L/20 무발언, 또는
-    (b) 단계 기본 시간 절반이 지났는데 이 단계 의견(propose·agree·oppose)이 없음."""
+    (b) 단계 기본 시간 절반이 지났는데 이 단계 의견(데이터 `opinion_intents`)이 없음."""
     rule = scenario["silence_invite"]
     last = await db.scalar(
         select(func.max(Message.created_at)).where(

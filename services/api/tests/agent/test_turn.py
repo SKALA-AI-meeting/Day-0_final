@@ -13,12 +13,17 @@ def _stim(kind: str, phase: str, generation: int) -> Stimulus:
 
 
 def keyword_with(h, supporters: dict[str, str]) -> dict[str, str]:
-    """키워드 안 행을 만들고 지지를 놓는다. 반환 {키: option_id}."""
+    """키워드 안 행을 만들고 지지를 놓는다. 반환 {키: option_id}.
+
+    지원자 지지가 있으면 지원자의 최신 발언이 그 안을 지지로 세는 발언이었던 상태로 둔다.
+    """
     ids = {}
     for key in dict.fromkeys(supporters.values()):
         ids[key] = h.server.add_option(key, "p1")
     for participant, key in supporters.items():
         h.server.set_support(participant, ids[key])
+    if "candidate" in supporters:
+        h.server.confirmed = ids[supporters["candidate"]]
     return ids
 
 
@@ -95,13 +100,37 @@ async def test_named_order_follows_the_message_not_the_classifier(harness):
     assert [s["seat"] for s in run.decision["speakers"]] == ["p2"] and not h.turn.calls
 
 
-async def test_classifier_addressed_seat_answers_first(harness):
-    """분류가 대상으로 본 자리가 메시지에서 먼저 불린 자리보다 먼저 답한다(지안님 말고 하람님)."""
+async def test_excluded_seat_does_not_answer(harness):
+    """지원자가 뺀 자리(분류 excluded)는 이름이 불렸어도 답하지 않는다(지안님 말고 하람님)."""
     h = harness("solution")
     h.server.confirm_keyword("water")
+    mid = h.candidate(
+        "지안님 말고 하람님 생각은 어때요?", intent_of("question", to=("p2",), excluded=("p3",))
+    )
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p2"]
+    # 분류가 대상만 내고 뺀 자리를 놓치면 이름으로 부른 자리는 그대로 답한다(대상이 먼저)
     mid = h.candidate("지안님 말고 하람님 생각은 어때요?", intent_of("question", to=("p2",)))
     run = await h.run("message", message_id=mid)
-    assert [s["seat"] for s in run.decision["speakers"]][0] == "p2"
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p2", "p3"]
+
+
+async def test_excluded_seat_is_not_picked_for_open_question_or_by_turn_llm(harness):
+    h = harness(
+        "solution",
+        turn=[
+            {"speakers": [{"seat": "p3", "purpose": "respond"}, {"seat": "p1", "purpose": "react"}]}
+        ],
+    )
+    h.server.confirm_keyword("water")
+    # 전체 질문 기본 화자(소극형·비판형)에서도 뺀 자리는 빠진다
+    mid = h.candidate("지안님 말고 다른 분들은요?", intent_of("question", excluded=("p3",)))
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p2"]
+    # 규칙 화자가 없어 턴 LLM이 골라도 뺀 자리는 넣지 않는다
+    mid = h.candidate("지안님 말고요.", intent_of("other", excluded=("p3",)))
+    run = await h.run("message", message_id=mid)
+    assert run.decision["llm_used"] and [s["seat"] for s in run.decision["speakers"]] == ["p1"]
 
 
 async def test_named_seat_missed_by_the_classifier_still_answers(harness):
@@ -200,13 +229,14 @@ async def test_existing_consensus_fills_without_respond(harness):
     assert h.server.phase == "problem"
 
 
-async def test_ai_reply_creates_consensus_in_same_run(harness):
+async def test_ai_move_does_not_fill_until_candidate_confirms(harness):
+    """비판형이 지원자 안으로 옮겨 3/4가 돼도 같은 run에서 채우지 않고, 지원자의 최신 발언이 그 안의
+    명시적 동의일 때 이후 run에서 채운다(B2)."""
     h = harness(
         "keyword",
         persona=[say("그래요, 물로 가도 괜찮아요.", {"option_id": "water", "stance": "support"})],
     )
     ids = keyword_with(h, {"candidate": "water", "p1": "water", "p3": "wind"})
-    # 서지안이 바람을 민 뒤 지원자가 두 번 반대 → 설득 가능 규칙으로 지원자 안(물)으로 옮긴다
     h.server.messages.append(
         {
             "id": "x",
@@ -217,15 +247,48 @@ async def test_ai_reply_creates_consensus_in_same_run(harness):
             "t_min": 0,
         }
     )
-    for text in ("바람은 막연해요.", "바람 말고 물이요."):
-        h.candidate(text, intent_of("oppose", option_id=ids["wind"]))
+    # 서지안이 바람을 민 뒤 지원자가 물을 두 번 명시적으로 제안 → 설득 가능 규칙으로 물로 옮긴다
+    for text in ("저는 물이 좋아요.", "바람 말고 물로 가요."):
+        h.candidate(text, intent_of("propose", option_id=ids["water"]))
     run = await h.run(
         "message", message_id=h.candidate("지안님?", intent_of("question", to=("p3",)))
     )
     assert run.decision["speakers"][0]["seat"] == "p3"
+    assert h.server.support["p3"] == ids["water"]
+    assert run.decision["fill"] is None and "fill_slot" not in h.tool_names()
+    # 다음 run도 지원자의 최신 발언이 동의가 아니면 채우지 않는다
+    run = await h.run(
+        "message", message_id=h.candidate("하람님 생각은요?", intent_of("question", to=("p2",)))
+    )
+    assert run.decision["fill"] is None and "keyword" not in h.server.slots
+    run = await h.run(
+        "message",
+        message_id=h.candidate("좋아요, 물로 정해요.", intent_of("agree", option_id=ids["water"])),
+    )
     assert run.decision["fill"] == {"option_id": ids["water"], "seat": "p3"}
     assert h.server.slots["keyword"]["resolution"] == "consensus"
-    assert [m for m in h.server.messages if m.get("seq") == 5][0]["sender"] == "p3"
+
+
+async def test_reserved_agreement_does_not_fill(harness):
+    """유보 표현이 든 동의는 지지로 저장하지 않고 합의 채움도 하지 않는다(B1·B2)."""
+    h = harness("keyword")
+    ids = keyword_with(h, {"p1": "water", "p3": "water"})
+    mid = h.candidate(
+        "물 좋긴 한데 범위가 걱정이에요.",
+        intent_of("agree", option_id=ids["water"], reservation=True),
+    )
+    run = await h.run("message", message_id=mid)
+    assert h.server.support["candidate"] is None
+    assert run.decision["fill"] is None and "fill_slot" not in h.tool_names()
+
+
+async def test_withhold_withdraws_candidate_support(harness):
+    h = harness("keyword")
+    ids = keyword_with(h, {"candidate": "water", "p1": "water", "p3": "water"})
+    mid = h.candidate("물은 일단 보류할게요.", intent_of("withhold", option_id=ids["water"]))
+    run = await h.run("message", message_id=mid)
+    assert h.server.support["candidate"] is None
+    assert run.decision["fill"] is None and "fill_slot" not in h.tool_names()
 
 
 async def test_fill_slot_conflict_saves_nothing(harness):
@@ -374,3 +437,55 @@ async def test_llm_fault_persona_timeout_skips_one_speaker(harness, monkeypatch)
     assert run.error.startswith("persona_llm_unavailable:p1") and run.usage["retries"] == 2
     assert [m["sender"] for m in h.posted()] == ["p3"]
     assert base.FAULTS == {"persona": 0}
+
+
+# ---- 설득 가능 규칙 ----------------------------------------------------------------------------
+def test_counter_count_counts_only_explicit_alternatives(catalog):
+    """비판형 이동 횟수는 다른 안의 명시적 제안·동의(high, 유보 없음)만 센다(B2)."""
+    from app.agent.manager import rules
+
+    rule = catalog.persona(catalog.seat_of("critic"))["persuadable"]
+    own = {"wind", "opt-wind"}
+    counted = [
+        intent_of("propose", option_id="opt-water"),
+        intent_of("agree", key="tree"),
+        {**intent_of("propose"), "new_option_label": "우주"},
+    ]
+    ignored = [
+        intent_of("oppose", option_id="opt-wind"),  # 반대만
+        intent_of("propose", option_id="opt-water", reservation=True),  # 유보 표현
+        intent_of("agree", option_id="opt-water", confidence="low"),
+        intent_of("withhold", option_id="opt-water"),
+        intent_of("agree", option_id="opt-wind"),  # 자기 안 동의
+    ]
+    assert rules.counter_count(counted + ignored, own, rule) == 3
+    assert rules.counter_count(ignored, own, rule) == 0
+
+
+async def test_excluded_seat_must_be_named_in_the_message(harness):
+    """분류가 이름을 부르지 않은 자리를 excluded로 내면(안 번호 "3번"을 자리로 읽음) 버린다."""
+    h = harness("solution")
+    h.server.confirm_keyword("water")
+    mid = h.candidate(
+        "3번은 보류예요. 다들 어떻게 보세요?", intent_of("question", excluded=("p3",))
+    )
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p2", "p3"]
+
+
+async def test_excluded_seat_named_without_honorific(harness):
+    """이름을 "님" 없이 불러 뺀 경우도 뺀다("서지안 말고 하람님", "지안 말고 하람님")."""
+    for text in ("서지안 말고 하람님 생각은요?", "지안 말고 하람님 생각은요?"):
+        h = harness("solution")
+        h.server.confirm_keyword("water")
+        mid = h.candidate(text, intent_of("question", to=("p2",), excluded=("p3",)))
+        run = await h.run("message", message_id=mid)
+        assert [s["seat"] for s in run.decision["speakers"]] == ["p2"], text
+
+
+def test_excluded_seats_is_a_name_fact_check(catalog):
+    from app.agent.manager import rules
+
+    assert rules.excluded_seats("서지안 말고요", ["p3"], catalog) == ["p3"]
+    assert rules.excluded_seats("지안님 빼고", ["p3"], catalog) == ["p3"]
+    assert rules.excluded_seats("3번은 보류", ["p3"], catalog) == []

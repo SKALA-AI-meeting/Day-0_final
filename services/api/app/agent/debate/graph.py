@@ -19,6 +19,7 @@ import re
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from typing import Any, TypedDict
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -133,35 +134,42 @@ def _plan_context(state: DebateState, deps: DebateDeps) -> PlanContext:
         if ctx.lead and key == ctx.lead.get("key") and ctx.lead.get("option_id"):
             targets.add(ctx.lead["option_id"])
         if declared and targets:
-            ctx.counter_count = rules.counter_count(_phase_intents(state, critic), targets)
+            rule = deps.catalog.persona(critic).get("persuadable") or {}
+            ctx.counter_count = rules.counter_count(
+                _phase_intents(state, critic), targets, rule if isinstance(rule, dict) else {}
+            )
     return ctx
 
 
 def _phase_intents(state: DebateState, after_seat: str | None = None) -> list[dict[str, Any]]:
-    """이 단계 지원자 메시지의 의도(이 프로세스가 분류한 것). 현재 자극 메시지 포함.
+    """이 단계 지원자 메시지의 의도. 현재 자극 메시지 포함.
 
-    after_seat를 주면 그 자리의 이 단계 첫 발언 뒤 메시지만 센다(입장을 밝히기 전 제안은 반론이
-    아님).
+    원천은 DebateState `candidate_intents`(api가 저장한 message_intents)라 재시작·다른
+    프로세스에서도 같다. after_seat를 주면 그 자리의 이 단계 첫 발언(`first_spoke_at`) 뒤 메시지만
+    센다(입장을 밝히기 전 제안은 반론이 아님). 그 자리가 아직 말하지 않았으면 하나도 세지 않는다.
     """
-    seen: set[str] = set()
+    ds = state.get("ds") or {}
+    since = (ds.get("first_spoke_at") or {}).get(after_seat) if after_seat else None
+    if after_seat and since is None:
+        return []
     found: list[dict[str, Any]] = []
-    started = after_seat is None
-    for message in state.get("transcript") or []:
-        if message.get("phase") != state["phase"]:
-            continue
-        if message.get("sender") == after_seat:
-            started = True
-        if message.get("sender") != "candidate" or not started:
-            continue
-        mid = str(message.get("id"))
-        cached = intent_mod.recall(mid)
-        if cached:
-            seen.add(mid)
-            found.append(cached)
+    seen: set[str] = set()
+    for row in ds.get("candidate_intents") or []:
+        seen.add(str(row.get("message_id")))
+        if since is None or _when(row.get("created_at")) > _when(since):
+            found.append(row)
     current_id = str((state.get("stimulus") or {}).get("message_id"))
     if state.get("intent") and current_id not in seen:
         found.append(state["intent"])
     return found
+
+
+def _when(value: Any) -> datetime:
+    """ISO 시각 비교용(문자열 비교는 소수 초 자리 수가 다르면 순서가 틀린다)."""
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.min.replace(tzinfo=UTC)
 
 
 def _plan_for(state: DebateState, deps: DebateDeps, seat: str) -> StancePlan:
@@ -363,7 +371,17 @@ async def turn(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, An
         )
     ):
         decision["llm_used"] = True
-        decision["speakers"] = await _turn_llm(state, deps, brief)
+        # 지원자가 답하지 말라고 뺀 자리(의도 분류 excluded)는 턴 LLM이 골라도 넣지 않는다
+        excluded = set(
+            rules.excluded_seats(
+                rules.message_text(state["stimulus"], state["transcript"]),
+                (state.get("intent") or {}).get("excluded"),
+                deps.catalog,
+            )
+        )
+        decision["speakers"] = [
+            s for s in await _turn_llm(state, deps, brief) if s["seat"] not in excluded
+        ]
         decision["reason"] = decision.get("reason") or "턴 LLM 화자 선택"
     critic = deps.catalog.seat_of("critic")
     if state.get("notice") and not decision["speakers"] and decision["fill"] is None and critic:
@@ -850,7 +868,8 @@ async def fill(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, An
     """합의 채우기 전용 분기: `fill_slot{option_id, seat, content, run_id}` 한 번(공지
     post_message 없음).
 
-    이번 run에 입장을 저장했으면 지지를 다시 읽어 판정한다(같은 run 재판정).
+    채우는 것은 load 때 이미 합의가 있던 run(`decision.fill`)뿐이다. 이번 run의 AI 발언으로 지지가
+    바뀌어도 같은 run에서 다시 판정하지 않고, 이후 run이 지원자의 최신 발언과 함께 다시 본다(B2).
     """
     deps = runtime.context
     if (
@@ -861,14 +880,6 @@ async def fill(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, An
     decision = dict(state["decision"])
     target = decision.get("fill")
     ds = state["ds"]
-    if any(p.get("stance") for p in state.get("posted") or []):
-        fresh = _data(await deps.tools.code.call("get_debate_state", {}))
-        if isinstance(fresh, dict):
-            ds = fresh
-            consensus = fresh.get("consensus_option_id")
-            if consensus and rules.slot_empty(fresh) and fresh.get("phase") == state["phase"]:
-                seat = rules.fill_seat(fresh, consensus, deps.catalog)
-                target = {"option_id": consensus, "seat": seat} if seat else None
     if not target:
         return {}
     option = rules.option_by_id(ds, target["option_id"]) or {}

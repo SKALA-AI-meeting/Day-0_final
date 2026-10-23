@@ -101,6 +101,7 @@ async def judge_phase(
     if default_id is None:
         key = default_option_key(scenario, phase, await keyword_key(db, session.id))
         default_id = next((o.id for o in options if o.scenario_option_key == key), None)
+    confirmed = await candidate_confirmed(db, session.id, phase)
     result = consensus.judge(
         [{"id": o.id, "proposer": o.proposer, "created_at": o.created_at} for o in options],
         [
@@ -113,8 +114,41 @@ async def judge_phase(
             for s in stances
         ],
         default_id,
+        confirmed,
     )
     return result, options
+
+
+async def candidate_confirmed(
+    db: AsyncSession, session_id: uuid.UUID, phase: str
+) -> uuid.UUID | None:
+    """그 단계 지원자의 최신 토론방 발언이 지지로 세는 발언이면 그 대상 안(B2).
+
+    지지로 세는 발언 = high인 propose·agree이고 대상 안에 보류·반대·조건 표현이 없음. 최신 발언이
+    아직 분류되지 않았거나 다른 의도면 None이라 AI 합의 채움이 성립하지 않는다.
+    """
+    latest = await db.scalar(
+        select(Message.id)
+        .where(
+            Message.session_id == session_id,
+            Message.sender == "candidate",
+            Message.channel == "room",
+            Message.phase == phase,
+        )
+        .order_by(Message.created_at.desc())
+        .limit(1)
+    )
+    if latest is None:
+        return None
+    found = await db.get(MessageIntent, latest)
+    if (
+        found is None
+        or found.intent not in ("propose", "agree")
+        or found.confidence != "high"
+        or found.reservation
+    ):
+        return None
+    return found.target_option_id
 
 
 def support_snapshot(options: list[Option], result: dict[str, Any]) -> list[dict[str, Any]]:
@@ -365,6 +399,9 @@ async def classify_and_apply(
     catalog_labels = {c["scenario_option_key"]: c["label"] for c in catalog}
     intent = result.get("intent", "other")
     confidence = result.get("confidence", "low")
+    reservation = bool(result.get("reservation"))
+    # 지지로 세는 발언: high인 propose·agree이고 대상 안에 보류·반대·조건 표현이 없음(B1)
+    explicit = confidence == "high" and not reservation
     target = by_id.get(str(result.get("target_option_id")))
     key = result.get("scenario_option_key")
     if key not in catalog_labels:
@@ -395,8 +432,9 @@ async def classify_and_apply(
                 source_message_id=message.id,
             )
     elif debate_phase and target is None and key is not None and intent in ("agree", "oppose"):
-        # 아직 행이 없는 카탈로그 안에 동의·반대: 지지는 high일 때만, 반대는 행이 없으면 의미 없음
-        if intent == "agree" and confidence == "high":
+        # 아직 행이 없는 카탈로그 안에 동의·반대: 지지는 지지로 세는 발언일 때만, 반대는 행이
+        # 없으면 의미 없음
+        if intent == "agree" and explicit:
             target, _ = await get_or_create_option(
                 db,
                 session.id,
@@ -407,6 +445,15 @@ async def classify_and_apply(
                 key=key,
                 source_message_id=message.id,
             )
+    withdrawn = None
+    if debate_phase and intent == "withhold":
+        # 보류·기권은 그 안 지지를 철회한다. 대상 없이 판단을 미루면 지금 지지하는 안을 철회한다.
+        # 지지를 줄이는 쪽이라 confidence와 상관없이 반영한다
+        withdrawn = target
+        if withdrawn is None and key is None:
+            result_now, _ = await judge_phase(db, session, scenario, phase)
+            current = result_now["current_support"].get("candidate")
+            withdrawn = next((o for o in options if o.id == current), None)
     row = MessageIntent(
         message_id=message.id,
         session_id=session.id,
@@ -416,25 +463,32 @@ async def classify_and_apply(
         scenario_option_key=key,
         new_option_label=result.get("new_option_label"),
         confidence=confidence,
+        reservation=reservation,
         addressed_to=[s for s in result.get("addressed_to") or [] if s in SEATS],
+        excluded=[s for s in result.get("excluded") or [] if s in SEATS],
         fallback=used_fallback,
         latency_ms=int((clock.now() - started).total_seconds() * 1000),
         created_at=clock.now(),
     )
     db.add(row)
-    if debate_phase and target is not None and confidence == "high":
-        stance = {"propose": "support", "agree": "support", "oppose": "oppose"}.get(intent)
-        if stance:
-            await add_stance(
-                db,
-                session,
-                phase=phase,
-                participant="candidate",
-                option_id=target.id,
-                stance=stance,
-                source_message_id=message.id,
-                now=clock.now(),
-            )
+    stance, stance_option = None, target
+    if intent in ("propose", "agree") and explicit:
+        stance = "support"
+    elif intent == "oppose" and confidence == "high":
+        stance = "oppose"
+    elif intent == "withhold":
+        stance, stance_option = "withhold", withdrawn
+    if debate_phase and stance and stance_option is not None:
+        await add_stance(
+            db,
+            session,
+            phase=phase,
+            participant="candidate",
+            option_id=stance_option.id,
+            stance=stance,
+            source_message_id=message.id,
+            now=clock.now(),
+        )
     await db.flush()
     return row
 
@@ -844,6 +898,39 @@ async def debate_state(
     }
     current = result.get("current_support", {p: None for p in consensus.PARTICIPANTS})
     order = {p: i for i, p in enumerate(sc.PHASES)}
+    # 이 단계 지원자 메시지의 저장된 의도(진행 매니저 설득 가능 규칙 횟수, 프로세스 메모리에 기대지
+    # 않음)와 AI 자리별 이 단계 첫 발언 시각
+    candidate_intents = (
+        (
+            await db.execute(
+                select(MessageIntent, Message.created_at)
+                .join(Message, Message.id == MessageIntent.message_id)
+                .where(
+                    MessageIntent.session_id == session.id,
+                    Message.phase == phase,
+                    Message.sender == "candidate",
+                    Message.channel == "room",
+                )
+                .order_by(Message.created_at)
+            )
+        ).all()
+        if debate_phase
+        else []
+    )
+    first_spoke = dict(
+        (
+            await db.execute(
+                select(Message.sender, func.min(Message.created_at))
+                .where(
+                    Message.session_id == session.id,
+                    Message.phase == phase,
+                    Message.channel == "room",
+                    Message.sender.in_(SEATS),
+                )
+                .group_by(Message.sender)
+            )
+        ).all()
+    )
     return {
         "phase": phase,
         "generation": session.generation,
@@ -897,6 +984,20 @@ async def debate_state(
             for c in cards
         ],
         "cost_left": budget.cost_left(session),
+        "candidate_intents": [
+            {
+                "message_id": str(i.message_id),
+                "created_at": iso(created),
+                "intent": i.intent,
+                "target_option_id": _str(i.target_option_id),
+                "scenario_option_key": i.scenario_option_key,
+                "new_option_label": i.new_option_label,
+                "confidence": i.confidence,
+                "reservation": i.reservation,
+            }
+            for i, created in candidate_intents
+        ],
+        "first_spoke_at": {seat: iso(first_spoke.get(seat)) for seat in SEATS},
     }
 
 

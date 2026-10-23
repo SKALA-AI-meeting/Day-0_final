@@ -5,7 +5,7 @@
 import uuid
 
 from app.agent import intent
-from conftest import say
+from conftest import model_reply, say
 
 
 def _addressed(target: str, to: list[str], kind: str = "oppose") -> dict:
@@ -15,7 +15,9 @@ def _addressed(target: str, to: list[str], kind: str = "oppose") -> dict:
         "scenario_option_key": target,
         "new_option_label": None,
         "confidence": "high",
+        "reservation": kind == "oppose",
         "addressed_to": to,
+        "excluded": [],
     }
 
 
@@ -93,4 +95,4 @@ class FakeIntent:
         self.out = out
 
     async def complete_json(self, role, system, user, schema, *, timeout, temperature):
-        return dict(self.out)
+        return model_reply(dict(self.out))

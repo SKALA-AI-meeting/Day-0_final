@@ -154,7 +154,7 @@ class PlanContext:
     catalog: Catalog
     card_active: bool  # 문제 상황 카드(기준안 잠금)가 시작됐는지(이번 run 포함)
     lead: dict[str, Any] | None  # {option_id, key}
-    counter_count: int = 0  # 지원자가 비판형 계획 안에 반대·대안 제안한 횟수(high)
+    counter_count: int = 0  # 지원자가 비판형 계획 안이 아닌 안을 지지로 세는 발언으로 낸 횟수
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -215,19 +215,36 @@ def _same(ds: dict[str, Any], option_id: str, plan: StancePlan) -> bool:
     return option_id in plan.targets or key_of(ds, option_id) in plan.targets
 
 
-def counter_count(intents: list[dict[str, Any]], base_targets: set[str]) -> int:
-    """설득 가능 규칙의 횟수: 그 안 대상 oppose 또는 다른 안 propose(confidence high)."""
+def counter_count(
+    intents: list[dict[str, Any]], base_targets: set[str], rule: dict[str, Any] | None = None
+) -> int:
+    """설득 가능 규칙의 횟수(personas.yaml `persuadable`, B2).
+
+    세는 발언은 규칙의 `intents`(의도와 대상 `own_option`∣`candidate_option`) 중 하나이고
+    confidence가 규칙 값(기본 high)이며 대상 안에 유보 표현이 없는 것이다. `candidate_option`은
+    비판형 계획 안이 아닌 안(새 안 포함)이다. 반대만 한 발언은 규칙에 없으면 세지 않는다.
+    """
+    rule = rule or {}
+    specs = rule.get("intents") or [
+        {"intent": "propose", "target": "candidate_option"},
+        {"intent": "agree", "target": "candidate_option"},
+    ]
+    confidence = rule.get("confidence", "high")
     count = 0
     for result in intents:
-        if result.get("confidence") != "high":
+        if result.get("confidence") != confidence or result.get("reservation"):
             continue
         target = result.get("target_option_id") or result.get("scenario_option_key")
-        if result.get("intent") == "oppose" and target and target in base_targets:
-            count += 1
-        elif result.get("intent") == "propose" and (
-            (target and target not in base_targets) or result.get("new_option_label")
-        ):
-            count += 1
+        own = bool(target) and target in base_targets
+        other = (bool(target) and not own) or bool(result.get("new_option_label"))
+        for spec in specs:
+            if spec.get("intent") != result.get("intent"):
+                continue
+            if (spec.get("target") == "own_option" and own) or (
+                spec.get("target") == "candidate_option" and other
+            ):
+                count += 1
+                break
     return count
 
 
@@ -376,25 +393,62 @@ def recent_streak_seat(transcript: list[dict[str, Any]]) -> str | None:
     return None
 
 
-def called_seats(text: str, addressed: list[str], catalog: Catalog) -> list[str]:
-    """지명 응답 자리와 순서.
+def _name_forms(seat: str, catalog: Catalog) -> list[str]:
+    """자리 표시 이름의 두 형태(성까지 붙인 이름, 세 글자 이상이면 성을 뗀 이름)."""
+    name = catalog.name_of(seat)
+    return [name, name[1:]] if len(name) >= 3 else [name]
 
-    대상 = 분류 addressed_to ∪ 메시지에서 "이름님"으로 부른 자리(부른 자리는 빠지지 않는다, C1).
-    순서 = addressed_to 자리 먼저(메시지에 나온 순서), 그다음 나머지 부른 자리(메시지 순서).
-    "지안님 말고 하람님"처럼 분류가 대상으로 본 자리가 먼저 답한다. 제외 표현 자체의 처리는
-    의도 분류(addressed_to) 개선에 맡긴다.
-    """
+
+def named_seats(text: str, catalog: Catalog, *, honorific: bool = True) -> list[str]:
+    """메시지에서 이름으로 부른 자리(메시지에 나온 순서). honorific이면 "이름님"만, 아니면 "님"
+    유무와 상관없이 이름이 나온 자리."""
     found: list[tuple[int, str]] = []
     for seat in SEATS:
-        name = catalog.name_of(seat)
-        given = name[1:] if len(name) >= 3 else name
-        hit = re.search(f"(?:{re.escape(name)}|{re.escape(given)})\\s*님", text)
+        forms = "|".join(re.escape(f) for f in _name_forms(seat, catalog))
+        pattern = f"(?:{forms})\\s*님" if honorific else f"(?:{forms})"
+        hit = re.search(pattern, text)
         if hit:
             found.append((hit.start(), seat))
-    order = [seat for _, seat in sorted(found)]
-    targets = [s for s in addressed if s in SEATS]
+    return [seat for _, seat in sorted(found)]
+
+
+def excluded_seats(text: str, excluded: list[str] | None, catalog: Catalog) -> list[str]:
+    """분류 excluded 중 메시지에 이름이 실제로 나온 자리만("님" 유무 무관).
+
+    뺀다는 것은 그 동료를 이름으로 가리켰다는 사실을 전제한다. "3번은 보류"의 안 번호를 자리로
+    읽은 분류는 기록과 맞지 않아 버린다.
+    """
+    named = set(named_seats(text, catalog, honorific=False))
+    return [s for s in excluded or [] if s in named]
+
+
+def called_seats(
+    text: str, addressed: list[str], catalog: Catalog, excluded: list[str] | None = None
+) -> list[str]:
+    """지명 응답 자리와 순서.
+
+    대상 = (분류 addressed_to ∪ 메시지에서 "이름님"으로 부른 자리) − 분류 excluded. 부른 자리는
+    지원자가 답하지 말라고 뺀 자리(excluded)가 아니면 빠지지 않는다(C1).
+    순서 = addressed_to 자리 먼저(메시지에 나온 순서), 그다음 나머지 부른 자리(메시지 순서).
+    "지안님 말고 하람님"은 분류가 지안님을 excluded로 내므로 하람님만 답한다.
+    """
+    skip = set(excluded or [])
+    order = [seat for seat in named_seats(text, catalog) if seat not in skip]
+    targets = [s for s in addressed if s in SEATS and s not in skip]
     first = [s for s in order if s in targets] + [s for s in targets if s not in order]
     return first + [s for s in order if s not in first]
+
+
+def message_text(stimulus: dict[str, Any], transcript: list[dict[str, Any]]) -> str:
+    """자극 메시지의 본문(기록에 없으면 빈 문자열)."""
+    return next(
+        (
+            str(m.get("content") or "")
+            for m in transcript
+            if str(m.get("id")) == str(stimulus.get("message_id"))
+        ),
+        "",
+    )
 
 
 def rule_decision(
@@ -439,17 +493,11 @@ def rule_decision(
     quiet = catalog.seat_of("quiet")
     # 3. 지명 응답(최대 2명). 소극형은 이름이 불렸거나 전체 질문일 때만
     if kind == "message" and intent:
-        text = next(
-            (
-                str(m.get("content") or "")
-                for m in transcript
-                if str(m.get("id")) == str(stimulus.get("message_id"))
-            ),
-            "",
-        )
-        named = called_seats(text, intent.get("addressed_to") or [], catalog)
+        text = message_text(stimulus, transcript)
+        excluded = excluded_seats(text, intent.get("excluded"), catalog)
+        named = called_seats(text, intent.get("addressed_to") or [], catalog, excluded)
         if intent.get("intent") == "question" and not named and phase in DEBATE_PHASES:
-            named = [s for s in (quiet, catalog.seat_of("critic")) if s]
+            named = [s for s in (quiet, catalog.seat_of("critic")) if s and s not in excluded]
             decision["reason"] = "전체 질문"
         for seat in named:
             if seat not in used and len(speakers) < MAX_SPEAKERS:

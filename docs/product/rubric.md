@@ -31,7 +31,7 @@
 | 시점 | 지원자 메시지마다 즉시 | **세션 종료 후 report-worker가 큐 작업으로** |
 | 모델 | 작은 모델(`MODEL_INTENT`) | 평가 역할 모델(`MODEL_EVALUATOR`) |
 | 입력 | 메시지 한 개와 짧은 앞 맥락 | 세션 대화 전체, 칸 기록, 기획안, 카드 발생 기록, 사실 지표, Contributions, 이 척도(창으로 자르지 않음) |
-| 출력 | `{intent: propose·agree·oppose·question·other, target_option, confidence: high·low}`(지지로 세는 것은 high인 propose·agree뿐) | 차원별 `{dimension_id, level∣null, no_record_reason?, evidence_refs[], rationale, confidence}` |
+| 출력 | `{intent: propose·agree·oppose·withhold·question·other, target_option, confidence: high·low, reservation}`(지지로 세는 것은 high이고 유보 표현(`reservation`)이 없는 propose·agree뿐, withhold는 그 안 지지 철회) | 차원별 `{dimension_id, level∣null, no_record_reason?, evidence_refs[], rationale, confidence}` |
 | 쓰임 | 토론 진행: 안별 지지자 누적, 진행 매니저 판단, 칸 채움·시간 초과 안 선택, 침묵 초대 조건, 안 행 생성(최초 제안자) | 평가: 차원 수준과 근거 |
 | 실패 | `other`로 두고 진행 | 형식 오류·근거 부재면 그 요소를 1회 재요청, 그래도 실패한 차원은 `evaluate_failed` |
 | 평가 영향 | 없음. 평가 에이전트에는 참고 입력이며 원문과 다르면 원문을 따른다 | 있음 |
@@ -440,7 +440,7 @@
 
 | 구분 | 카드·장면 | 관찰 창 | 보는 것 |
 |---|---|---|---|
-| 핵심 | `flexibility_majority`(문제 상황) | 카드 시각 ~ **해결책 단계 끝** | 강한결(확정 전 불변)과 서지안(설득 가능 규칙: 지원자 반대·대안 2회)이 기준안을 지지. 지원자 안이 채택될 수 있다(R1) |
+| 핵심 | `flexibility_majority`(문제 상황) | 카드 시각 ~ **해결책 단계 끝** | 강한결(확정 전 불변)과 서지안(설득 가능 규칙: 지원자의 다른 안 명시적 제안·동의 2회)이 기준안을 지지. 지원자 안이 채택될 수 있다(R1) |
 | 겹침 | `listening_pressure` | 문제 상황 단계 | 같은 메시지라도 여기서는 자기 입장·결과를 다루는 방식만 본다 |
 | 보조 | 키워드 단계, 해결책 단계(`persuasion_solution` 반론 포함) | 각 단계 | 채택 안 된 키워드·해결책에 대한 반응, 반론 뒤 자기 안 보완·통합, 각 칸 확정 방식 |
 | 보조 | 기획안 작성 | 기획안 단계 | 제출본 `problem` 필드를 칸 결과와 다르게 바꿨는지(칸 결과대로 쓰면 중립) |
@@ -671,7 +671,7 @@
 | `first_message_sec` | int·null(단계별) | 단계 시작부터 지원자 첫 메시지까지 | 배려, 수용(참고) |
 | `response_latency_median_sec` | int·null | 지원자 메시지 직전 메시지가 AI 동료일 때 그 간격의 중앙값 | 표시만 |
 | `avg_message_chars` | int | 지원자 메시지 평균 글자 수 | 표시만(판단에 쓰지 않음) |
-| `intent_counts` | map | 실시간 의도별 수(D16, `propose·agree·oppose·question·other`) | 장면 위치 탐색 |
+| `intent_counts` | map | 실시간 의도별 수(D16, `propose·agree·oppose·withhold·question·other`) | 장면 위치 탐색 |
 | `name_mentions` | map | 참여자별 지원자가 이름을 부른 횟수(지원자 메시지 본문의 표시 이름 일치, 의도 분류 `addressed_to` 포함) | 경청, 배려, 설득, 정직(보조) |
 | `slot_records` | list | 칸별 `resolution`·`filled_by`·`option_id`·확정 시각·지지 현황 스냅샷 | `flex_decision_respect`, `hon_process_truth`, `incl_shared_decision`, `pers_convergence` |
 | `own_options_proposed` / `own_options_adopted` | int | `options.proposer = candidate`인 안 수 / 그중 확정 칸의 `option_id`인 수 | 설득, 수용, 정직 |

@@ -26,8 +26,17 @@ def _setup(harness, case: dict):
         lead = h.server.add_option(plan["option"], "p1")
         h.server.lock("flexibility_majority", lead)
         h.server.cards["flexibility_majority"]["delivered"] = ["p1", "p3"]
+    other = next(
+        (
+            c["scenario_option_key"]
+            for c in h.server.catalog.catalog_options(case["phase"], "water")
+            if c["scenario_option_key"] != plan["option"]
+        ),
+        None,
+    )
     for _ in range(plan.get("candidate_counter_count", 0)):
-        h.candidate("그 안은 별로예요.", intent_of("oppose", key=plan["option"]))
+        # 설득 가능 규칙이 세는 발언: 다른 안의 명시적 제안(B2)
+        h.candidate("저는 다른 안이 좋아요.", intent_of("propose", key=other))
     return h
 
 

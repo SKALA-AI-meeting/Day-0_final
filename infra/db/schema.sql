@@ -118,12 +118,14 @@ CREATE TABLE message_intents (               -- 지원자 room 메시지마다 1
   message_id uuid PRIMARY KEY REFERENCES messages(id),
   session_id uuid NOT NULL REFERENCES sessions(id),
   phase text NOT NULL CHECK (phase IN ('keyword','problem','solution','proposal')),   -- messages.phase
-  intent text NOT NULL CHECK (intent IN ('propose','agree','oppose','question','other')),
+  intent text NOT NULL CHECK (intent IN ('propose','agree','oppose','withhold','question','other')),
   target_option_id uuid REFERENCES options(id),
   scenario_option_key text,
   new_option_label text,
   confidence text NOT NULL CHECK (confidence IN ('high','low')),
+  reservation boolean NOT NULL DEFAULT false,   -- 대상 안에 대한 보류·반대·조건 표현 포함
   addressed_to text[] NOT NULL DEFAULT '{}',
+  excluded text[] NOT NULL DEFAULT '{}',        -- 지원자가 답하지 말라고 뺀 자리
   fallback boolean NOT NULL DEFAULT false,
   model text,
   latency_ms int,
@@ -137,7 +139,7 @@ CREATE TABLE stances (                       -- append-only 입장 이력
   phase text NOT NULL CHECK (phase IN ('keyword','problem','solution')),
   participant text NOT NULL CHECK (participant IN ('candidate','p1','p2','p3')),
   option_id uuid NOT NULL REFERENCES options(id),
-  stance text NOT NULL CHECK (stance IN ('support','oppose')),
+  stance text NOT NULL CHECK (stance IN ('support','oppose','withhold')),   -- withhold는 지원자만
   source_message_id uuid NOT NULL REFERENCES messages(id),
   run_id uuid,
   created_at timestamptz NOT NULL DEFAULT now(),

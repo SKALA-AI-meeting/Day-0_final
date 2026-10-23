@@ -5,10 +5,13 @@
 DebateState, 내부 `POST /slots/fill` 검사, 시간 초과 채우기가 같은 함수를 쓴다.
 
 - 현재 지지는 참여자당 하나: 참여자별 그 단계의 마지막 support 안. 다른 안 support는 대체하고,
-  그 뒤 같은 안 oppose는 철회(null). 다른 안 oppose는 바꾸지 않는다.
-- AI 자리의 제안(안 행 proposer)은 제안자 지지를 포함한다. 지원자는 confidence high일 때만 stances
-  행이 생기므로 안 행만으로는 지지로 세지 않는다(R4).
-- consensus: 지원자 포함 3명 이상이 같은 안을 현재 지지(대기 없음).
+  그 뒤 같은 안 oppose·withhold(지원자 보류·기권)는 철회(null). 다른 안 oppose·withhold는 바꾸지
+  않는다. withhold는 반대자로 세지 않는다.
+- AI 자리의 제안(안 행 proposer)은 제안자 지지를 포함한다. 지원자는 지지로 세는 발언(high인
+  propose·agree이고 유보 표현 없음)일 때만 support 행이 생기므로 안 행만으로는 지지로 세지
+  않는다(R4·B1).
+- consensus: 지원자 포함 3명 이상이 같은 안을 현재 지지하고, 지원자의 그 단계 최신 발언이 그 안을
+  지지로 세는 발언(`confirmed_option_id`, B2)일 때(대기 없음).
 - timeout: 지지자 최다 → 동률이면 지원자 지지 안 → 먼저 제안된 안 → 안이 없으면 단계 기준안.
 """
 
@@ -36,9 +39,11 @@ def judge(
     options: list[dict[str, Any]],
     stances: list[dict[str, Any]],
     default_option_id: Any = None,
+    confirmed_option_id: Any = None,
 ) -> dict[str, Any]:
     """options: [{id, proposer, created_at}], stances: 시간순 [{participant, option_id, stance,
-    created_at}].
+    created_at}]. confirmed_option_id: 지원자의 그 단계 최신 발언이 지지로 세는 발언이면 그 대상
+    안(아니면 None이라 합의가 없다).
 
     반환: {consensus_option_id, timeout_option_id, current_support, supporters, opposers}.
     """
@@ -61,7 +66,11 @@ def judge(
 
     consensus = None
     for option_id, people in supporters.items():
-        if len(people) >= MIN_SUPPORTERS and "candidate" in people:
+        if (
+            len(people) >= MIN_SUPPORTERS
+            and "candidate" in people
+            and option_id == confirmed_option_id
+        ):
             consensus = option_id
             break
 

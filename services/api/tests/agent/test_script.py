@@ -28,6 +28,7 @@ async def mailbox(h, text: str):
         seats=SEATS,
         message_id=mid,
     )
+    h.server.intents[mid] = dict(result)
     h.server.apply_candidate(result)
     return await h.run("message", message_id=mid)
 
@@ -53,7 +54,7 @@ async def test_fifteen_minute_script(harness):
     h.server.phase = "problem"
     h.ports.generation += 1
 
-    # 문제 상황: 카드 전에는 입장 없음 → 카드에서 기준안 P2 → 지원자 동의로 3/4 → 같은 run에서 채움
+    # 문제 상황: 카드 전에는 입장 없음 → 카드에서 기준안 P2 → 지원자 동의로 3/4 → 그 run에서 채움
     assert seats_of(await h.run("phase_started")) == ["p1"]
     assert h.server.debate_state()["current_support"]["p1"] is None
     await mailbox(h, f"{label('water_p1')} 문제가 커요")
@@ -64,15 +65,19 @@ async def test_fifteen_minute_script(harness):
     assert h.server.slots["problem"]["value"] == label("water_p2")
     assert h.server.phase == "solution"
 
-    # 해결책: 고정 입장 화자, 머뭇거림 고정 문장, 반론 카드, 지명 → 이번 AI 발언으로 3/4 → 채움
+    # 해결책: 고정 입장 화자, 머뭇거림 고정 문장, 반론 카드, 지원자 안 명시적 동의 2회 → 지명에서
+    # 비판형 이동으로 3/4(같은 run에서는 채우지 않음) → 지원자의 다음 명시적 동의에서 채움
     assert seats_of(await h.run("phase_started")) == ["p1", "p3"]
     assert seats_of(await h.run("card_due", card_id="inclusion_silence")) == ["p2"]
     assert seats_of(await h.run("card_due", card_id="persuasion_solution")) == ["p3"]
     await mailbox(h, f"{label('water_s3')}로 가면 어때요")
+    await mailbox(h, f"{label('water_s2')}은 반대예요")  # 반대만 한 발언은 이동 횟수에 들지 않는다
     for _ in range(2):
-        await mailbox(h, f"{label('water_s2')}은 반대예요")
+        await mailbox(h, f"{label('water_s3')} 좋아요")
     run = await mailbox(h, "하람님, 지안님 생각은요")
-    assert seats_of(run) == ["p2", "p3"] and run.decision["fill"]["seat"] == "p3"
+    assert seats_of(run) == ["p2", "p3"] and run.decision["fill"] is None
+    run = await mailbox(h, f"{label('water_s3')}로 정해요, 좋아요")
+    assert run.decision["speakers"] == [] and run.decision["fill"]["seat"] == "p3"
     assert h.server.slots["solution"]["value"] == label("water_s3")
     assert h.server.support["p1"] == next(
         o["option_id"] for o in h.server.options if o["scenario_option_key"] == "water_s1"

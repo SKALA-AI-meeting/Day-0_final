@@ -101,6 +101,7 @@ _PURPOSE = re.compile(r"\[이번 목적\]\n(\w+):")
 _CANDIDATE = re.compile(r"- 지원자: (.+)님")
 _OPPOSE = ("아니", "반대", "글쎄")
 _AGREE = ("좋아요", "동의", "찬성")
+_WITHHOLD = ("보류",)
 NEUTRAL_LINE = "자료부터 같이 보고 얘기해요."
 TURN_SEAT = (
     "p3"  # 규칙 결과 0명일 때 우선순위 첫 자리(critic > quiet > stubborn, quiet는 지명 전 제외)
@@ -142,7 +143,8 @@ def _last_human(messages: list[BaseMessage]) -> str:
 
 
 def _intent(messages: list[BaseMessage], _tools: Any) -> str:
-    """키워드 규칙: 반대어 → oppose, 동의어 → agree, 안 라벨 → propose, 물음표 → question."""
+    """키워드 규칙(가짜 모델): 보류 → withhold, 반대어 → oppose, 동의어 → agree, 안 라벨 → propose,
+    물음표 → question."""
     data = json.loads(_last_human(messages))
     text = str(data.get("메시지") or "")
     labels: list[tuple[str, str, str]] = [
@@ -153,7 +155,9 @@ def _intent(messages: list[BaseMessage], _tools: Any) -> str:
         for c in data.get("카탈로그 안") or []
     ]
     hit = next((x for x in sorted(labels, key=lambda x: -len(x[0])) if x[0] in text), None)
-    if any(w in text for w in _OPPOSE):
+    if any(w in text for w in _WITHHOLD):
+        intent = "withhold"
+    elif any(w in text for w in _OPPOSE):
         intent = "oppose"
     elif any(w in text for w in _AGREE):
         intent = "agree"
@@ -168,16 +172,19 @@ def _intent(messages: list[BaseMessage], _tools: Any) -> str:
         for p in data.get("참여자") or []
         if p.get("name") and (p["name"] in text or p["name"][1:] in text)
     ]
+    # 모델 응답 형식(app.agent.intent SCHEMA): 대상은 한 칸(target, 나온 안 id 또는 카탈로그 키)
     out: dict[str, Any] = {
+        "wanted": hit[0] if hit and intent in ("propose", "agree") else None,
         "intent": intent,
-        "target_option_id": None,
-        "scenario_option_key": None,
         "new_option_label": None,
+        "target": None,
         "confidence": "low",
+        "reservation": intent in ("oppose", "withhold"),
         "addressed_to": addressed,
+        "excluded": [],
     }
-    if hit and intent in ("propose", "agree", "oppose"):
-        out[hit[1]] = hit[2]
+    if hit and intent in ("propose", "agree", "oppose", "withhold"):
+        out["target"] = hit[2]
         out["confidence"] = "high"
     elif intent == "question":
         out["confidence"] = "high"

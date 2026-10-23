@@ -117,7 +117,9 @@ def _internal_message(session: Session, m: Message, intent: MessageIntent | None
             "scenario_option_key": intent.scenario_option_key,
             "new_option_label": intent.new_option_label,
             "confidence": intent.confidence,
+            "reservation": intent.reservation,
             "addressed_to": list(intent.addressed_to),
+            "excluded": list(intent.excluded),
         },
     }
 

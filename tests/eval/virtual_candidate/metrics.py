@@ -261,6 +261,7 @@ def _fill_row(s: Session, phase: str, slot: dict[str, Any]) -> dict[str, Any]:
         intent
         and intent["intent"] in ("propose", "agree")
         and intent["confidence"] == "high"
+        and not intent.get("reservation")
         and intent.get("target_option_id") == slot.get("option_id")
     )
     return {

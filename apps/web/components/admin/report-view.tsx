@@ -582,6 +582,7 @@ function FactsTable({ facts, ctx }: { facts: Record<string, unknown>; ctx: Ctx }
     propose: "제안",
     agree: "동의",
     oppose: "반대",
+    withhold: "보류",
     question: "질문",
     other: "기타",
   };

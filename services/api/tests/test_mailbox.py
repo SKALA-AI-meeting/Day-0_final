@@ -261,3 +261,15 @@ async def test_missing_scenario_copy_fails_session_without_running(api, ctx, run
     assert ended == [{"reason": "failed"}] and calls == []
     runs = await _runs(ctx, sess, "message")
     assert runs[-1].status == "failed"
+
+
+async def test_intent_reservation_and_excluded_are_stored(api, classifier):
+    sess = await api.new_session()
+    classifier.rules["지안님 말고 하람님은요?"] = high(
+        "question", addressed_to=["p2"], excluded=["p3"]
+    )
+    await api.say(sess, "지안님 말고 하람님은요?")
+    messages = (await api.internal.get(f"/internal/sessions/{sess.id}/messages")).json()
+    found = next(m["intent"] for m in messages if m["sender"] == "candidate")
+    assert found["addressed_to"] == ["p2"] and found["excluded"] == ["p3"]
+    assert found["reservation"] is False

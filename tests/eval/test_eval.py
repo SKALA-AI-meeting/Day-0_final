@@ -40,7 +40,9 @@ def test_intent_cases_cover_the_contract():
     data = evaluate.load_intent()
     cases = data["cases"]
     assert len(cases) == 20
-    assert {c["expected"]["intent"] for c in cases} == set(evaluate.INTENTS)
+    # 20문장은 기준선과 비교하려고 그대로 두고, 보류(withhold)는 결정 사례가 덮는다
+    assert {c["expected"]["intent"] for c in cases} == set(evaluate.INTENTS) - {"withhold"}
+    assert any("withhold" in c["check"] for c in data["decided_cases"])
     assert sum(1 for c in cases if c["expected"]["addressed_to"]) >= 3  # 이름 부르기
     keys = {p: {o["scenario_option_key"] for o in opts} for p, opts in data["catalog"].items()}
     first = [
@@ -82,7 +84,9 @@ def test_perfect_intent_output_scores_one():
             "scenario_option_key": None,
             "new_option_label": "하수관 점검 앱" if want.get("new_label") else None,
             "confidence": want["confidence"],
+            "reservation": want["intent"] == "oppose",
             "addressed_to": want["addressed_to"],
+            "excluded": [],
         }
         if want["intent"] in evaluate.STANCE_INTENTS and want.get("target"):
             if want["target"] in case["existing"]:
@@ -98,17 +102,30 @@ def test_perfect_intent_output_scores_one():
 def test_decided_intent_cases_cover_b1():
     data = evaluate.load_intent()
     cases = data["decided_cases"]
-    assert {c["group"] for c in cases} == {"withhold", "new_option", "a_not_b", "correction"}
+    assert {c["group"] for c in cases} == {
+        "withhold",
+        "new_option",
+        "a_not_b",
+        "correction",
+        "exclusion",
+    }
     keys = {p: {o["scenario_option_key"] for o in opts} for p, opts in data["catalog"].items()}
     ids = [c["id"] for c in cases] + [c["id"] for c in data["cases"]]
     assert len(ids) == len(set(ids))
     for case in cases:
         check = case["check"]
-        assert set(check) <= {"not_support", "support", "new_option", "addressed_to"}, case["id"]
-        named = [*check.get("not_support", []), check.get("support"), check.get("new_option")]
+        allowed = {"not_support", "support", "withhold", "new_option", "addressed_to", "excluded"}
+        assert set(check) <= allowed, case["id"]
+        named = [
+            *check.get("not_support", []),
+            check.get("support"),
+            check.get("withhold"),
+            check.get("new_option"),
+        ]
         assert {k for k in named if k} <= keys[case["phase"]], case["id"]
         assert set(case["existing"]) <= keys[case["phase"]]
         assert set(check.get("addressed_to", [])) <= set(data["seats"])
+        assert set(check.get("excluded", [])) <= set(data["seats"])
 
 
 def test_decided_scoring_counts_only_high_support():
@@ -124,9 +141,15 @@ def test_decided_scoring_counts_only_high_support():
         "scenario_option_key": "water_p2",
         "new_option_label": None,
         "confidence": "high",
+        "reservation": False,
         "addressed_to": [],
+        "excluded": [],
     }
     assert evaluate.decided_problems(case, base) == []
+    # 유보 표현이 든 제안은 지지로 세지 않는다
+    assert evaluate.decided_problems(case, {**base, "reservation": True}) == [
+        "water_p2를 지지로 세지 않음"
+    ]
     held = {**base, "scenario_option_key": None, "target_option_id": "opt-water_p1"}
     assert evaluate.decided_problems(case, held)  # 보류한 안을 지지로 셈 + 지지할 안 빠짐
     assert evaluate.decided_problems(case, {**held, "confidence": "low"}) == [
@@ -139,6 +162,19 @@ def test_decided_scoring_counts_only_high_support():
     assert evaluate.decided_problems(new, fresh) == []
     score = evaluate.score_decided([case, new], [base, fresh])
     assert score["pass"] == 1.0 and score["groups"] == {"withhold": "2/2"}
+    # 보류 사례는 withhold 의도와 그 안 대상이 맞아야 통과한다
+    held_case = {**case, "check": {"withhold": "water_p1", "not_support": ["water_p1"]}}
+    withheld = {**held, "intent": "withhold", "reservation": True}
+    assert evaluate.decided_problems(held_case, withheld) == []
+    assert evaluate.decided_problems(held_case, {**withheld, "intent": "oppose"})
+    named = {**case, "check": {"addressed_to": ["p2"], "excluded": ["p3"]}}
+    assert (
+        evaluate.decided_problems(named, {**base, "addressed_to": ["p2"], "excluded": ["p3"]}) == []
+    )
+    assert evaluate.decided_problems(named, {**base, "addressed_to": ["p2", "p3"]}) == [
+        "addressed_to 다름",
+        "excluded 다름",
+    ]
 
 
 def test_intent_schema_violations_are_counted():
@@ -148,11 +184,16 @@ def test_intent_schema_violations_are_counted():
         "scenario_option_key": None,
         "new_option_label": None,
         "confidence": "low",
+        "reservation": False,
         "addressed_to": [],
+        "excluded": [],
     }
     assert evaluate.intent_violations(fallback) == []
+    assert evaluate.intent_violations({**fallback, "intent": "withhold"}) == []
     assert evaluate.intent_violations({**fallback, "intent": "maybe"})
     assert evaluate.intent_violations({**fallback, "addressed_to": ["p9"]})
+    assert evaluate.intent_violations({**fallback, "excluded": ["p9"]})
+    assert evaluate.intent_violations({**fallback, "reservation": "yes"})
 
 
 # ---- 평가 에이전트 BARS -----------------------------------------------------------------------

@@ -186,7 +186,7 @@ CONFIDENCE = Enum("high", "medium", "low")
 RESOLUTION = Enum("consensus", "timeout")
 OUTCOME = Enum("consensus", "candidate_decision", "timeout")  # 표시용 칸 결과
 STIMULUS = Enum("message", "phase_started", "idle", "card_due")
-INTENT = Enum("propose", "agree", "oppose", "question", "other")
+INTENT = Enum("propose", "agree", "oppose", "withhold", "question", "other")
 ORIGIN = Enum("spontaneous", "invited")
 FAILED_STAGE = Enum("session", "report")
 RECORD_TYPE = Enum(
@@ -232,7 +232,9 @@ INTENT_OUTPUT = {
     "scenario_option_key": Opt(str),
     "new_option_label": Opt(str),
     "confidence": Enum("high", "low"),
+    "reservation": bool,
     "addressed_to": [SEAT],
+    "excluded": [SEAT],
 }
 INTERNAL_MESSAGE = {
     **MESSAGE,
@@ -737,6 +739,19 @@ DEBATE_STATE = {
     ],
     "card_progress": CARD_PROGRESS,
     "cost_left": NUM,
+    "candidate_intents": [
+        {
+            "message_id": str,
+            "created_at": TS,
+            "intent": INTENT,
+            "target_option_id": Opt(str),
+            "scenario_option_key": Opt(str),
+            "new_option_label": Opt(str),
+            "confidence": Enum("high", "low"),
+            "reservation": bool,
+        }
+    ],
+    "first_spoke_at": {k: Opt(TS) for k in ("p1", "p2", "p3")},
 }
 CONTRIBUTIONS = {
     "options": [CONTRIBUTION_OPTION],

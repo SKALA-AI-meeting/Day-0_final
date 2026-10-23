@@ -12,7 +12,7 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 | POST | /internal/sessions/{id}/messages | {sender: p1∣p2∣p3∣system, content, run_id, seq, expected_generation?: int, is_invite?: bool, card_ids?: [card_id], cited_material_ids?: [], meta?} | Message. (run_id, seq) 멱등(이미 있으면 generation 검사 없이 기존 행). `expected_generation`이 있고 현재 `sessions.generation`과 다르면 409 `stale_generation`(게시 안 함). is_invite=true면 그 단계를 `invite_delivered_phases`에 추가, 단계당 두 번째는 409 `conflict`. `card_ids`의 카드마다 그 `session_cards.delivered_seats`에 sender 자리를 더한다(같은 자리 중복 없음, 같은 트랜잭션). 메시지 행에는 `card_ids`로 저장 | debate-mcp |
 | POST | /internal/sessions/{id}/options | {phase, label, proposer: p1∣p2∣p3, scenario_option_key?, source_message_id, run_id} | Option {option_id, phase, label, proposer, scenario_option_key, created_at, existing: bool}. 멱등 키는 위 표. 같은 scenario_option_key 행이 이미 있으면(지원자가 먼저 말한 경우 포함) 새로 만들지 않고 기존 행(`existing: true`, proposer 그대로). 현재 단계가 아니면 409 `phase_not_open` | debate-mcp |
 | POST | /internal/sessions/{id}/stances | {participant: p1∣p2∣p3, option_id, stance: "support"∣"oppose", source_message_id, run_id} | {stance_id}. source_message_id는 그 입장을 말한 자기 메시지. 멱등 | debate-mcp |
-| POST | /internal/sessions/{id}/slots/fill | {option_id, seat: p1∣p2∣p3, content, run_id} | {slot, message, phase: <다음 단계>}. **AI 합의 채우기 전용**(`resolution: consensus`, `filled_by` = seat). 대상 단계는 그 option의 phase다. 판정 순서: 같은 run_id로 이미 확정된 칸이 있으면 단계와 상관없이 기존 칸·공지(200) → option의 phase가 현재 단계가 아니면 409 `phase_not_open` → 칸이 이미 confirmed면 409 `slot_confirmed` → `consensus.judge` 결과가 이 option_id가 아니면 409 `no_consensus`. 성공은 한 트랜잭션: 칸 confirmed → `content`를 공지 메시지로 저장(sender = seat, run_id, seq 5, `meta.kind = "consensus_fill"`) → `advance_phase`(generation +1). 커밋 뒤 WS `message.new` → `slot.confirmed` → `phase.changed` → `timer`(keyword면 `materials.opened`). 409면 아무것도 저장하지 않는다. 시간 초과 채우기는 api 스케줄러가 직접 하므로 이 경로가 없다 | debate-mcp |
+| POST | /internal/sessions/{id}/slots/fill | {option_id, seat: p1∣p2∣p3, content, run_id} | {slot, message, phase: <다음 단계>}. **AI 합의 채우기 전용**(`resolution: consensus`, `filled_by` = seat). 대상 단계는 그 option의 phase다. 판정 순서: 같은 run_id로 이미 확정된 칸이 있으면 단계와 상관없이 기존 칸·공지(200) → option의 phase가 현재 단계가 아니면 409 `phase_not_open` → 칸이 이미 confirmed면 409 `slot_confirmed` → `consensus.judge` 결과(지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언)가 이 option_id가 아니면 409 `no_consensus`. 성공은 한 트랜잭션: 칸 confirmed → `content`를 공지 메시지로 저장(sender = seat, run_id, seq 5, `meta.kind = "consensus_fill"`) → `advance_phase`(generation +1). 커밋 뒤 WS `message.new` → `slot.confirmed` → `phase.changed` → `timer`(keyword면 `materials.opened`). 409면 아무것도 저장하지 않는다. 시간 초과 채우기는 api 스케줄러가 직접 하므로 이 경로가 없다 | debate-mcp |
 | GET | /internal/sessions/{id}/proposal | | Proposal(in_progress면 현재 초안, completed 이후면 제출본. `submitted_at`·`auto_submitted` 포함) | debate-mcp, assessment-mcp, 워커 |
 | GET | /internal/sessions/{id}/materials | | {catalog_version, locked, keyword_key∣null, materials: [{material_id, title}]} | rag-mcp |
 | GET | /internal/sessions/{id}/materials/{material_id} | | {material_id, title, content} 또는 423 `not_released`. 채용 건 `catalog_version`의 `materials` 행 | rag-mcp |
@@ -48,10 +48,12 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
  "invite_delivered":false,"last_room_message_t_min":11.4,
  "confirmed":[{"phase":"keyword","value":"물","option_id":"...","resolution":"consensus","filled_by":"candidate"}],
  "card_progress":[{"card_id":"<card_id>","locked_option_id":"...","delivered":["p1"],"trigger_message_id":"...","spoken_since_trigger":{"p1":2}}],
- "cost_left":1.79}
+ "cost_left":1.79,
+ "candidate_intents":[{"message_id":"...","created_at":"...","intent":"propose","target_option_id":"...","scenario_option_key":null,"new_option_label":null,"confidence":"high","reservation":false}],
+ "first_spoke_at":{"p1":"...","p2":null,"p3":"..."}}
 ```
 
-`consensus_option_id`는 합의 판정 결과(없으면 null), `timeout_option_id`는 지금 마감되면 고를 안. 진행 매니저는 이 값을 그대로 쓴다. `card_progress`는 `session_cards` 행(처리가 시작된 카드)의 잠긴 기준안과 전달된 자리, 그 카드의 첫 발언(`observations.trigger_message_id`, 아직 없으면 null), 그 발언(포함)부터 같은 단계에서 AI 자리별 토론방 발언 수(`spoken_since_trigger`, 전체 기록 기준, 첫 발언이 없으면 `{}`. 진행 매니저의 압박 횟수)이고, 결정적 노드가 아직 전달되지 않은 담당 화자를 다음 run의 화자로 이어서 넣는다. **페르소나 컨텍스트에는 `card_progress`·`cost_left`를 넣지 않는다**(카드 brief와 자기 입장 계획만 그 화자에게). `cost_left` = `SESSION_COST_HARD_USD`(기본 $2) − `sessions.debate_cost_usd`(리포트 비용 제외, `services/budget.py`가 계산)이고 0 이하면 페르소나는 LLM 없이 고정 안전 문구만 게시한다. 그래프 `load`는 위 필드를 걸러 낸 DebateState를 페르소나 컨텍스트에 미리 넣어 조회 도구 왕복을 줄인다.
+`consensus_option_id`는 합의 판정 결과(없으면 null. 지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언일 때만 값이 있다, 아래 "의도 분류 출력 스키마"), `timeout_option_id`는 지금 마감되면 고를 안. 진행 매니저는 이 값을 그대로 쓴다. `card_progress`는 `session_cards` 행(처리가 시작된 카드)의 잠긴 기준안과 전달된 자리, 그 카드의 첫 발언(`observations.trigger_message_id`, 아직 없으면 null), 그 발언(포함)부터 같은 단계에서 AI 자리별 토론방 발언 수(`spoken_since_trigger`, 전체 기록 기준, 첫 발언이 없으면 `{}`. 진행 매니저의 압박 횟수)이고, 결정적 노드가 아직 전달되지 않은 담당 화자를 다음 run의 화자로 이어서 넣는다. `candidate_intents`는 그 단계 지원자 토론방 메시지의 저장된 의도 분류(`message_intents`, 메시지 순), `first_spoke_at`은 AI 자리별 그 단계 첫 토론방 발언 시각(없으면 null)이고, 진행 매니저가 설득 가능 규칙 횟수를 프로세스 메모리 없이 센다. **페르소나 컨텍스트에는 `card_progress`·`cost_left`·`candidate_intents`·`first_spoke_at`을 넣지 않는다**(카드 brief와 자기 입장 계획만 그 화자에게). `cost_left` = `SESSION_COST_HARD_USD`(기본 $2) − `sessions.debate_cost_usd`(리포트 비용 제외, `services/budget.py`가 계산)이고 0 이하면 페르소나는 LLM 없이 고정 안전 문구만 게시한다. 그래프 `load`는 위 필드를 걸러 낸 DebateState를 페르소나 컨텍스트에 미리 넣어 조회 도구 왕복을 줄인다.
 
 ### Contributions
 
@@ -149,23 +151,28 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 지원자 메시지마다 **세션 메일박스가 `message` 자극을 꺼낼 때** 순서대로 호출한다(`MODEL_INTENT`, 타임아웃 10초, 재시도 없음). 큐 밖에서는 메시지 저장·generation +1·enqueue만 한다. 분류와 아래 안·입장 반영은 그 자극이 낡았어도(generation이 현재 값보다 작음) **반드시 수행**하고, 낡은 자극에서 건너뛰는 것은 턴 선택·페르소나 발언 생성뿐이다. 분류 결과는 `message_id` 멱등이라 같은 자극의 재실행(재큐·재시작)에서 다시 부르지 않는다. **분류 입력과 안·입장 저장 대상의 단계는 저장된 `messages.phase`**다. 메일박스가 밀린 동안 단계가 바뀌었어도 현재 단계로 바꿔 분류하지 않는다. 현재 단계 검사는 턴 선택·발언 생성을 생략할지 판단하는 데만 쓴다. 입력: 메시지, 메시지의 단계(`messages.phase`), 그 단계의 기존 안 목록 `[{option_id, label, scenario_option_key}]`, **그 단계의 카탈로그 안 전체** `[{scenario_option_key, label}]`(아직 아무도 말하지 않은 안 포함. 키워드 단계는 후보 4개), 직전 메시지 5개.
 
 ```json
-{"intent": "propose", "target_option_id": null, "scenario_option_key": "water_p2", "new_option_label": null, "confidence": "high", "addressed_to": ["p2"]}
+{"intent": "propose", "target_option_id": null, "scenario_option_key": "water_p2", "new_option_label": null, "confidence": "high", "reservation": false, "addressed_to": ["p2"], "excluded": []}
 ```
 
 | 필드 | 값 |
 |---|---|
-| intent | `propose`(새 안 또는 기존 안을 자기 의견으로 냄) ∣ `agree` ∣ `oppose` ∣ `question` ∣ `other` |
+| intent | `propose`(새 안 또는 기존 안을 자기 의견으로 냄) ∣ `agree` ∣ `oppose` ∣ `withhold`(안을 보류·유보하거나 판단을 미룸, 기권 포함) ∣ `question` ∣ `other`. 다른 안을 내거나 지지하면서 어떤 안을 보류·반대하면 지지하는 안이 대상인 `propose`·`agree`이고, 지지하는 안 없이 보류만 하면 `withhold`다 |
 | target_option_id | 대상이 기존 안 행이면 그 id, 아니면 null |
 | scenario_option_key | 대상이 아직 행이 없는 카탈로그 안이면 그 키, 아니면 null |
-| new_option_label | intent=propose이고 기존 안·카탈로그 안 어느 것과도 다를 때 짧은 라벨(20자 이내), 아니면 null |
+| new_option_label | intent=propose이고 핵심(무엇을·누구에게·어떤 방법으로)이 같은 기존 안·카탈로그 안이 없을 때 짧은 라벨(20자 이내), 아니면 null |
 | confidence | `high` ∣ `low`. 의도와 대상이 분명하면 high |
-| addressed_to | 이름을 부르거나 답한 자리 id 목록(진행 매니저 규칙 입력). 없으면 [] |
+| reservation | bool. 대상 안에 대한 보류·유보·반대·조건 표현이 있으면 true(다른 안에 대한 반대·보류는 넣지 않음). `withhold`는 true |
+| addressed_to | 이름을 부르거나 답한 자리 id 목록(진행 매니저 규칙 입력). 없으면 []. `excluded`에 든 자리는 검증에서 뺀다 |
+| excluded | 지원자가 이번에 답하지 말라고 뺀 자리 id 목록("지안님 말고 하람님"의 p3). 없으면 [] |
 
 처리(결정적 코드):
 
 - `propose` + scenario_option_key → 그 키로 안 행을 만들거나(이미 있으면 기존 행, 멱등 키 (session_id, phase, scenario_option_key)) proposer = candidate. 뒤에 AI가 같은 안을 `propose_option`해도 같은 행이 돌아오므로 최초 제안자가 보존된다. `propose` + new_option_label → 자유 안(proposer = candidate). **안 행은 confidence와 상관없이 만든다**(최초 제안 사실 기록).
-- 입장: confidence = high일 때만 stances 행을 쓴다. `propose`·`agree` + 대상 → support, `oppose` + 대상 → oppose(같은 안의 이전 support를 철회). confidence = low·`question`·`other` → 입장 없음.
-- 실패·스키마 위반은 `{"intent": "other", "target_option_id": null, "scenario_option_key": null, "new_option_label": null, "confidence": "low", "addressed_to": []}`, `fallback=true`.
+- 입장: **지지로 세는 발언**(confidence = high인 `propose`·`agree`이고 `reservation = false`) + 대상 → support. 아직 행이 없는 카탈로그 안에 대한 `agree`는 지지로 세는 발언일 때만 안 행을 만든다. `oppose`(high) + 대상 → oppose(같은 안의 이전 support를 철회). `withhold` + 대상 → withhold(같은 안의 이전 support를 철회, 반대자로 세지 않음). 대상 없는 `withhold`는 그 시점 지원자의 현재 지지 안을 철회한다. 지지를 줄이는 쪽이라 `withhold`는 confidence와 상관없이 반영한다. 유보 표현이 든 `propose`·`agree`, confidence = low, `question`·`other` → 입장 없음.
+- 합의 판정(`consensus.judge`)은 지원자의 그 단계 **최신** 토론방 발언의 분류 행이 지지로 세는 발언이고 그 대상이 합의 안일 때만 합의로 본다(최신 발언이 아직 분류되지 않았으면 합의 없음).
+- 모델 응답 형식(모듈 안, 계약 밖): 모델은 먼저 지원자가 원하는 안을 지원자 말로 적는 `wanted`(저장하지 않음)를 쓰고, 대상은 `target` 한 칸(나온 안 id 또는 카탈로그 키)으로, 새 안 라벨은 그보다 먼저 낸다. 모듈이 위 표의 계약 출력으로 나누며, 알 수 없는 `target`은 폴백이다. 새 안 라벨이 나온 안·카탈로그 안 라벨과 정규화 문자열로 같으면 그 안으로 바꾼다.
+- 저장: `message_intents`에 `reservation`·`excluded`를 함께 남기고, 내부 메시지 조회(`GET /messages`·`transcript_span`)의 `intent`에 같은 필드가 들어간다.
+- 실패·스키마 위반은 `{"intent": "other", "target_option_id": null, "scenario_option_key": null, "new_option_label": null, "confidence": "low", "reservation": false, "addressed_to": [], "excluded": []}`, `fallback=true`.
 - 분류는 토론 진행용이다. 세션 후 평가 에이전트에는 참고 입력으로만 들어가고 원문과 다르면 원문을 따른다([product/rubric.md](../product/rubric.md) 1.2). 정확도 목표는 `tests/eval/` 의도 분류 20문장 기준 0.85다(최근 측정은 [architecture/harness.md](../architecture/harness.md) "실측 기준선").
 
 ## 진행 매니저 결정 스키마
@@ -178,5 +185,5 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 
 - `purpose`: `respond`(지원자에게 답) ∣ `push_option`(자기 고정 안 주장) ∣ `react`(다른 동료 발언에 반응) ∣ `invite`(침묵 초대) ∣ `card`(카드가 정한 발언. 이전 run에서 전달되지 않은 카드 화자를 이어서 포함). `card_ids`는 그 발언이 전달하는 카드 id 배열(카드 발언이 아니면 []).
 - `speakers`는 0~2명이고 일반 발언 루프(respond → apply)를 탄다. 합의 채우기 공지 화자는 `speakers`에 넣지 않는다.
-- `fill`은 `{option_id, seat}`(합의 채우기만, seat = 공지·채우는 자리) 또는 null. `fill` 노드의 `announce_fill` 분기가 이 값으로 `fill_slot{option_id, seat, content, run_id}`를 한 번 불러 칸 확정과 공지를 함께 저장한다([세션 생명주기](../architecture/session-lifecycle.md) "합의 채우기"). load 때 합의가 없었어도 apply 뒤 재판정에서 합의가 생기면 같은 분기를 탄다.
+- `fill`은 `{option_id, seat}`(합의 채우기만, seat = 공지·채우는 자리) 또는 null. `fill` 노드의 `announce_fill` 분기가 이 값으로 `fill_slot{option_id, seat, content, run_id}`를 한 번 불러 칸 확정과 공지를 함께 저장한다([세션 생명주기](../architecture/session-lifecycle.md) "합의 채우기"). 이 값은 load 때 읽은 합의로만 정한다. 이번 run의 AI 발언으로 지지가 바뀌어도 같은 run에서 다시 판정하지 않는다(이후 run이 다시 본다).
 - 규칙 결과가 0명이고 자극이 `message`일 때만 턴 LLM(`MODEL_TURN`)을 부른다(`llm_used`). 나머지 자극은 규칙만.

@@ -45,6 +45,9 @@ class FakeServer:
         self.keyword: str | None = None
         self.options: list[dict[str, Any]] = []
         self.support: dict[str, str | None] = {p: None for p in ("candidate", *SEATS)}
+        # 지원자의 이 단계 최신 발언이 지지로 세는 발언이면 그 안(api candidate_confirmed)
+        self.confirmed: str | None = None
+        self.intents: dict[str, dict[str, Any]] = {}  # message_intents(저장된 분류)
         self.opposers: dict[str, set[str]] = {}
         self.slots: dict[str, dict[str, Any]] = {}
         self.cards: dict[str, dict[str, Any]] = {}
@@ -104,6 +107,7 @@ class FakeServer:
             }
         )
         self.ports.generation += 1
+        self.confirmed = None  # 새 최신 발언은 분류 반영 전까지 지지로 세지 않는다
         return mid
 
     def system_says(self, content: str) -> str:
@@ -121,17 +125,24 @@ class FakeServer:
         return mid
 
     def apply_candidate(self, result: dict[str, Any]) -> None:
-        """api 메일박스의 의도 반영(docs/contracts/internal.md): 안 행은 confidence와 무관, 입장은
-        high만."""
+        """api 메일박스의 의도 반영(docs/contracts/internal.md): 안 행은 confidence와 무관, 지지는
+        high이고 유보 표현이 없을 때만, 보류는 confidence와 무관하게 그 안 지지 철회."""
         target = result.get("target_option_id")
         key = result.get("scenario_option_key")
         if result["intent"] == "propose" and key:
             found = next((o for o in self.phase_options() if o["scenario_option_key"] == key), None)
             target = found["option_id"] if found else self.add_option(key, "candidate")
+        if result["intent"] == "withhold":
+            withdrawn = target or (None if key else self.support.get("candidate"))
+            if withdrawn and self.support.get("candidate") == withdrawn:
+                self.support["candidate"] = None
+            return
         if result.get("confidence") != "high" or not target:
             return
         if result["intent"] in ("propose", "agree"):
-            self.support["candidate"] = target
+            if not result.get("reservation"):
+                self.support["candidate"] = target
+                self.confirmed = target
         elif result["intent"] == "oppose":
             self.opposers.setdefault(target, set()).add("candidate")
             if self.support.get("candidate") == target:
@@ -150,7 +161,7 @@ class FakeServer:
 
     def consensus(self) -> str | None:
         cand = self.support.get("candidate")
-        if not cand:
+        if not cand or cand != self.confirmed:
             return None
         count = sum(1 for p, o in self.support.items() if o == cand)
         return cand if count >= 3 else None
@@ -190,6 +201,15 @@ class FakeServer:
             "confirmed": [s for s in self.slots.values() if s["status"] == "confirmed"],
             "card_progress": [self.card_row(c) for c in self.cards.values()],
             "cost_left": self.cost_left,
+            "candidate_intents": [
+                {"message_id": m["id"], "created_at": at, **self.intents[m["id"]]}
+                for m, at in self.timed()
+                if m["sender"] == "candidate" and m["id"] in self.intents
+            ],
+            "first_spoke_at": {
+                seat: next((at for m, at in self.timed() if m["sender"] == seat), None)
+                for seat in SEATS
+            },
             "seats": [{"seat": "candidate", "display_name": self.candidate_name}]
             + [
                 {"seat": s, "display_name": self.catalog.name_of(s), "avatar_url": f"/a/{s}.png"}
@@ -208,6 +228,14 @@ class FakeServer:
                 if m["sender"] in SEATS and m["phase"] == start["phase"]:
                     spoken[m["sender"]] = spoken.get(m["sender"], 0) + 1
         return {**card, "trigger_message_id": trigger, "spoken_since_trigger": spoken}
+
+    def timed(self) -> list[tuple[dict[str, Any], str]]:
+        """이 단계 메시지와 저장 순서대로 매긴 시각(api의 created_at 대역)."""
+        return [
+            (m, f"2026-10-21T01:{i // 60:02d}:{i % 60:02d}Z")
+            for i, m in enumerate(self.messages)
+            if m.get("phase") == self.phase
+        ]
 
     def room(self, sender: str | None = None) -> list[dict[str, Any]]:
         return [m for m in self.messages if sender is None or m["sender"] == sender]
@@ -414,7 +442,7 @@ class Harness:
             default={"content": "네, 그 얘기 더 해 봐요.", "proposes": None, "stance": None},
         )
         self.turn = FakeLLM(turn, default='{"speakers": [], "reason": "없음"}')
-        self.intent = FakeLLM(intent, default="not json")
+        self.intent = FakeLLM([model_reply(i) for i in intent], default="not json")
         self.slept: list[float] = []
         self.snapshots: list[dict[str, Any]] = []
         self.tools_seen: list[RunTools] = []
@@ -473,6 +501,7 @@ class Harness:
         mid = self.server.candidate_says(content)
         if result is not None:
             intent_mod.remember(mid, result)
+            self.server.intents[mid] = dict(result)
             self.server.apply_candidate(result)
         return mid
 
@@ -490,6 +519,8 @@ def intent_of(
     key: str | None = None,
     to: tuple[str, ...] = (),
     confidence: str = "high",
+    reservation: bool = False,
+    excluded: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     return {
         "intent": kind,
@@ -497,8 +528,21 @@ def intent_of(
         "scenario_option_key": key,
         "new_option_label": None,
         "confidence": confidence,
+        "reservation": reservation,
         "addressed_to": list(to),
+        "excluded": list(excluded),
     }
+
+
+def model_reply(result: Any) -> Any:
+    """계약 출력 형태(target_option_id·scenario_option_key)를 의도 분류 모델 응답 형태(target 한
+    칸)로 바꾼다. dict가 아니거나 이미 응답 형태면 그대로."""
+    if not isinstance(result, dict) or "target" in result or "target_option_id" not in result:
+        return result
+    out = {k: v for k, v in result.items() if k not in ("target_option_id", "scenario_option_key")}
+    out["target"] = result.get("target_option_id") or result.get("scenario_option_key")
+    out["wanted"] = None
+    return out
 
 
 def say(content: str, stance: dict | None = None, proposes: dict | None = None) -> dict:

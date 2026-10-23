@@ -43,7 +43,7 @@ async def test_intent_stub_returns_contract_fallback():
     )
     assert used_fallback
     assert result == _contract("intent_classification_fallback")
-    assert set(intent.SCHEMA["required"]) == set(_contract("intent_classification"))
+    assert set(intent.OUTPUT_FIELDS) == set(_contract("intent_classification"))
 
 
 def test_role_models_use_new_env_names():
