@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 204개(live 3개 포함, `make test`는 live를 뺀다).
+총 211개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -161,7 +161,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_cards.py</code> (13)</summary>
+<details><summary><code>tests/agent/test_cards.py</code> (14)</summary>
 
 - `test_c5_lead_lock_joint_delivery_and_observations`
 - `test_c5_api_lock_is_used`
@@ -175,6 +175,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_honesty_credit_observed_on_proposal_start`
 - `test_moved_critic_must_record_support_for_candidate_option`
 - `test_moved_critic_support_overrides_structured_oppose` ×2
+- `test_pressure_counts_from_the_card_message_up_to_three`
 
 </details>
 
@@ -223,11 +224,13 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_persona.py</code> (26)</summary>
+<details><summary><code>tests/agent/test_persona.py</code> (30)</summary>
 
 - `test_offplan_regenerates_then_fallback` ×5
 - `test_offplan_regenerated_ok`
 - `test_guard_regenerates_then_safe_phrase` ×4
+- `test_safe_phrase_is_not_posted_twice_in_a_row`
+- `test_stance_fallback_is_not_posted_twice_in_a_row`
 - `test_guard_allow_exact_notice_passes`
 - `test_cost_cap_uses_safe_phrase_without_llm`
 - `test_persona_context_snapshot`
@@ -235,9 +238,11 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_material_question_before_keyword_gets_not_released`
 - `test_resolve_target_maps_catalog_label_to_key`
 - `test_guard_blocks_credit_preemption`
+- `test_guard_does_not_flag_the_candidate_display_name`
 - `test_credit_group_only_in_proposal_and_narrow`
 - `test_decide_question_gets_fixed_notice_first`
 - `test_repeated_line_is_regenerated_once`
+- `test_regenerated_line_is_rechecked_for_repetition`
 - `test_decide_question_is_answered_even_if_turn_llm_picks_nobody`
 - `test_long_body_is_cut_before_checks_so_notice_fits`
 - `test_notice_is_attached_to_safe_phrase`
@@ -252,12 +257,14 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_turn.py</code> (21)</summary>
+<details><summary><code>tests/agent/test_turn.py</code> (23)</summary>
 
 - `test_phase_started_keyword_pushers_and_problem_react`
+- `test_second_speaker_sees_the_first_speakers_line`
 - `test_proposal_phase_started_has_no_speakers`
 - `test_named_reply_first_and_at_most_two`
 - `test_named_order_follows_the_message_not_the_classifier`
+- `test_named_but_excluded_seat_does_not_take_the_reply`
 - `test_quiet_only_when_called_or_asked_all`
 - `test_turn_llm_only_for_message`
 - `test_turn_llm_failure_means_no_speakers`

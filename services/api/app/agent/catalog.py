@@ -144,8 +144,13 @@ class Catalog:
     def persona_prompt(self, seat: str) -> str:
         return self.prompts.get(f"persona_{self.type_of(seat)}.md", "")
 
+    def safe_phrases(self, seat: str) -> list[str]:
+        """자리별 안전 문구 후보(파일의 한 줄에 하나, 같은 자리에서 직전 문구 반복을 피할 때 씀)."""
+        text = self.prompts.get(f"safe_{self.type_of(seat)}.md", "")
+        return [line.strip() for line in text.splitlines() if line.strip()] or ["네, 들어 볼게요."]
+
     def safe_phrase(self, seat: str) -> str:
-        return self.prompts.get(f"safe_{self.type_of(seat)}.md", "").strip() or "네, 들어 볼게요."
+        return self.safe_phrases(seat)[0]
 
     def seats_by_priority(self, types: list[str]) -> list[str]:
         """유형 우선순위 목록을 세션 자리 순서로(없는 유형은 건너뜀)."""

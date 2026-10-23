@@ -22,6 +22,7 @@ from app.masking import mask
 from app.models import (
     Message,
     MessageIntent,
+    Observation,
     Option,
     Position,
     Session,
@@ -825,6 +826,17 @@ async def debate_state(
     cards = (
         await db.scalars(select(SessionCard).where(SessionCard.session_id == session.id))
     ).all()
+    # 카드의 첫 발언(관찰 trigger). 진행 매니저가 그 메시지부터 압박 발언을 센다
+    triggers = {
+        card_id: message_id
+        for card_id, message_id in (
+            await db.execute(
+                select(Observation.card_id, Observation.trigger_message_id).where(
+                    Observation.session_id == session.id
+                )
+            )
+        ).all()
+    }
     current = result.get("current_support", {p: None for p in consensus.PARTICIPANTS})
     order = {p: i for i, p in enumerate(sc.PHASES)}
     return {
@@ -874,6 +886,7 @@ async def debate_state(
                 "card_id": c.card_id,
                 "locked_option_id": _str(c.locked_option_id),
                 "delivered": list(c.delivered_seats),
+                "trigger_message_id": _str(triggers.get(c.card_id)),
             }
             for c in cards
         ],

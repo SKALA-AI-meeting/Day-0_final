@@ -67,7 +67,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 
 1. `consensus_option_id`가 있고 칸이 `empty`: 화자 0명, `fill = {option_id, seat}`(합의 채우기 전용)만 정한다. 공지 화자는 화자 목록에 들어가지 않고 respond → guard → stance_check → apply 루프 없이 fill 노드 전용 분기가 처리한다. `seat` = 그 안 지지자 중 우선순위([product/scenario.md](../product/scenario.md), 고정 자리에서는 서지안 > 윤하람 > 강한결) 첫 자리. 합의는 지원자 포함 3/4 지지가 되는 즉시이고 대기 시간이 없다(R4). 이번 실행의 AI 발언으로 합의가 생기면 fill 노드가 apply 뒤에 다시 판정한다.
 2. `card_brief`가 있으면 카드가 정한 화자·목적(`card`)을 넣는다. 미전달 화자가 남아 있으면 자극 종류와 상관없이 먼저 넣는다. `stimulus=card_due`는 이 규칙으로만 화자를 정한다.
-3. `stimulus=message`이고 지원자가 부른 자리가 있으면 그 자리 `respond`(최대 2명). 부른 자리는 메시지에서 "이름님"으로 먼저 부른 순서이고, 의도 분류 `addressed_to`가 놓친 호명도 넣는다(`called_seats`). `quiet`는 이름이 불렸거나 전체 질문(intent=question, addressed_to=[])일 때만 대상이 된다. 정하는 방법을 묻는 진행 질문인데 턴 LLM이 화자 0명을 고르면 비판형 한 명이 답한다.
+3. `stimulus=message`이고 지원자가 부른 자리가 있으면 그 자리 `respond`(최대 2명). 부른 자리(대상)는 의도 분류 `addressed_to`가 정하고 순서는 메시지에서 "이름님"이 먼저 나온 순서다. 이름이 나왔어도 `addressed_to`에 없는 자리("지안님 말고 하람님"의 지안)는 넣지 않고, `addressed_to`가 비었을 때(전체 질문·분류 실패)만 "이름님"으로 부른 자리를 대상으로 쓴다(`called_seats`). `quiet`는 이름이 불렸거나 전체 질문(intent=question, addressed_to=[])일 때만 대상이 된다. 정하는 방법을 묻는 진행 질문인데 턴 LLM이 화자 0명을 고르면 비판형 한 명이 답한다.
 4. `stimulus=idle`이고 그 단계 `invite_delivered=false`: 화자 1명 `invite`. 묻는 자리 = 우선순위 `agreeable > divergent > critic` 중 세션에 있는 첫 자리(`stubborn`·`quiet` 제외, 고정 자리에서는 서지안). 게시 때 `is_invite=true`. 지원자가 입력 중이라 게시하지 못하면 플래그가 그대로라 스케줄러가 다시 넣는다.
 5. `stimulus=phase_started`: 단계 첫 발언자 1~2명 `push_option`(시나리오 고정 입장을 가진 자리 중 `quiet` 제외). 문제 상황 단계에서는 카드 전이므로 `stubborn`도 입장을 밝히지 않고 일반 발언(`react`)만 한다(R5-4). proposal 단계는 화자 0명.
 6. **턴 LLM은 1~5의 결과가 0명이고 자극이 `message`일 때만** 부른다(R5-12). LLM은 `respond`·`push_option`·`react` 중에서 최대 2명을 고른다. 입력은 DebateState 요약·최근 대화 10개·자리별 성향 한 줄·카드 선점 금지 목록. LLM 실패면 0명.
@@ -81,7 +81,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 - 출력(구조화): `{content, proposes?: {scenario_option_key∣label}, stance?: {option_id, stance: support∣oppose}}`. `content`는 1~3문장, 200자 이내 권장(guard 상한 400자).
 - `stance_plan`은 결정적으로 계산한다: 단계별 고정 입장 표, 수용 카드 담당(고집형 1명 확정 전 불변 + 다른 1명 설득 가능, R1), 설득 가능 규칙(지원자가 그 자리 안에 반대·대안 제안을 두 번 하면 지원자 안으로 단계당 1회 이동, `stubborn`은 확정 전 불변).
 - 정해진 안내(`fixed_phrases.yaml` `notices.decide`·`notice_triggers`): 지원자 메시지가 정하는 방법을 묻는 패턴에 걸리면 그 run 첫 화자 발언 앞에 코드가 고정 안내문을 붙이고, 페르소나에는 `[정해진 안내]` 블록으로 이어질 말만 쓰게 한다. 순서는 생성 직후 본문을 (400 − 안내문 길이 − 1)자로 자르기 → 잘린 본문으로 guard·stance_check(입장 판정도 잘린 본문 기준) → apply에서 안내문 부착이다. guard·입장 폴백과 비용 상한 안전 문구에도 붙이고, 카드 고정 한 줄(머뭇거림)에는 붙이지 않는다. 안내문은 화면 위치("결정 사항")와 방법만 말하고 어떤 안을 고를지는 말하지 않는다.
-- 반복 재생성: 초안이 자기 최근 발언 3개 중 하나와 유사도 0.8 이상(공백·문장부호 제거 뒤 `SequenceMatcher`)이면 1회 다시 쓴다(`meta.repeat`, 최초 생성과 도구 3회 예산을 공유). 다시 써도 비슷하거나 실패하면 첫 초안을 쓴다. guard·stance_check는 그 뒤에 그대로 돈다.
+- 반복 재생성: 초안이 자기 최근 발언 3개 중 하나와 유사도 0.8 이상(공백·문장부호 제거 뒤 `SequenceMatcher`)이면 1회 다시 쓴다(최초 생성과 도구 3회 예산을 공유). 다시 쓴 문장도 같은 반복 검사를 하고, 통과하면 그 문장(`meta.repeat = regenerated`), 다시 써도 비슷하거나 비거나 실패하면 첫 초안을 쓴다(`meta.repeat = kept`). guard·stance_check는 그 뒤에 그대로 돈다.
 - 비용 하드 상한($2, R5-11)을 넘은 세션(load가 읽은 DebateState `cost_left ≤ 0`, 원천은 `sessions.debate_cost_usd`)이면 respond는 LLM을 부르지 않고 자리별 고정 안전 문구를 낸다.
 - 금지(모든 자리): 점수·평가·합격·연출될 상황 언급, 지원자 대신 결론 선언(칸 채우기 고정 문장 제외), 지원자 평가·판정, 카드 선점 금지 위반, 기획안 대필, `idea_credit` 내용 언급, 다른 자리의 성향 이름 언급. 페르소나는 assessment-mcp에 접근할 수 없다.
 
@@ -98,7 +98,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 |---|---|---|
 | `persuasion_keyword` | 그 시점 지원자와 다른 키워드를 민 자리 중 서지안 우선(`critic > stubborn`) | 자기 키워드 + 이유 하나 + 지원자 안 약점 질문. 지원자가 아직 제안하지 않았으면 전체에게 자기 키워드를 민다 |
 | `flexibility_majority` | 강한결(`stubborn`, 확정 전 불변) + 서지안(`critic`, 설득 가능 규칙) | 카드 시점에 기준안을 잠그고(아래) 두 자리가 각자 기준안 지지를 밝힌다. 서지안은 지원자 반대·대안 2회면 지원자 안으로 옮길 수 있으므로 지원자 안이 채택될 수 있다(R1) |
-| `listening_pressure` | 강한결 | 기준안을 강하게 밀고 지원자 안을 짧게 일축, 지원자가 반박하면 재반박(`pressure_count` 최대 3). 같은 화자가 `flexibility_majority`도 맡으므로 한 발언으로 합쳐 두 카드의 첫 발언을 겸할 수 있다. 그 메시지는 `card_ids`에 두 카드를 담고 두 카드의 `trigger_message_id`가 된다 |
+| `listening_pressure` | 강한결 | 기준안을 강하게 밀고 지원자 안을 짧게 일축, 지원자가 반박하면 재반박(`pressure_count`: 카드 첫 발언(`card_progress[].trigger_message_id`)부터 센 강한결의 이 단계 발언, 카드 발언 포함 최대 3). 같은 화자가 `flexibility_majority`도 맡으므로 한 발언으로 합쳐 두 카드의 첫 발언을 겸할 수 있다. 그 메시지는 `card_ids`에 두 카드를 담고 두 카드의 `trigger_message_id`가 된다 |
 | `inclusion_silence` | 윤하람(`quiet`) | 머뭇거림 한 줄(고정 골격). 이후 이름이 불리거나 전체 질문이 올 때까지 turn이 `quiet`를 고르지 않음. 불리면 자기 안을 자료 근거와 함께 |
 | `persuasion_solution` | 서지안(그 시점 지원자가 서지안 안 S2를 지지하면 강한결) | 비용·실현 가능성 약점을 자료 근거로 짚고 담당 자신의 고정 방향(서지안 S2, 강한결 S1)을 민다. 담당만 바뀌고 입장은 바뀌지 않는다 |
 | `honesty_credit` | 없음 | 발언이 없는 유일한 카드다. 기획안 단계의 `phase_started` 실행에서 cards 노드가 `record_observation`만 한다(`trigger_message_id`는 단계 시작 시스템 안내). 페르소나 행동 없음, 선점 금지(누가 냈는지 먼저 말하지 않음)만 강화 |
@@ -156,7 +156,8 @@ agent(LLM, 도구 바인딩) ⇄ tools(search_materials·get_material) … 최�
 
 모든 LLM 생성 텍스트(페르소나·어시스턴트)에 코드에서 무조건 실행한다.
 - 패턴(`positions.scenario`의 `guard_patterns`, 카탈로그 `prompts/shared/guard_patterns.yaml`): 점수·합격·순위·평가·연출 언급, 평가 기준 질문 응답, 지원자 판정 표현("OO님은 경청을 잘하시네요" 류), 결론 대리 선언("이걸로 확정할게요" 류, 칸 채우기 공지 제외), 다른 자리 성향 이름, 미래 카드 암시.
-- 처리: 걸리면 같은 입력으로 재생성 1회 → 그래도 걸리면 자리별 안전 문구(`prompts/persona/safe_<type>.md`, 성향에 맞는 짧은 중립 문장)로 교체. 400자 초과는 자른다. 결과는 `messages.meta.guard`에 기록.
+- 검사 전에 지원자 표시 이름을 가린다(이름 안의 글자가 패턴에 걸려 이름을 부른 발언이 막히지 않게, 예: 표시 이름 "합성-대본"의 "대본"). 동료 이름은 카탈로그 값이고 패턴이 직접 쓰므로 가리지 않는다.
+- 처리: 걸리면 같은 입력으로 재생성 1회 → 그래도 걸리면 자리별 안전 문구(`prompts/persona/safe_<type>.md`, 성향에 맞는 짧은 중립 문장, 한 줄에 하나)로 교체. 안전 문구와 입장 폴백 문구(`stance_fallback.yaml`의 `text`·`alternatives`)는 그 자리 최근 발언 3개와 겹치지 않는 첫 후보를 쓴다(모두 겹치면 가장 오래전에 쓴 후보). 400자 초과는 자른다. 결과는 `messages.meta.guard`에 기록.
 - 입력 쪽: 지원자 메시지 마스킹은 api가 저장 전에 한다.
 
 ## 프롬프트와 카탈로그 (`scenarios/missions/debate/prompts/`)

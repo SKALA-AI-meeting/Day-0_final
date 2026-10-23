@@ -8,11 +8,14 @@ Guardrails).
   않는다(정해진 평가 안내문 보존). 부분 포함·변형 문장은 예외가 아니다.
 - 그룹의 `phases`가 있으면 그 단계 발언에만 적용한다(예: credit은 기획안 단계만). 호출한 노드가
   단계를 넘기고, 단계를 모르는 호출(어시스턴트)은 단계 범위 그룹을 건너뛴다.
+- `names`(지원자 표시 이름 등 사람이 정한 이름)는 가린 뒤 검사한다. 이름 안의 글자("합성-대본"의
+  '대본')가 금지 패턴에 걸려 이름을 부른 발언이 막히지 않게 하기 위함이다. 자르기는 원문 기준이다.
 - 처리 정책(재생성 1회 → 페르소나는 자리별 안전 문구, 어시스턴트는 그룹 notice)은 호출한 노드가
   정하고, 이 모듈은 판정·자르기·교체 문장만 준다. max_chars 초과는 자른다.
 """
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
@@ -20,6 +23,7 @@ from typing import Any
 import yaml
 
 GUARD_FILE = "guard_patterns.yaml"
+MASK = "○"
 
 
 @dataclass(frozen=True)
@@ -66,17 +70,21 @@ class Guard:
     def from_yaml(cls, text: str) -> "Guard":
         return cls(yaml.safe_load(text) or {})
 
-    def groups_hit(self, text: str, phase: str | None = None) -> list[str]:
-        """phase는 발언 단계. 단계 범위가 있는 그룹은 단계가 맞을 때만 본다(None이면 건너뜀)."""
+    def groups_hit(
+        self, text: str, phase: str | None = None, names: Iterable[str] = ()
+    ) -> list[str]:
+        """phase는 발언 단계. 단계 범위가 있는 그룹은 단계가 맞을 때만 본다(None이면 건너뜀).
+        names는 검사 전에 가린다."""
         body = text.strip()
         if body in self.allow_exact:
             return []
+        body = mask_names(body, names)
         return [g.id for g in self.groups if g.applies(phase) and g.hits(body)]
 
-    def check(self, text: str, phase: str | None = None) -> GuardResult:
+    def check(self, text: str, phase: str | None = None, names: Iterable[str] = ()) -> GuardResult:
         """판정 + 자르기. 문장은 바꾸지 않는다(교체는 노드가 정한다)."""
         body = text.strip()
-        hits = tuple(self.groups_hit(body, phase))
+        hits = tuple(self.groups_hit(body, phase, names))
         truncated = len(body) > self.max_chars
         if truncated:
             body = body[: self.max_chars].rstrip()
@@ -84,6 +92,13 @@ class Guard:
 
     def notice_key(self, group_id: str) -> str | None:
         return next((g.notice for g in self.groups if g.id == group_id), None)
+
+
+def mask_names(text: str, names: Iterable[str]) -> str:
+    """이름을 같은 길이의 가림 글자로 바꾼다(긴 이름부터, 이름 뒤 "님" 등 문장 구조는 그대로)."""
+    for name in sorted({n.strip() for n in names if n and n.strip()}, key=len, reverse=True):
+        text = text.replace(name, MASK * len(name))
+    return text
 
 
 @lru_cache(maxsize=16)

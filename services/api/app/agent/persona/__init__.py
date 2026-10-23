@@ -341,10 +341,30 @@ def sentence_supports_plan(judged: dict[str, Any] | None, plan: StancePlan) -> b
     return judged.get("intent") in ("propose", "agree") and bool(target & plan.targets)
 
 
+def pick_fixed(lines: list[str], mine: list[str]) -> str:
+    """고정 문구 후보 중 내 최근 발언과 겹치지 않는 첫 문구. 모두 겹치면 가장 오래전에 쓴 문구
+    (같은 고정 문구를 연달아 게시하지 않게)."""
+    fresh = [line for line in lines if not repeats(line, mine)]
+    if fresh:
+        return fresh[0]
+
+    def last_used(line: str) -> int:
+        return max((i for i, m in enumerate(mine) if repeats(line, [m])), default=-1)
+
+    return min(lines, key=last_used)
+
+
 def stance_fallback(
-    catalog: Catalog, seat: str, plan: StancePlan, pending_move: bool = False
+    catalog: Catalog,
+    seat: str,
+    plan: StancePlan,
+    pending_move: bool = False,
+    mine: list[str] | None = None,
 ) -> Draft:
-    """계획과 맞는 자리별 고정 문구(stance_fallback.yaml)와 그 입장. 이동 직후면 moved 문구."""
+    """계획과 맞는 자리별 고정 문구(stance_fallback.yaml)와 그 입장. 이동 직후면 moved 문구.
+
+    항목의 `text`와 `alternatives` 중 내 최근 발언(mine)과 겹치지 않는 문구를 쓴다.
+    """
     table = catalog.stance_fallback.get(catalog.type_of(seat)) or {}
     entry = (
         (pending_move and table.get("moved"))
@@ -352,7 +372,12 @@ def stance_fallback(
         or table.get(plan.phase)
         or {}
     )
-    text = render(str(entry.get("text") or catalog.safe_phrase(seat)), option=plan.label or "")
+    if entry.get("text"):
+        lines = [str(t) for t in (entry["text"], *(entry.get("alternatives") or [])) if t]
+        lines = [render(t, option=plan.label or "") for t in lines]
+    else:
+        lines = catalog.safe_phrases(seat)
+    text = pick_fixed(lines, mine or [])
     stance = None
     if entry.get("stance") == "support" and plan.declared:
         stance = {"option_id": plan.option_id or plan.key, "stance": "support"}
@@ -362,8 +387,9 @@ def stance_fallback(
     return Draft(content=text, proposes=proposes, stance=stance, fixed=True)
 
 
-def safe_draft(catalog: Catalog, seat: str) -> Draft:
-    return Draft(content=catalog.safe_phrase(seat), fixed=True)
+def safe_draft(catalog: Catalog, seat: str, mine: list[str] | None = None) -> Draft:
+    """자리별 안전 문구(safe_<type>.md 한 줄). 내 최근 발언과 겹치지 않는 줄을 고른다."""
+    return Draft(content=pick_fixed(catalog.safe_phrases(seat), mine or []), fixed=True)
 
 
 def to_json(draft: Draft) -> str:

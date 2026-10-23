@@ -52,6 +52,7 @@ class FakeServer:
         self.messages: list[dict[str, Any]] = []
         self.observations: dict[str, dict[str, Any]] = {}
         self.cost_left = 2.0
+        self.candidate_name = "김지원"
         self.remaining = 600
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.fail_tools: set[str] = set()
@@ -187,9 +188,17 @@ class FakeServer:
             "invite_delivered": self.phase in self.invites,
             "last_room_message_t_min": 1.0,
             "confirmed": [s for s in self.slots.values() if s["status"] == "confirmed"],
-            "card_progress": list(self.cards.values()),
+            "card_progress": [
+                {
+                    **c,
+                    "trigger_message_id": (self.observations.get(c["card_id"]) or {}).get(
+                        "trigger_message_id"
+                    ),
+                }
+                for c in self.cards.values()
+            ],
             "cost_left": self.cost_left,
-            "seats": [{"seat": "candidate", "display_name": "김지원"}]
+            "seats": [{"seat": "candidate", "display_name": self.candidate_name}]
             + [
                 {"seat": s, "display_name": self.catalog.name_of(s), "avatar_url": f"/a/{s}.png"}
                 for s in SEATS
