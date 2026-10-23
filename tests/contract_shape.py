@@ -538,6 +538,30 @@ FACTS = {
     "assistant_calls": [{"call_id": str, "t_min": NUM, "cited_material_ids": [str]}],
     "material_views": [{"material_id": str, "t_min": NUM}],
     "connection_gaps": [GAP],
+    # 평가자 사실(결정 A1, rubric.md 6장)
+    "decisions": [
+        {
+            "phase": SLOT_PHASE,
+            "option_id": Opt(str),
+            "value": Opt(str),
+            "t_min": NUM,
+            "path": Enum("candidate_confirm", "ai_consensus_fill", "timeout"),
+            "filled_by": PARTICIPANT,
+            "timeout_rule": Opt(str),
+            "support": SUPPORT,
+            "candidate_backed": bool,
+            "candidate_option_adopted": bool,
+        }
+    ],
+    "message_facts": [
+        {
+            "message_id": str,
+            "addressed_to": [SEAT],
+            "reply_to": Opt(str),
+            "decided_before": [SLOT_PHASE],
+            "paste_suspect": Opt({"call_id": str, "overlap": NUM}),
+        }
+    ],
 }
 REPORT = {
     "session_id": str,
@@ -729,6 +753,7 @@ RUBRIC = {
                     "name": str,
                     "definition": str,
                     "core_cards": [CARD],
+                    "decision_timing": Opt(Enum("before", "after")),
                     "levels": [{"level": LEVEL, "anchor": str, "reviewer_hint": str}],
                 }
             ],

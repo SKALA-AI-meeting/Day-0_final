@@ -3,6 +3,9 @@
 #   evidence: 그 수준을 정한 지원자 메시지 id (수준 4·5는 서로 다른 단위 2개 이상). 사람 라벨은 사용자 검토 전 초안이다.
 # 용도: 평가 에이전트 실행기(live)가 세션마다 그 요소 호출 1회로 차원 수준을 내면 완전 일치·±1 일치율을 센다.
 #       mock(기본)에서는 형태 검사만 한다(tests/eval/test_eval.py). 세션 대화 앞 두 메시지는 시스템 안내다.
+# facts_input: SessionRecord 밖에서 api가 DB로 읽는 평가자 사실 입력(어시스턴트 답 원문 assistant_calls,
+#   카드가 잠근 기준안 lead_option_ids). 실행기는 운영과 같은 api 함수(facts.evaluator_facts)로
+#   record.facts에 decisions·message_facts를 채운다(tests/eval/evaluate.py bars_record).
 version: 1
 common:
   seats:
@@ -102,6 +105,7 @@ sessions:
 
   - id: bars_flexibility
     element: flexibility
+    facts_input: { lead_option_ids: [opt-pb-p1] }
     record:
       session: { id: bars-4, elements: [persuasion, listening, inclusion, flexibility, honesty], session_minutes: 60, started_at: "2026-10-21T01:00:00Z", completed_at: "2026-10-21T01:57:00Z", connection_gaps: [] }
       messages:
@@ -220,6 +224,7 @@ sessions:
   - id: bars_decision_timing
     scene: decision_timing      # 결정 전 주장(정상 행동)을 결정 후 재론으로 읽지 않는다. AI 합의 채움 직후 해결책 단계가 열린다
     element: flexibility
+    facts_input: { lead_option_ids: [opt-pb-p1] }
     record:
       session: { id: bars-8, elements: [persuasion, listening, inclusion, flexibility, honesty], session_minutes: 15, started_at: "2026-10-21T01:00:00Z", completed_at: "2026-10-21T01:15:00Z", connection_gaps: [] }
       messages:
@@ -283,6 +288,9 @@ sessions:
   - id: bars_pasted_assistant
     scene: pasted_assistant     # 붙여 넣은 어시스턴트 답은 지원자 자신의 논증으로 세지 않는다(결정 A1 붙여넣기 의심)
     element: persuasion
+    facts_input:
+      assistant_calls:
+        - { call_id: ac-1, t_min: 8.4, response: "도심 침수 사례 자료에 따르면 피해의 70%가 비가 시작되고 1시간 안에 발생했으며, 도심 면적의 62%가 아스팔트·콘크리트로 덮여 빗물이 스미지 못합니다. 빗물 재이용 사례에서는 투수 포장 이후 도로 물고임 신고가 35% 줄었습니다. 따라서 생활 인프라 확충이 비용 대비 효과적인 대안이 될 수 있습니다.\n출처: 도심 침수 사례, 빗물 재이용 사례" }
     record:
       session: { id: bars-10, elements: [persuasion, listening, inclusion, flexibility, honesty], session_minutes: 15, started_at: "2026-10-21T01:00:00Z", completed_at: "2026-10-21T01:15:00Z", connection_gaps: [] }
       messages:
@@ -313,6 +321,7 @@ sessions:
   - id: bars_timeout_adopted
     scene: timeout_adopted      # 결정 A5: 시간 초과로 지원자 안이 정해져도 채택이 아니므로 수용 차원을 판단한다
     element: flexibility
+    facts_input: { lead_option_ids: [opt-pb-p1] }
     record:
       session: { id: bars-11, elements: [persuasion, listening, inclusion, flexibility, honesty], session_minutes: 15, started_at: "2026-10-21T01:00:00Z", completed_at: "2026-10-21T01:15:00Z", connection_gaps: [] }
       messages:

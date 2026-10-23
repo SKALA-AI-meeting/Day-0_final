@@ -138,5 +138,150 @@
       "from_t_min": 51.0,
       "to_t_min": 51.6
     }
+  ],
+  "decisions": [
+    {
+      "phase": "keyword",
+      "option_id": "opt-kw-water",
+      "value": "물",
+      "t_min": 8.2,
+      "path": "candidate_confirm",
+      "filled_by": "candidate",
+      "timeout_rule": null,
+      "support": [
+        {
+          "option_id": "opt-kw-water",
+          "supporters": ["candidate", "p2"]
+        },
+        {
+          "option_id": "opt-kw-fire",
+          "supporters": ["p1"]
+        },
+        {
+          "option_id": "opt-kw-wind",
+          "supporters": ["p3"]
+        }
+      ],
+      "candidate_backed": true,
+      "candidate_option_adopted": false
+    },
+    {
+      "phase": "problem",
+      "option_id": "opt-pb-p2",
+      "value": "도심 폭우·침수 피해 증가",
+      "t_min": 25.4,
+      "path": "ai_consensus_fill",
+      "filled_by": "p3",
+      "timeout_rule": null,
+      "support": [
+        {
+          "option_id": "opt-pb-p2",
+          "supporters": ["candidate", "p1", "p3"]
+        },
+        {
+          "option_id": "opt-pb-p1",
+          "supporters": []
+        }
+      ],
+      "candidate_backed": false,
+      "candidate_option_adopted": false
+    },
+    {
+      "phase": "solution",
+      "option_id": "opt-sl-s1",
+      "value": "센서·데이터 기반 물 관리·경보",
+      "t_min": 46.0,
+      "path": "timeout",
+      "filled_by": "p3",
+      "timeout_rule": null,
+      "support": [
+        {
+          "option_id": "opt-sl-s1",
+          "supporters": ["candidate", "p1"]
+        },
+        {
+          "option_id": "opt-sl-s2",
+          "supporters": ["p3"]
+        },
+        {
+          "option_id": "opt-sl-s3",
+          "supporters": ["p2"]
+        }
+      ],
+      "candidate_backed": true,
+      "candidate_option_adopted": true
+    }
+  ],
+  "message_facts": [
+    {
+      "message_id": "m-06",
+      "addressed_to": [],
+      "reply_to": "m-05",
+      "decided_before": [],
+      "paste_suspect": null
+    },
+    {
+      "message_id": "m-08",
+      "addressed_to": ["p3"],
+      "reply_to": "m-05",
+      "decided_before": [],
+      "paste_suspect": null
+    },
+    {
+      "message_id": "m-12",
+      "addressed_to": [],
+      "reply_to": "m-11",
+      "decided_before": ["keyword"],
+      "paste_suspect": null
+    },
+    {
+      "message_id": "m-15",
+      "addressed_to": ["p1"],
+      "reply_to": "m-13",
+      "decided_before": ["keyword"],
+      "paste_suspect": null
+    },
+    {
+      "message_id": "m-17",
+      "addressed_to": ["p1"],
+      "reply_to": "m-16",
+      "decided_before": ["keyword"],
+      "paste_suspect": null
+    },
+    {
+      "message_id": "m-18",
+      "addressed_to": [],
+      "reply_to": "m-16",
+      "decided_before": ["keyword"],
+      "paste_suspect": null
+    },
+    {
+      "message_id": "m-22",
+      "addressed_to": [],
+      "reply_to": "m-21",
+      "decided_before": ["keyword", "problem"],
+      "paste_suspect": null
+    },
+    {
+      "message_id": "m-24",
+      "addressed_to": ["p2"],
+      "reply_to": "m-21",
+      "decided_before": ["keyword", "problem"],
+      "paste_suspect": null
+    },
+    {
+      "message_id": "m-27",
+      "addressed_to": ["p2"],
+      "reply_to": "m-25",
+      "decided_before": ["keyword", "problem"],
+      "paste_suspect": null
+    },
+    {
+      "message_id": "m-31",
+      "addressed_to": [],
+      "reply_to": "m-29",
+      "decided_before": ["keyword", "problem", "solution"],
+      "paste_suspect": null
+    }
   ]
 }

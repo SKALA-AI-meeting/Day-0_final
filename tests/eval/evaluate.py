@@ -34,6 +34,26 @@ def load_bars() -> dict[str, Any]:
     return _load("bars_sessions.yaml")
 
 
+def bars_record(session: dict[str, Any], common: dict[str, Any]) -> dict[str, Any]:
+    """평가 입력 SessionRecord: 픽스처 기록 + 공용 자리 + 운영과 같은 함수로 계산한 평가자 사실.
+
+    api `facts.evaluator_facts`(결정 기록·메시지별 사실)를 그대로 부른다. DB에서 읽는 입력
+    (어시스턴트 답 원문·카드 기준안)은 픽스처 `facts_input`이 준다.
+    """
+    from app.services.facts import evaluator_facts
+
+    record = {**session["record"], "seats": common["seats"]}
+    extra = session.get("facts_input") or {}
+    computed = evaluator_facts(
+        record["messages"],
+        record["slots"],
+        record["contributions"]["options"],
+        extra.get("assistant_calls", []),
+        extra.get("lead_option_ids", []),
+    )
+    return {**record, "facts": {**record["facts"], **computed}}
+
+
 def load_leak() -> dict[str, Any]:
     return _load("leak_cases.yaml")
 

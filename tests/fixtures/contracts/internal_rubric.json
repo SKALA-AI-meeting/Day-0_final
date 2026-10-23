@@ -10,6 +10,7 @@
           "name": "근거 제시",
           "definition": "자기 안에 이유·사례·자료를 붙이고 그 이유가 주장과 연결되는가",
           "core_cards": ["persuasion_keyword", "persuasion_solution"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -43,6 +44,7 @@
           "name": "반론 대응",
           "definition": "자기 안에 온 반론·약점 질문에 그 논점으로 답하는가",
           "core_cards": ["persuasion_keyword", "persuasion_solution"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -76,6 +78,7 @@
           "name": "경쟁 안 비교",
           "definition": "경쟁하는 안들의 장단점을 기준을 세워 비교하는가",
           "core_cards": ["persuasion_keyword", "persuasion_solution"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -109,6 +112,7 @@
           "name": "논의 수렴",
           "definition": "논점을 정리하고 결론 쪽으로 논의를 모으는가",
           "core_cards": ["persuasion_keyword", "persuasion_solution"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -148,6 +152,7 @@
           "name": "응답성",
           "definition": "상대 발언에 내용으로 직접 답하는가",
           "core_cards": ["listening_pressure"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -181,6 +186,7 @@
           "name": "이해 확인",
           "definition": "상대 주장을 요약하거나 질문해 이해를 확인하는가",
           "core_cards": ["listening_pressure"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -214,6 +220,7 @@
           "name": "타당성 인정",
           "definition": "반대 의견의 타당한 점을 인정하는가",
           "core_cards": ["listening_pressure"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -247,6 +254,7 @@
           "name": "존중하는 반대",
           "definition": "압박 속에서도 사람이 아닌 안에 초점을 두고 반대하는가",
           "core_cards": ["listening_pressure"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -286,6 +294,7 @@
           "name": "머뭇거림 알아차리고 초대하기",
           "definition": "머뭇거리는 동료를 알아차리고 말할 자리를 만드는가",
           "core_cards": ["inclusion_silence"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -319,6 +328,7 @@
           "name": "들은 의견 이어받기",
           "definition": "초대해 들은 의견을 되짚고 논의에 올리는가",
           "core_cards": ["inclusion_silence"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -352,6 +362,7 @@
           "name": "결정 전 모두의 목소리 확인",
           "definition": "확정 전에 말하지 않은 사람의 의견을 확인하는가",
           "core_cards": ["inclusion_silence"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -385,6 +396,7 @@
           "name": "말하기 편한 분위기",
           "definition": "부담을 낮춰 다시 말하기 쉬운 분위기를 만드는가",
           "core_cards": ["inclusion_silence"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -424,6 +436,7 @@
           "name": "다른 안 재검토",
           "definition": "다른 안의 근거를 듣고 자기 안을 다시 검토하는가",
           "core_cards": ["flexibility_majority"],
+          "decision_timing": "before",
           "levels": [
             {
               "level": 1,
@@ -457,6 +470,7 @@
           "name": "결정 절차 존중",
           "definition": "결정 방법과 남은 반대를 확인하고 정리하는가",
           "core_cards": ["flexibility_majority"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -490,6 +504,7 @@
           "name": "결과 승복",
           "definition": "자기 안과 다른 결과를 받아들이는가",
           "core_cards": ["flexibility_majority"],
+          "decision_timing": "after",
           "levels": [
             {
               "level": 1,
@@ -523,6 +538,7 @@
           "name": "다음 단계 기여",
           "definition": "결정된 결과 위에서 다음 단계 논의에 기여하는가",
           "core_cards": ["flexibility_majority"],
+          "decision_timing": "after",
           "levels": [
             {
               "level": 1,
@@ -562,6 +578,7 @@
           "name": "기여 기록의 정확성",
           "definition": "기획안에 채택된 아이디어의 제안자를 사실대로 적는가",
           "core_cards": ["honesty_credit"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -595,6 +612,7 @@
           "name": "토론 중 출처 존중",
           "definition": "토론 중 동료 아이디어의 출처를 밝히는가",
           "core_cards": ["honesty_credit"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,
@@ -628,6 +646,7 @@
           "name": "결정 과정의 사실 표현",
           "definition": "합의·이견·시간 초과 같은 결정 과정을 사실대로 표현하는가",
           "core_cards": ["honesty_credit"],
+          "decision_timing": null,
           "levels": [
             {
               "level": 1,

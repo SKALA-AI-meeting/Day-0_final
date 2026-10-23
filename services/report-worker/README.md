@@ -33,7 +33,8 @@ env 이름은 `report_worker/config.py`·`llm.py`·`heartbeat.py`와 `infra/.env
 |---|---|
 | `assessment.py` | assessment-mcp 클라이언트(`X-Assessment-Token`). `get_session_record`·`get_rubric`·`get_contributions`·`get_transcript_span`·`save_evaluation`만 |
 | `api.py` | 내부 REST(X-Internal-Token): 세션 정보, 어시스턴트 호출(요청·응답 원문 포함), `GET /evaluations`, draft·final·report_failed |
-| `evaluate.py` | 요소별 평가 호출(기본 5회, 다른 요소 결과 없음. 조건부로 요소 재요청·요약 재작성이 더해짐), 워커 검증, 재요청 뒤에도 실패면 `evaluate_failed`, 확신도 clamp, 요소 수준(평균 .5 올림), 프롬프트 버전 맵 |
+| `evaluate.py` | 요소별 평가 호출(판단 5회 + 최종 행 요약 조립 5회, 다른 요소 결과 없음. 조건부로 요소 재요청), 워커 검증(형식·근거·금지어·사실 모순), 재요청 뒤에도 실패면 `evaluate_failed`, 확신도 clamp, 요소 수준(평균 .5 올림), 프롬프트 버전 맵 |
+| `scenes.py` | 차원별 장면 구간(핵심 카드 창, 결정 전후 자르기)과 구간 안 지원자 메시지, 평가 프롬프트 `[사실]` 블록 |
 | `report.py` | aggregate(사실 지표 그대로, 칸·카드·관찰 창, 기여 대조 `contribution_check`)와 draft 조립(근거 원문·앞 5·뒤 3 맥락·record_ref, 카드 장면은 `report_template` 그대로, 총점 없음, LLM 없음) |
 | `graph.py` | LangGraph 그래프, thread·run_id 규칙(`uuid5(session_id, "evaluate:"+eval_round)`) |
 | `consumer.py` | 메시지 처리 규칙(같은 eval_round만 체크포인트 재개, 재시도 백오프 5·15·45초, attempt≥3 → DLQ, dlq는 api 복구까지 60초 간격)과 aio-pika 연결 |
@@ -66,7 +67,7 @@ make test                                               # 전체
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 55개(live 2개 포함, `make test`는 live를 뺀다).
+총 73개(live 2개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/test_evaluate.py</code> (31)</summary>
 
@@ -76,17 +77,17 @@ make test                                               # 전체
 - `test_retry_prompt_names_dimension_and_reject_reason`
 - `test_failed_row_rationale_has_guidance_and_reason_code`
 - `test_retry_result_replaces_first_output`
-- `test_valid_output_calls_once`
+- `test_valid_output_calls_once_then_assembles_summary`
 - `test_confidence_over_cap_is_clamped_not_rejected`
 - `test_core_card_not_fired_caps_low_and_one_persuasion_card_caps_medium`
 - `test_credit_record_counts_contribution_reference`
-- `test_forbidden_summary_retries_then_fixed_sentence`
+- `test_main_output_summary_is_ignored_and_forbidden_summary_falls_back`
 - `test_unparseable_twice_fails_every_dimension`
 - `test_core_card_not_fired_without_support_mark_becomes_event_not_fired`
 - `test_partially_delivered_core_card_counts_as_not_fired`
 - `test_partially_delivered_core_card_with_support_mark_caps_low`
-- `test_summary_rewritten_once_only_for_changed_element`
-- `test_summary_rewrite_failure_uses_fixed_sentence` ×3
+- `test_summary_is_always_assembled_from_final_rows_only`
+- `test_summary_assembly_failure_uses_rows_sentence` ×3
 - `test_element_level_rounds_half_up_and_null_when_no_record`
 - `test_numeric_msg_refs_are_fixed_when_session_has_m_prefixed_id`
 - `test_fixed_numeric_ref_to_ai_message_does_not_count_as_evidence`
@@ -96,12 +97,33 @@ make test                                               # 전체
 
 </details>
 
+<details><summary><code>tests/test_facts_checks.py</code> (18)</summary>
+
+- `test_scene_uses_delivered_core_card_windows_and_decision_cut`
+- `test_scene_without_core_cards_is_whole_session_and_undelivered_card_is_none`
+- `test_after_decision_scene_is_empty_when_slot_not_decided`
+- `test_facts_block_lists_dimension_scenes_and_recorded_decisions`
+- `test_prompt_has_facts_block_and_message_facts_once`
+- `test_no_activity_rejected_when_candidate_spoke_in_scene`
+- `test_event_not_fired_rejected_when_core_card_fired`
+- `test_peer_message_as_evidence_is_rejected`
+- `test_out_of_scene_evidence_needs_support_mark`
+- `test_after_decision_dimension_rejects_evidence_before_decision`
+- `test_before_decision_dimension_treats_later_messages_as_outside`
+- `test_fact_contradiction_retries_with_fact_then_evaluate_failed` ×3
+- `test_fact_retry_fixed_output_is_used`
+- `test_tidy_fixes_only_single_meaning_shapes`
+- `test_output_shapes_with_one_meaning_are_read`
+- `test_retry_names_dimension_facts_and_keeps_rows_valid_in_first_output`
+
+</details>
+
 <details><summary><code>tests/test_graph.py</code> (23)</summary>
 
 - `test_generate_evaluates_each_element_once_and_saves_draft`
 - `test_draft_shape_matches_report_contract`
 - `test_redelivery_reuses_checkpoint_without_llm`
-- `test_rerun_reuses_saved_rewritten_summary_without_llm`
+- `test_rerun_reuses_saved_assembled_summary_without_llm`
 - `test_crash_after_save_recovers_elements_without_llm`
 - `test_new_eval_round_starts_new_thread_from_collect`
 - `test_approve_resumes_and_final_equals_draft`
@@ -111,7 +133,7 @@ make test                                               # 전체
 - `test_three_failures_go_to_dlq_and_dlq_marks_failed`
 - `test_c7_honesty_credit_contrast`
 - `test_llm_fake_runs_graph_to_draft_without_key`
-- `test_llm_fake_not_confused_by_rewrite_header_in_candidate_message`
+- `test_llm_fake_not_confused_by_summary_header_in_candidate_message`
 - `test_llm_fake_same_input_same_result`
 - `test_llm_fault_evaluator_timeout_requeues_then_succeeds`
 - `test_position_keeps_evaluator_prompts_after_catalog_change`

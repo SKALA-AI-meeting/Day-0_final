@@ -73,6 +73,7 @@ def rubric_view(scenario: dict) -> dict[str, Any]:
                         "name": d["name"],
                         "definition": d["definition"],
                         "core_cards": d.get("core_cards", []),
+                        "decision_timing": d.get("decision_timing"),
                         "levels": [
                             {
                                 "level": lv["level"],

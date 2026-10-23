@@ -184,7 +184,7 @@ agent(LLM, 도구 바인딩) ⇄ tools(search_materials·get_material) … 최�
 
 D18·D19 개정과 R5-14. 세션 종료 후 report-worker의 `evaluate` 노드에서 돈다. api 안의 모듈이 아니지만 프롬프트·LLM 규칙을 이 문서가 정한다. 판단 규칙·앵커·검증 규칙의 정본은 [product/rubric.md](../product/rubric.md)(2장 공통 판단 규칙, 3장 척도, 4장 경계표, 7장 출력 형식), 저장 형식은 [contracts/internal.md](../contracts/internal.md) `save_evaluation`이다. 원칙: AI 평가 에이전트가 공개된 척도로 근거를 들어 수준을 판단하고, 담당자가 그것을 참고해 최종 평가한다. 합격·불합격·순위·총점은 만들지 않는다.
 
-**호출 단위**: 요소마다 1회(5요소 고정이므로 기본 5회). 검증에 걸린 요소의 재요청 1회와, 검증으로 차원 행이 바뀐 요소의 summary 재작성 1회가 조건부로 더해진다(`evaluate.py`). 한 호출이 그 요소의 차원 3~4개를 모두 낸다. 다른 요소의 판단 결과·요약은 입력에 넣지 않는다(후광 방지). 모델 `MODEL_EVALUATOR`, temperature 0~0.2 **[초안]**, JSON 스키마 구조화 출력, 도구 바인딩 없음(입력은 워커가 미리 모은다).
+**호출 단위**: 요소마다 판단 1회와 요약 조립 1회(5요소 고정이므로 기본 10회). 검증에 걸린 요소의 재요청 1회가 조건부로 더해진다(`evaluate.py`). 요약 조립은 검증이 끝난 최종 차원 행만 입력으로 받는다(결정 A2). 한 호출이 그 요소의 차원 3~4개를 모두 낸다. 다른 요소의 판단 결과·요약은 입력에 넣지 않는다(후광 방지). 모델 `MODEL_EVALUATOR`, temperature 0~0.2 **[초안]**, JSON 스키마 구조화 출력, 도구 바인딩 없음(입력은 워커가 미리 모은다).
 
 **프롬프트 구성**(순서 고정):
 
@@ -194,29 +194,28 @@ D18·D19 개정과 R5-14. 세션 종료 후 report-worker의 `evaluate` 노드�
 | 판단 순서 | [product/rubric.md](../product/rubric.md) 2.1 순서(전체 읽기 → 장면 위치 → 기록 없음 검사 → 앵커 대조 → 보조 장면 ±1 → 근거 수 → 확신도) 그대로 | `prompts/evaluator/common.md` |
 | 공통 규칙 | 근거 단위·최소 개수(1~3은 1개, 4·5는 서로 다른 2개), 기록 없음 사유 5종과 우선순위, 확신도 기준·상한, 편향 방지 표, 경계표 중 이 요소 관련 행(확정 행위는 `flex_decision_respect`, `flex_acceptance`는 결정 후 행동만 — 결정 후 발언이 없으면 `no_activity`, R5-17) | `get_rubric` |
 | 척도 주입 | 이 요소의 차원마다 id·정의·핵심 장면(카드 창)·**수준 1~5 앵커와 예시 발언**·요소별 특수 지침(수용 차원은 "근거 있는 이의 제기도 높은 수준", 지원자 안이 채택되면 수용 차원은 `not_applicable`, R1) | `get_rubric`(세션에 복사된 척도, `rubric_version`) |
-| 세션 입력 | **대화 전체**(메시지 id·자리·오피스 시각·단계·origin·의도), 칸 기록(지지 현황 스냅샷), 기획안 제출본, 카드 발생 기록과 창 시각, 사실 지표, Contributions, 자리 → 유형 대응. 카드 창으로 자르지 않는다 | `get_session_record` |
+| 평가 사실 `[사실]` | 칸별 결정 기록(`facts.decisions`), 이 요소 차원별 장면 구간(핵심 카드 창, 결정 전후 자르기)과 구간 안 지원자 메시지. 대화 인상과 다르면 사실을 따른다(결정 A1) | api `facts.evaluator_facts`, 워커 `scenes.py` |
+| 세션 입력 | **대화 전체**(메시지 id·자리·오피스 시각·단계·origin·의도), 지원자 메시지별 사실(`reply_to`·`decided_before`·`paste_suspect`), 칸 기록(지지 현황 스냅샷), 기획안 제출본, 카드 발생 기록과 창 시각, 사실 지표, Contributions, 자리 → 유형 대응. 카드 창으로 자르지 않는다 | `get_session_record` |
 | 출력 지시 | 아래 스키마, 차원마다 정확히 한 행, 근거 참조는 `msg:<id>`·`slot:<phase>`·`proposal:<field>`·`contribution:<option_id>` 문자열만 | `prompts/evaluator/common.md` |
 
 **출력 JSON 스키마**([product/rubric.md](../product/rubric.md) 7.1·7.2, 저장 형식은 [contracts/README.md](../contracts/README.md)):
 
 ```json
-{"element": "listening",
- "summary": "1~2줄 서술",
- "dimensions": [
+{"dimensions": [
    {"dimension_id": "listen_engage", "level": 4, "no_record_reason": null,
     "evidence_refs": ["msg:<id>", "msg:<id>"], "rationale": "1~3문장", "confidence": "high"}
  ]}
 ```
 
 - `level`은 1~5 정수 또는 null. null이면 `no_record_reason`(`no_activity`·`not_applicable`·`event_not_fired`·`auto_submitted_blank`; `evaluate_failed`는 워커만 쓴다)과 `confidence: null`.
-- 요소 `level`은 모델이 내지 않는다. 워커가 차원 평균 반올림(.5 올림)으로 계산한다. 모델은 `summary`만 쓴다.
-- 검증 경계(R5-14, 정본 [product/rubric.md](../product/rubric.md) 7.3): 형식 오류(스키마 위반·차원 누락·중복·금지어)나 근거 부재(수준이 있는데 지원자 근거 단위 0개)면 **그 요소 호출 전체를 1회 재요청**한다(차원별 실패 사유를 붙여서). 그래도 남은 실패 차원은 워커가 `evaluate_failed`로 둔다. 수준 4·5에 지원자 근거 단위가 1개뿐이면 거부하지 않고 수준 3·확신도 최대 medium으로 깎고, 확신도 상한 위반도 워커가 상한으로 깎는다(clamp). LLM 전송 오류·타임아웃은 저장하지 않고 큐 재시도로 넘긴다.
+- 요소 `level`은 모델이 내지 않는다. 워커가 차원 평균 반올림(.5 올림)으로 계산한다. 판단 호출은 `summary`를 내지 않고, 요약 조립 호출이 `{"summary": "..."}`만 낸다.
+- 검증 경계(R5-14, 정본 [product/rubric.md](../product/rubric.md) 7.3): 형식 오류(스키마 위반·차원 누락·중복·금지어)나 근거 부재(수준이 있는데 지원자 근거 단위 0개), 사실 모순(장면 구간에 지원자 메시지가 있는데 `no_activity`, 장면이 있는데 `event_not_fired`, AI 메시지 근거, 표시 없는 구간 밖 근거, 결정 후 차원의 결정 전 근거)이면 **그 요소 호출 전체를 1회 재요청**한다(차원별 실패 사유와 어긴 사실을 붙여서). 재요청에서 새로 깨진 차원은 첫 출력의 통과 행을 쓰고, 그래도 남은 실패 차원은 워커가 `evaluate_failed`로 둔다. 수준 4·5에 지원자 근거 단위가 1개뿐이면 거부하지 않고 수준 3·확신도 최대 medium으로 깎고, 확신도 상한 위반도 워커가 상한으로 깎는다(clamp). LLM 전송 오류·타임아웃은 저장하지 않고 큐 재시도로 넘긴다.
 
 **버전**: 평가 프롬프트 파일(`prompts/evaluator/common.md`와 `prompts/evaluator/<element>.md` 5개)마다 개별 해시를 `prompt_versions` 맵(형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave)으로, 세션 척도 버전을 `rubric_version`으로, 실제 모델 id를 `model`로 `save_evaluation`에 함께 저장한다(api가 `evaluation_runs`에 보관). 단일 `prompt_version` 필드는 쓰지 않는다.
 
 **평가 프롬프트 고정**: 채용 건 생성 때 api `scenario.assemble`이 카탈로그 `prompts/` 전체(픽스처 제외)를 프롬프트 키로 `positions.scenario.prompts`에 복사한다(따로 둔 열 없음). 워커는 내부 `GET /internal/sessions/{id}`의 `position.scenario.prompts`에서 `"evaluator/*.md"`(common과 5요소)와 `"guard_patterns.yaml"`의 `evaluator_forbidden`을 읽고, `prompt_versions` 해시(키 `{common, persuasion, listening, inclusion, flexibility, honesty}`)도 이 복사본 내용으로 계산한다. draft의 금지어 검사도 같은 복사본을 쓴다. 복사본에 평가 파일이나 `evaluator_forbidden`이 하나라도 없으면 현재 파일로 채우지 않고 `PinnedCopyMissing`(채용 건 id 포함)으로 실패한다. 재시도해도 같으므로 백오프·재발행 없이 바로 `report.dlq`로 보내 리포트 실패(`failed_stage=report`)가 된다.
 
-**리포트 요약 문장과의 관계**: 요소 서술(`elements[].summary`)은 이 평가 호출이 쓰고 draft에서 다시 만들지 않는다. 리포트의 카드 장면(`cards[].scene`)은 LLM 없이 카드의 고정 문장 `report_template`을 그대로 쓴다. draft 단계에는 LLM 호출이 없다. 리포트용 요약 호출은 검증으로 차원 행이 바뀐 요소의 summary 재작성 1회뿐이다. 평가 호출이 실패해 요소의 모든 차원이 `evaluate_failed`면 요소 서술은 템플릿 고정 문장으로 대신하고, 차원 수준을 템플릿이나 다른 모델로 메우지 않는다.
+**리포트 요약 문장과의 관계**: 요소 서술(`elements[].summary`)은 이 평가 호출이 쓰고 draft에서 다시 만들지 않는다. 리포트의 카드 장면(`cards[].scene`)은 LLM 없이 카드의 고정 문장 `report_template`을 그대로 쓴다. draft 단계에는 LLM 호출이 없다. 리포트용 요약 호출은 요소마다 최종 차원 행으로 summary를 조립하는 1회뿐이다(실패하면 차원 행에서 만든 문장). 평가 호출이 실패해 요소의 모든 차원이 `evaluate_failed`면 요소 서술은 템플릿 고정 문장으로 대신하고, 차원 수준을 템플릿이나 다른 모델로 메우지 않는다.
 
 ## 역할별 모델
 

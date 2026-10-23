@@ -2,6 +2,7 @@
 # [초안] 차원 구성·정의·앵커·예시 발언은 사용자 검토 대상이다(rubric.md 머리말). 내용을 바꾸려면 rubric.md를 먼저 고친다.
 # api가 채용 건 생성 때 positions.scenario.rubric으로 복사하고 assessment-mcp get_rubric이 그 복사본을 내준다.
 # get_rubric의 cards[{card_id, element, window}]는 cards.yaml에서 만든다. no_record_reasons.priority는 겹칠 때 앞선 순서(1이 먼저).
+# decision_timing(before∣after)은 핵심 카드 단계의 칸 결정 전·후 행동만 보는 차원이다(rubric.md 3.4). 평가 워커가 장면 구간을 결정 시각에서 자른다.
 rubric_version: debate-bars-2026-10-21-draft1
 draft: true
 source: docs/product/rubric.md (정본). 이 파일의 문장은 정본 표와 글자 그대로 같아야 한다(tests/test_catalog.py가 검사).
@@ -396,6 +397,7 @@ elements:
     core_cards:
     - flexibility_majority
     core_scene: flexibility_majority 카드 시각 ~ 해결책 단계 끝
+    decision_timing: before
     levels:
     - level: 5
       anchor: 다수안의 근거를 구체적으로 짚어 인정하고, 자기 안과 비교한 뒤 통합안 또는 근거 있는 입장 조정을 스스로 내놓는다
@@ -456,6 +458,7 @@ elements:
     core_cards:
     - flexibility_majority
     core_scene: flexibility_majority 카드 시각 ~ 해결책 단계 끝
+    decision_timing: after
     levels:
     - level: 5
       anchor: 결과를 분명히 받아들이고 자기 안의 쓸 만한 요소를 결정된 안에 연결해 팀이 쓸 수 있게 넘긴다. 재론 없음
@@ -486,6 +489,7 @@ elements:
     core_cards:
     - flexibility_majority
     core_scene: flexibility_majority 카드 시각 ~ 해결책 단계 끝
+    decision_timing: after
     levels:
     - level: 5
       anchor: 결정된 문제를 전제로 해결책을 근거와 함께 내고, 다른 참여자 안과 연결하거나 논의를 정리해 결론으로 이끈다

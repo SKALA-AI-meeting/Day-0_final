@@ -1,7 +1,13 @@
 """사실 지표(rubric.md 6장). 평가 결과 없이 기록만으로 규칙 계산한다. 사실만으로 수준을 정하지
-않는다."""
+않는다.
 
+평가자 사실(`decisions`·`message_facts`, 결정 A1)은 SessionRecord 모양의 dict만 받는 순수 함수
+`evaluator_facts`가 만든다. 평가셋 실행기(tests/eval)도 같은 함수로 픽스처 사실을 채운다.
+"""
+
+import re
 import statistics
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import select
@@ -16,6 +22,7 @@ from app.models import (
     Position,
     Proposal,
     Session,
+    SessionCard,
     Slot,
     Stance,
 )
@@ -24,6 +31,139 @@ from app.services.common import t_min
 from app.services.views import gaps
 
 INTENTS = ("propose", "agree", "oppose", "question", "other")
+AI_SEATS = ("p1", "p2", "p3")
+# 붙여넣기 의심: 지원자 메시지의 글자 5-gram 중 앞선 어시스턴트 답에도 있는 비율. 짧은 메시지는
+# 우연히 겹치므로 공백을 뺀 5-gram이 20개 이상인 메시지만 본다
+PASTE_GRAM = 5
+PASTE_MIN_GRAMS = 20
+PASTE_OVERLAP = 0.6
+
+
+# ---- 평가자 사실 (결정 A1, 순수 함수) ---------------------------------------------------------
+
+
+def decision_path(slot: dict[str, Any]) -> str:
+    """칸이 정해진 경로: 시간 초과 / 지원자 확정 / AI 동료 합의 채움."""
+    if slot.get("resolution") == "timeout":
+        return "timeout"
+    return "candidate_confirm" if slot.get("filled_by") == "candidate" else "ai_consensus_fill"
+
+
+def decision_facts(
+    slots: list[dict[str, Any]],
+    options: list[dict[str, Any]],
+    lead_option_ids: Iterable[str] = (),
+) -> list[dict[str, Any]]:
+    """확정 칸마다 결정 시각·경로·채운 자리·적용 규칙·확정 시점 지지 현황·지원자 안 채택 여부.
+
+    slots는 SessionRecord `slots` 행(확정된 칸), options는 Contributions `options` 행,
+    lead_option_ids는 카드가 잠근 기준안(`session_cards.locked_option_id`).
+    `candidate_backed`: 정해진 안을 지원자가 처음 냈거나, 기준안이 아닌데 확정 시점에 지원자가
+    지지함.
+    `candidate_option_adopted`: 현재 규칙(rubric.md 3.4 R1) 그대로 — 지원자 안이고, AI 합의 채움·
+    시간 초과이거나 지원자 확정이면 지원자 포함 지지 3명 이상. `timeout_rule`은 시간 초과 칸에
+    적용 규칙이 기록돼 있을 때만 값이 있다.
+    """
+    first = {o["option_id"]: o.get("first_proposer") for o in options}
+    leads = set(lead_option_ids)
+    order = {p: i for i, p in enumerate(sc.PHASES)}
+    out = []
+    for s in sorted(slots, key=lambda s: order.get(s["phase"], 99)):
+        if s.get("t_min") is None:
+            continue
+        path = decision_path(s)
+        support = s.get("support") or []
+        chosen = s.get("option_id")
+        backers = next(
+            (g.get("supporters") or [] for g in support if g.get("option_id") == chosen), []
+        )
+        backed = first.get(chosen) == "candidate" or (
+            "candidate" in backers and chosen not in leads
+        )
+        out.append(
+            {
+                "phase": s["phase"],
+                "option_id": s.get("option_id"),
+                "value": s.get("value"),
+                "t_min": s["t_min"],
+                "path": path,
+                "filled_by": s.get("filled_by"),
+                "timeout_rule": s.get("timeout_rule"),
+                "support": support,
+                "candidate_backed": backed,
+                "candidate_option_adopted": backed
+                and (path != "candidate_confirm" or len(backers) >= 3),
+            }
+        )
+    return out
+
+
+def _grams(text: str) -> set[str]:
+    flat = re.sub(r"\s+", "", text or "").lower()
+    return {flat[i : i + PASTE_GRAM] for i in range(len(flat) - PASTE_GRAM + 1)}
+
+
+def paste_overlap(message: str, response: str) -> float:
+    """지원자 메시지 글자 5-gram 중 어시스턴트 답에도 있는 비율. 짧은 메시지는 0."""
+    grams = _grams(message)
+    if len(grams) < PASTE_MIN_GRAMS:
+        return 0.0
+    return len(grams & _grams(response)) / len(grams)
+
+
+def message_facts(
+    messages: list[dict[str, Any]],
+    slots: list[dict[str, Any]],
+    calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """지원자 메시지마다 답한 대상·이미 정해진 칸·붙여넣기 의심.
+
+    messages는 SessionRecord `messages`(시간순), calls는 `{call_id, t_min, response}`.
+    - `addressed_to`: 의도 분류가 기록한 부른 자리
+    - `reply_to`: 부른 자리가 있으면 그 자리들의 직전 메시지, 없으면 직전 AI 동료 메시지
+      (없으면 null)
+    - `decided_before`: 이 메시지보다 먼저 확정된 칸의 단계
+    - `paste_suspect`: 이 메시지 전에 받은 어시스턴트 답과 글자가 많이 겹치면 `{call_id, overlap}`
+    """
+    decided = [(s["phase"], s["t_min"]) for s in slots if s.get("t_min") is not None]
+    out = []
+    for index, m in enumerate(messages):
+        if m["sender"] != "candidate":
+            continue
+        addressed = list((m.get("intent") or {}).get("addressed_to") or [])
+        targets = set(addressed) or set(AI_SEATS)
+        reply = next((p["id"] for p in reversed(messages[:index]) if p["sender"] in targets), None)
+        best = None
+        for call in calls:
+            if call.get("t_min") is None or call["t_min"] > m["t_min"]:
+                continue
+            overlap = paste_overlap(m["content"], call.get("response") or "")
+            if overlap >= PASTE_OVERLAP and (best is None or overlap > best["overlap"]):
+                best = {"call_id": call["call_id"], "overlap": round(overlap, 2)}
+        out.append(
+            {
+                "message_id": m["id"],
+                "addressed_to": addressed,
+                "reply_to": reply,
+                "decided_before": [p for p, t in decided if t < m["t_min"]],
+                "paste_suspect": best,
+            }
+        )
+    return out
+
+
+def evaluator_facts(
+    messages: list[dict[str, Any]],
+    slots: list[dict[str, Any]],
+    options: list[dict[str, Any]],
+    calls: list[dict[str, Any]],
+    lead_option_ids: Iterable[str] = (),
+) -> dict[str, Any]:
+    """`facts`에 더하는 평가자 사실 두 가지. 입력은 SessionRecord 모양 dict."""
+    return {
+        "decisions": decision_facts(slots, options, lead_option_ids),
+        "message_facts": message_facts(messages, slots, calls),
+    }
 
 
 async def compute(db: AsyncSession, session: Session, position: Position) -> dict[str, Any]:
@@ -151,6 +291,63 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
             .order_by(MaterialView.viewed_at)
         )
     ).all()
+    responses = {
+        m.id: m.content
+        for m in (
+            await db.scalars(
+                select(Message).where(
+                    Message.id.in_([c.response_message_id for c in calls if c.response_message_id])
+                )
+            )
+        ).all()
+    }
+    record_slots = [
+        {
+            "phase": s.phase,
+            "option_id": str(s.option_id) if s.option_id else None,
+            "value": s.value,
+            "filled_by": s.filled_by,
+            "resolution": s.resolution,
+            "support": s.support or [],
+            "t_min": t_min(session, s.confirmed_at),
+        }
+        for s in confirmed
+    ]
+    evaluator = evaluator_facts(
+        [
+            {
+                "id": str(m.id),
+                "sender": m.sender,
+                "content": m.content,
+                "t_min": t_min(session, m.created_at) or 0.0,
+                "intent": {"addressed_to": list(intents[m.id].addressed_to)}
+                if m.id in intents
+                else None,
+            }
+            for m in room
+        ],
+        record_slots,
+        [{"option_id": str(o.id), "first_proposer": o.proposer} for o in options],
+        [
+            {
+                "call_id": str(c.id),
+                "t_min": t_min(session, c.created_at) or 0.0,
+                "response": responses.get(c.response_message_id, ""),
+            }
+            for c in calls
+        ],
+        [
+            str(lead)
+            for lead in (
+                await db.scalars(
+                    select(SessionCard.locked_option_id).where(
+                        SessionCard.session_id == session.id,
+                        SessionCard.locked_option_id.is_not(None),
+                    )
+                )
+            ).all()
+        ],
+    )
     silence: dict[str, int] = {p: 0 for p in sc.DEBATE_PHASES}
     for m in room:
         if m.is_invite and m.phase in silence:
@@ -210,4 +407,5 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
             for v in views
         ],
         "connection_gaps": await gaps(db, session),
+        **evaluator,
     }

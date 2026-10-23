@@ -1,20 +1,25 @@
-"""평가 에이전트: 요소별 LLM 호출, 워커 검증, 요소 단위 1회 재요청, 확신도 clamp, 요소 수준.
+"""평가 에이전트: 요소별 LLM 호출, 워커 검증, 요소 단위 1회 재요청, 확신도 clamp, 요소 수준·요약.
 
-규칙 정본은 `docs/product/rubric.md` 2.2·2.4·7.3과 `docs/contracts/internal.md` EvaluationSave·검증
-경계다.
+규칙 정본은 `docs/product/rubric.md` 2.2·2.4·7.2·7.3과 `docs/contracts/internal.md`
+EvaluationSave·검증 경계다.
 
-- 요소마다 별도 호출(5회). 입력은 그 요소의 척도·지침과 세션 기록 전체뿐이고 다른 요소의 결과는
-  넣지 않는다(후광 방지).
+- 요소마다 별도 호출(5회). 입력은 그 요소의 척도·지침, 코드가 계산한 사실(`[사실]`: 결정 기록과
+  차원별 장면 구간·구간 안 지원자 메시지, 메시지별 답한 대상·붙여넣기 의심)과 세션 기록 전체뿐이고
+  다른 요소의 결과는 넣지 않는다(후광 방지).
 - 형식 오류(파싱·스키마·차원 누락·중복·없는 차원), 근거 부재(수준이 있는데 같은 세션의 실제 행인
-  지원자 근거가 최소 개수 미만), 금지어가 하나라도 있으면 그 요소 호출 전체를 실패 사유와 함께
-  1회 다시 요청한다. 재요청 결과에서도 실패한 차원만 `evaluate_failed`로 두고 나머지는 재요청
-  결과를 쓴다. 워커는 수준·근거를 고쳐 쓰지 않는다.
+  지원자 근거가 최소 개수 미만), 금지어, 사실 모순(장면 구간에 지원자 메시지가 있는데
+  `no_activity`, 핵심 카드가 발동했는데 `event_not_fired`, 지원자가 아닌 메시지를 근거로 씀, "보조
+  장면" 표시 없이 장면 구간 밖 근거, 결정 후 차원에 결정 전 근거)이 하나라도 있으면 그 요소 호출
+  전체를 실패 사유(어긴 사실 포함)와 함께 1회 다시 요청한다. 재요청 결과에서도 실패한 차원만
+  `evaluate_failed`로 두고 나머지는 재요청 결과를 쓴다. 워커는 수준·근거를 고쳐 쓰지 않는다.
+  값의 뜻이 하나뿐인 모양 차이(기록 없음 행의 confidence·근거 null, 숫자 문자열 수준 등)는 검증
+  전에 맞춘다.
 - 확신도 상한 위반은 거부하지 않고 상한으로 깎는다(clamp).
 - 핵심 카드가 하나도 발동하지 않았는데 `rationale`에 "보조 장면" 표시 없이 수준을 낸 차원은 거부하지
   않고 `event_not_fired`로 바꾼다(rubric.md 2.4: 부재로만 낮게 보지 않는다). 담당 동료 일부만 전달한
   카드(`delivered=false`)는 발동으로 세지 않는다.
-- 검증으로 차원 행(evaluate_failed, 수준 상한 3, event_not_fired)이 모델 출력과 달라진 요소만 최종
-  차원 행으로 summary를 1회 다시 쓰게 한다. 실패하면 고정 문장. 입력에 다른 요소 결과는 없다.
+- 요소 요약(summary)은 항상 최종 차원 행만 입력으로 따로 1회 조립한다(결정 A2). 실패하면 차원 행에서
+  결정적으로 만든 문장. 입력에 세션 기록·다른 요소 결과는 없다.
 - LLM 전송 오류·타임아웃은 여기서 잡지 않는다(저장 없이 큐 재시도).
 검증·clamp·요소 수준은 순수 함수라 단위 테스트한다.
 """
@@ -32,6 +37,7 @@ from typing import Any
 import yaml
 
 from report_worker.llm import LLM, complete_tracked
+from report_worker.scenes import Decision, Scene, build_scenes, decisions, facts_block
 
 log = logging.getLogger("report_worker.evaluate")
 
@@ -52,10 +58,6 @@ FAILED_RATIONALE = (
 CAPPED_MARK = " (근거 1개로 수준 상한 3 적용)"
 SUPPORT_MARK = "보조 장면"
 NOT_FIRED_MARK = " (핵심 카드 미발생·보조 장면 표시 없음으로 이벤트 미발생 처리)"
-REWRITE_FALLBACK = (
-    "일부 차원 판단이 검증 단계에서 바뀌어 요약을 다시 쓰지 못했습니다. "
-    "차원별 판단을 확인해 주세요."
-)
 REF_PATTERN = re.compile(r"^(msg|slot|proposal|contribution):(.+)$")
 
 
@@ -139,6 +141,7 @@ class RefIndex:
     """같은 세션의 실제 행과 근거 개수 규칙(rubric.md 2.2, 3.5 예외)."""
 
     def __init__(self, record: dict[str, Any], contributions: dict[str, Any]) -> None:
+        self.messages = {m["id"]: m for m in record.get("messages", [])}
         self.message_sender = {m["id"]: m["sender"] for m in record.get("messages", [])}
         self.slot_filled_by = {s["phase"]: s.get("filled_by") for s in record.get("slots", [])}
         sections = ((record.get("proposal") or {}).get("sections")) or {}
@@ -176,30 +179,149 @@ class RefIndex:
 
 
 def fix_refs(output: Any, refs: RefIndex) -> Any:
-    """모델이 `msg:15`로 낸 숫자 id를 세션에 `m-15`가 있을 때만 `msg:m-15`로 고친다."""
-    if not isinstance(output, dict) or not isinstance(output.get("dimensions"), list):
+    """뜻이 하나뿐인 참조 모양만 고친다: 접두 없이 메시지 id만 쓴 `m-15`는 `msg:m-15`로, 숫자만
+    쓴 `msg:15`는 세션에 `m-15`가 있을 때만 `msg:m-15`로."""
+    rows = dimension_rows(output)
+    if rows is None:
         return output
-    for row in output["dimensions"]:
+    for row in rows:
         evidence = row.get("evidence_refs") if isinstance(row, dict) else None
         if not isinstance(evidence, list):
             continue
-        row["evidence_refs"] = [
-            f"msg:m-{ref[4:]}"
-            if isinstance(ref, str)
-            and re.fullmatch(r"msg:\d+", ref)
-            and f"m-{ref[4:]}" in refs.message_sender
-            and ref[4:] not in refs.message_sender
-            else ref
-            for ref in evidence
-        ]
-    return output
+        row["evidence_refs"] = [_fix_ref(ref, refs) for ref in evidence]
+    return {"dimensions": rows}
+
+
+def _fix_ref(ref: Any, refs: RefIndex) -> Any:
+    if not isinstance(ref, str):
+        return ref
+    if ref in refs.message_sender:
+        return f"msg:{ref}"
+    if (
+        re.fullmatch(r"msg:\d+", ref)
+        and f"m-{ref[4:]}" in refs.message_sender
+        and ref[4:] not in refs.message_sender
+    ):
+        return f"msg:m-{ref[4:]}"
+    return ref
 
 
 # ---- 검증 (rubric.md 7.3) ---------------------------------------------------------------------
 
 
-def check_dimension(row: Any, refs: RefIndex, forbidden: list[re.Pattern]) -> str | None:
-    """차원 한 행의 실패 사유. 통과하면 None."""
+def tidy(row: Any) -> Any:
+    """뜻이 하나뿐인 모양 차이만 맞춘다(내용 규칙은 그대로). 기록 없음 행의 confidence·근거 null,
+    "3"·3.0 같은 수준, 대문자 확신도, 빈 문자열 사유."""
+    if not isinstance(row, dict):
+        return row
+    row = dict(row)
+    row.setdefault("no_record_reason", None)
+    level = row.get("level")
+    if isinstance(level, str) and level.strip().isdigit():
+        row["level"] = int(level.strip())
+    elif isinstance(level, float) and level.is_integer():
+        row["level"] = int(level)
+    if row.get("no_record_reason") in ("", "null", "none", "None"):
+        row["no_record_reason"] = None
+    if isinstance(row.get("confidence"), str):
+        row["confidence"] = row["confidence"].strip().lower() or None
+    if row.get("evidence_refs") is None:
+        row["evidence_refs"] = []
+    elif isinstance(row["evidence_refs"], str):
+        row["evidence_refs"] = [row["evidence_refs"]]
+    # 기록 없음 사유가 있고 근거·확신도가 비었으면 수준 칸은 남은 값일 뿐이다(근거 없는 수준은
+    # 어차피 받지 않으므로 뜻이 하나뿐이다). 근거나 확신도가 있으면 뜻이 둘이라 고치지 않는다
+    if (
+        row.get("level") is not None
+        and row.get("no_record_reason") is not None
+        and not row["evidence_refs"]
+        and row.get("confidence") is None
+    ):
+        row["level"] = None
+    if row.get("level") is None and row.get("no_record_reason") is not None:
+        row["confidence"] = None
+    return row
+
+
+def _refs_text(ids: list[str] | tuple[str, ...], limit: int = 8) -> str:
+    shown = [f"msg:{i}" for i in ids[:limit]]
+    return ", ".join(shown) + (f" 외 {len(ids) - limit}개" if len(ids) > limit else "")
+
+
+def check_facts(
+    row: dict[str, Any],
+    refs: "RefIndex",
+    scene: Scene | None,
+    decided: dict[str, Decision],
+) -> str | None:
+    """기록된 사실과 모순되는 판단(결정 A1). 단어로 뜻을 추측하지 않고 시각·보낸 자리만 본다."""
+    level, reason = row["level"], row["no_record_reason"]
+    if level is None:
+        if scene is None:
+            return None
+        if reason == "no_activity" and scene.candidate_ids:
+            return (
+                f"activity_present: 사실 — 이 차원의 장면 구간({scene.describe()})에 지원자 메시지 "
+                f"{len(scene.candidate_ids)}개({_refs_text(scene.candidate_ids)})가 있다. "
+                "no_activity는 쓸 수 없다. 그 메시지로 수준을 판단하거나, 메시지가 있어도 "
+                "이 차원이 볼 장면·전제가 없으면 not_applicable과 그 이유를 쓴다"
+            )
+        if reason == "event_not_fired" and scene.exists:
+            where = "핵심 카드가 없어 세션 전체가 장면" if scene.session_wide else scene.describe()
+            return (
+                f"card_fired: 사실 — 이 차원의 장면이 있다({where}). event_not_fired는 쓸 수 없다. "
+                "장면 안 행동으로 판단하거나 no_activity·not_applicable 중 사실에 맞는 사유를 쓴다"
+            )
+        return None
+    msgs = [r.split(":", 1)[1] for r in row["evidence_refs"] if r.startswith("msg:")]
+    peers = [i for i in msgs if refs.message_sender.get(i) != "candidate"]
+    if peers:
+        who = ", ".join(f"msg:{i}({refs.message_sender.get(i)})" for i in peers)
+        own = _refs_text(scene.candidate_ids) if scene is not None and scene.exists else ""
+        hint = f" 이 차원 장면 구간의 지원자 메시지: {own}." if own else ""
+        return (
+            f"peer_evidence: 사실 — {who}는 지원자 메시지가 아니다. evidence_refs에서 빼고 "
+            "지원자 메시지·지원자가 확정한 칸·기획안 필드(정직 기여 기록은 contribution 행도)만 "
+            f"단다. 장면을 만든 동료 발언은 rationale에 말로 적는다.{hint} 지원자 근거가 없으면 "
+            "수준 대신 기록 없음 사유를 쓴다"
+        )
+    if scene is None or not scene.exists:
+        return None  # 핵심 카드 미발생: 보조 장면 표시 여부는 not_fired 변환이 본다
+    marked = SUPPORT_MARK in row["rationale"]
+    if scene.timing == "after" and scene.decision is not None:
+        early = [
+            i
+            for i in msgs
+            if refs.messages[i]["t_min"] <= scene.decision.t_min
+            and not (marked and any(d.t_min < refs.messages[i]["t_min"] for d in decided.values()))
+        ]
+        if early:
+            after = _refs_text(scene.candidate_ids) or "없음"
+            return (
+                f"before_decision: 사실 — {_refs_text(early)}는 {scene.decision.describe()} 전 "
+                "메시지다. 이 차원은 결정 뒤 행동만 본다. 결정 뒤 장면 구간의 지원자 메시지: "
+                f"{after}. 결정 뒤 메시지가 없으면 no_activity, 결정 뒤 볼 장면이 없으면 "
+                "not_applicable"
+            )
+    outside = [i for i in msgs if not scene.contains(refs.messages[i]["t_min"])]
+    if outside and not marked:
+        inside = _refs_text(scene.candidate_ids) or "없음"
+        return (
+            f"out_of_scene: 사실 — {_refs_text(outside)}는 이 차원의 장면 구간"
+            f"({scene.describe()}) 밖이다. 구간 안 지원자 메시지({inside})로 판단하거나, 구간 밖 "
+            '행동을 보조 장면 근거로 쓰려면 rationale에 "보조 장면"이라고 밝힌다'
+        )
+    return None
+
+
+def check_dimension(
+    row: Any,
+    refs: "RefIndex",
+    forbidden: list[re.Pattern],
+    scene: Scene | None = None,
+    decided: dict[str, Decision] | None = None,
+) -> str | None:
+    """차원 한 행의 실패 사유. 통과하면 None. scene이 없으면 사실 모순 검사는 하지 않는다."""
     if not isinstance(row, dict):
         return "format: 차원 행이 객체가 아님"
     dimension_id = row.get("dimension_id")
@@ -222,13 +344,19 @@ def check_dimension(row: Any, refs: RefIndex, forbidden: list[re.Pattern]) -> st
             return f"format: 기록 없음 사유가 올바르지 않음 {reason!r}"
         if confidence is not None:
             return "format: 기록 없음이면 confidence는 null"
-        return None
+        return check_facts(row, refs, scene, decided or {})
     if isinstance(level, bool) or not isinstance(level, int) or not 1 <= level <= 5:
         return f"format: level은 1~5 정수 또는 null {level!r}"
     if reason is not None:
-        return "format: level과 no_record_reason은 둘 중 하나만 쓴다"
+        return (
+            "format: level과 no_record_reason은 둘 중 하나만 쓴다 — 수준이면 "
+            "no_record_reason을 빼고, 기록 없음이면 level·confidence를 null로 둔다"
+        )
     if confidence not in CONFIDENCE_ORDER:
         return f"format: confidence 값이 올바르지 않음 {confidence!r}"
+    fact = check_facts(row, refs, scene, decided or {})
+    if fact:
+        return fact
     units = refs.counted_units(evidence, dimension_id)
     if units < 1:
         return (
@@ -243,8 +371,23 @@ def check_dimension(row: Any, refs: RefIndex, forbidden: list[re.Pattern]) -> st
 @dataclass
 class Validation:
     valid: dict[str, dict[str, Any]]  # dimension_id → 통과한 행
-    errors: dict[str, str]  # dimension_id 또는 "_format"·"summary" → 사유
-    summary: str | None  # 통과한 summary
+    errors: dict[str, str]  # dimension_id 또는 "_format" → 사유
+
+
+def dimension_rows(output: Any) -> list[Any] | None:
+    """출력의 차원 행 목록. `{dimensions: [...]}`가 기본이고, 행 목록만 낸 출력과
+    `{dimensions: {<dimension_id>: 행}}`처럼 뜻이 하나인 모양은 같은 목록으로 읽는다."""
+    if isinstance(output, list):
+        return output
+    if not isinstance(output, dict):
+        return None
+    rows = output.get("dimensions")
+    if isinstance(rows, dict):
+        return [
+            {"dimension_id": key, **value} if isinstance(value, dict) else value
+            for key, value in rows.items()
+        ]
+    return rows if isinstance(rows, list) else None
 
 
 def validate_output(
@@ -252,28 +395,24 @@ def validate_output(
     dimension_ids: list[str],
     refs: RefIndex,
     forbidden: list[re.Pattern],
+    scenes: dict[str, Scene] | None = None,
+    decided: dict[str, Decision] | None = None,
 ) -> Validation:
-    result = Validation({}, {}, None)
-    if not isinstance(output, dict) or not isinstance(output.get("dimensions"), list):
-        result.errors["_format"] = "format: 출력이 {element, summary, dimensions[]} 형식이 아님"
+    result = Validation({}, {})
+    rows = dimension_rows(output)
+    if rows is None:
+        result.errors["_format"] = "format: 출력이 {dimensions: [...]} 형식이 아님"
         return result
-    summary = output.get("summary")
-    if not isinstance(summary, str) or not summary.strip():
-        result.errors["summary"] = "format: summary가 비어 있음"
-    elif has_forbidden(summary, forbidden):
-        result.errors["summary"] = (
-            "forbidden: summary에 금지어(합격·순위·추천·점수 표현)를 쓰지 않는다"
-        )
-    else:
-        result.summary = summary
     seen: dict[str, int] = {}
-    for row in output["dimensions"]:
+    for raw in rows:
+        row = tidy(raw)
         dimension_id = row.get("dimension_id") if isinstance(row, dict) else None
         if dimension_id not in dimension_ids:
             result.errors["_format"] = f"format: 척도에 없는 차원 {dimension_id!r}"
             continue
         seen[dimension_id] = seen.get(dimension_id, 0) + 1
-        error = check_dimension(row, refs, forbidden)
+        scene = (scenes or {}).get(dimension_id)
+        error = check_dimension(row, refs, forbidden, scene, decided)
         if error:
             result.errors[dimension_id] = error
         else:
@@ -385,6 +524,7 @@ def user_prompt(
     no_record_reasons: list[dict[str, Any]],
     guide: str,
     record: dict[str, Any],
+    facts: dict[str, Any],
 ) -> str:
     rubric_block = {**element_rubric, "no_record_reasons": no_record_reasons}
     return "\n\n".join(
@@ -392,15 +532,35 @@ def user_prompt(
             f"[요소] {element_rubric['element']}",
             "[요소 척도]\n" + json.dumps(rubric_block, ensure_ascii=False),
             "[요소 지침]\n" + guide,
+            "[사실]\n" + json.dumps(facts, ensure_ascii=False),
             "[세션 기록]\n" + json.dumps(with_refs(record), ensure_ascii=False),
         ]
     )
 
 
+EVALUATOR_FACT_KEYS = ("decisions", "message_facts")  # [사실]·메시지 행으로 옮겨 보이는 사실
+
+
 def with_refs(record: dict[str, Any]) -> dict[str, Any]:
-    """근거로 달 수 있는 행마다 `ref`(계약 근거 4종 문자열)를 붙여 모델이 그대로 베끼게 한다."""
+    """근거로 달 수 있는 행마다 `ref`(계약 근거 4종 문자열)를 붙여 모델이 그대로 베끼게 한다.
+
+    지원자 메시지에는 메시지별 사실(답한 대상 `reply_to`, 먼저 정해진 칸 `decided_before`, 붙여넣기
+    의심 `paste_suspect`)을 붙이고, 같은 값을 `facts`에서 빼 입력이 두 번 들어가지 않게 한다.
+    """
     out = {**record}
-    out["messages"] = [{**m, "ref": f"msg:{m['id']}"} for m in record.get("messages", [])]
+    facts = record.get("facts") or {}
+    per_message = {f["message_id"]: f for f in facts.get("message_facts") or []}
+    messages = []
+    for m in record.get("messages", []):
+        row = {**m, "ref": f"msg:{m['id']}"}
+        fact = per_message.get(m["id"])
+        if fact is not None:
+            row["reply_to"] = f"msg:{fact['reply_to']}" if fact.get("reply_to") else None
+            row["decided_before"] = fact.get("decided_before") or []
+            row["paste_suspect"] = fact.get("paste_suspect")
+        messages.append(row)
+    out["messages"] = messages
+    out["facts"] = {k: v for k, v in facts.items() if k not in EVALUATOR_FACT_KEYS}
     out["slots"] = [{**s, "ref": f"slot:{s['phase']}"} for s in record.get("slots", [])]
     proposal = record.get("proposal")
     if proposal and proposal.get("sections"):
@@ -413,21 +573,36 @@ def with_refs(record: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def retry_block(errors: dict[str, str]) -> str:
-    lines = [f"- {key}: {reason}" for key, reason in errors.items()]
+def scene_fact(scene: Scene | None) -> str:
+    """재요청 사유 뒤에 붙이는 그 차원의 사실 한 줄."""
+    if scene is None:
+        return ""
+    if not scene.exists:
+        return " [사실: 핵심 장면 없음(핵심 카드 미발생 또는 결정 없음)]"
+    ids = _refs_text(scene.candidate_ids) if scene.candidate_ids else "없음"
+    banned = "no_activity·event_not_fired" if scene.candidate_ids else "event_not_fired"
     return (
-        "\n\n[재요청]\n직전 출력에 아래 문제가 있었습니다. "
-        "같은 출력 형식으로 이 요소의 차원 전부를 다시 판단해 JSON 하나만 내 주세요.\n"
+        f" [사실: 장면 구간 {scene.describe()}, 구간 안 지원자 메시지 "
+        f"{len(scene.candidate_ids)}개: {ids}. 이 차원에 {banned}는 쓸 수 없다]"
+    )
+
+
+def retry_block(errors: dict[str, str], scenes: dict[str, Scene] | None = None) -> str:
+    lines = [
+        f"- {key}: {reason}{scene_fact((scenes or {}).get(key))}" for key, reason in errors.items()
+    ]
+    return (
+        "\n\n[재요청]\n직전 출력에 아래 문제가 있었습니다. 사실과 다른 판단은 [사실]을 따라 "
+        "고치고, 같은 출력 형식으로 이 요소의 차원 전부를 다시 판단해 JSON 하나만 내 주세요.\n"
         + "\n".join(lines)
     )
 
 
-def summary_prompt(
+def final_rows(
     element_rubric: dict[str, Any], rows: list[dict[str, Any]], labels: dict[str, str]
-) -> str:
-    """요약 재작성 입력: 이 요소의 최종 차원 행만(세션 기록·다른 요소 결과 없음)."""
+) -> list[dict[str, Any]]:
     names = {d["dimension_id"]: d.get("name") for d in element_rubric["dimensions"]}
-    final = [
+    return [
         {
             "dimension_id": r["dimension_id"],
             "name": names.get(r["dimension_id"]),
@@ -439,14 +614,33 @@ def summary_prompt(
         }
         for r in rows
     ]
+
+
+def summary_prompt(
+    element_rubric: dict[str, Any], rows: list[dict[str, Any]], labels: dict[str, str]
+) -> str:
+    """요약 조립 입력: 이 요소의 최종 차원 행만(세션 기록·다른 요소 결과 없음)."""
     return "\n\n".join(
         [
             f"[요소] {element_rubric['element']}",
-            "[요약 재작성]\n워커 검증으로 이 요소의 차원 판단이 바뀌었습니다. "
-            '아래 최종 차원 행만 보고 공통 지침 "요약 재작성"대로 summary를 다시 써 주세요.',
-            "[최종 차원]\n" + json.dumps(final, ensure_ascii=False),
+            '[요약 조립]\n아래 최종 차원 행만 보고 공통 지침 "요약 조립"대로 summary를 써 주세요.',
+            "[최종 차원]\n"
+            + json.dumps(final_rows(element_rubric, rows, labels), ensure_ascii=False),
         ]
     )
+
+
+def plain_summary(
+    element_rubric: dict[str, Any], rows: list[dict[str, Any]], labels: dict[str, str]
+) -> str:
+    """요약 조립이 실패했을 때 차원 행에서 결정적으로 만드는 문장(행에 없는 내용이 없다)."""
+    parts = []
+    for row in final_rows(element_rubric, rows, labels):
+        if row["level"] is not None:
+            parts.append(f"{row['name']} 수준 {row['level']}")
+        else:
+            parts.append(f"{row['name']} {row['no_record']}")
+    return "세부 판단: " + ", ".join(parts) + "."
 
 
 def parse_json(text: str) -> Any:
@@ -456,7 +650,15 @@ def parse_json(text: str) -> Any:
     try:
         return json.loads(cleaned)
     except ValueError:
-        return None
+        pass
+    # 앞뒤에 설명 문장이 붙은 출력: 처음 '{'부터 마지막 '}'까지가 JSON 하나면 그것을 쓴다
+    first, last = cleaned.find("{"), cleaned.rfind("}")
+    if 0 <= first < last:
+        try:
+            return json.loads(cleaned[first : last + 1])
+        except ValueError:
+            return None
+    return None
 
 
 @dataclass(frozen=True)
@@ -472,18 +674,26 @@ class EvalContext:
         """담당 동료 전원이 전달한 카드만. 부분 전달은 핵심 장면이 성립하지 않아 미발생과 같다."""
         return {o["card_id"] for o in self.record.get("observations", []) if o.get("delivered")}
 
+    @property
+    def scenes(self) -> dict[str, Scene]:
+        return build_scenes(self.record, self.rubric)
+
+    @property
+    def decided(self) -> dict[str, Decision]:
+        return decisions(self.record)
+
     def element_cards(self, element: str) -> list[str]:
         return [c["card_id"] for c in self.rubric.get("cards", []) if c.get("element") == element]
 
 
-async def rewrite_summary(
+async def assemble_summary(
     llm: LLM,
     ctx: EvalContext,
     element_rubric: dict[str, Any],
     rows: list[dict[str, Any]],
     usage: dict[str, Any],
 ) -> str:
-    """최종 차원 행으로 summary만 1회 다시 쓴다. 형식·금지어 실패면 고정 문장."""
+    """최종 차원 행으로 summary를 1회 조립한다(결정 A2). 형식·금지어 실패면 결정적 문장."""
     labels = {r["code"]: r["label"] for r in ctx.rubric.get("no_record_reasons", [])}
     text = await complete_tracked(
         llm, ctx.prompts.common, summary_prompt(element_rubric, rows, labels), usage
@@ -491,9 +701,9 @@ async def rewrite_summary(
     out = parse_json(text)
     summary = out.get("summary") if isinstance(out, dict) else None
     if not isinstance(summary, str) or not summary.strip() or has_forbidden(summary, ctx.forbidden):
-        log.info("summary_rewrite_failed element=%s", element_rubric["element"])
-        return REWRITE_FALLBACK
-    return summary
+        log.info("summary_assemble_failed element=%s", element_rubric["element"])
+        return plain_summary(element_rubric, rows, labels)
+    return summary.strip()
 
 
 async def evaluate_element(
@@ -503,26 +713,30 @@ async def evaluate_element(
     element = element_rubric["element"]
     dimensions = element_rubric["dimensions"]
     dimension_ids = [d["dimension_id"] for d in dimensions]
+    scenes, decided = ctx.scenes, ctx.decided
     user = user_prompt(
         element_rubric,
         ctx.rubric.get("no_record_reasons", []),
         ctx.prompts.elements[element],
         ctx.record,
+        facts_block(element_rubric, scenes, ctx.record),
     )
-    text = await complete_tracked(llm, ctx.prompts.common, user, usage)
-    checked = validate_output(
-        fix_refs(parse_json(text), ctx.refs), dimension_ids, ctx.refs, ctx.forbidden
-    )
+
+    def check(text: str) -> Validation:
+        output = fix_refs(parse_json(text), ctx.refs)
+        return validate_output(output, dimension_ids, ctx.refs, ctx.forbidden, scenes, decided)
+
+    checked = check(await complete_tracked(llm, ctx.prompts.common, user, usage))
     if checked.errors:
         usage["element_retries"] += 1
-        text = await complete_tracked(
-            llm, ctx.prompts.common, user + retry_block(checked.errors), usage
-        )
-        checked = validate_output(
-            fix_refs(parse_json(text), ctx.refs), dimension_ids, ctx.refs, ctx.forbidden
-        )
+        retry = user + retry_block(checked.errors, scenes)
+        first = checked
+        checked = check(await complete_tracked(llm, ctx.prompts.common, retry, usage))
+        # 재요청에서 새로 실패한 차원은 첫 출력에서 검증을 통과한 행을 쓴다(통과 행끼리만 고른다)
+        for dimension_id, row in first.valid.items():
+            if dimension_id not in checked.valid:
+                checked.valid[dimension_id] = row
     rows = []
-    changed = False  # 워커가 수준·기록 없음을 바꾼 차원이 있으면 모델 summary와 어긋날 수 있다
     for dimension in dimensions:
         dimension_id = dimension["dimension_id"]
         row = checked.valid.get(dimension_id)
@@ -530,7 +744,6 @@ async def evaluate_element(
             code = reason_code(checked.errors.get(dimension_id) or checked.errors.get("_format"))
             log.info("evaluate_failed dimension=%s reason=%s", dimension_id, code)
             rows.append(failed_row(dimension_id, code))
-            changed = True
             continue
         if not_fired(row, dimension, ctx.fired_cards):
             log.info("event_not_fired dimension=%s (no support mark)", dimension_id)
@@ -543,20 +756,16 @@ async def evaluate_element(
                     "rationale": row["rationale"] + NOT_FIRED_MARK,
                 }
             )
-            changed = True
             continue
         units = ctx.refs.counted_units(row["evidence_refs"], dimension_id)
         if row["level"] is not None and row["level"] >= 4 and units < 2:
             row = {**row, "level": 3, "rationale": row["rationale"] + CAPPED_MARK}
-            changed = True
         cap = confidence_cap(dimension, units, ctx.element_cards(element), ctx.fired_cards)
         rows.append(clamp(row, cap))
     if all(r["no_record_reason"] == "evaluate_failed" for r in rows):
         summary = FAILED_SUMMARY
-    elif changed:
-        summary = await rewrite_summary(llm, ctx, element_rubric, rows, usage)
     else:
-        summary = checked.summary or FAILED_SUMMARY
+        summary = await assemble_summary(llm, ctx, element_rubric, rows, usage)
     return rows, element_summary(element, rows, summary)
 
 

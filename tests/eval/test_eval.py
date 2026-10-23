@@ -179,6 +179,25 @@ def test_bars_sessions_have_session_record_shape():
         assert {s["phase"] for s in record["slots"]} == {"keyword", "problem", "solution"}
 
 
+def test_bars_record_gets_evaluator_facts_like_production():
+    data = evaluate.load_bars()
+    sessions = {s["id"]: s for s in data["sessions"]}
+    for session in data["sessions"]:
+        facts = evaluate.bars_record(session, data["common"])["facts"]
+        candidates = [m["id"] for m in session["record"]["messages"] if m["sender"] == "candidate"]
+        assert [f["message_id"] for f in facts["message_facts"]] == candidates
+        assert [d["phase"] for d in facts["decisions"]] == ["keyword", "problem", "solution"]
+    pasted = evaluate.bars_record(sessions["bars_pasted_assistant"], data["common"])["facts"]
+    suspects = {f["message_id"]: f["paste_suspect"] for f in pasted["message_facts"]}
+    assert suspects["m8"]["call_id"] == "ac-1"
+    assert all(v is None for k, v in suspects.items() if k != "m8")
+    timing = evaluate.bars_record(sessions["bars_decision_timing"], data["common"])["facts"]
+    problem = next(d for d in timing["decisions"] if d["phase"] == "problem")
+    assert problem["path"] == "ai_consensus_fill" and problem["candidate_backed"] is False
+    m9 = next(f for f in timing["message_facts"] if f["message_id"] == "m9")
+    assert m9["decided_before"] == ["keyword", "problem"]
+
+
 def test_bars_expected_levels_follow_evidence_rules():
     rubric = yaml.safe_load((MISSION / "rubric.yaml").read_text("utf-8"))
     by_element = {
@@ -389,13 +408,15 @@ async def test_bars_live(live_report):
     forbidden = load_forbidden(ROOT / "scenarios", "debate")
     data = evaluate.load_bars()
     sessions, outputs, all_rows, unsupported = data["sessions"], {}, {}, 0
+    summaries = {}
     for session in sessions:
-        record = {**session["record"], "seats": data["common"]["seats"]}
+        record = evaluate.bars_record(session, data["common"])
         ctx = EvalContext(
             record, rubric, RefIndex(record, record["contributions"]), prompts, forbidden
         )
         element = next(e for e in rubric["elements"] if e["element"] == session["element"])
-        rows, _ = await evaluate_element(llm, ctx, element, empty_usage(model))
+        rows, summary = await evaluate_element(llm, ctx, element, empty_usage(model))
+        summaries[session["id"]] = summary["summary"]
         outputs[session["id"]] = {r["dimension_id"]: r["level"] for r in rows}
         all_rows[session["id"]] = rows
         unsupported += sum(r["no_record_reason"] == "evaluate_failed" for r in rows)
@@ -408,6 +429,10 @@ async def test_bars_live(live_report):
     diagnostics = evaluate.bars_diagnostics(sessions, all_rows)
     if os.environ.get("BARS_EVAL_DUMP"):  # 원자료(차원 행, 다시 채점용)
         Path(os.environ["BARS_EVAL_DUMP"]).write_text(json.dumps(all_rows, ensure_ascii=False))
+    if os.environ.get("BARS_EVAL_SUMMARY_DUMP"):  # 요소 요약(요약-차원 모순 판정용)
+        Path(os.environ["BARS_EVAL_SUMMARY_DUMP"]).write_text(
+            json.dumps(summaries, ensure_ascii=False)
+        )
     live_report.append(
         f"## 평가 에이전트 BARS\n\n```json\n{json.dumps(score, ensure_ascii=False, indent=2)}\n```"
         "\n\n## 평가 에이전트 BARS 장면 세션"
