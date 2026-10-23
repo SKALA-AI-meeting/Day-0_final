@@ -148,6 +148,7 @@ async def test_voice_normal_turn_waits_for_press(api, voice_ctx, clock):
     snap = await snapshot(api, voice_ctx, sess)
     assert snap["state"] == "USER_READY"
     assert "think_deadline_at" not in snap  # 자동 시작 없음
+    assert "speech_limit_seconds" not in snap  # 마감이 멀면 60초 그대로
     hold = controller.at(snap["turn_until_at"]) - controller.at(snap["ready_at"])
     assert hold.total_seconds() == 20
     clock.advance(seconds=19)
@@ -565,11 +566,14 @@ async def near_deadline(ctx, sess, seconds: float):
 
 
 async def test_voice_forced_turn_before_phase_ends(api, voice_ctx):
-    """이 단계 지원자 발언이 없고 마감까지 75초(60+5+10) 이하면 동료 발언을 넘기고 강제한다."""
+    """이 단계 지원자 발언이 없고 마감까지 105초(30+5+60+10) 이하면 동료 발언을 넘기고 강제한다."""
     ctx = voice_ctx
     sess = await setup(api, ctx)
     await ready_two(api, ctx, sess)
-    await near_deadline(ctx, sess, 70)
+    await near_deadline(ctx, sess, 110)
+    snap = await snapshot(api, ctx, sess)
+    assert not snap.get("priority")  # 아직 105초보다 많이 남음
+    await near_deadline(ctx, sess, 100)
     snap = await snapshot(api, ctx, sess)
     assert snap["state"] == "USER_READY"
     assert snap["priority"] == "forced"
@@ -578,6 +582,20 @@ async def test_voice_forced_turn_before_phase_ends(api, voice_ctx):
     async with ctx.session_factory() as db:
         job = await db.get(SpeechJob, uuid.UUID(start["utterance_id"]))
         assert job.data["turn_kind"] == "forced"
+
+
+async def test_voice_short_turn_near_deadline_is_announced(api, voice_ctx):
+    """마감이 가까워 60초를 못 쓰면 녹음 전에 말할 수 있는 초를 알리고 녹음도 그만큼 준다(V4)."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    await near_deadline(ctx, sess, 30)
+    snap = await snapshot(api, ctx, sess)
+    assert snap["priority"] == "forced"
+    assert snap["speech_limit_seconds"] in (24, 25)  # 생각 시간 5초 뒤 시작, 마감까지
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    start = (await post(api, sess, "capture", turn)).json()
+    given = controller.at(start["speech_deadline_at"]) - controller.at(start["speech_started_at"])
+    assert given.total_seconds() <= 30
 
 
 async def test_voice_no_forced_turn_after_candidate_spoke(api, voice_ctx):

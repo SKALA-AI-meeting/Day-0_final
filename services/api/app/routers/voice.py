@@ -73,6 +73,10 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
                     snap["think_deadline_at"] = auto
                 hold = controller.ready_hold(position, snap)
                 snap["turn_until_at"] = iso(controller.at(snap["ready_at"]) + hold)
+                # 마감이 가까워 발언 한도(60초)를 다 못 쓰면 녹음 전에 알린다
+                limit = controller.speech_limit_seconds(session, position, snap, ctx.clock.now())
+                if limit is not None:
+                    snap["speech_limit_seconds"] = limit
             if snap.get("utterance_id"):
                 job = await db.get(SpeechJob, uuid.UUID(snap["utterance_id"]))
                 if job:

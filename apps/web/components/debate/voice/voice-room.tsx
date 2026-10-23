@@ -44,6 +44,8 @@ export type VoiceSnapshot = {
   think_deadline_at?: string;
   /** 내 차례를 지켜 주는 끝 시각. 지나면 동료가 이어 말한다 */
   turn_until_at?: string;
+  /** 마감이 가까워 이번 녹음이 발언 한도보다 짧을 때만: 말할 수 있는 초 */
+  speech_limit_seconds?: number;
   /** 손들기·강제 차례 */
   priority?: "hand" | "forced";
   /** 동료 차례 중 든 손(내리면 없음) */
@@ -587,6 +589,11 @@ export function useVoiceTurn(props: Props) {
               ? `${Math.ceil(thinkLeft(voice))}초 뒤 녹음이 자동으로 시작돼요`
               : `${Math.ceil(secondsUntil(voice, voice.turn_until_at))}초 안에 시작하지 않으면 동료가 이어서 말해요`}
           </p>
+          {voice.speech_limit_seconds !== undefined && (
+            <p className="text-footnote font-semibold text-warning tabular-nums">
+              단계 마감이 가까워 이번 발언은 최대 {voice.speech_limit_seconds}초예요
+            </p>
+          )}
         </div>
       )}
       {!props.locked &&

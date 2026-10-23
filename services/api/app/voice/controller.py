@@ -73,6 +73,23 @@ def auto_start_at(position, data: dict) -> str | None:
     return None
 
 
+def speech_cutoff(session, data: dict) -> datetime:
+    """녹음이 아무리 길어도 넘지 못하는 시각: 단계 마감·세션 종료·이 차례에 받은 발언 마감(V4)."""
+    cutoff = min(session.phase_deadline_at, session.ends_at)
+    if data.get("speech_deadline_at"):
+        cutoff = min(cutoff, at(data["speech_deadline_at"]))
+    return cutoff
+
+
+def speech_limit_seconds(session, position, data: dict, now) -> int | None:
+    """내 차례에서 녹음을 시작하면 말할 수 있는 초. 발언 한도보다 짧을 때만(마감이 가까움) 준다."""
+    turn = position.scenario["voice_policy"]["user_turn_seconds"]
+    auto = auto_start_at(position, data)
+    start = max(now, at(auto)) if auto else now
+    left = int((speech_cutoff(session, data) - start).total_seconds())
+    return max(left, 0) if left < turn else None
+
+
 NOTICE_KINDS = ("consensus_fill", "timeout_fill")
 DEBATE_PHASES = ("keyword", "problem", "solution")
 # 강제 차례의 받아 적기·제출 여유(초). 녹음 60초가 단계 마감 안에 끝나도록 일찍 발동한다
@@ -80,10 +97,17 @@ FORCED_MARGIN_SECONDS = 10
 
 
 def forced_lead(position) -> timedelta:
-    """단계 마감 몇 초 전에 강제 차례를 줄지: 발언 한도 + 자동 시작 대기(생각 시간) + 여유."""
+    """단계 마감 몇 초 전에 강제 차례를 줄지.
+
+    지금 동료 발언이 끝나기를 기다리는 시간(forced_wait_seconds, 예전 채용 건은 0)
+    + 자동 시작 대기(생각 시간) + 발언 한도 + 여유.
+    """
     policy = position.scenario["voice_policy"]
     return timedelta(
-        seconds=policy["user_turn_seconds"] + think_seconds(position) + FORCED_MARGIN_SECONDS
+        seconds=policy.get("forced_wait_seconds", 0)
+        + think_seconds(position)
+        + policy["user_turn_seconds"]
+        + FORCED_MARGIN_SECONDS
     )
 
 
@@ -388,11 +412,8 @@ async def capture(db, session, position, body, now):
     jid = uuid.uuid4()
     deadline = min(
         now + timedelta(seconds=position.scenario["voice_policy"]["user_turn_seconds"]),
-        session.phase_deadline_at,
-        session.ends_at,
+        speech_cutoff(session, data),
     )
-    if data.get("speech_deadline_at"):
-        deadline = min(deadline, at(data["speech_deadline_at"]))
     if deadline <= now:
         raise conflict("voice_turn_expired")
     # 평가 담당이 "손들고 말함 / 내 차례에 말함 / 강제로 말함"을 구분할 수 있게 발언 기록에 남긴다

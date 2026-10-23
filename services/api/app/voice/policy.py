@@ -18,6 +18,9 @@ def pinned_policy() -> dict:
     confirm = int(os.getenv("VOICE_CONFIRM_SECONDS", "3"))
     if not 0 <= confirm <= 30:
         raise ValueError("VOICE_CONFIRM_SECONDS must be 0..30")
+    forced_wait = int(os.getenv("VOICE_FORCED_WAIT_SECONDS", "30"))
+    if not 0 <= forced_wait <= 120:
+        raise ValueError("VOICE_FORCED_WAIT_SECONDS must be 0..120")
     return {
         "version": "azure-f0-v1",
         "provider": os.getenv("VOICE_PROVIDER", "azure"),
@@ -25,6 +28,7 @@ def pinned_policy() -> dict:
         "think_seconds": think,
         "turn_hold_seconds": hold,
         "confirm_seconds": confirm,
+        "forced_wait_seconds": forced_wait,
         "voices": VOICES.copy(),
         "locale": "ko-KR",
         "sku": "F0",
