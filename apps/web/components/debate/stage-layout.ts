@@ -114,7 +114,8 @@ export function stageWeights(flags: StageFlags): Weights {
   const anyRight = flags.decisions || flags.proposal || flags.library;
   return {
     left: 0.85,
-    profiles: 1,
+    // 음성 토론은 4명 프로필을 가운데 말하기 칸에 크게 두므로 인사 뒤 왼쪽 프로필 칸은 숨긴다
+    profiles: flags.voice ? 0 : 1,
     voice: flags.voice ? 1 : 0,
     summary: flags.summary ? 1 : 0,
     chat: p ? 2 : 2.4,

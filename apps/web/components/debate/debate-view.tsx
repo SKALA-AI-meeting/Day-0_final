@@ -39,7 +39,7 @@ import { PHASE_LABEL, clock, warnSeconds } from "./state";
 import { PHASES, type EndReason, type Seat, type StateSnapshot } from "./types";
 import { useDebateSession, type SessionAuth } from "./use-session";
 import { MemoPad } from "./voice/memo-pad";
-import { VoiceStage, useVoiceTurn } from "./voice/voice-room";
+import { useVoiceTurn } from "./voice/voice-room";
 
 export function PhaseBar({ snap }: { snap: StateSnapshot }) {
   const current = snap.session.phase;
@@ -404,16 +404,21 @@ export function DebateView({
             </div>
           ),
           summary: <PhaseSummary snap={snap} />,
-          // 가운데 칸: 말하기(지금 말하는 사람 + 차례·녹음·손들기 조작)
+          // 가운데 칸: 4명 프로필(2x2, 말하는 사람 강조) + 차례·녹음·손들기 조작
           chat: (
-            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line">
-              <VoiceStage
-                participants={snap.participants}
-                speakingSeat={voice.speakingSeat}
-                recording={voice.recording}
-              >
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden">
+              <div className="min-h-0 flex-1">
+                <ProfileStage
+                  snap={voice.chatSnap}
+                  speaking={speaking}
+                  candidateTalking={voice.recording}
+                  intro={false}
+                  onSkipIntro={() => setIntroDone(true)}
+                />
+              </div>
+              <div className="shrink-0 rounded-xl border border-line bg-surface p-4">
                 {voice.controls}
-              </VoiceStage>
+              </div>
             </div>
           ),
           decisions: (

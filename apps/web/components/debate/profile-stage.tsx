@@ -22,6 +22,7 @@ export function ProfileStage({
   intro,
   onSkipIntro,
   voice = null,
+  candidateTalking = false,
   onJump,
 }: {
   snap: StateSnapshot;
@@ -30,11 +31,13 @@ export function ProfileStage({
   intro: boolean;
   onSkipIntro: () => void;
   voice?: VoiceInput | null;
+  /** 음성 토론에서 지원자가 녹음 중인지(서버 발언권 기준). 지원자 칸을 말하는 중으로 강조한다 */
+  candidateTalking?: boolean;
   /** 프로필 안 메시지를 누르면 토론방의 그 말풍선으로. 토론방이 숨어 있으면 없음 */
   onJump?: (messageId: string) => void;
 }) {
   const voiceState = useVoiceState(voice);
-  const talking = voiceState.status === "recording";
+  const talking = voiceState.status === "recording" || candidateTalking;
   // AI 동료 셋 다음에 지원자(2x2)
   const people = snap.participants
     .filter((p) => p.id !== "candidate")

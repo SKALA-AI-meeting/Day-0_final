@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_URL, api } from "@/lib/api";
-import { Avatar, Button } from "@/components/ui";
-import type { Participant, Seat, StateSnapshot } from "../types";
+import { Button } from "@/components/ui";
+import type { Seat, StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
 import { sentences, spokenCount } from "./caption";
 import { finishOnce, normalize } from "./recorder";
@@ -657,46 +657,4 @@ export function useVoiceTurn(props: Props) {
     candidateTurn: !!voice && CANDIDATE_STATES.has(voice.state),
     recording: voice?.state === "USER_SPEAKING",
   };
-}
-
-/** 가운데 말하기 칸: 지금 말하는 사람(동료 또는 나)을 크게 보이고 그 아래에 조작부를 둔다. */
-export function VoiceStage({
-  participants,
-  speakingSeat,
-  recording,
-  children,
-}: {
-  participants: Participant[];
-  speakingSeat: Seat | null;
-  recording: boolean;
-  children: ReactNode;
-}) {
-  const id = recording ? "candidate" : speakingSeat;
-  const person = participants.find((p) => p.id === id);
-  return (
-    <section
-      aria-label="말하기"
-      className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto bg-surface p-6"
-    >
-      <div className="flex min-h-40 flex-col items-center gap-3" aria-live="off">
-        {person ? (
-          <>
-            <Avatar
-              name={person.display_name}
-              src={person.avatar_url}
-              seat={person.id}
-              size={36}
-              className="!h-28 !w-28 text-title1"
-            />
-            <p className="text-title3 font-semibold">
-              {person.display_name}
-              {person.id === "candidate" ? " (나)" : ""}
-            </p>
-            <p className="text-footnote text-muted">{recording ? "마이크 켜짐" : "발언 중"}</p>
-          </>
-        ) : null}
-      </div>
-      <div className="w-full max-w-md">{children}</div>
-    </section>
-  );
 }
