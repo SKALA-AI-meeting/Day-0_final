@@ -98,6 +98,23 @@ async def test_voice_playback_barrier_and_single_message(api, voice_ctx):
         assert mine[0].meta["source"] == "voice"
 
 
+async def test_voice_spoken_ids_follow_playback_start(api, voice_ctx):
+    """동료 발언 글은 재생이 시작된 것만 spoken_message_ids에 들어간다(들은 범위만 화면에 표시)."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    first = await api.post_ai(sess, "p1", "물 부족을 생각해 봐요")
+    await api.post_ai(sess, "p3", "다른 의견도 있어요")
+    await snapshot(api, ctx, sess)
+    snap = await snapshot(api, ctx, sess)
+    assert snap["spoken_message_ids"] == []
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    item = snap["items"][0]
+    r = await post(api, sess, "playback", {**turn, "job_id": item["id"], "outcome": "start"})
+    assert r.status_code == 200
+    snap = await snapshot(api, ctx, sess)
+    assert snap["spoken_message_ids"] == [first["id"]]
+
+
 async def test_voice_zero_speakers_stale_and_audio_validation(api, voice_ctx, clock):
     sess = await setup(api, voice_ctx)
     snap = await snapshot(api, voice_ctx, sess)

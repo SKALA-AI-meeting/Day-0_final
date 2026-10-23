@@ -204,6 +204,7 @@ export function ChatRoom({
   pending,
   typing,
   locked,
+  readOnly = false,
   onSend,
   onTyping,
 }: {
@@ -211,6 +212,8 @@ export function ChatRoom({
   pending: Pending[];
   typing: Seat[];
   locked: boolean;
+  /** 음성 세션의 대화 기록처럼 입력창 없이 보기만 할 때 */
+  readOnly?: boolean;
   onSend: (content: string) => void;
   onTyping: (state: "start" | "stop") => void;
 }) {
@@ -318,7 +321,7 @@ export function ChatRoom({
           </button>
         )}
       </div>
-      <Composer locked={locked} onSend={onSend} onTyping={onTyping} />
+      {!readOnly && <Composer locked={locked} onSend={onSend} onTyping={onTyping} />}
     </section>
   );
 }

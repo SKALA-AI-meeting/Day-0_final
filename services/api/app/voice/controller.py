@@ -169,6 +169,21 @@ async def sync(db, session, position, now):
     return {**data, "items": items, "server_now": iso(now)}, pending
 
 
+async def spoken_message_ids(db, session_id) -> list[str]:
+    """재생이 시작된 동료 발언의 메시지 id. 화면은 이 발언만 글로 보여 준다(들은 범위, V5).
+
+    0.75초마다 조회되므로 음성 파일(audio)은 읽지 않고 id만 꺼낸다.
+    """
+    rows = await db.scalars(
+        select(SpeechJob.data["message_id"].astext).where(
+            SpeechJob.session_id == session_id,
+            SpeechJob.kind == "tts",
+            SpeechJob.data.has_key("playback_started_at"),
+        )
+    )
+    return list(rows)
+
+
 async def blocked(ctx, session_id):
     if not ctx.settings.voice_enabled:
         return False

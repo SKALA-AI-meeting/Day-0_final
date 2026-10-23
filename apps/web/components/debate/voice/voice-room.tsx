@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_URL, api } from "@/lib/api";
 import { Avatar, Button } from "@/components/ui";
+import { ChatRoom } from "../chat";
 import type { StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
 import { finishOnce, normalize } from "./recorder";
@@ -20,7 +21,11 @@ export type VoiceSnapshot = {
   speech_deadline_at?: string;
   speech_started_at?: string;
   utterance?: { id: string; status: string; transcript?: string; message_id?: string };
+  /** 재생이 시작된 동료 발언 id. 상태 조회(GET)에만 있다 */
+  spoken_message_ids?: string[];
 };
+const SEATS = new Set(["p1", "p2", "p3"]);
+const noop = () => {};
 type Props = {
   auth: SessionAuth;
   snap: StateSnapshot;
@@ -49,6 +54,7 @@ export function VoiceRoom(props: Props) {
   const [active, setActive] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(60);
   const [level, setLevel] = useState(0);
+  const [spoken, setSpoken] = useState<string[]>([]);
   const stream = useRef<MediaStream | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
@@ -292,6 +298,8 @@ export function VoiceRoom(props: Props) {
         const nextFence = `${next.generation}:${next.epoch}`;
         if (fence.current && nextFence !== fence.current) stopMedia();
         fence.current = nextFence;
+        const ids = next.spoken_message_ids ?? [];
+        setSpoken((prev) => (prev.join() === ids.join() ? prev : ids));
         // 녹음 종료/업로드 중에는 서버의 직전 USER_SPEAKING 스냅샷을 표시하지 않는다.
         if (!busy.current || player.current) setVoice(next);
         const u = next.utterance;
@@ -379,59 +387,79 @@ export function VoiceRoom(props: Props) {
     } else if (voice?.state === "USER_READY") void record(voice);
   };
 
+  // 동료 발언은 재생이 시작된 것만 글로 보인다(목소리보다 글이 먼저 보이지 않게, V5 들은 범위).
+  // 지원자 발언과 시스템 안내는 바로 보인다.
+  const heard = useMemo(() => {
+    const ids = new Set(spoken);
+    return {
+      ...props.snap,
+      messages: props.snap.messages.filter((m) => !SEATS.has(m.sender) || ids.has(m.id)),
+    };
+  }, [props.snap, spoken]);
+
   return (
-    <section
-      className="flex min-w-0 flex-1 flex-col items-center justify-center gap-8 p-8"
-      aria-label="음성 회의"
-    >
-      <p role="status" className="text-title3 font-semibold">
-        {props.locked ? "토론이 종료됐어요" : LABEL[voice?.state ?? "AI_GENERATING"]}
-      </p>
-      <div className="grid w-full max-w-xl grid-cols-2 gap-5">
-        {props.snap.participants.map((person) => (
-          <div
-            key={person.id}
-            className={`rounded-2xl border p-6 text-center ${active === person.id || (person.id === "candidate" && voice?.state === "USER_SPEAKING") ? "border-accent bg-accent/10" : "border-line bg-surface"}`}
-          >
-            <Avatar
-              name={person.display_name}
-              src={person.avatar_url}
-              seat={person.id}
-              size={36}
-              className="mx-auto mb-3 !h-20 !w-20 text-title2"
-            />
-            <p className="font-semibold">
-              {person.display_name}
-              {person.id === "candidate" ? " (나)" : ""}
-            </p>
-            <p className="text-footnote text-muted">
-              {active === person.id
-                ? "발언 중"
-                : person.id === "candidate" && voice?.state === "USER_SPEAKING"
-                  ? "마이크 켜짐"
-                  : "대기"}
-            </p>
-          </div>
-        ))}
-      </div>
-      {!props.locked && voice?.state === "USER_SPEAKING" && (
-        <div className="flex flex-col items-center gap-3">
-          <p className="tabular-nums">내 발언 {remaining}초 남음</p>
-          <meter min={0} max={100} value={level} aria-label="마이크 입력 음량" />
-          <Button onClick={() => finish.current()}>발언 완료</Button>
-          <p className="text-footnote text-muted">시간이 끝나면 자동으로 제출해요</p>
-        </div>
-      )}
-      {error && (
-        <p role="alert" className="max-w-md text-center text-warning">
-          {error}
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="음성 회의">
+      <div className="flex shrink-0 flex-col items-center gap-4 p-5">
+        <p role="status" className="text-title3 font-semibold">
+          {props.locked ? "토론이 종료됐어요" : LABEL[voice?.state ?? "AI_GENERATING"]}
         </p>
-      )}
-      {(!enabled || error || voice?.blocked_reason) && !props.locked && (
-        <Button disabled={!props.connected} onClick={() => void resume()}>
-          {enabled ? "다시 시도 / 발언 시작" : "음성 참여 시작"}
-        </Button>
-      )}
+        <div className="grid w-full max-w-3xl grid-cols-4 gap-3">
+          {props.snap.participants.map((person) => (
+            <div
+              key={person.id}
+              className={`rounded-2xl border p-3 text-center ${active === person.id || (person.id === "candidate" && voice?.state === "USER_SPEAKING") ? "border-accent bg-accent/10" : "border-line bg-surface"}`}
+            >
+              <Avatar
+                name={person.display_name}
+                src={person.avatar_url}
+                seat={person.id}
+                size={36}
+                className="mx-auto mb-2 !h-12 !w-12 text-title3"
+              />
+              <p className="font-semibold">
+                {person.display_name}
+                {person.id === "candidate" ? " (나)" : ""}
+              </p>
+              <p className="text-footnote text-muted">
+                {active === person.id
+                  ? "발언 중"
+                  : person.id === "candidate" && voice?.state === "USER_SPEAKING"
+                    ? "마이크 켜짐"
+                    : "대기"}
+              </p>
+            </div>
+          ))}
+        </div>
+        {!props.locked && voice?.state === "USER_SPEAKING" && (
+          <div className="flex flex-col items-center gap-3">
+            <p className="tabular-nums">내 발언 {remaining}초 남음</p>
+            <meter min={0} max={100} value={level} aria-label="마이크 입력 음량" />
+            <Button onClick={() => finish.current()}>발언 완료</Button>
+            <p className="text-footnote text-muted">시간이 끝나면 자동으로 제출해요</p>
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="max-w-md text-center text-warning">
+            {error}
+          </p>
+        )}
+        {(!enabled || error || voice?.blocked_reason) && !props.locked && (
+          <Button disabled={!props.connected} onClick={() => void resume()}>
+            {enabled ? "다시 시도 / 발언 시작" : "음성 참여 시작"}
+          </Button>
+        )}
+      </div>
+      <div className="flex min-h-0 flex-1 border-t border-line">
+        <ChatRoom
+          snap={heard}
+          pending={[]}
+          typing={[]}
+          locked={props.locked}
+          readOnly
+          onSend={noop}
+          onTyping={noop}
+        />
+      </div>
     </section>
   );
 }

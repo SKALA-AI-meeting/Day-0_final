@@ -1207,6 +1207,7 @@ SHAPES["voice_state"] = {
     "utterance_id?": Opt(str),
     "speech_started_at?": str,
     "speech_deadline_at?": str,
+    "spoken_message_ids?": [str],
     "utterance?": {
         "id": str,
         "status": str,

@@ -52,6 +52,7 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
             if session.status == "in_progress":
                 await quota.admission(db, session, ctx.clock.now())
             snap, pending = await controller.sync(db, session, position, ctx.clock.now())
+            snap["spoken_message_ids"] = await controller.spoken_message_ids(db, session_id)
             if snap.get("utterance_id"):
                 job = await db.get(SpeechJob, uuid.UUID(snap["utterance_id"]))
                 if job:
