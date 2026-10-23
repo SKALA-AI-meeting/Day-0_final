@@ -419,7 +419,7 @@ def _cost_left(state: DebateState) -> float:
 async def _turn_llm(
     state: DebateState, deps: DebateDeps, brief: list[rules.CardSpeaker]
 ) -> list[str]:
-    """규칙 6: 지원자 메시지에 답할 화자가 규칙으로 정해지지 않았을 때 답할 자리를 고른다. 실패하면
+    """규칙 7: 지원자 메시지에 답할 화자가 규칙으로 정해지지 않았을 때 답할 자리를 고른다. 실패하면
     빈 목록(호출자가 기본 응답 자리를 쓴다)."""
     ds, names = state["ds"], state["names"]
     summary = persona.visible_state(ds)

@@ -30,6 +30,8 @@ log = logging.getLogger(__name__)
 MAX_TOOL_CALLS = 3  # 응답당(harness.md Tools)
 RECENT_MESSAGES = 30
 MEMORY_MESSAGES = 3
+# [상황] 줄 이름. 뜻으로 반박을 세지 않으므로 무엇을 세는지 이름에 그대로 적는다
+REACTION_LABEL = "내 지난 발언에 답한 동료·나를 부른 지원자 메시지"
 REPEAT_SIMILARITY = 0.8  # 내 최근 발언과 이 이상 같으면 반복(testing.md 반복률 임계와 같음)
 REPEAT_VIOLATION = "[내 기억]의 내 말과 거의 같은 문장 반복. 새 근거를 하나 들거나 다른 표현으로"
 PHASE_NAMES = {
@@ -184,10 +186,10 @@ def situation_text(situation: dict[str, Any], names: dict[str, str]) -> str:
         lines.append("- 침묵 초대 차례: 예(지원자가 이번 단계에서 한동안 말이 없음)")
     reacted = situation.get("reactions")
     if reacted is None:
-        lines.append("- 내 지난 발언에 대한 반응: 이 단계에서 아직 말하지 않음")
+        lines.append(f"- {REACTION_LABEL}: 이 단계에서 아직 말하지 않음")
     else:
         who = ", ".join(_display(p, names) for p in reacted) if reacted else "아직 없음"
-        lines.append(f"- 내 지난 발언에 대한 반응: {who}")
+        lines.append(f"- {REACTION_LABEL}: {who}")
     return "\n".join(lines)
 
 

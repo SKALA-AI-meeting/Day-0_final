@@ -2,6 +2,7 @@
 
 from app.agent import intent as intent_mod
 from app.agent.debate import DebateGraphRunner
+from app.agent.persona import REACTION_LABEL
 from conftest import intent_of, say
 
 CARD = "persuasion_keyword"
@@ -127,7 +128,7 @@ async def test_situation_block_is_facts_only(harness):
         '- 답할 메시지: 김지원(지원자): "한결님, 불은 범위가 넓지 않나요?"',
         "- 이 메시지에서 지원자가 나를 이름으로 불렀는지: 예",
         "- 이번 발언이 내 카드 차례인지: 아니요",
-        "- 내 지난 발언에 대한 반응: 서지안, 김지원(지원자)",
+        "- 내 지난 발언에 답한 동료·나를 부른 지원자 메시지: 서지안, 김지원(지원자)",
     ]
 
 
@@ -138,7 +139,7 @@ async def test_situation_without_a_message_and_on_card_turn(harness):
     block = _situation(h.snapshots[0]["text"])
     assert "- 답할 메시지: 없음" in block
     assert "- 이번 발언이 내 카드 차례인지: 예" in block
-    assert "- 내 지난 발언에 대한 반응: 이 단계에서 아직 말하지 않음" in block
+    assert f"- {REACTION_LABEL}: 이 단계에서 아직 말하지 않음" in block
 
 
 async def test_silence_invite_is_a_situation_fact(harness):

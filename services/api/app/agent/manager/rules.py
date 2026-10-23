@@ -689,7 +689,7 @@ def rule_decision(
     intent: dict[str, Any] | None,
     transcript: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """규칙 1~5의 결과. 지원자 메시지에 답하는 화자가 없으면 호출자가 턴 LLM(규칙 6)과 기본 응답
+    """규칙 1~5의 결과. 지원자 메시지에 답하는 화자가 없으면 호출자가 턴 LLM(규칙 7)과 기본 응답
     자리(`default_responder`)로 채운다.
     """
     phase = stimulus["phase"]
@@ -790,7 +790,7 @@ def rule_decision(
 
 
 def needs_responder(decision: dict[str, Any], stimulus: dict[str, Any]) -> bool:
-    """지원자 메시지 자극인데 그 메시지에 답하는 화자가 없고 자리가 남았는지(규칙 6 대상)."""
+    """지원자 메시지 자극인데 그 메시지에 답하는 화자가 없고 자리가 남았는지(규칙 7 대상)."""
     if stimulus.get("type") != "message" or decision.get("fill") is not None:
         return False
     current = str(stimulus.get("message_id"))
