@@ -378,3 +378,96 @@ async def test_azure_fast_transcription_request(monkeypatch):
     monkeypatch.setattr(AzureSpeech, "_transcribe_continuous", continuous)
     assert await AzureSpeech().transcribe(silence(), ["윤하람"]) == "연속 인식 결과"
     assert fallback == [["윤하람"]]
+
+
+def tone(seconds: float, loud: bool = True) -> bytes:
+    """PCM16 mono 16kHz 원본 소리. loud=False면 무음(말이 멈춘 곳)."""
+    import array
+    import math
+
+    n = int(seconds * 16000)
+    amp = 8000 if loud else 0
+    return array.array("h", (int(amp * math.sin(i / 8)) for i in range(n))).tobytes()
+
+
+class SegmentSpeech(FakeSpeech):
+    """소리가 있으면 "소리", 무음이면 "무음"을 돌려주는 가짜 받아 적기(조각 경로 확인용)."""
+
+    def __init__(self):
+        super().__init__()
+        self.stt_calls: list[float] = []
+
+    async def transcribe(self, audio, phrases=()):
+        frames, seconds = pcm(audio)
+        self.stt_calls.append(round(seconds, 2))
+        return "소리" if any(frames) else "무음"
+
+
+def test_live_cut_lands_in_pause(monkeypatch):
+    from app.voice import live
+
+    frames = tone(7) + tone(0.5, loud=False) + tone(3)
+    cut = live.quietest_cut(frames, 6 * 32000, len(frames), 0.3)
+    assert 7 * 32000 <= cut <= 7.5 * 32000
+
+
+async def test_live_segments_then_tail_in_order(monkeypatch):
+    """10초가 쌓이면 쉬는 곳에서 잘라 미리 보내고, 끝나면 꼬리만 보낸 뒤 순서대로 잇는다."""
+    from app.voice import live
+
+    monkeypatch.setenv("VOICE_SEGMENT_SECONDS", "10")
+    speech = SegmentSpeech()
+    seg = live.Segmenter("s", speech, ["하람님"])
+    audio = tone(7) + tone(0.5, loud=False) + tone(4.5)
+    for seq, i in enumerate(range(0, len(audio), 16000)):
+        seg.feed(seq, audio[i : i + 16000])
+    assert len(seg.tasks) == 1  # 10초가 되는 순간 한 번 잘림
+    text = await seg.finish(12)
+    assert text == "소리 소리"
+    assert 7 <= speech.stt_calls[0] <= 7.5 and sum(speech.stt_calls) == 12
+
+
+async def test_live_gap_or_length_mismatch_falls_back():
+    from app.voice import live
+
+    seg = live.Segmenter("s", SegmentSpeech(), [])
+    seg.feed(0, tone(0.5))
+    seg.feed(2, tone(0.5))  # 1번 조각이 빠짐
+    with pytest.raises(live.Fallback):
+        await seg.finish(1)
+    seg = live.Segmenter("s", SegmentSpeech(), [])
+    seg.feed(0, tone(0.5))
+    with pytest.raises(live.Fallback):
+        await seg.finish(5)  # 완성 파일은 5초인데 0.5초만 받음
+
+
+async def test_voice_stream_chunks_used_for_transcript(api, voice_ctx):
+    """녹음 중에 보낸 조각으로 받아 적고, 완성 파일 전체는 다시 받아 적지 않는다."""
+    ctx = voice_ctx
+    speech = SegmentSpeech()
+    ctx.speech = speech
+    sess = await setup(api, ctx)
+    snap = await snapshot(api, ctx, sess)
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    start = (await post(api, sess, "capture", turn)).json()
+    audio = tone(3)
+    for seq, i in enumerate(range(0, len(audio), 16000)):
+        body = {
+            **turn,
+            "utterance_id": start["utterance_id"],
+            "seq": seq,
+            "pcm_base64": base64.b64encode(audio[i : i + 16000]).decode(),
+        }
+        assert (await post(api, sess, "stream", body)).status_code == 200
+    # 완성 파일은 같은 길이의 무음: 조각 경로를 쓰면 "소리", 파일 전체로 받아 적으면 "무음"
+    body = {
+        **turn,
+        "utterance_id": start["utterance_id"],
+        "audio_base64": base64.b64encode(silence(3)).decode(),
+        "stop_reason": "button",
+    }
+    assert (await post(api, sess, "audio", body)).status_code == 200
+    await ctx.drain_spawned()
+    snap = await snapshot(api, ctx, sess)
+    assert snap["utterance"]["transcript"] == "소리"
+    assert speech.stt_calls == [3.0]

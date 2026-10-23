@@ -8,6 +8,7 @@
 | POST `/capture` | `{turn_id, epoch, restart?:bool}` | 발언권 상태: utterance_id, speech_started_at, speech_deadline_at 포함. 동일 활성 발언의 중복 시작은 같은 ID |
 | POST `/playback` | `{turn_id, epoch, job_id, outcome: start∣ended∣error∣retry}` | `{ok:true}`. 첫 미완료 항목만 처리. start 뒤 실제 ended 확인. heard 항목 ended 중복은 성공 |
 | POST `/audio` | `{turn_id, epoch, utterance_id, audio_base64, stop_reason: button∣timeout∣disconnect}` | `{utterance_id,status}`. PCM16 mono 16kHz WAV, 최대 60초·base64 2,600,000자. 동일 파일 해시로 멱등 |
+| POST `/stream` | `{turn_id, epoch, utterance_id, seq, pcm_base64}` | `{ok:true}`. 녹음 중(USER_SPEAKING) 그 발언의 소리 조각(PCM16 mono 16kHz 원본, WAV 머리 없음, 약 0.5초)을 0부터 순번대로 보낸다. 서버는 약 10초마다 쉬는 곳에서 잘라 미리 받아 적고, `/audio` 뒤에는 남은 꼬리만 받아 적어 잇는다. 순번이 빠지거나 받은 길이가 완성 파일과 1초 넘게 다르면 완성 파일 전체로 받아 적는다. 선택 사항이며 보내지 않아도 `/audio`만으로 동작한다 |
 | POST `/abort` | `{turn_id,epoch}` | 장치/파일 실패를 기록하고 남은 발언권으로 복귀 |
 | POST `/retry` | `{turn_id, epoch, job_id}` | `{ok:true}`. 같은 완성 파일 STT를 총 2시도 이내 재처리 |
 | POST `/rerecord` | `{turn_id, epoch, job_id}` | 발언권 상태(state USER_READY, `rerecorded:true`). 받아 적기가 끝난(ready) 현재 발언을 제출하지 않고 버린다. 같은 차례에서 1회만, 두 번째는 409 `voice_retry_exhausted`. 다음 `/capture`는 발언 시간을 새로 받는다 |

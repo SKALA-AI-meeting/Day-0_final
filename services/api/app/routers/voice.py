@@ -14,7 +14,7 @@ from app.auth import Principal, require_candidate
 from app.models import SpeechJob
 from app.services.common import ServiceError, conflict, iso, load_context
 from app.services.context import AppContext, get_context
-from app.voice import controller, quota
+from app.voice import controller, live, quota
 
 router = APIRouter()
 Ctx = Annotated[AppContext, Depends(get_context)]
@@ -34,6 +34,12 @@ class PlaybackIn(TurnIn):
 
 class RetryIn(TurnIn):
     job_id: uuid.UUID
+
+
+class StreamIn(TurnIn):
+    utterance_id: str
+    seq: int = Field(ge=0, le=1000)
+    pcm_base64: str = Field(max_length=200000)  # 조각 하나(약 0.5초, 최대 4초 남짓)
 
 
 class AudioIn(TurnIn):
@@ -154,6 +160,7 @@ async def abort_capture(session_id: uuid.UUID, body: TurnIn, ctx: Ctx, _: Candid
             if job:
                 job.data = {**job.data, "status": "canceled", "error": "voice_recording_failed"}
                 job.audio = None
+                live.discard(str(job.id))
             state.data = {
                 **state.data,
                 "state": "USER_READY",
@@ -199,6 +206,31 @@ async def playback(session_id: uuid.UUID, body: PlaybackIn, ctx: Ctx, _: Candida
             if data["status"] == "queued":
                 ctx.spawn(controller.run_job(ctx, job.id))
             return {"ok": True}
+
+
+@router.post("/sessions/{session_id}/voice/stream")
+async def stream(session_id: uuid.UUID, body: StreamIn, ctx: Ctx, _: Candidate):
+    """녹음 중 소리 조각(PCM16 mono 16kHz 원본, base64)을 받아 말하는 동안 받아 적기를 진행한다."""
+    try:
+        chunk = base64.b64decode(body.pcm_base64, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ServiceError(422, "voice_audio_invalid") from exc
+    async with ctx.ordered(session_id):
+        async with ctx.session_factory() as db:
+            session, _, _ = await load_context(db, session_id)
+            state = await controller.row(db, session_id)
+            controller.validate(session, state.data, body.turn_id, body.epoch, ctx.clock.now())
+            if (
+                state.data.get("state") != "USER_SPEAKING"
+                or state.data.get("utterance_id") != body.utterance_id
+            ):
+                raise conflict("voice_turn_conflict")
+            job = await db.get(SpeechJob, uuid.UUID(body.utterance_id))
+            phrases = job.data.get("phrases", []) if job else []
+            await db.commit()
+    seg = live.open_segmenter(body.utterance_id, str(session_id), ctx.speech, phrases)
+    seg.feed(body.seq, chunk)
+    return {"ok": True}
 
 
 @router.post("/sessions/{session_id}/voice/audio")

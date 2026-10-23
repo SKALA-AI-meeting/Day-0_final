@@ -1,6 +1,7 @@
 """DB 기반 Voice Turn Controller. 실행 완료와 실제 재생 확인을 구분한다."""
 
 import hashlib
+import logging
 import uuid
 from datetime import datetime, timedelta
 
@@ -10,9 +11,10 @@ from sqlalchemy.dialects.postgresql import insert
 from app.masking import mask
 from app.models import AgentRun, Message, SpeechJob, VoiceState
 from app.services.common import ServiceError, conflict, iso
-from app.voice import quota
+from app.voice import live, quota
 from app.voice.speech import pcm
 
+log = logging.getLogger(__name__)
 HOLD = {"USER_READY", "USER_SPEAKING", "TRANSCRIBING", "PROCESSING"}
 # 생각 시간이 끝난 뒤 화면이 녹음을 시작하기까지 기다려 주는 여유. 지나면 차례를 반납한다.
 READY_GRACE_SECONDS = 10
@@ -342,6 +344,17 @@ async def accept_audio(db, session, body, audio, now):
     return job
 
 
+async def transcribe_stt(speech, job_id, audio: bytes, data: dict) -> str:
+    """미리 받아 적은 조각이 있으면 이어 붙이고, 없거나 어긋나면 완성 파일 전체로 받아 적는다."""
+    seg = live.pop(str(job_id))
+    if seg is not None:
+        try:
+            return await seg.finish(data["seconds"])
+        except live.Fallback as exc:
+            log.warning("말하는 동안 받아 적기 대신 파일 전체로 받아 적음: %s", exc)
+    return await speech.transcribe(audio, data.get("phrases", []))
+
+
 async def rerecord(db, session, body, now):
     """받아 적은 글을 제출하지 않고 버린 뒤, 같은 차례에서 한 번만 새로 녹음하게 한다(60초 새로)."""
     state = await row(db, session.id)
@@ -359,6 +372,7 @@ async def rerecord(db, session, body, now):
     ):
         raise conflict("voice_turn_conflict")
     job.data = {**job.data, "status": "canceled", "error": "voice_rerecorded"}
+    live.discard(str(job.id))
     # 앞 녹음의 마감을 지워야 capture가 발언 시간을 새로 준다
     for key in ("utterance_id", "speech_started_at", "speech_deadline_at"):
         data.pop(key, None)
@@ -438,7 +452,7 @@ async def run_job(ctx, job_id):
         if kind == "tts":
             result = await speech.synthesize(data["text"], data["voice"])
         else:
-            result = mask((await speech.transcribe(audio, data.get("phrases", []))).strip())
+            result = mask((await transcribe_stt(speech, job_id, audio, data)).strip())
         error = None
     except Exception:
         result, error = None, "voice_speech_failed"

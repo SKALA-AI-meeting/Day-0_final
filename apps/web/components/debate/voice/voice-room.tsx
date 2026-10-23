@@ -8,6 +8,7 @@ import type { StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
 import { sentences, spokenCount } from "./caption";
 import { finishOnce, normalize } from "./recorder";
+import { startPcmStream, type PcmStream } from "./streamer";
 
 type Item = {
   id: string;
@@ -194,7 +195,27 @@ export function VoiceRoom(props: Props) {
         }, duration * 1000);
         const audioContext = new AudioContext();
         const analyser = audioContext.createAnalyser();
-        audioContext.createMediaStreamSource(mic).connect(analyser);
+        const source = audioContext.createMediaStreamSource(mic);
+        source.connect(analyser);
+        // 말하는 동안 받아 적기. 조각 보내기를 못 열면(브라우저 미지원 등) 완성 파일만 보낸다.
+        let live: PcmStream | null = null;
+        try {
+          live = await startPcmStream(audioContext, source, (seq, pcm) =>
+            api(`${path}/stream`, {
+              method: "POST",
+              token: token(),
+              body: {
+                turn_id: start.turn_id,
+                epoch: start.epoch,
+                utterance_id: start.utterance_id,
+                seq,
+                pcm_base64: pcm,
+              },
+            }),
+          );
+        } catch {
+          live = null;
+        }
         const samples = new Uint8Array(analyser.fftSize);
         const meter = setInterval(() => {
           analyser.getByteTimeDomainData(samples);
@@ -204,9 +225,12 @@ export function VoiceRoom(props: Props) {
           clearInterval(timer);
           clearInterval(meter);
           clearTimeout(end);
+          live?.stop();
           if (audioContext.state !== "closed") void audioContext.close();
         };
         r.onstop = async () => {
+          // 처리기를 닫기 전에 남은 소리를 마지막 조각으로 보낸다(완성 파일보다 먼저 도착해야 함)
+          const flushed = live?.flush() ?? Promise.resolve();
           cleanupRecorder.current();
           mic.getTracks().forEach((t) => t.stop());
           recorder.current = null;
@@ -223,6 +247,7 @@ export function VoiceRoom(props: Props) {
               audio_base64: audio,
               stop_reason: reason,
             };
+            await flushed;
             await api(`${path}/audio`, {
               method: "POST",
               token: token(),

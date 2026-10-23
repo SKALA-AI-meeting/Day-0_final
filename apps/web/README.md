@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 66개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 68개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -201,10 +201,12 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>components/debate/voice/recorder.test.ts</code> (2)</summary>
+<details><summary><code>components/debate/voice/recorder.test.ts</code> (4)</summary>
 
 - 버튼과 타이머가 겹쳐도 녹음 종료는 한 번만 실행한다
 - 완성 오디오를 mono 16kHz PCM WAV로 만들고 클리핑을 제한한다
+- 48kHz를 16kHz로 줄이면 길이가 3분의 1이고 구간 평균을 쓴다
+- PCM16 리틀 엔디언 원본으로 바꾸고 범위를 넘는 값은 자른다
 
 </details>
 
