@@ -33,6 +33,7 @@ export async function startPcmStream(
   let pending: Float32Array[] = [];
   let seq = 0;
   let failed = false;
+  let stopped = false;
   let chain: Promise<void> = Promise.resolve();
   node.port.onmessage = (event: MessageEvent<Float32Array>) => pending.push(event.data);
   source.connect(node);
@@ -65,7 +66,11 @@ export async function startPcmStream(
       ship();
       await chain;
     },
+    // 녹음 종료와 메시지 제출(stopMedia) 때 두 번 불린다. 이미 끊은 노드를 다시 끊으면 브라우저가
+    // 예외를 던져 음성 상태 확인이 멈추므로 한 번만 정리한다.
     stop: () => {
+      if (stopped) return;
+      stopped = true;
       clearInterval(timer);
       node.port.onmessage = null;
       source.disconnect(node);
