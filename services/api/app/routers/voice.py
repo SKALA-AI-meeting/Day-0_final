@@ -3,6 +3,7 @@
 import base64
 import binascii
 import uuid
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
@@ -11,7 +12,7 @@ from sqlalchemy import select
 
 from app.auth import Principal, require_candidate
 from app.models import SpeechJob
-from app.services.common import ServiceError, conflict, load_context
+from app.services.common import ServiceError, conflict, iso, load_context
 from app.services.context import AppContext, get_context
 from app.voice import controller, quota
 
@@ -53,6 +54,9 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
                 await quota.admission(db, session, ctx.clock.now())
             snap, pending = await controller.sync(db, session, position, ctx.clock.now())
             snap["spoken_message_ids"] = await controller.spoken_message_ids(db, session_id)
+            if snap.get("state") == "USER_READY" and snap.get("ready_at"):
+                think = timedelta(seconds=controller.think_seconds(position))
+                snap["think_deadline_at"] = iso(controller.at(snap["ready_at"]) + think)
             if snap.get("utterance_id"):
                 job = await db.get(SpeechJob, uuid.UUID(snap["utterance_id"]))
                 if job:

@@ -23,7 +23,14 @@ export type VoiceSnapshot = {
   utterance?: { id: string; status: string; transcript?: string; message_id?: string };
   /** 재생이 시작된 동료 발언 id. 상태 조회(GET)에만 있다 */
   spoken_message_ids?: string[];
+  /** 내 차례(USER_READY)일 때 생각 시간이 끝나는 시각. 예전 채용 건이면 ready_at과 같다 */
+  think_deadline_at?: string;
 };
+/** 생각 시간이 남은 초(서버 시각 기준). 생각 시간이 없으면 0 */
+function thinkLeft(snap: VoiceSnapshot): number {
+  if (!snap.think_deadline_at) return 0;
+  return Math.max(0, (Date.parse(snap.think_deadline_at) - Date.parse(snap.server_now)) / 1000);
+}
 const SEATS = new Set(["p1", "p2", "p3"]);
 const noop = () => {};
 type Props = {
@@ -321,7 +328,9 @@ export function VoiceRoom(props: Props) {
         }
         if (enabled && !error && !busy.current && next.epoch) {
           if (next.state === "AI_SPEAKING") void play(next);
-          if (next.state === "USER_READY" && !next.blocked_reason) void record(next);
+          // 생각 시간 동안은 마이크를 켜지 않는다. "지금 발언하기"를 누르면 바로 녹음한다.
+          if (next.state === "USER_READY" && !next.blocked_reason && thinkLeft(next) <= 0)
+            void record(next);
         }
       } catch {
         if (!disposed) setError("음성 연결을 확인하지 못했어요. 다시 시도해 주세요.");
@@ -430,6 +439,19 @@ export function VoiceRoom(props: Props) {
             </div>
           ))}
         </div>
+        {!props.locked &&
+          !error &&
+          voice?.state === "USER_READY" &&
+          !voice.blocked_reason &&
+          thinkLeft(voice) > 0 && (
+            <div className="flex flex-col items-center gap-3">
+              <p className="tabular-nums">생각할 시간 {Math.ceil(thinkLeft(voice))}초</p>
+              <Button disabled={!props.connected} onClick={() => void record(voice)}>
+                지금 발언하기
+              </Button>
+              <p className="text-footnote text-muted">시간이 끝나면 녹음이 자동으로 시작돼요</p>
+            </div>
+          )}
         {!props.locked && voice?.state === "USER_SPEAKING" && (
           <div className="flex flex-col items-center gap-3">
             <p className="tabular-nums">내 발언 {remaining}초 남음</p>

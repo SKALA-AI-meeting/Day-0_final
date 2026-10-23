@@ -14,10 +14,22 @@ from app.voice import quota
 from app.voice.speech import pcm
 
 HOLD = {"USER_READY", "USER_SPEAKING", "TRANSCRIBING", "PROCESSING"}
+# 생각 시간이 끝난 뒤 화면이 녹음을 시작하기까지 기다려 주는 여유. 지나면 차례를 반납한다.
+READY_GRACE_SECONDS = 10
 
 
 def at(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def think_seconds(position) -> int:
+    """채용 건에 고정된 생각 시간. 이 값이 없던 예전 채용 건은 0(바로 녹음)."""
+    return position.scenario["voice_policy"].get("think_seconds", 0)
+
+
+def ready_hold(position) -> timedelta:
+    """내 차례(USER_READY)를 동료 발언·카드에 반납하지 않고 지켜 주는 시간."""
+    return timedelta(seconds=think_seconds(position) + READY_GRACE_SECONDS)
 
 
 async def row(db, session_id):
@@ -68,7 +80,7 @@ async def sync(db, session, position, now):
     if (
         data["state"] == "USER_READY"
         and not data.get("release_ready")
-        and now < at(data["ready_at"]) + timedelta(seconds=10)
+        and now < at(data["ready_at"]) + ready_hold(position)
     ):
         state.data = data
         return {**data, "items": [], "server_now": iso(now)}, []
@@ -162,7 +174,7 @@ async def sync(db, session, position, now):
         if data["state"] != "USER_READY":
             data["ready_at"] = iso(now)
         data["state"] = "USER_READY"
-    if data["state"] == "USER_READY" and now > at(data["ready_at"]) + timedelta(seconds=10):
+    if data["state"] == "USER_READY" and now > at(data["ready_at"]) + ready_hold(position):
         # 시작하지 않은 예약은 카드/침묵 실행을 위해 반납한다.
         data["release_ready"] = True
     state.data = data

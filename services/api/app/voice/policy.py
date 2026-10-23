@@ -9,10 +9,14 @@ def pinned_policy() -> dict:
     seconds = int(os.getenv("VOICE_USER_TURN_SECONDS", "60"))
     if not 1 <= seconds <= 60:
         raise ValueError("VOICE_USER_TURN_SECONDS must be 1..60")
+    think = int(os.getenv("VOICE_THINK_SECONDS", "30"))
+    if not 0 <= think <= 60:
+        raise ValueError("VOICE_THINK_SECONDS must be 0..60")
     return {
         "version": "azure-f0-v1",
         "provider": os.getenv("VOICE_PROVIDER", "azure"),
         "user_turn_seconds": seconds,
+        "think_seconds": think,
         "voices": VOICES.copy(),
         "locale": "ko-KR",
         "sku": "F0",

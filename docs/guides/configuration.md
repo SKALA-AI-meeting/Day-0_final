@@ -85,7 +85,7 @@ env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값�
 
 ## 음성 모드
 
-기본 `VOICE_PROVIDER=azure`는 F0만 허용한다. `AZURE_SPEECH_KEY`·`AZURE_SPEECH_REGION`·`AZURE_SPEECH_RESOURCE_ID`와 DefaultAzureCredential용 관리 ID 또는 서비스 계정 설정은 `.env`에만 둔다. F0 자원 조회·listKeys 권한이 필요하며 요금제 변경 권한은 주지 않는다. `VOICE_QUOTA_PERIOD`는 공급자 잔여 무료량·리셋 경계를 확인한 기간 ID다. 값이 없으면 음성 호출이 차단된다. `VOICE_USER_TURN_SECONDS` 기본 60(1~60)은 새 채용 건에 고정된다.
+기본 `VOICE_PROVIDER=azure`는 F0만 허용한다. `AZURE_SPEECH_KEY`·`AZURE_SPEECH_REGION`·`AZURE_SPEECH_RESOURCE_ID`와 DefaultAzureCredential용 관리 ID 또는 서비스 계정 설정은 `.env`에만 둔다. F0 자원 조회·listKeys 권한이 필요하며 요금제 변경 권한은 주지 않는다. `VOICE_QUOTA_PERIOD`는 공급자 잔여 무료량·리셋 경계를 확인한 기간 ID다. 값이 없으면 음성 호출이 차단된다. `VOICE_USER_TURN_SECONDS` 기본 60(1~60)은 새 채용 건에 고정된다. `VOICE_THINK_SECONDS` 기본 30(0~60)은 내 차례가 온 뒤 녹음이 자동으로 시작되기까지의 생각 시간이고, 새 채용 건에 고정된다. 크면 지원자가 준비할 시간이 늘지만 단계 시간을 더 쓰고, 0이면 예전처럼 바로 녹음한다.
 
 격리 e2e override는 API에 FakeSpeech·FakeLLM·테스트 API를 강제한다. 새 음성 스키마는 기존 볼륨에 자동 적용되지 않으므로 테스트/개발 DB를 구분하고 DB 가이드를 따른다. 실제 Azure 설정이 없어도 Fake 기반 검증은 가능하지만 음질·인식 정확도 검증과 구분한다.
 

@@ -115,6 +115,21 @@ async def test_voice_spoken_ids_follow_playback_start(api, voice_ctx):
     assert snap["spoken_message_ids"] == [first["id"]]
 
 
+async def test_voice_think_time_holds_turn(api, voice_ctx, clock):
+    """내 차례에는 생각 시간(기본 30초) + 여유 10초 동안 차례를 반납하지 않는다."""
+    sess = await setup(api, voice_ctx)
+    snap = await snapshot(api, voice_ctx, sess)
+    assert snap["state"] == "USER_READY"
+    think = controller.at(snap["think_deadline_at"]) - controller.at(snap["ready_at"])
+    assert think.total_seconds() == 30
+    clock.advance(seconds=35)
+    snap = await snapshot(api, voice_ctx, sess)
+    assert not snap.get("release_ready")
+    clock.advance(seconds=6)
+    snap = await snapshot(api, voice_ctx, sess)
+    assert snap["release_ready"] is True
+
+
 async def test_voice_zero_speakers_stale_and_audio_validation(api, voice_ctx, clock):
     sess = await setup(api, voice_ctx)
     snap = await snapshot(api, voice_ctx, sess)
