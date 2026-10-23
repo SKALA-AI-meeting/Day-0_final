@@ -146,9 +146,9 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 263개(live 3개 포함, `make test`는 live를 뺀다).
+총 274개(live 3개 포함, `make test`는 live를 뺀다).
 
-<details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
+<details><summary><code>tests/agent/test_assistant.py</code> (33)</summary>
 
 - `test_model_picks_tools_and_cites`
 - `test_tool_calls_capped_at_three`
@@ -158,6 +158,17 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_internal_material_ids_are_not_shown` ×4
 - `test_hide_ids_touches_only_known_id_notation` ×12
 - `test_ids_hidden_with_open_and_locked_lookups`
+- `test_cites_only_materials_actually_used`
+- `test_verbatim_span_counts_as_used`
+- `test_unrelated_answer_cites_nothing_even_with_tool_results`
+- `test_no_tool_results_means_no_source_line`
+- `test_ungrounded_number_regenerated_once`
+- `test_ungrounded_number_dropped_after_second_failure`
+- `test_all_sentences_dropped_falls_back_to_missing_text`
+- `test_numbers_from_the_question_are_allowed`
+- `test_long_answer_is_cut_at_sentence_end`
+- `test_trim_sentences_prefers_sentence_then_space_then_hard_cut`
+- `test_ungrounded_numbers_rules`
 
 </details>
 

@@ -72,6 +72,10 @@ async def test_runner_scores_fake_assistant():
     catalog = h_mod.Catalog.from_dir(h_mod.MISSION_DIR)
     server = h_mod.FakeServer(catalog, FakeSessionPorts(uuid.uuid4()))
     server.keyword = "water"
+    server.materials = {  # 실제 자료 원문(가짜 rag는 열린 자료를 전부 돌려준다)
+        m["material_id"]: (m["title"], "water", (ae.MISSION / "materials" / m["file"]).read_text())
+        for m in ae.keyword_materials("water")
+    }
     case = next(c for c in ae.load_cases()["cases"] if c["id"] == "a08")
     llm = FakeLLM(
         [tool_call("search_materials", query="센서 경보"), "경보를 평균 25분 앞당겼어요."]
@@ -105,10 +109,10 @@ async def test_runner_scores_fake_assistant():
         ae.corpus("water"),
         ae.max_chars(),
     )
-    # 가짜 rag는 열린 자료를 전부 돌려주고, 답에 제목이 없으면 받은 자료 전부를 인용한다(결정 D1이
-    # 고칠 동작)
-    assert row["tools"] == 1 and row["cited"]
-    assert "자료에 없는 숫자" not in " ".join(row["problems"])
+    # 받은 자료 4개 중 답의 숫자("25분")가 있는 자료만 인용하고 그 제목을 출처 줄로 붙인다(결정 D1)
+    assert row["tools"] == 1 and row["cited"] == ["water_flood_cases"]
+    assert result.content.endswith("\n출처: 도심 침수 사례")
+    assert row["pass"], row["problems"]
 
 
 @pytest.mark.live

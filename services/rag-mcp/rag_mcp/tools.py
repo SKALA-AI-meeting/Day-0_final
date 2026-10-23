@@ -86,7 +86,7 @@ async def reindex_materials(
         str, Field(min_length=1, description="색인할 미션 ID(기본 debate)")
     ] = materials.DEFAULT_MISSION,
 ) -> dict[str, Any]:
-    """미션의 현재 카탈로그 버전으로 자료를 400자 청크로 나눠 다시 색인한다(관리용).
+    """미션의 현재 카탈로그 버전으로 자료를 줄·문장 경계 청크(상한 400자)로 다시 색인한다(관리용).
 
     같은 버전은 덮어써서 몇 번 불러도 결과가 같고, 다른 버전의 청크는 지우지 않아 진행 중인 채용
     건이 자기 버전으로 계속 검색할 수 있다. 결과는 {indexed: 색인된 청크 수, model, dim,
