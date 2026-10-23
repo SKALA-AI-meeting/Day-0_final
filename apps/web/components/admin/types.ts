@@ -74,7 +74,15 @@ export type InviteResult = {
 };
 
 export type NoRecordReason =
-  "no_activity" | "evaluate_failed" | "not_applicable" | "event_not_fired" | "auto_submitted_blank";
+  | "no_activity"
+  | "evaluate_failed"
+  | "not_applicable"
+  | "preempted"
+  | "event_not_fired"
+  | "auto_submitted_blank";
+
+/** 기록 없음 사유가 속한 상태(rubric.md 2.3·5장, 결정 A3). 수준이 있으면 "반응 있음" */
+export type RecordState = "no_scene" | "no_response" | "failed";
 
 export type RecordRef = { type: string; id: string; t_min: number };
 
@@ -165,6 +173,8 @@ export type ReportCard = {
   element: ElementId;
   fired_at: number | null;
   delivered: boolean;
+  /** 지원자가 예정 시각 전에 칸을 확정해 생기지 않은 카드(선결정). 이전 리포트에는 없다 */
+  preempted?: boolean;
   scene: string;
 };
 

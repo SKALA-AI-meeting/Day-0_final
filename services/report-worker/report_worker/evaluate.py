@@ -19,8 +19,14 @@ EvaluationSave·검증 경계다.
 - 핵심 장면이 없는데(핵심 카드 미발생 등) 보조 장면 id를 단 근거 없이 수준을 낸 차원은 거부하지
   않고 `event_not_fired`로 바꾼다(rubric.md 2.4: 부재로만 낮게 보지 않는다). 담당 동료 일부만 전달한
   카드(`delivered=false`)는 발동으로 세지 않는다.
-- 요소 요약(summary)은 LLM을 다시 부르지 않고 최종 차원 행의 `summary_line`·기록 없음 사유로
-  코드가 조립한다(결정 A2).
+- 선결정(결정 A3): 핵심 카드가 지원자 선확정으로 생기지 않은 차원(`scenes` `preempted`)의
+  `event_not_fired`·`no_activity`(위 변환 포함)는 `preempted`로 바꾼다. 장면이 생기지 않았으니
+  반응 없음이 아니다. 척도 복사본에 `preempted` 사유가 없으면(이전 채용 건) 바꾸지 않는다.
+- 지원자 안 채택(결정 A5): 결정 뒤를 보는 차원인데 지원자 안이 채택돼 결정 뒤 장면이 없으면
+  (`scenes` `fixed_reason`) 모델 출력과 상관없이 워커가 기록 없음 행을 쓰고 재요청 사유에 넣지
+  않는다.
+- 요소 요약(summary)은 LLM을 다시 부르지 않고 최종 차원 행의 `summary_line`과 기록 없음 차원의
+  상태(장면 없음·반응 없음·판단 보류)·사유로 코드가 조립한다(결정 A2·A3).
 - LLM 전송 오류·타임아웃은 여기서 잡지 않는다(저장 없이 큐 재시도).
 검증·clamp·요소 수준은 순수 함수라 단위 테스트한다.
 """
@@ -45,9 +51,10 @@ log = logging.getLogger("report_worker.evaluate")
 
 ELEMENTS = ("persuasion", "listening", "inclusion", "flexibility", "honesty")
 CONFIDENCE_ORDER = {"low": 0, "medium": 1, "high": 2}
-# 모델이 쓸 수 있는 기록 없음 사유. evaluate_failed는 워커만 쓴다
+# 모델이 쓸 수 있는 기록 없음 사유. evaluate_failed는 워커만 쓴다. preempted는 워커가 사실로
+# 정하지만 모델이 낸 값이 사실과 맞으면 받는다(맞지 않으면 사실 모순)
 MODEL_REASONS = frozenset(
-    {"no_activity", "not_applicable", "event_not_fired", "auto_submitted_blank"}
+    {"no_activity", "not_applicable", "event_not_fired", "auto_submitted_blank", "preempted"}
 )
 CREDIT_DIMENSION = "hon_credit_record"  # contribution 참조도 근거 개수에 드는 예외(rubric.md 3.5)
 FAILED_SUMMARY = (
@@ -60,6 +67,11 @@ FAILED_RATIONALE = (
 CAPPED_MARK = " (근거 1개로 수준 상한 3 적용)"
 AUX_CAPPED_MARK = " (보조 장면 근거만이라 수준 상한 4 적용)"
 NOT_FIRED_MARK = " (핵심 장면 없음·보조 장면 근거 없음으로 이벤트 미발생 처리)"
+PREEMPTED_MARK = " (지원자가 카드 예정 시각 전에 칸을 확정해 선결정 처리)"
+ADOPTED_RATIONALE = "지원자 안이 채택돼 결정 뒤 설계된 장면이 성립하지 않음"
+PREEMPTED_RATIONALE = "지원자가 카드 예정 시각 전에 칸을 확정해 설계된 장면이 생기지 않음"
+# 상태가 없는 이전 척도 복사본의 기록 없음 묶음 이름
+NO_RECORD_GROUP = "기록 없음"
 REF_PATTERN = re.compile(r"^(msg|slot|proposal|contribution):(.+)$")
 
 
@@ -305,6 +317,11 @@ def check_facts(row: dict[str, Any], refs: "RefIndex", dim: DimensionScenes | No
                 "no_activity는 쓸 수 없다. 그 메시지로 수준을 판단하거나, 메시지가 있어도 "
                 "이 차원이 볼 장면·전제가 없으면 not_applicable과 그 이유를 쓴다"
             )
+        if reason == "preempted" and not dim.preempted:
+            return (
+                "not_preempted: 사실 — 이 차원의 핵심 카드는 선결정되지 않았다. preempted는 쓸 수 "
+                "없다. 사실에 맞는 다른 사유를 쓰거나 장면 안 행동으로 판단한다"
+            )
         if reason == "event_not_fired" and core.exists:
             return (
                 f"card_fired: 사실 — 이 차원의 핵심 장면이 있다({core.label}). "
@@ -537,6 +554,32 @@ def failed_row(dimension_id: str, code: str = "format") -> dict[str, Any]:
     }
 
 
+def fixed_reason(dim: DimensionScenes | None, codes: set[str]) -> str | None:
+    """워커가 정하는 기록 없음 사유(결정 A5). 척도 복사본에 없는 사유는 not_applicable로."""
+    reason = dim.fixed_reason if dim is not None else None
+    if reason == "preempted" and reason not in codes:
+        return "not_applicable"
+    return reason
+
+
+def fixed_row(dimension_id: str, reason: str) -> dict[str, Any]:
+    rationale = PREEMPTED_RATIONALE if reason == "preempted" else ADOPTED_RATIONALE
+    return {**failed_row(dimension_id), "no_record_reason": reason, "rationale": rationale}
+
+
+def preempt(row: dict[str, Any], dim: DimensionScenes | None, codes: set[str]) -> dict[str, Any]:
+    """선결정 차원의 event_not_fired·no_activity를 preempted로(결정 A3). 장면이 생기지 않았으니
+    반응 없음도 아니다."""
+    if (
+        dim is None
+        or not dim.preempted
+        or "preempted" not in codes
+        or row["no_record_reason"] not in ("event_not_fired", "no_activity")
+    ):
+        return row
+    return {**row, "no_record_reason": "preempted", "rationale": row["rationale"] + PREEMPTED_MARK}
+
+
 # ---- 확신도 상한 (rubric.md 2.4) ---------------------------------------------------------------
 
 
@@ -616,7 +659,7 @@ def element_summary(element: str, rows: list[dict[str, Any]], summary: str) -> d
 def first_sentence(rationale: str) -> str:
     """판단 이유의 첫 문장(워커가 붙인 상한·변환 표시는 뺀다). summary_line이 없을 때 쓴다."""
     text = rationale
-    for mark in (CAPPED_MARK, AUX_CAPPED_MARK, NOT_FIRED_MARK):
+    for mark in (CAPPED_MARK, AUX_CAPPED_MARK, NOT_FIRED_MARK, PREEMPTED_MARK):
         text = text.replace(mark, "")
     text = text.strip()
     return re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0] if text else ""
@@ -627,12 +670,19 @@ def build_summary(
     rows: list[dict[str, Any]],
     labels: dict[str, str],
     forbidden: list[re.Pattern],
+    states: dict[str, str] | None = None,
 ) -> str:
     """요소 요약을 최종 차원 행에서 결정적으로 조립한다(결정 A2). 수준이 있는 차원은 수준이 높은
-    순서로 그 행의 `summary_line`(없으면 그 행 판단 이유의 첫 문장), 기록 없음 차원은 이름과 사유
-    표시."""
+    순서로 그 행의 `summary_line`(없으면 그 행 판단 이유의 첫 문장), 기록 없음 차원은 상태별로
+    이름과 사유 표시(결정 A3).
+
+    states는 사유 코드 → 상태 이름(`rubric.yaml` record_states, 상태 순서대로). 없으면(이전 척도
+    복사본) "기록 없음" 하나로 묶는다. 판단 보류 상태는 사유 문장이 상태 이름과 같은 말이라 이름만
+    쓴다.
+    """
     if all(r["no_record_reason"] == "evaluate_failed" for r in rows):
         return FAILED_SUMMARY
+    states = states or {}
     names = {
         d["dimension_id"]: d.get("name") or d["dimension_id"] for d in element_rubric["dimensions"]
     }
@@ -645,13 +695,22 @@ def build_summary(
     for row in leveled:
         line = (row.get("summary_line") or first_sentence(row["rationale"])).strip().rstrip(".")
         parts.append(f"{line}." if line else f"{names[row['dimension_id']]} 수준 {row['level']}.")
-    missing = [
-        f"{names[r['dimension_id']]}({labels.get(r['no_record_reason'], r['no_record_reason'])})"
-        for r in rows
-        if r["level"] is None
-    ]
-    if missing:
-        parts.append("기록 없음: " + ", ".join(missing) + ".")
+    groups: dict[str, list[str]] = {name: [] for name in dict.fromkeys(states.values())}
+    for r in rows:
+        if r["level"] is not None:
+            continue
+        reason = r["no_record_reason"]
+        group = states.get(reason, NO_RECORD_GROUP)
+        name = names[r["dimension_id"]]
+        shown = (
+            name
+            if reason == "evaluate_failed" and reason in states
+            else (f"{name}({labels.get(reason, reason)})")
+        )
+        groups.setdefault(group, []).append(shown)
+    for group, items in groups.items():
+        if items:
+            parts.append(f"{group}: " + ", ".join(items) + ".")
     summary = " ".join(parts)
     if has_forbidden(summary, forbidden):  # 행마다 검사했으므로 겹쳐 생긴 경우만
         return FAILED_SUMMARY
@@ -789,6 +848,20 @@ class EvalContext:
     def scenes(self) -> dict[str, DimensionScenes]:
         return build_scenes(self.record, self.rubric)
 
+    @property
+    def reason_codes(self) -> set[str]:
+        """채용 건 척도 복사본의 기록 없음 사유 코드(이전 복사본에는 preempted가 없다)."""
+        return {r["code"] for r in self.rubric.get("no_record_reasons", [])}
+
+    @property
+    def reason_states(self) -> dict[str, str]:
+        """사유 코드 → 상태 이름(record_states 순서). 이전 복사본에는 없어 빈 dict."""
+        names = {s["state"]: s["label"] for s in self.rubric.get("record_states") or []}
+        order = {state: i for i, state in enumerate(names)}
+        reasons = [r for r in self.rubric.get("no_record_reasons", []) if r.get("state") in names]
+        reasons.sort(key=lambda r: order[r["state"]])
+        return {r["code"]: names[r["state"]] for r in reasons}
+
     def element_cards(self, element: str) -> list[str]:
         return [c["card_id"] for c in self.rubric.get("cards", []) if c.get("element") == element]
 
@@ -809,9 +882,19 @@ async def evaluate_element(
         facts_block(element_rubric, scenes, ctx.record),
     )
 
+    # 지원자 안 채택으로 결정 뒤 장면이 없는 차원은 워커가 정하므로 그 출력 오류로 재요청하지 않는다
+    fixed = {
+        i: reason
+        for i in dimension_ids
+        if (reason := fixed_reason(scenes.get(i), ctx.reason_codes)) is not None
+    }
+
     def check(text: str) -> Validation:
         output = fix_refs(parse_json(text), ctx.refs)
-        return validate_output(output, dimension_ids, ctx.refs, ctx.forbidden, scenes)
+        result = validate_output(output, dimension_ids, ctx.refs, ctx.forbidden, scenes)
+        for dimension_id in fixed:
+            result.errors.pop(dimension_id, None)
+        return result
 
     checked = check(await complete_tracked(llm, ctx.prompts.common, user, usage))
     if checked.errors:
@@ -827,6 +910,10 @@ async def evaluate_element(
     for dimension in dimensions:
         dimension_id = dimension["dimension_id"]
         dim = scenes.get(dimension_id)
+        if dimension_id in fixed:
+            log.info("fixed dimension=%s reason=%s", dimension_id, fixed[dimension_id])
+            rows.append(fixed_row(dimension_id, fixed[dimension_id]))
+            continue
         row = checked.valid.get(dimension_id)
         if row is None:
             code = reason_code(checked.errors.get(dimension_id) or checked.errors.get("_format"))
@@ -835,15 +922,15 @@ async def evaluate_element(
             continue
         if not_fired(row, dim, ctx.refs):
             log.info("event_not_fired dimension=%s (no auxiliary scene evidence)", dimension_id)
-            rows.append(
-                {
-                    **row,
-                    "level": None,
-                    "no_record_reason": "event_not_fired",
-                    "confidence": None,
-                    "rationale": row["rationale"] + NOT_FIRED_MARK,
-                }
-            )
+            row = {
+                **row,
+                "level": None,
+                "no_record_reason": "event_not_fired",
+                "confidence": None,
+                "rationale": row["rationale"] + NOT_FIRED_MARK,
+            }
+        if row["level"] is None:
+            rows.append(preempt(row, dim, ctx.reason_codes))
             continue
         if row["level"] == 5 and aux_only(row, ctx.refs):  # 보조 장면만으로 5를 주지 않는다
             row = {**row, "level": 4, "rationale": row["rationale"] + AUX_CAPPED_MARK}
@@ -860,7 +947,7 @@ async def evaluate_element(
         )
         rows.append(clamp(row, cap))
     labels = {r["code"]: r["label"] for r in ctx.rubric.get("no_record_reasons", [])}
-    summary = build_summary(element_rubric, rows, labels, ctx.forbidden)
+    summary = build_summary(element_rubric, rows, labels, ctx.forbidden, ctx.reason_states)
     final = [contract_row(r) for r in rows]
     return final, element_summary(element, final, summary)
 

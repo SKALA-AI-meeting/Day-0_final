@@ -7,6 +7,7 @@ from app.services.facts import (
     evaluator_facts,
     message_facts,
     paste_overlap,
+    phase_starts,
 )
 
 
@@ -34,7 +35,7 @@ def msg(id_, sender, t, addressed=None, content="짧은 말", phase="keyword"):
     }
 
 
-def test_decision_path_and_candidate_adoption_follow_current_rule():
+def test_decision_path_and_candidate_adoption_exclude_timeout():
     options = [
         {"option_id": "kw-mine", "first_proposer": "candidate"},
         {"option_id": "pb-lead", "first_proposer": "p1"},
@@ -52,10 +53,50 @@ def test_decision_path_and_candidate_adoption_follow_current_rule():
     assert keyword["candidate_option_adopted"] is False  # 지원자 확정인데 지지 2명(반대 남음)
     assert problem["path"] == "ai_consensus_fill"
     assert problem["candidate_backed"] is False  # 지원자가 지지해도 카드 기준안은 지원자 안이 아님
-    assert solution["path"] == "timeout" and solution["candidate_option_adopted"] is True
+    # 시간 초과로 정해진 칸은 지원자 안이어도 채택이 아니다(결정 A5)
+    assert solution["path"] == "timeout" and solution["candidate_backed"]
+    assert solution["candidate_option_adopted"] is False
+    fill = decision_facts(
+        [slot("solution", "sl-p2", "p3", "consensus", ["candidate"], 40.0)], options
+    )
+    assert fill[0]["path"] == "ai_consensus_fill" and fill[0]["candidate_option_adopted"] is True
     assert all(r["timeout_rule"] is None for r in rows)
     ruled = decision_facts([{**slots[0], "timeout_rule": "most_support"}], options)
     assert ruled[0]["timeout_rule"] == "most_support"
+
+
+def test_preempted_cards_when_candidate_confirms_before_card_time():
+    options = [{"option_id": "pb-mine", "first_proposer": "candidate"}]
+    schedule = [
+        {"card_id": "flexibility_majority", "phase": "problem", "t_min": 5.0, "at": 300.0},
+        {"card_id": "listening_pressure", "phase": "problem", "t_min": 5.0, "at": 300.0},
+        {"card_id": "persuasion_solution", "phase": "solution", "t_min": 9.0, "at": 540.0},
+    ]
+
+    def problem(filled_by, resolution, at, t):
+        row = slot("problem", "pb-mine", filled_by, resolution, ["candidate"], t)
+        return {**row, "at": at}
+
+    # 지원자가 예정 시각 전에 직접 확정 → 그 단계의 발동하지 않은 카드만 선결정
+    early = decision_facts([problem("candidate", "consensus", 299.5, 5.0)], options, (), schedule)
+    assert early[0]["preempted_cards"] == ["flexibility_majority", "listening_pressure"]
+    # 반올림한 분이 같아도 초로 가른다. 예정 시각 뒤 확정·발동한 카드·AI 채움·시간 초과는 아니다
+    late = decision_facts([problem("candidate", "consensus", 300.5, 5.0)], options, (), schedule)
+    assert late[0]["preempted_cards"] == []
+    fired = [{**c, "fired": c["card_id"] == "listening_pressure"} for c in schedule]
+    partly = decision_facts([problem("candidate", "consensus", 120.0, 2.0)], options, (), fired)
+    assert partly[0]["preempted_cards"] == ["flexibility_majority"]
+    for filled_by, resolution in (("p3", "consensus"), ("p3", "timeout")):
+        row = decision_facts([problem(filled_by, resolution, 120.0, 2.0)], options, (), schedule)
+        assert row[0]["preempted_cards"] == []
+    # 초가 없으면 분으로 비교한다
+    no_at = decision_facts(
+        [slot("problem", "pb-mine", "candidate", "consensus", [], 2.0)],
+        options,
+        (),
+        [{k: v for k, v in c.items() if k != "at"} for c in schedule],
+    )
+    assert no_at[0]["preempted_cards"] == ["flexibility_majority", "listening_pressure"]
 
 
 def test_message_facts_reply_target_and_decided_phases():
@@ -107,3 +148,19 @@ def test_paste_suspect_needs_prior_answer_and_long_overlap():
     assert same_minute["message_facts"][0]["paste_suspect"] is None
     assert rows["c2"]["call_id"] == "ac-1" and rows["c2"]["overlap"] >= PASTE_OVERLAP
     assert facts["decisions"] == []
+
+
+def test_phase_starts_follow_transition_times_like_the_card_scheduler():
+    from datetime import UTC, datetime, timedelta
+
+    t0 = datetime(2026, 10, 21, 1, 0, tzinfo=UTC)
+    confirmed = {"keyword": t0 + timedelta(minutes=2), "problem": t0 + timedelta(minutes=6)}
+    # 지나간 단계는 앞 칸 확정(단계 전환) 시각, 진행 중인 단계는 phase_started_at(시간 당기기 반영)
+    shifted = t0 + timedelta(minutes=5)
+    starts = phase_starts(t0, confirmed, "solution", shifted)
+    assert starts == {
+        "keyword": t0,
+        "problem": t0 + timedelta(minutes=2),
+        "solution": shifted,  # 앞 칸 확정 시각(6분)이 아니라 스케줄러가 읽는 값
+    }
+    assert phase_starts(t0, {}, None, None) == {"keyword": t0}

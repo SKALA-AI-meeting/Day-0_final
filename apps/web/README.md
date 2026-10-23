@@ -77,7 +77,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 62개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 67개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -98,10 +98,12 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>components/admin/format.test.ts</code> (2)</summary>
+<details><summary><code>components/admin/format.test.ts</code> (4)</summary>
 
 - evaluate_failed는 판단 보류 문구, 나머지 사유는 기존 문구
 - 기록 요약 끝의 outcome 토큰을 표시 글자로 바꾼다
+- 사유 문장·상태는 척도 계약(get_rubric no_record_reasons·record_states)과 같다
+- 평가 문장의 차원은 세부 행동으로 보인다
 
 </details>
 
@@ -125,15 +127,18 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>components/admin/report-view.test.tsx</code> (7)</summary>
+<details><summary><code>components/admin/report-view.test.tsx</code> (10)</summary>
 
-- 샘플 리포트 픽스처: 5요소·19차원, 사유 5종, 미발생 카드 1장, 조정 1개, 확신도 3종, 근거 4종
-- 샘플 리포트 화면: 사유 문장 5종, 미발생 카드, 담당자 조정 나란히, 조정·검토 UI 없음
+- 샘플 리포트 픽스처: 5요소·19차원, 사유 6종, 미발생 카드 1장, 조정 1개, 확신도 3종, 근거 4종
+- 샘플 리포트 화면: 사유 문장 6종, 미발생 카드, 담당자 조정 나란히, 조정·검토 UI 없음
 - 카드 장면: 발동했지만 일부 동료만 전달한 카드에 표시, 전원 전달·미발생 카드에는 없음
 - 리포트 draft 렌더: 안내·요약·타임라인·차원·근거·사실·기획안·AI 활용
 - 차원 조정은 메모 필수, 요소 수준 재계산, 검토 완료 → 확정 중 → final → 메모 추가
 - 전체 기록: 근거 앵커 줄 하이라이트, 오피스 시각, 단계·결과 한국어
 - 사실 지표에 제출 때 빈 칸과 빈칸 경고 확인이 나오고, 칸 결과는 outcome으로 보인다
+- 기록 상태: 기록 없음 차원마다 장면 없음·반응 없음·판단 보류 표식과 사유, 요약표는 상태별 개수
+- 용어 설명과 화면 용어: 세부 행동·수준·확신도·상태·선결정·설계된 장면, 차원은 보이지 않는다
+- 카드 장면: 지원자 선확정으로 생기지 않은 카드는 이벤트 미발생 대신 선결정
 
 </details>
 

@@ -11,9 +11,15 @@ type LevelChipBase = {
   className?: string;
 };
 
-/** 수준이 있으면 사유를 받지 않고, 기록 없음(null)이면 사유 문장(rubric.md 5장)이 반드시 따라온다 */
+/**
+ * 수준이 있으면 사유를 받지 않고, 기록 없음(null)이면 사유 문장(rubric.md 5장)이 반드시 따라온다.
+ * state는 기록 상태 이름(장면 없음·반응 없음·판단 보류, rubric.md 2.3). 없으면 "기록 없음"
+ */
 export type LevelChipProps = LevelChipBase &
-  ({ level: Level; reason?: never } | { level: null; reason: string });
+  (
+    | { level: Level; reason?: never; state?: never }
+    | { level: null; reason: string; state?: string }
+  );
 
 /**
  * BARS 수준 표기. 높고 낮음을 색으로 서열화하지 않도록 수준과 상관없이 중립 톤 하나만 쓴다.
@@ -24,7 +30,7 @@ export function LevelChip(props: LevelChipProps) {
     return (
       <span className={cn("inline-flex items-center gap-1.5 text-sm text-muted", className)}>
         <span className="rounded-sm border border-line bg-surface px-1.5 py-px text-xs font-medium">
-          {label ? `${label} · 기록 없음` : "기록 없음"}
+          {label ? `${label} · ${props.state ?? "기록 없음"}` : (props.state ?? "기록 없음")}
         </span>
         <span>{props.reason}</span>
         {adjusted && <AdjustedMark />}

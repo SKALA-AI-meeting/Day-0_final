@@ -1,7 +1,7 @@
 // 관리자 화면 표기 규칙: 시각(오피스 시각), 단계·유형·사유 문장(rubric.md 5장), 차원 정의, 삭제 예정일.
 import { resolutionLabel, type Outcome } from "@/lib/resolution";
 
-import type { NoRecordReason, PhaseId, Sender } from "./types";
+import type { NoRecordReason, PhaseId, RecordState, Sender } from "./types";
 
 const dateTime = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul",
@@ -46,9 +46,72 @@ export const NO_RECORD_TEXT: Record<NoRecordReason, string> = {
   no_activity: "지원자 활동 없음",
   evaluate_failed: "판단 보류 · 근거 부족 — 원문 기록 확인 권장",
   not_applicable: "해당 없음",
+  preempted: "선결정 · 카드 전에 지원자가 칸을 확정",
   event_not_fired: "이벤트 미발생",
   auto_submitted_blank: "자동 제출로 기여 칸 미작성",
 };
+
+/** 기록 없음 사유 → 상태(rubric.md 5장 "상태" 열, rubric.yaml no_record_reasons[].state) */
+export const RECORD_STATE: Record<NoRecordReason, RecordState> = {
+  no_activity: "no_response",
+  evaluate_failed: "failed",
+  not_applicable: "no_scene",
+  preempted: "no_scene",
+  event_not_fired: "no_scene",
+  auto_submitted_blank: "no_response",
+};
+
+/** 상태 이름(rubric.yaml record_states). 수준이 있는 "반응 있음"은 수준 칩이 대신한다 */
+export const RECORD_STATE_TEXT: Record<RecordState, string> = {
+  no_scene: "장면 없음",
+  no_response: "반응 없음",
+  failed: "판단 보류",
+};
+
+export const stateOf = (reason: NoRecordReason) => RECORD_STATE_TEXT[RECORD_STATE[reason]];
+
+/**
+ * 평가 문장(판단 이유·요약)의 내부 용어 "차원"을 화면 용어 "세부 행동"으로(결정 A4).
+ * 평가 단위로 쓰인 낱말만 바꾼다: 앞에 한글이 붙은 말("다차원")과 "차원적"은 그대로 둔다.
+ * 두 말 모두 받침으로 끝나 뒤 조사("은·이·을·별" 등)가 그대로 맞는다
+ */
+export const displayTerms = (text: string) => text.replace(/(?<![가-힣])차원(?!적)/g, "세부 행동");
+
+/** 리포트 머리의 용어 설명(rubric.md 8장) */
+export const REPORT_TERMS: { term: string; text: string }[] = [
+  {
+    term: "세부 행동",
+    text: "요소(설득·경청·배려·수용·정직) 하나를 나눠 보는 관찰 단위입니다. 요소마다 3~4개이고 각각 따로 판단합니다.",
+  },
+  {
+    term: "수준 1~5",
+    text: "공개된 행동 기준표에서 지원자 행동에 가장 가까운 단계입니다. 요소 수준은 그 요소 세부 행동 수준의 평균을 반올림한 값이고 요소끼리 더하지 않습니다.",
+  },
+  {
+    term: "확신도",
+    text: "근거가 얼마나 분명한지입니다. 낮음이면 근거가 약하니 원문 기록을 확인해 주세요.",
+  },
+  {
+    term: "장면 없음",
+    text: "판단할 장면이 생기지 않아 수준을 매기지 않았습니다(해당 없음, 이벤트 미발생, 선결정).",
+  },
+  {
+    term: "선결정",
+    text: "지원자가 카드 예정 시각 전에 그 단계 칸을 직접 확정해 설계된 장면이 생기지 않은 경우입니다. 장면 없음의 한 종류입니다.",
+  },
+  {
+    term: "반응 없음",
+    text: "장면은 있었지만 지원자 반응이 없었습니다. 반응이 없다는 것만으로 수준을 낮추지 않습니다.",
+  },
+  {
+    term: "판단 보류",
+    text: "AI 평가가 근거 있는 판단을 내지 못한 경우입니다. 원문 기록을 보고 직접 판단해 주세요.",
+  },
+  {
+    term: "설계된 장면",
+    text: "같은 채용 건의 모든 지원자가 같은 시각·같은 방식으로 겪도록 설계한 장면(동료의 반대·압박·머뭇거림 등)입니다.",
+  },
+];
 
 export const PHASE_TEXT: Record<PhaseId, string> = {
   keyword: "키워드",

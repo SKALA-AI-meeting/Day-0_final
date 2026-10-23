@@ -67,7 +67,7 @@ make test                                               # 전체
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 74개(live 2개 포함, `make test`는 live를 뺀다).
+총 82개(live 2개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/test_evaluate.py</code> (29)</summary>
 
@@ -149,6 +149,19 @@ make test                                               # 전체
 <details><summary><code>tests/test_heartbeat.py</code> (1)</summary>
 
 - `test_beat_writes_current_time`
+
+</details>
+
+<details><summary><code>tests/test_states.py</code> (8)</summary>
+
+- `test_preempted_core_card_turns_not_fired_and_no_activity_into_preempted`
+- `test_not_preempted_card_stays_event_not_fired_and_model_preempted_is_checked`
+- `test_old_rubric_copy_keeps_event_not_fired_and_one_no_record_group`
+- `test_facts_block_marks_preempted_dimensions`
+- `test_report_cards_mark_preempted_only_for_cards_that_did_not_fire`
+- `test_adopted_candidate_option_fixes_only_after_decision_dimensions`
+- `test_adopted_and_preempted_after_dimensions_are_preempted`
+- `test_facts_block_gives_fixed_result_and_no_after_scene_when_adopted`
 
 </details>
 <!-- /gen:tests -->

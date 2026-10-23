@@ -58,9 +58,9 @@ const ERROR_TEXT: Record<string, string> = {
   unauthorized: "이메일 또는 비밀번호가 맞지 않습니다.",
   invalid_previous_session: "세션 실패·취소된 지원자만 재응시 초대할 수 있습니다.",
   invalid_input: "필수 입력을 확인해 주세요.",
-  memo_required: "조정한 차원에는 메모를 적어야 합니다.",
-  invalid_dimension: "평가표에 없는 차원입니다.",
-  duplicate_dimension: "같은 차원이 두 번 들어 있습니다.",
+  memo_required: "조정한 세부 행동에는 메모를 적어야 합니다.",
+  invalid_dimension: "평가표에 없는 세부 행동입니다.",
+  duplicate_dimension: "같은 세부 행동이 두 번 들어 있습니다.",
   already_reviewed:
     "이미 다른 내용으로 검토가 제출되었습니다. 화면을 새로 고쳐 확정된 값을 확인하세요.",
 };

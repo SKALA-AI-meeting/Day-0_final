@@ -1,6 +1,6 @@
 """docs/product/rubric.md의 BARS 표를 읽는 파서.
 
-rubric.yaml이 정본 문서의 표(차원 목록·수준 앵커·담당자 참고 문구·기록 없음 사유)와
+rubric.yaml이 정본 문서의 표(차원 목록·수준 앵커·담당자 참고 문구·기록 없음 사유와 상태)와
 글자 그대로 같은지 검사할 때 쓴다. 표준 라이브러리만 쓴다.
 """
 
@@ -20,7 +20,9 @@ HINT_ROW = re.compile(
     r"^\| `(?P<id>(pers|listen|incl|flex|hon)_[a-z_]+)` \| (?P<h5>[^|]+?) \| (?P<h4>[^|]+?) "
     r"\| (?P<h3>[^|]+?) \| (?P<h2>[^|]+?) \| (?P<h1>[^|]+?) \|$"
 )
-REASON_ROW = re.compile(r"^\| `(?P<code>[a-z_]+)` \| (?P<meaning>[^|]+?) \| (?P<label>[^|]+?) \|$")
+REASON_ROW = re.compile(
+    r"^\| `(?P<code>[a-z_]+)` \| (?P<state>[^|`]+?) \| (?P<meaning>[^|]+?) \| (?P<label>[^|]+?) \|$"
+)
 
 
 def default_doc_path() -> Path:
@@ -57,7 +59,9 @@ def parse_rubric(path: Path | None = None) -> dict:
         if in_reasons:
             r = REASON_ROW.match(line)
             if r:
-                reasons.append({"code": r["code"], "label": r["label"].strip()})
+                reasons.append(
+                    {"code": r["code"], "state": r["state"].strip(), "label": r["label"].strip()}
+                )
             continue
         if current_el is None:
             continue

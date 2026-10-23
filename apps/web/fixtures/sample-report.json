@@ -48,9 +48,9 @@
       "element": "persuasion",
       "name": "설득/논리력",
       "level": 3,
-      "summary": "자기 안에 이유를 붙여 주장했고 확정 직전 결론을 모았습니다. 반론 대응은 핵심 장면이 없어 기록 없음입니다.",
+      "summary": "자기 안에 이유를 붙여 주장했습니다. 장면 없음: 반론 대응(이벤트 미발생), 논의 수렴(선결정 · 카드 전에 지원자가 칸을 확정).",
       "dimension_count": 4,
-      "no_record_count": 1,
+      "no_record_count": 2,
       "low_confidence_count": 1,
       "adjusted_level": 3
     },
@@ -68,7 +68,7 @@
       "element": "inclusion",
       "name": "배려/포용",
       "level": 3,
-      "summary": "머뭇거린 동료를 불러 의견을 듣고 자기 안과 묶었으나 확정 전 전체 확인은 없었습니다. 말하기 편한 분위기는 기록 없음입니다.",
+      "summary": "머뭇거린 동료를 불러 의견을 듣고 자기 안과 묶었으나 확정 전 전체 확인은 없었습니다. 반응 없음: 말하기 편한 분위기(지원자 활동 없음).",
       "dimension_count": 4,
       "no_record_count": 1,
       "low_confidence_count": 0,
@@ -78,7 +78,7 @@
       "element": "flexibility",
       "name": "수용/유연성",
       "level": 4,
-      "summary": "자기 안과 다른 결론을 받아들이고 다음 단계에서 먼저 해결책을 냈습니다. 다른 안 재검토는 판단 보류로 기록 없음입니다.",
+      "summary": "자기 안과 다른 결론을 받아들이고 다음 단계에서 먼저 해결책을 냈습니다. 판단 보류: 다른 안 재검토.",
       "dimension_count": 4,
       "no_record_count": 1,
       "low_confidence_count": 0,
@@ -88,7 +88,7 @@
       "element": "honesty",
       "name": "정직/공정",
       "level": 4,
-      "summary": "채택된 아이디어의 제안자를 구분해 적었습니다. 토론 중 출처와 결정 과정 표현은 기록 없음입니다.",
+      "summary": "채택된 아이디어의 제안자를 구분해 적었습니다. 장면 없음: 토론 중 출처 존중(해당 없음). 반응 없음: 결정 과정의 사실 표현(자동 제출로 기여 칸 미작성).",
       "dimension_count": 3,
       "no_record_count": 2,
       "low_confidence_count": 0,
@@ -354,115 +354,16 @@
       "element": "persuasion",
       "dimension_id": "pers_convergence",
       "name": "논의 수렴",
-      "level": 4,
-      "no_record_reason": null,
-      "rationale": "키워드를 직접 확정하고 문제 상황에서 조건을 붙여 결론으로 모음.",
-      "confidence": "high",
-      "reviewer_hint": "대체로 분명히 보입니다",
+      "level": null,
+      "no_record_reason": "preempted",
+      "rationale": "해결책 단계 반론 카드 예정 시각 전에 지원자가 해결책 칸을 확정해 결론을 모으는 장면이 생기지 않았고, 키워드 단계에도 흩어진 의견을 모은 발언이 없음. (지원자가 카드 예정 시각 전에 칸을 확정해 선결정 처리)",
+      "confidence": null,
+      "reviewer_hint": null,
       "adjusted_level": null,
       "adjusted_no_record_reason": null,
       "adjust_memo": null,
-      "evidence_refs": ["msg:m-18", "slot:keyword"],
-      "evidence": [
-        {
-          "ref": "msg:m-18",
-          "kind": "message",
-          "counted": true,
-          "speaker": "candidate",
-          "phase": "problem",
-          "t_min": 24.8,
-          "origin": "spontaneous",
-          "quote": "좋아요, 침수 피해 증가로 가는 데 동의해요. 대신 해결책에서 물 부족 데이터도 같이 보면 좋겠어요.",
-          "context": {
-            "before": [
-              {
-                "id": "m-13",
-                "sender": "p1",
-                "content": "도심 폭우·침수 피해가 핵심이에요. 가뭄은 핵심이 아니에요. 침수는 해마다 피해액이 커지고 있어요.",
-                "t_min": 11.2
-              },
-              {
-                "id": "m-14",
-                "sender": "p3",
-                "content": "저도 도심 침수 쪽이 더 급하다고 봐요. 피해 사례가 훨씬 구체적이에요.",
-                "t_min": 11.6
-              },
-              {
-                "id": "m-15",
-                "sender": "candidate",
-                "content": "침수도 중요하지만 가뭄은 생활 전체에 영향을 줘서 우선순위가 더 높다고 생각해요.",
-                "t_min": 13.0
-              },
-              {
-                "id": "m-16",
-                "sender": "p1",
-                "content": "그건 핵심이 아니에요. 침수 피해액이 더 크다니까요.",
-                "t_min": 13.8
-              },
-              {
-                "id": "m-17",
-                "sender": "candidate",
-                "content": "강한결님 말씀처럼 피해액 기준이면 침수가 더 클 수도 있겠네요. 침수 사례 자료를 같이 볼게요.",
-                "t_min": 15.5
-              }
-            ],
-            "after": [
-              {
-                "id": "m-19",
-                "sender": "p3",
-                "content": "그럼 도심 폭우·침수 피해 증가로 정리할게요.",
-                "t_min": 25.4
-              },
-              {
-                "id": "m-20",
-                "sender": "system",
-                "content": "해결책 단계예요. 이 문제의 해결 방향 하나를 정해 주세요. 이 단계 20분 남았어요.",
-                "t_min": 25.4
-              },
-              {
-                "id": "m-21",
-                "sender": "p2",
-                "content": "저… 하나 생각한 게 있긴 한데… 아니에요, 먼저 얘기하세요.",
-                "t_min": 27.4
-              }
-            ]
-          },
-          "record_ref": {
-            "type": "message",
-            "id": "m-18",
-            "t_min": 24.8
-          }
-        },
-        {
-          "ref": "slot:keyword",
-          "kind": "slot",
-          "counted": true,
-          "phase": "keyword",
-          "value": "물",
-          "resolution": "consensus",
-          "filled_by": "candidate",
-          "support": [
-            {
-              "option_id": "opt-kw-water",
-              "supporters": ["candidate", "p2"]
-            },
-            {
-              "option_id": "opt-kw-fire",
-              "supporters": ["p1"]
-            },
-            {
-              "option_id": "opt-kw-wind",
-              "supporters": ["p3"]
-            }
-          ],
-          "t_min": 8.2,
-          "record_ref": {
-            "type": "slot",
-            "id": "keyword",
-            "t_min": 8.2
-          }
-        }
-      ]
+      "evidence_refs": [],
+      "evidence": []
     },
     {
       "element": "listening",
@@ -2232,42 +2133,48 @@
       "element": "persuasion",
       "fired_at": 3.0,
       "delivered": true,
-      "scene": "비판형 동료가 키워드 단계에서 다른 키워드를 이유와 함께 밀고 지원자 안의 약점을 물은 장면"
+      "scene": "비판형 동료가 키워드 단계에서 다른 키워드를 이유와 함께 밀고 지원자 안의 약점을 물은 장면",
+      "preempted": false
     },
     {
       "card_id": "flexibility_majority",
       "element": "flexibility",
       "fired_at": 11.2,
       "delivered": true,
-      "scene": "문제 상황 단계에서 두 동료가 지원자 안과 다른 기준안을 지지한 장면"
+      "scene": "문제 상황 단계에서 두 동료가 지원자 안과 다른 기준안을 지지한 장면",
+      "preempted": false
     },
     {
       "card_id": "listening_pressure",
       "element": "listening",
       "fired_at": 11.2,
       "delivered": true,
-      "scene": "고집형 동료가 문제 상황 단계에서 자기 안을 강하게 밀어붙인 장면"
+      "scene": "고집형 동료가 문제 상황 단계에서 자기 안을 강하게 밀어붙인 장면",
+      "preempted": false
     },
     {
       "card_id": "inclusion_silence",
       "element": "inclusion",
       "fired_at": 27.4,
       "delivered": true,
-      "scene": "소극형 동료가 해결책 단계에서 의견이 있다고 말하다 멈춘 장면"
+      "scene": "소극형 동료가 해결책 단계에서 의견이 있다고 말하다 멈춘 장면",
+      "preempted": false
     },
     {
       "card_id": "persuasion_solution",
       "element": "persuasion",
       "fired_at": null,
       "delivered": false,
-      "scene": "비판형 동료가 해결책 단계에서 지원자 안의 약점을 자료로 짚고 자기 안을 민 장면"
+      "scene": "비판형 동료가 해결책 단계에서 지원자 안의 약점을 자료로 짚고 자기 안을 민 장면",
+      "preempted": false
     },
     {
       "card_id": "honesty_credit",
       "element": "honesty",
       "fired_at": 46.0,
       "delivered": true,
-      "scene": "기획안 단계에서 아이디어 기여 칸을 지원자가 직접 작성한 장면"
+      "scene": "기획안 단계에서 아이디어 기여 칸을 지원자가 직접 작성한 장면",
+      "preempted": false
     }
   ],
   "debrief": {

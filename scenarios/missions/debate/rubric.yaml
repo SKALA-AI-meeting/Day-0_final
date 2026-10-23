@@ -2,6 +2,7 @@
 # [초안] 차원 구성·정의·앵커·예시 발언은 사용자 검토 대상이다(rubric.md 머리말). 내용을 바꾸려면 rubric.md를 먼저 고친다.
 # api가 채용 건 생성 때 positions.scenario.rubric으로 복사하고 assessment-mcp get_rubric이 그 복사본을 내준다.
 # get_rubric의 cards[{card_id, element, window}]는 cards.yaml에서 만든다. no_record_reasons.priority는 겹칠 때 앞선 순서(1이 먼저).
+# no_record_reasons.state는 record_states(장면 없음·반응 없음·판단 보류) 중 그 사유가 속한 상태다(rubric.md 2.3·5장, 결정 A3).
 # aux_scenes는 관찰 장면 표의 보조 행을 단계(phases)·카드 창(cards)으로 옮긴 보조 장면 구간이다(id는 차원 안에서 고유).
 # fields는 그 보조 장면에서 근거로 달 수 있는 제출 기획안 필드(proposal:<field>)다.
 # decision_timing(before∣after)은 핵심 카드 단계의 칸 결정 전·후 행동만 보는 차원이다(rubric.md 3.4). 평가 워커가 핵심 장면을 그 칸 결정 전·후(메시지 단계)로 자른다.
@@ -419,7 +420,7 @@ elements:
 - element: flexibility
   name: 수용/유연성
   definition: 내 안이 다수에게 지지받지 못하거나 채택되지 않는 상황에서, 다른 안의 근거를 실제로 검토하고, 결정 절차를 존중하며, 결과를 받아들이고, 정해진 결과 위에서 다음 단계에 계속 기여하는가. 시간 순으로 **결정 전(재검토) → 결정 시점(절차 존중) → 결정 후(승복) → 다음 단계(기여)**를 본다.
-  reviewer_notice: 문제 상황 단계는 **설계된 장면**입니다. 강한결은 확정 전까지 다른 안을 고수하고, 서지안은 반대 의견을 두 번 들으면 바꿀 수 있습니다. 설득 성공 여부가 아니라 결과를 다루는 방식을 보십시오. 근거 있는 이의 제기도 높은 수준일 수 있습니다. 지원자 안이 채택된 세션은 이 요소가 "해당 없음"입니다.
+  reviewer_notice: 문제 상황 단계는 **설계된 장면**입니다. 강한결은 확정 전까지 다른 안을 고수하고, 서지안은 반대 의견을 두 번 들으면 바꿀 수 있습니다. 설득 성공 여부가 아니라 결과를 다루는 방식을 보십시오. 근거 있는 이의 제기도 높은 수준일 수 있습니다. 지원자 안이 채택되면 결정 뒤 세부 행동(결과 승복·다음 단계 기여)은 "장면 없음"이고, 결정 전 세부 행동(다른 안 재검토·결정 절차 존중)은 카드 장면으로 판단합니다. 시간 초과로 정해진 칸은 채택으로 보지 않습니다.
   dimensions:
   - dimension_id: flex_openness
     name: 다른 안 재검토
@@ -522,7 +523,7 @@ elements:
       anchor: 확정된 결정을 다시 정하자고 하거나 참여를 거두거나 결정을 비난한다
       example: '"아까 문제 상황 다시 정해요. 가뭄은 아닌 것 같아요." / "그럼 알아서들 하세요."'
       reviewer_hint: 결정을 되돌리려 하거나 참여를 거두거나 결정을 비난했습니다
-    no_record: 지원자가 문제 상황에서 자기 안을 내지 않았고(`own_option_rejected = null`) 보조 장면에도 채택되지 않은 자기 안이 없음 → `not_applicable`. 확정 후 해결책 단계 끝까지 지원자 메시지 0(`messages_after_rejection = 0`) → `no_activity`(침묵만으로 승복 실패로 보지 않는다).
+    no_record: 지원자가 문제 상황에서 자기 안을 내지 않았고(`own_option_rejected = null`) 보조 장면에도 채택되지 않은 자기 안이 없음 → `not_applicable`. 확정 후 해결책 단계 끝까지 지원자 메시지 0(`messages_after_rejection = 0`) → `no_activity`(침묵만으로 승복 실패로 보지 않는다). 문제 상황에서 지원자 안이 합의로 채택된 세션(`candidate_option_adopted`, 시간 초과는 채택 아님)은 워커가 `not_applicable`로 정한다.
   - dimension_id: flex_forward
     name: 다음 단계 기여
     definition: 자기 안이 채택되지 않은 뒤 다음 단계에서 결정된 결과를 바탕으로 실질적으로 기여하는가. 양이 아니라 기여의 내용을 본다
@@ -556,7 +557,7 @@ elements:
       anchor: 해결책 단계 참여를 거부하거나 앞 결정을 이유로 논의를 방해한다
       example: '"문제가 마음에 안 드니까 해결책은 다른 분들이 정하세요."'
       reviewer_hint: 다음 단계 참여를 거부하거나 방해했습니다
-    no_record: 해결책 단계 지원자 메시지 0 → `no_activity`. 지원자 안이 채택되어 "채택되지 않은 뒤"가 없고 보조 장면에도 없음 → `not_applicable`. 세션이 해결책 단계 전에 끝남 → `event_not_fired`.
+    no_record: 해결책 단계 지원자 메시지 0 → `no_activity`. 세션이 해결책 단계 전에 끝남 → `event_not_fired`. 문제 상황에서 지원자 안이 합의로 채택된 세션(`candidate_option_adopted`, 시간 초과는 채택 아님)은 "채택되지 않은 뒤"가 없어 워커가 `not_applicable`로 정한다.
 - element: honesty
   name: 정직/공정
   definition: 함께 만든 결과에서 **누가 무엇을 냈는지와 어떻게 결정됐는지를 사실대로 드러내는가**. 핵심 장면은 최종 기획안의 `idea_credit` 칸이고, 토론 중 남의 아이디어를 다루는 말과 합의 상태를 전달하는 말도 함께 본다. 사실 기준은 `get_contributions`(실제 최초 제안자)와 칸 기록(`resolution`·지지 현황 스냅샷)이다.
@@ -653,24 +654,38 @@ elements:
       example: '"다들 동의하셨으니 확정합니다." (스냅샷상 강한결·서지안 반대) / 기획안: "전원 합의로 바람 선정" (`resolution: timeout`)'
       reviewer_hint: 반대가 남았는데 모두 동의했다고 말했거나 시간 초과 결과를 전원 합의로 적었습니다
     no_record: 지원자가 합의 상태를 말한 메시지, 기획안 본문의 결정 과정 서술이 모두 없음 → `not_applicable`. 말없이 확정만 한 것은 이 차원의 장면이 아니다(확정 행위는 `flex_decision_respect`).
+record_states:
+- { state: no_scene, label: 장면 없음 }
+- { state: no_response, label: 반응 없음 }
+- { state: failed, label: 판단 보류 }
 no_record_reasons:
 - code: no_activity
   label: 지원자 활동 없음
-  priority: 5
+  state: no_response
+  priority: 6
   worker_only: false
 - code: evaluate_failed
   label: '판단 보류 · 근거 부족 — 원문 기록 확인 권장'
+  state: failed
   priority: 1
   worker_only: true
 - code: not_applicable
   label: 해당 없음
-  priority: 4
+  state: no_scene
+  priority: 5
   worker_only: false
+- code: preempted
+  label: 선결정 · 카드 전에 지원자가 칸을 확정
+  state: no_scene
+  priority: 2
+  worker_only: true
 - code: event_not_fired
   label: 이벤트 미발생
-  priority: 2
+  state: no_scene
+  priority: 3
   worker_only: false
 - code: auto_submitted_blank
   label: 자동 제출로 기여 칸 미작성
-  priority: 3
+  state: no_response
+  priority: 4
   worker_only: false

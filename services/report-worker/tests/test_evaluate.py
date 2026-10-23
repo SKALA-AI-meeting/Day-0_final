@@ -140,7 +140,7 @@ async def test_invalid_dimension_retries_element_once_then_evaluate_failed(dimen
     others = [r for d, r in rows.items() if d != dimension_id]
     assert all(r["no_record_reason"] != "evaluate_failed" for r in others)  # 나머지는 재요청 결과
     assert summary["dimension_count"] == 4 and summary["no_record_count"] == 1
-    assert "기록 없음: 이해 확인(판단 보류" in summary["summary"]
+    assert summary["summary"].endswith("판단 보류: 이해 확인.")  # 평가 실패는 판단 보류 상태로
 
 
 async def test_level4_with_one_candidate_unit_is_capped_to_3_medium_not_rejected():
@@ -315,12 +315,12 @@ async def test_partially_delivered_core_card_with_aux_scene_evidence_caps_low():
 
 
 async def test_summary_lists_no_record_rows_by_state_without_llm():
-    # 경청: 핵심 카드 미발생 → event_not_fired로 바뀐 행은 요약에서 기록 없음으로만 보인다
+    # 경청: 핵심 카드 미발생 → event_not_fired로 바뀐 행은 요약에서 장면 없음 상태로만 보인다
     out = element_outputs()["listening"]
     _, summary, llm, _ = await run("listening", out, record=_without_listening_card())
     assert len(llm.calls) == 1
     assert summary["summary"] == (
-        "기록 없음: 응답성(이벤트 미발생), 이해 확인(이벤트 미발생), "
+        "장면 없음: 응답성(이벤트 미발생), 이해 확인(이벤트 미발생), "
         "타당성 인정(이벤트 미발생), 존중하는 반대(이벤트 미발생)."
     )
     assert not any(dim(out, d)["summary_line"] in summary["summary"] for d in ("listen_engage",))

@@ -173,8 +173,14 @@ DIMENSION_IDS = (
 )
 DIMENSION = Enum(*DIMENSION_IDS)
 NO_RECORD = Enum(
-    "no_activity", "evaluate_failed", "not_applicable", "event_not_fired", "auto_submitted_blank"
+    "no_activity",
+    "evaluate_failed",
+    "not_applicable",
+    "preempted",
+    "event_not_fired",
+    "auto_submitted_blank",
 )
+RECORD_STATE = Enum("no_scene", "no_response", "failed")  # 결정 A3 기록 상태
 LEVEL = Enum(1, 2, 3, 4, 5)
 CONFIDENCE = Enum("high", "medium", "low")
 RESOLUTION = Enum("consensus", "timeout")
@@ -551,6 +557,7 @@ FACTS = {
             "support": SUPPORT,
             "candidate_backed": bool,
             "candidate_option_adopted": bool,
+            "preempted_cards": [CARD],
         }
     ],
     "message_facts": [
@@ -639,6 +646,8 @@ REPORT = {
             "element": ELEMENT,
             "fired_at": Opt(NUM),
             "delivered": bool,
+            # 지원자가 예정 시각 전에 칸을 확정해 생기지 않은 카드(결정 A3). 이전 리포트에는 없다
+            "preempted?": bool,
             "scene": str,
         }
     ],
@@ -770,7 +779,9 @@ RUBRIC = {
             ],
         }
     ],
-    "no_record_reasons": [{"code": NO_RECORD, "label": str}],
+    # state·record_states(결정 A3)는 이 값이 생기기 전에 복사된 척도에는 없다
+    "record_states?": [{"state": RECORD_STATE, "label": str}],
+    "no_record_reasons": [{"code": NO_RECORD, "label": str, "state?": RECORD_STATE}],
     "cards": [
         {
             "card_id": CARD,

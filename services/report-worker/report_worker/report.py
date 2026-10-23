@@ -138,6 +138,12 @@ def aggregate(
         }
         for s in record.get("slots", [])
     ]
+    # 지원자가 예정 시각 전에 칸을 확정해 생기지 않은 카드(평가 사실 decisions, 결정 A3)
+    preempted = {
+        c
+        for d in (record.get("facts") or {}).get("decisions") or []
+        for c in d.get("preempted_cards") or []
+    }
     cards, debrief_cards = [], []
     for card in scenario.get("cards", []):
         seen = observations.get(card["card_id"])
@@ -147,6 +153,7 @@ def aggregate(
                 "element": card["element"],
                 "fired_at": seen["t_min"] if seen else None,
                 "delivered": bool(seen and seen.get("delivered")),
+                "preempted": seen is None and card["card_id"] in preempted,
                 "scene": card.get("report_template", ""),
             }
         )

@@ -2390,7 +2390,8 @@
           }
         ],
         "candidate_backed": true,
-        "candidate_option_adopted": false
+        "candidate_option_adopted": false,
+        "preempted_cards": []
       },
       {
         "phase": "problem",
@@ -2411,7 +2412,8 @@
           }
         ],
         "candidate_backed": false,
-        "candidate_option_adopted": false
+        "candidate_option_adopted": false,
+        "preempted_cards": []
       },
       {
         "phase": "solution",
@@ -2436,7 +2438,8 @@
           }
         ],
         "candidate_backed": true,
-        "candidate_option_adopted": true
+        "candidate_option_adopted": false,
+        "preempted_cards": []
       }
     ],
     "message_facts": [
@@ -2606,42 +2609,48 @@
       "element": "persuasion",
       "fired_at": 3.0,
       "delivered": true,
-      "scene": "비판형 동료가 키워드 단계에서 다른 키워드를 이유와 함께 밀고 지원자 안의 약점을 물은 장면"
+      "scene": "비판형 동료가 키워드 단계에서 다른 키워드를 이유와 함께 밀고 지원자 안의 약점을 물은 장면",
+      "preempted": false
     },
     {
       "card_id": "flexibility_majority",
       "element": "flexibility",
       "fired_at": 11.2,
       "delivered": true,
-      "scene": "문제 상황 단계에서 두 동료가 지원자 안과 다른 기준안을 지지한 장면"
+      "scene": "문제 상황 단계에서 두 동료가 지원자 안과 다른 기준안을 지지한 장면",
+      "preempted": false
     },
     {
       "card_id": "listening_pressure",
       "element": "listening",
       "fired_at": 11.2,
       "delivered": true,
-      "scene": "고집형 동료가 문제 상황 단계에서 자기 안을 강하게 밀어붙인 장면"
+      "scene": "고집형 동료가 문제 상황 단계에서 자기 안을 강하게 밀어붙인 장면",
+      "preempted": false
     },
     {
       "card_id": "inclusion_silence",
       "element": "inclusion",
       "fired_at": 27.4,
       "delivered": true,
-      "scene": "소극형 동료가 해결책 단계에서 의견이 있다고 말하다 멈춘 장면"
+      "scene": "소극형 동료가 해결책 단계에서 의견이 있다고 말하다 멈춘 장면",
+      "preempted": false
     },
     {
       "card_id": "persuasion_solution",
       "element": "persuasion",
       "fired_at": 30.4,
       "delivered": true,
-      "scene": "비판형 동료가 해결책 단계에서 지원자 안의 약점을 자료로 짚고 자기 안을 민 장면"
+      "scene": "비판형 동료가 해결책 단계에서 지원자 안의 약점을 자료로 짚고 자기 안을 민 장면",
+      "preempted": false
     },
     {
       "card_id": "honesty_credit",
       "element": "honesty",
       "fired_at": 46.0,
       "delivered": true,
-      "scene": "기획안 단계에서 아이디어 기여 칸을 지원자가 직접 작성한 장면"
+      "scene": "기획안 단계에서 아이디어 기여 칸을 지원자가 직접 작성한 장면",
+      "preempted": false
     }
   ],
   "debrief": {
