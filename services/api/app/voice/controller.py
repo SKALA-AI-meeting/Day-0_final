@@ -73,9 +73,18 @@ def auto_start_at(position, data: dict) -> str | None:
     return None
 
 
+# 녹음이 끝난 뒤 받아 적기·확인·제출에 남겨 두는 여유(초). 마감에 맞춰 잘린 녹음도
+# 파일이 마감 전에 도착해 그 단계 발언이 되게 하고, 강제 차례도 이만큼 일찍 발동한다
+SUBMIT_MARGIN_SECONDS = 10
+
+
 def speech_cutoff(session, data: dict) -> datetime:
-    """녹음이 아무리 길어도 넘지 못하는 시각: 단계 마감·세션 종료·이 차례에 받은 발언 마감(V4)."""
-    cutoff = min(session.phase_deadline_at, session.ends_at)
+    """녹음이 아무리 길어도 넘지 못하는 시각.
+
+    단계 마감·세션 종료보다 제출 여유만큼 앞, 그리고 이 차례에 이미 받은 발언 마감(V4).
+    """
+    margin = timedelta(seconds=SUBMIT_MARGIN_SECONDS)
+    cutoff = min(session.phase_deadline_at, session.ends_at) - margin
     if data.get("speech_deadline_at"):
         cutoff = min(cutoff, at(data["speech_deadline_at"]))
     return cutoff
@@ -92,8 +101,6 @@ def speech_limit_seconds(session, position, data: dict, now) -> int | None:
 
 NOTICE_KINDS = ("consensus_fill", "timeout_fill")
 DEBATE_PHASES = ("keyword", "problem", "solution")
-# 강제 차례의 받아 적기·제출 여유(초). 녹음 60초가 단계 마감 안에 끝나도록 일찍 발동한다
-FORCED_MARGIN_SECONDS = 10
 
 
 def forced_lead(position) -> timedelta:
@@ -107,7 +114,7 @@ def forced_lead(position) -> timedelta:
         seconds=policy.get("forced_wait_seconds", 0)
         + think_seconds(position)
         + policy["user_turn_seconds"]
-        + FORCED_MARGIN_SECONDS
+        + SUBMIT_MARGIN_SECONDS
     )
 
 

@@ -591,11 +591,34 @@ async def test_voice_short_turn_near_deadline_is_announced(api, voice_ctx):
     await near_deadline(ctx, sess, 30)
     snap = await snapshot(api, ctx, sess)
     assert snap["priority"] == "forced"
-    assert snap["speech_limit_seconds"] in (24, 25)  # 생각 시간 5초 뒤 시작, 마감까지
+    assert snap["speech_limit_seconds"] in (14, 15)  # 생각 5초 뒤 시작, 마감 10초 전까지
     turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
     start = (await post(api, sess, "capture", turn)).json()
     given = controller.at(start["speech_deadline_at"]) - controller.at(start["speech_started_at"])
     assert given.total_seconds() <= 30
+
+
+async def test_voice_recording_cut_by_deadline_still_submits(api, voice_ctx, clock):
+    """마감 직전 녹음은 마감 10초 전에 끝나서, 녹음 파일이 마감 전에 도착해 그 단계 발언이 된다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    await near_deadline(ctx, sess, 30)
+    snap = await snapshot(api, ctx, sess)
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    start = (await post(api, sess, "capture", turn)).json()
+    async with ctx.session_factory() as db:
+        phase_deadline = (await db.get(Session, sess.id)).phase_deadline_at
+    end = controller.at(start["speech_deadline_at"])
+    assert phase_deadline - end >= timedelta(seconds=10)  # 받아 적기·확인·제출 여유
+    # 녹음 시간이 끝나 자동으로 멈추고, 파일은 조금 늦게(2초 뒤) 도착한다
+    clock.advance(seconds=(end - clock.now()).total_seconds() + 2)
+    body = {
+        **turn,
+        "utterance_id": start["utterance_id"],
+        "audio_base64": base64.b64encode(silence()).decode(),
+        "stop_reason": "timeout",
+    }
+    assert (await post(api, sess, "audio", body)).status_code == 200
 
 
 async def test_voice_no_forced_turn_after_candidate_spoke(api, voice_ctx):

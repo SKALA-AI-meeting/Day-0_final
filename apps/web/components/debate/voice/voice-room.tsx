@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { API_URL, api } from "@/lib/api";
+import { API_URL, ApiError, api } from "@/lib/api";
 import { Button } from "@/components/ui";
 import type { Seat, StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
@@ -68,6 +68,12 @@ function thinkLeft(snap: VoiceSnapshot): number {
   return Math.max(0, (Date.parse(snap.think_deadline_at) - Date.parse(snap.server_now)) / 1000);
 }
 const SEATS = new Set(["p1", "p2", "p3"]);
+/** 단계 마감으로 발언이 들어가지 못했을 때 안내를 보여 주는 시간(ms). 오류와 달리 진행을 막지 않는다 */
+const NOTICE_MS = 6000;
+/** 단계(또는 세션)가 끝나 서버가 이 차례의 녹음·제출을 받지 않는 경우 */
+function expired(e: unknown): boolean {
+  return e instanceof ApiError && e.code === "voice_turn_expired";
+}
 const CANDIDATE_STATES = new Set(["USER_READY", "USER_SPEAKING", "TRANSCRIBING", "PROCESSING"]);
 // 음성 상태 확인 주기(ms). 평소 750(계약 docs/contracts/voice.md), 기다리는 상태에서는 250.
 // 작게 하면 준비된 발언을 더 빨리 알지만 서버 요청이 늘어난다(세션당 초당 4회).
@@ -99,6 +105,7 @@ export function useVoiceTurn(props: Props) {
   }, [props]);
   const [voice, setVoice] = useState<VoiceSnapshot | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [active, setActive] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(60);
@@ -128,6 +135,11 @@ export function useVoiceTurn(props: Props) {
   const cleanupRecorder = useRef<() => void>(() => {});
   const path = `/sessions/${props.auth.sessionId}/voice`;
   const token = () => latest.current.auth.getToken();
+
+  const showNotice = useCallback((text: string) => {
+    setNotice(text);
+    setTimeout(() => setNotice((now) => (now === text ? "" : now)), NOTICE_MS);
+  }, []);
 
   const stopMedia = useCallback(() => {
     operation.current++;
@@ -267,7 +279,13 @@ export function useVoiceTurn(props: Props) {
               body: pendingAudio.current,
             });
             pendingAudio.current = null;
-          } catch {
+          } catch (e) {
+            if (expired(e)) {
+              // 단계가 이미 끝나 이 녹음은 들어갈 수 없다. 오류로 멈추지 않고 다음 진행을 이어 간다
+              pendingAudio.current = null;
+              showNotice("단계가 끝나 이번 발언은 제출되지 않았어요.");
+              return;
+            }
             if (!pendingAudio.current)
               await api(`${path}/abort`, {
                 method: "POST",
@@ -290,13 +308,14 @@ export function useVoiceTurn(props: Props) {
           finish.current();
         };
         r.start();
-      } catch {
+      } catch (e) {
         stream.current?.getTracks().forEach((t) => t.stop());
         busy.current = false;
-        setError("마이크를 사용할 수 없어요. 권한과 장치를 확인한 뒤 다시 시작해 주세요.");
+        if (expired(e)) showNotice("단계 마감이 가까워 이번 단계에서는 더 말할 수 없어요.");
+        else setError("마이크를 사용할 수 없어요. 권한과 장치를 확인한 뒤 다시 시작해 주세요.");
       }
     },
-    [path],
+    [path, showNotice],
   );
 
   const play = useCallback(
@@ -428,6 +447,7 @@ export function useVoiceTurn(props: Props) {
           if (
             next.state === "USER_READY" &&
             !next.blocked_reason &&
+            next.speech_limit_seconds !== 0 &&
             next.think_deadline_at &&
             thinkLeft(next) <= 0
           )
@@ -574,28 +594,46 @@ export function useVoiceTurn(props: Props) {
             ? "받아 적은 내용을 확인해 주세요"
             : LABEL[voice?.state ?? "AI_GENERATING"]}
       </p>
-      {!props.locked && !error && voice?.state === "USER_READY" && !voice.blocked_reason && (
-        <div className="flex flex-col items-center gap-2">
-          {voice.priority === "forced" && (
-            <p className="font-semibold text-accent">
-              이번 단계에서 아직 의견을 말하지 않았어요. 지금 말해 주세요
-            </p>
-          )}
-          <Button disabled={!props.connected} onClick={() => void record(voice)}>
-            {voice.think_deadline_at ? "지금 발언하기" : "발언하기"}
-          </Button>
-          <p className="text-footnote text-muted tabular-nums">
-            {voice.think_deadline_at
-              ? `${Math.ceil(thinkLeft(voice))}초 뒤 녹음이 자동으로 시작돼요`
-              : `${Math.ceil(secondsUntil(voice, voice.turn_until_at))}초 안에 시작하지 않으면 동료가 이어서 말해요`}
-          </p>
-          {voice.speech_limit_seconds !== undefined && (
-            <p className="text-footnote font-semibold text-warning tabular-nums">
-              단계 마감이 가까워 이번 발언은 최대 {voice.speech_limit_seconds}초예요
-            </p>
-          )}
-        </div>
+      {notice && (
+        <p role="status" className="text-footnote font-semibold text-warning">
+          {notice}
+        </p>
       )}
+      {!props.locked &&
+        !error &&
+        voice?.state === "USER_READY" &&
+        !voice.blocked_reason &&
+        voice.speech_limit_seconds === 0 && (
+          <p className="text-footnote font-semibold text-warning">
+            단계 마감이 가까워 이번 단계에서는 더 말할 수 없어요
+          </p>
+        )}
+      {!props.locked &&
+        !error &&
+        voice?.state === "USER_READY" &&
+        !voice.blocked_reason &&
+        voice.speech_limit_seconds !== 0 && (
+          <div className="flex flex-col items-center gap-2">
+            {voice.priority === "forced" && (
+              <p className="font-semibold text-accent">
+                이번 단계에서 아직 의견을 말하지 않았어요. 지금 말해 주세요
+              </p>
+            )}
+            <Button disabled={!props.connected} onClick={() => void record(voice)}>
+              {voice.think_deadline_at ? "지금 발언하기" : "발언하기"}
+            </Button>
+            <p className="text-footnote text-muted tabular-nums">
+              {voice.think_deadline_at
+                ? `${Math.ceil(thinkLeft(voice))}초 뒤 녹음이 자동으로 시작돼요`
+                : `${Math.ceil(secondsUntil(voice, voice.turn_until_at))}초 안에 시작하지 않으면 동료가 이어서 말해요`}
+            </p>
+            {voice.speech_limit_seconds !== undefined && (
+              <p className="text-footnote font-semibold text-warning tabular-nums">
+                단계 마감이 가까워 이번 발언은 최대 {voice.speech_limit_seconds}초예요
+              </p>
+            )}
+          </div>
+        )}
       {!props.locked &&
         !error &&
         (voice?.state === "AI_GENERATING" || voice?.state === "AI_SPEAKING") && (
