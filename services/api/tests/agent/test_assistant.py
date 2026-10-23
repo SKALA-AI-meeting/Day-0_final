@@ -321,6 +321,9 @@ def test_trim_sentences_prefers_sentence_then_space_then_hard_cut():
     assert trim_sentences("- 첫 줄\n- 둘째 줄\n- 셋째 줄", 14) == "- 첫 줄\n- 둘째 줄"
     assert trim_sentences("마침표 없이 공백만 있는 긴 문장", 10) == "마침표 없이 공백만"
     assert trim_sentences("공백도마침표도없는긴글자열", 5) == "공백도마침"
+    assert trim_sentences("1. 첫째 항목이에요.\n2. 둘째 항목이에요.\n3.\n4. 셋째", 28) == (
+        "1. 첫째 항목이에요.\n2. 둘째 항목이에요."
+    )
 
 
 def test_ungrounded_numbers_rules():
@@ -334,3 +337,57 @@ def test_ungrounded_numbers_rules():
         drop_sentences("25분이에요. 5분 아니에요.\n2018년 값: 3일", ["5분", "2018년"])
         == "25분이에요."
     )
+
+
+async def test_named_title_wins_over_shared_year_numbers(catalog):
+    """제목을 밝힌 자료가 있으면 여러 자료에 같이 있는 숫자(연도)로 다른 자료를 더하지 않는다."""
+    runner, _, server = grounded(
+        catalog,
+        [
+            tool_call("search_materials", query="제한 급수"),
+            "2025년 제한 급수 일수는 21일이에요. (자료: 지역별 물 부족 통계)",
+        ],
+    )
+    server.materials["water_flood_cases"] = ("도심 침수 사례", "water", "2025년 침수 가구 640.")
+    result = await runner.answer(uuid.uuid4(), "제한 급수 일수?", uuid.uuid4())
+    assert result.cited_material_ids == ["water_stats"]
+    assert "출처" not in result.content  # 제목이 본문에 있으면 출처 줄을 따로 붙이지 않는다
+
+
+async def test_regeneration_can_search_again(catalog):
+    """앞 답의 숫자를 도구 없이 되풀이하면 자료에 없는 수치로 보고 재생성에서 다시 찾아 인용한다."""
+    runner, llm, _ = grounded(
+        catalog,
+        [
+            tool_call("search_materials", query="경보"),
+            "센서를 단 동네는 경보를 평균 25분 앞당겼어요.",
+            "앞서 말씀드린 대로 평균 25분 앞당겼어요.",  # 두 번째 질문: 도구 없이 기억으로 답함
+            tool_call("search_materials", query="경보 시간"),
+            "도심 침수 사례 기준으로 평균 25분 앞당겼어요.",
+        ],
+    )
+    sid = uuid.uuid4()
+    first = await runner.answer(sid, "경보를 얼마나 앞당겼어요?", uuid.uuid4())
+    second = await runner.answer(sid, "몇 분이라고요?", uuid.uuid4())
+    assert first.cited_material_ids == ["water_flood_cases"]
+    assert [c["name"] for c in second.tool_calls] == ["search_materials"]
+    assert second.cited_material_ids == ["water_flood_cases"]
+    assert second.content == "도심 침수 사례 기준으로 평균 25분 앞당겼어요."
+    assert llm.calls[-2].tools  # 재생성 호출에도 도구가 묶여 있다
+
+
+async def test_too_long_answer_is_regenerated_shorter_before_trimming(catalog):
+    runner, llm, _ = grounded(
+        catalog,
+        [
+            tool_call("get_material", material_id="water_stats"),
+            "제한 급수 일수가 세 배 넘게 늘었어요. " * 20,
+            "제한 급수 일수가 세 배 넘게 늘었어요. 2025년은 21일이에요.",
+        ],
+    )
+    result = await runner.answer(uuid.uuid4(), "자세히 설명해 줘", uuid.uuid4())
+    assert (
+        result.content
+        == "제한 급수 일수가 세 배 넘게 늘었어요. 2025년은 21일이에요.\n출처: 지역별 물 부족 통계"
+    )
+    assert "자를 넘는다" in llm.calls[-1].messages[-1].content

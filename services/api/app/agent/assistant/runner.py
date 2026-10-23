@@ -54,6 +54,7 @@ NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 UNIT = re.compile(r"[분%개원톤일배명년세곳회㎡주월시만억]")
 # 문장 끝: 마침표류(닫는 따옴표·괄호 허용) 뒤 공백·끝, 또는 줄바꿈
 SENTENCE_END = re.compile(r"[.!?…][\"'”’)\]」』]*(?=\s|$)|\n")
+LIST_MARKER_TAIL = re.compile(r"(?:\n\s*(?:[-*•]|\d+[.)])\s*)+$")  # 잘린 끝의 빈 목록 표시 줄
 
 # 본문에서 손대지 않는 구역: 코드 블록(``` · ~~~ 펜스, 4칸·탭 들여쓴 줄), URL.
 # 인라인 코드는 맨 id 치환에서만 보호한다.
@@ -166,10 +167,31 @@ class _Loop:
             return self.catalog.fixed.get("assistant_locked", LOCKED_TEXT), [], False
         if not draft:
             return FALLBACK_TEXT, [], True
-        allowed = [question, *(t["content"] for t in history), *self._pieces()]
-        draft = await self._ground_numbers(draft, allowed)
-        if not draft:  # 확인되지 않는 수치를 빼고 나니 남는 문장이 없다
-            return self.catalog.fixed.get("assistant_missing", MISSING_TEXT), [], False
+        # 지원자가 쓴 숫자(질문·앞 질문)는 자료에 없어도 된다. 앞 답의 숫자는 다시 찾아야 한다.
+        given = [question, *(t["content"] for t in history if t["role"] == "user")]
+        missing = self.catalog.fixed.get("assistant_missing", MISSING_TEXT)
+
+        bad = ungrounded_numbers(draft, given + self._pieces())
+        if bad:
+            if self.retrieved:
+                reason = (
+                    f"앞 답의 수치 {', '.join(bad)}는 받은 자료에 없다. 자료 원문에 있는 숫자만 "
+                    "그대로 쓰고, 자료에서 확인되지 않는 수치는 빼고 다시 답한다. 자료에 답이 "
+                    "없으면 없다고 말한다."
+                )
+            else:  # 이번 응답에서 자료를 읽지 않고 수치를 말했다(기억·추측)
+                reason = (
+                    f"앞 답의 수치 {', '.join(bad)}는 이번 응답에서 자료로 확인하지 않았다. "
+                    "search_materials로 먼저 찾은 뒤 자료 원문의 숫자로 다시 답하고, 자료에 없으면 "
+                    "없다고 말한다."
+                )
+            again = await self._regenerate(draft, reason)
+            if again is not None:
+                draft, bad = again, ungrounded_numbers(again, given + self._pieces())
+            draft = drop_sentences(draft, bad)
+            if not draft:
+                return missing, [], False
+
         hits = self.guard.groups_hit(draft)
         if hits:
             again = await self._regenerate(
@@ -178,36 +200,29 @@ class _Loop:
             if again is None or self.guard.groups_hit(again):
                 key = self.guard.notice_key(hits[0]) or "evaluation"
                 return self.catalog.notices.get(key, FALLBACK_TEXT), [], False
-            draft = drop_sentences(again, ungrounded_numbers(again, allowed))
+            draft = drop_sentences(again, ungrounded_numbers(again, given + self._pieces()))
             if not draft:
-                return self.catalog.fixed.get("assistant_missing", MISSING_TEXT), [], False
+                return missing, [], False
+
+        if len(hide_ids(draft, self.retrieved)) > self.guard.max_chars:
+            again = await self._regenerate(
+                draft,
+                f"앞 답이 {self.guard.max_chars}자를 넘는다. 핵심만 골라 {self.guard.max_chars}자 "
+                "안에서 문장을 끝내고, 자료 원문의 숫자만 그대로 쓴다.",
+            )
+            if again is not None and not self.guard.groups_hit(again):
+                shorter = drop_sentences(again, ungrounded_numbers(again, given + self._pieces()))
+                draft = shorter or draft
         return (*self._cite(draft), False)
 
-    async def _ground_numbers(self, draft: str, allowed: list[str]) -> str:
-        """자료·질문에 없는 숫자 → 재생성 1회 → 그래도 남으면 그 수치가 든 문장을 뺀다."""
-        bad = ungrounded_numbers(draft, allowed)
-        if not bad:
-            return draft
-        again = await self._regenerate(
-            draft,
-            f"앞 답의 수치 {', '.join(bad)}는 받은 자료에 없다. 자료 원문에 있는 숫자만 그대로 "
-            "쓰고, 자료에서 확인되지 않는 수치는 빼고 다시 답한다. 자료에 답이 없으면 없다고 "
-            "말한다.",
-        )
-        if again is not None:
-            draft, bad = again, ungrounded_numbers(again, allowed)
-        return drop_sentences(draft, bad) if bad else draft
-
     async def _regenerate(self, draft: str, reason: str) -> str | None:
-        """도구 결과까지 포함한 같은 입력에 앞 답과 고칠 이유를 붙여 한 번 더 받는다."""
+        """같은 입력(도구 결과 포함)에 앞 답과 고칠 이유를 붙여 도구 루프를 한 번 더 돈다(남은 도구
+        예산 안에서 다시 찾을 수 있다). LLM 실패면 None."""
         note = HumanMessage(f"[다시 쓰기] {reason}")
         try:
-            again = await self.llm.ainvoke(
-                [*self.history, AIMessage(draft), note], usage=self.usage, trace=self.trace
-            )
+            return await self._agent([*self.history, AIMessage(draft), note])
         except LLMUnavailable:
             return None
-        return str(again.content or "").strip()
 
     def _pieces(self) -> list[str]:
         return [piece for pieces in self.texts.values() for piece in pieces]
@@ -251,12 +266,13 @@ class _Loop:
 
     def _cite(self, text: str) -> tuple[str, list[str]]:
         """쓴 자료만 인용하고, 본문에 제목이 없는 인용 자료는 출처 줄로 붙인다. 출처 줄 자리를 뺀
-        상한 안의 문장 끝에서 자른다. 쓴 자료가 없으면 인용도 출처 줄도 없다.
+        상한 안의 문장 끝에서 자르고, 잘려 나간 자료는 인용에서 뺀다. 쓴 자료가 없으면 인용도
+        출처 줄도 없다.
         """
-        cited = self._used(text)  # id 표기를 지우기 전에 본다
+        declared = [m for m in self.retrieved if m in text]  # id 표기는 지우기 전에 본다
         body = hide_ids(text, self.retrieved)
-        line = ""
-        for _ in range(3):  # 자르면서 제목이 떨어져 나가면 출처 줄이 길어지므로 다시 맞춘다
+        for _ in range(3):  # 자르면서 제목이 떨어져 나가면 인용·출처 줄이 바뀌므로 다시 맞춘다
+            cited = self._used(body, declared)
             missing = [self.retrieved[m] for m in cited if self.retrieved[m] not in body]
             line = SOURCE_PREFIX + ", ".join(missing) if missing else ""
             room = self.guard.max_chars - (len(line) + 1 if line else 0)
@@ -265,17 +281,19 @@ class _Loop:
             body = trim_sentences(body, room)
         return (f"{body}\n{line}" if line else body), cited
 
-    def _used(self, body: str) -> list[str]:
-        """받은 자료 중 답에 쓴 것: 제목·id를 적었거나, 숫자(단위 포함)나 12자 이상 구간이 그 자료
-        조각에 글자 그대로 있는 자료. 받은 순서."""
+    def _used(self, body: str, declared: list[str]) -> list[str]:
+        """받은 자료 중 답에 쓴 것(받은 순서). 모델이 제목·id로 밝힌 자료가 있으면 그것만 본다.
+        밝힌 자료가 없으면 본문의 숫자(단위 포함)나 12자 이상 구간이 조각에 글자 그대로 있는 자료.
+        """
+        named = [m for m, t in self.retrieved.items() if m in declared or t in body]
+        if named:
+            return named
         numbers = {v + u for v, u in _numbers(body) if u or len(v) >= 2}
         windows = _windows(body)
         used = []
-        for material_id, title in self.retrieved.items():
+        for material_id in self.retrieved:
             pieces = self.texts.get(material_id) or []
-            if title in body or material_id in body:
-                used.append(material_id)
-            elif numbers and any(
+            if numbers and any(
                 v + u in numbers or (u and v in numbers) for p in pieces for v, u in _numbers(p)
             ):
                 used.append(material_id)
@@ -344,16 +362,18 @@ def _sentences(line: str) -> list[str]:
 
 def trim_sentences(text: str, limit: int) -> str:
     """limit 안의 마지막 문장 끝(또는 줄 끝)에서 자른다. 문장 끝이 없으면 마지막 공백, 그것도 없으면
-    limit에서 자른다."""
+    limit에서 자른다. 잘린 끝에 목록 표시("4.", "-")만 남은 줄은 함께 뗀다."""
     body = text.strip()
     if len(body) <= limit:
         return body
     head = body[: limit + 1]
     ends = [m.end() for m in SENTENCE_END.finditer(head) if m.end() <= limit]
     if ends:
-        return body[: ends[-1]].rstrip()
-    cut = head.rfind(" ", 0, limit + 1)
-    return body[: cut if cut > 0 else limit].rstrip()
+        cut = ends[-1]
+    else:
+        space = head.rfind(" ", 0, limit + 1)
+        cut = space if space > 0 else limit
+    return LIST_MARKER_TAIL.sub("", body[:cut].rstrip()).rstrip()
 
 
 def _squash(text: str) -> str:

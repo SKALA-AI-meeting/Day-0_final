@@ -29,7 +29,7 @@ MISSION = ROOT / "scenarios" / "missions" / "debate"
 GROUPS = ("grounded", "out_of_materials", "numbers", "long")
 NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 SENTENCE_END = re.compile(r"[.!?…)\]」』”\"'요다죠까음함]\s*$")
-MISSING = re.compile(r"자료.{0,20}(없|않|못\s*찾)")
+MISSING = re.compile(r"자료.{0,40}(없|않|못\s*찾)")
 UNIT = re.compile(r"[분%개원톤일배명년세곳회㎡주월시만억]")
 SOURCE_LINE = re.compile(r"^\s*출처\s*:", re.MULTILINE)
 
