@@ -523,7 +523,7 @@ elements:
       anchor: 확정된 결정을 다시 정하자고 하거나 참여를 거두거나 결정을 비난한다
       example: '"아까 문제 상황 다시 정해요. 가뭄은 아닌 것 같아요." / "그럼 알아서들 하세요."'
       reviewer_hint: 결정을 되돌리려 하거나 참여를 거두거나 결정을 비난했습니다
-    no_record: 문제 상황에서 지원자 안이 채택됨(`candidate_option_adopted`, 시간 초과 제외) → `not_applicable`(워커가 정한다). 지원자가 문제 상황에서 자기 안을 내지 않았고(`own_option_rejected = null`) 보조 장면에도 채택되지 않은 자기 안이 없음 → `not_applicable`. 확정 후 해결책 단계 끝까지 지원자 메시지 0(`messages_after_rejection = 0`) → `no_activity`(침묵만으로 승복 실패로 보지 않는다).
+    no_record: 지원자가 문제 상황에서 자기 안을 내지 않았고(`own_option_rejected = null`) 보조 장면에도 채택되지 않은 자기 안이 없음 → `not_applicable`. 확정 후 해결책 단계 끝까지 지원자 메시지 0(`messages_after_rejection = 0`) → `no_activity`(침묵만으로 승복 실패로 보지 않는다). 문제 상황에서 지원자 안이 합의로 채택된 세션(`candidate_option_adopted`, 시간 초과는 채택 아님)은 워커가 `not_applicable`로 정한다.
   - dimension_id: flex_forward
     name: 다음 단계 기여
     definition: 자기 안이 채택되지 않은 뒤 다음 단계에서 결정된 결과를 바탕으로 실질적으로 기여하는가. 양이 아니라 기여의 내용을 본다
@@ -557,7 +557,7 @@ elements:
       anchor: 해결책 단계 참여를 거부하거나 앞 결정을 이유로 논의를 방해한다
       example: '"문제가 마음에 안 드니까 해결책은 다른 분들이 정하세요."'
       reviewer_hint: 다음 단계 참여를 거부하거나 방해했습니다
-    no_record: 해결책 단계 지원자 메시지 0 → `no_activity`. 문제 상황에서 지원자 안이 채택돼 "채택되지 않은 뒤"가 없음(`candidate_option_adopted`, 시간 초과 제외) → `not_applicable`(워커가 정한다). 세션이 해결책 단계 전에 끝남 → `event_not_fired`.
+    no_record: 해결책 단계 지원자 메시지 0 → `no_activity`. 세션이 해결책 단계 전에 끝남 → `event_not_fired`. 문제 상황에서 지원자 안이 합의로 채택된 세션(`candidate_option_adopted`, 시간 초과는 채택 아님)은 "채택되지 않은 뒤"가 없어 워커가 `not_applicable`로 정한다.
 - element: honesty
   name: 정직/공정
   definition: 함께 만든 결과에서 **누가 무엇을 냈는지와 어떻게 결정됐는지를 사실대로 드러내는가**. 핵심 장면은 최종 기획안의 `idea_credit` 칸이고, 토론 중 남의 아이디어를 다루는 말과 합의 상태를 전달하는 말도 함께 본다. 사실 기준은 `get_contributions`(실제 최초 제안자)와 칸 기록(`resolution`·지지 현황 스냅샷)이다.
