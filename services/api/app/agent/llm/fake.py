@@ -172,18 +172,19 @@ def _intent(messages: list[BaseMessage], _tools: Any) -> str:
         for p in data.get("참여자") or []
         if p.get("name") and (p["name"] in text or p["name"][1:] in text)
     ]
+    # 모델 응답 형식(app.agent.intent SCHEMA): 대상은 한 칸(target, 나온 안 id 또는 카탈로그 키)
     out: dict[str, Any] = {
+        "wanted": hit[0] if hit and intent in ("propose", "agree") else None,
         "intent": intent,
-        "target_option_id": None,
-        "scenario_option_key": None,
         "new_option_label": None,
+        "target": None,
         "confidence": "low",
         "reservation": intent in ("oppose", "withhold"),
         "addressed_to": addressed,
         "excluded": [],
     }
     if hit and intent in ("propose", "agree", "oppose", "withhold"):
-        out[hit[1]] = hit[2]
+        out["target"] = hit[2]
         out["confidence"] = "high"
     elif intent == "question":
         out["confidence"] = "high"

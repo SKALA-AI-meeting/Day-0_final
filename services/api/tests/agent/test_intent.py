@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from app.agent import intent
 from app.agent.llm import FakeLLM, make_llm
+from conftest import model_reply
 
 FIXTURE = Path(__file__).parent / "fixtures" / "intent_keyword_20.jsonl"
 SEATS = {"p1": "강한결", "p2": "윤하람", "p3": "서지안"}
@@ -40,6 +41,11 @@ def _expected(row: dict) -> dict:
     }
 
 
+def model(steps: list) -> FakeLLM:
+    """계약 출력 형태로 적은 기대값을 모델 응답 형태로 바꿔 내는 가짜 모델."""
+    return FakeLLM([model_reply(s) for s in steps])
+
+
 async def _classify(llm, text: str, catalog, options=OPTIONS, **kw):
     return await intent.classify(
         llm, text, phase="keyword", catalog=catalog, options=options, recent=[], seats=SEATS, **kw
@@ -48,13 +54,13 @@ async def _classify(llm, text: str, catalog, options=OPTIONS, **kw):
 
 async def test_fixture_20_schema_and_confidence(catalog):
     rows = _rows()
-    llm = FakeLLM([_expected(r) for r in rows])
+    llm = model([_expected(r) for r in rows])
     keyword_catalog = catalog.catalog_options("keyword", None)
     violations = 0
     for row in rows:
         out, used_fallback = await _classify(llm, row["text"], keyword_catalog)
         violations += used_fallback
-        assert set(out) == set(intent.SCHEMA["properties"]) and out["confidence"] in ("high", "low")
+        assert set(out) == set(intent.OUTPUT_FIELDS) and out["confidence"] in ("high", "low")
     assert violations == 0
     assert all(c.temperature == 0.0 and c.schema == intent.SCHEMA for c in llm.calls)
 
@@ -70,15 +76,13 @@ async def test_catalog_option_first_mentioned_is_key(catalog):
         "addressed_to": [],
         "excluded": [],
     }
-    result, used = await _classify(
-        FakeLLM([out]), "물이요", catalog.catalog_options("keyword", None)
-    )
+    result, used = await _classify(model([out]), "물이요", catalog.catalog_options("keyword", None))
     assert (
         not used and result["scenario_option_key"] == "water" and result["target_option_id"] is None
     )
     # 이미 행이 있는 카탈로그 안이면 option_id로(최초 제안자 보존)
     out = {**out, "scenario_option_key": "fire"}
-    result, _ = await _classify(FakeLLM([out]), "불이요", catalog.catalog_options("keyword", None))
+    result, _ = await _classify(model([out]), "불이요", catalog.catalog_options("keyword", None))
     assert result["target_option_id"] == "opt-fire" and result["scenario_option_key"] is None
 
 
@@ -94,12 +98,10 @@ async def test_message_phase_catalog_is_used(catalog):
         "addressed_to": [],
         "excluded": [],
     }
-    result, used = await _classify(
-        FakeLLM([out]), "침수요", catalog.catalog_options("keyword", None)
-    )
+    result, used = await _classify(model([out]), "침수요", catalog.catalog_options("keyword", None))
     assert used and result == intent.fallback()
     result, used = await _classify(
-        FakeLLM([out]), "침수요", catalog.catalog_options("problem", "water"), options=[]
+        model([out]), "침수요", catalog.catalog_options("problem", "water"), options=[]
     )
     assert not used and result["scenario_option_key"] == "water_p2"
 
@@ -143,7 +145,7 @@ async def test_message_phase_catalog_is_used(catalog):
     ],
 )
 async def test_failure_falls_back_to_other(catalog, step):
-    llm = FakeLLM([step])
+    llm = model([step])
     llm.retry_delays = ()  # 의도 분류는 재시도 없음
     result, used = await _classify(llm, "x", catalog.catalog_options("keyword", None))
     assert used and result == intent.fallback()
@@ -161,7 +163,7 @@ async def test_message_id_is_remembered(catalog):
         "excluded": [],
     }
     await _classify(
-        FakeLLM([out]), "하람님?", catalog.catalog_options("keyword", None), message_id="m-1"
+        model([out]), "하람님?", catalog.catalog_options("keyword", None), message_id="m-1"
     )
     assert intent.recall("m-1")["addressed_to"] == ["p2"]
 
@@ -178,7 +180,7 @@ async def test_withhold_and_reservation_pass_validation(catalog):
         "excluded": [],
     }
     result, used = await _classify(
-        FakeLLM([out]), "바람은 일단 보류요", catalog.catalog_options("keyword", None)
+        model([out]), "바람은 일단 보류요", catalog.catalog_options("keyword", None)
     )
     assert not used and result["intent"] == "withhold" and result["reservation"] is True
     assert result["target_option_id"] == "opt-wind"
@@ -197,7 +199,7 @@ async def test_excluded_seat_is_removed_from_addressed(catalog):
         "excluded": ["p3"],
     }
     result, used = await _classify(
-        FakeLLM([out]), "지안님 말고 하람님은요?", catalog.catalog_options("keyword", None)
+        model([out]), "지안님 말고 하람님은요?", catalog.catalog_options("keyword", None)
     )
     assert not used and result["addressed_to"] == ["p2"] and result["excluded"] == ["p3"]
 
@@ -240,7 +242,50 @@ async def test_only_one_target_field_is_kept(catalog):
         "excluded": [],
     }
     result, used = await _classify(
-        FakeLLM([both]), "불이요", catalog.catalog_options("keyword", None)
+        model([both]), "불이요", catalog.catalog_options("keyword", None)
     )
     assert not used and result["target_option_id"] == "opt-fire"
     assert result["scenario_option_key"] is None and result["new_option_label"] is None
+
+
+async def test_model_reply_target_is_split_into_contract_fields(catalog):
+    """모델은 대상을 한 칸(target)으로 낸다. 나온 안 id면 target_option_id, 카탈로그 키면
+    scenario_option_key, 둘 다 아니면 폴백."""
+    reply = {
+        "wanted": "불",
+        "intent": "agree",
+        "new_option_label": None,
+        "target": "opt-fire",
+        "confidence": "high",
+        "reservation": False,
+        "addressed_to": [],
+        "excluded": [],
+    }
+    keyword = catalog.catalog_options("keyword", None)
+    result, used = await _classify(FakeLLM([reply]), "불 좋아요", keyword)
+    assert not used and result["target_option_id"] == "opt-fire"
+    result, used = await _classify(FakeLLM([{**reply, "target": "water"}]), "물이요", keyword)
+    assert not used and result["scenario_option_key"] == "water"
+    result, used = await _classify(FakeLLM([{**reply, "target": "lava"}]), "용암", keyword)
+    assert used and result == intent.fallback()
+
+
+async def test_new_label_equal_to_catalog_label_is_that_option(catalog):
+    """새 안 라벨이 카탈로그·나온 안 라벨과 문자열로 같으면 그 안이다(정규화 문자열 일치만)."""
+    reply = {
+        "wanted": "침수 피해",
+        "intent": "propose",
+        "new_option_label": "도심 폭우·침수  피해 증가.",
+        "target": None,
+        "confidence": "high",
+        "reservation": False,
+        "addressed_to": [],
+        "excluded": [],
+    }
+    problem = catalog.catalog_options("problem", "water")
+    result, used = await _classify(FakeLLM([reply]), "침수", problem, options=[])
+    assert not used and result["scenario_option_key"] == "water_p2"
+    assert result["new_option_label"] is None
+    other = {**reply, "new_option_label": "지하수 오염"}
+    result, _ = await _classify(FakeLLM([other]), "지하수", problem, options=[])
+    assert result["new_option_label"] == "지하수 오염" and result["scenario_option_key"] is None

@@ -11,7 +11,8 @@
 ## 출력
 
 - `{intent, target_option_id, scenario_option_key, new_option_label, confidence, reservation, addressed_to, excluded}`([contracts/internal.md](../contracts/internal.md) "의도 분류 출력 스키마"). `intent`는 `propose`·`agree`·`oppose`·`withhold`·`question`·`other`
-- `excluded`에 든 자리는 검증에서 `addressed_to`에서 뺀다
+- `excluded`에 든 자리는 검증에서 `addressed_to`에서 뺀다. 진행 매니저는 그중 메시지에서 이름을 부른 자리만 뺀다
+- 모델 응답은 계약 출력과 모양이 다르다: 먼저 `wanted`(지원자가 원하는 안을 지원자 말로, 저장하지 않음), 새 안 라벨, 대상 한 칸 `target`(나온 안 id 또는 카탈로그 키) 순서로 쓰게 하고 모듈이 계약 필드로 나눈다. 새 안 라벨이 안 라벨과 정규화 문자열로 같으면 그 안으로 바꾼다
 - 실패·타임아웃·스키마 위반이면 `other`·`confidence: low`·`reservation: false`·`fallback=True`
 
 ## 데이터 파일 (`scenarios/missions/debate/`)

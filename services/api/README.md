@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 235개(live 3개 포함, `make test`는 live를 뺀다).
+총 238개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -181,7 +181,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_intent.py</code> (15)</summary>
+<details><summary><code>tests/agent/test_intent.py</code> (17)</summary>
 
 - `test_fixture_20_schema_and_confidence`
 - `test_catalog_option_first_mentioned_is_key`
@@ -193,6 +193,8 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_fallback_has_no_reservation_or_exclusion`
 - `test_live_accuracy_baseline` (live)
 - `test_only_one_target_field_is_kept`
+- `test_model_reply_target_is_split_into_contract_fields`
+- `test_new_label_equal_to_catalog_label_is_that_option`
 
 </details>
 
@@ -262,7 +264,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_turn.py</code> (28)</summary>
+<details><summary><code>tests/agent/test_turn.py</code> (29)</summary>
 
 - `test_phase_started_keyword_pushers_and_problem_react`
 - `test_second_speaker_sees_the_first_speakers_line`
@@ -292,6 +294,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_unexpected_error_after_respond_stops_typing`
 - `test_llm_fault_persona_timeout_skips_one_speaker`
 - `test_counter_count_counts_only_explicit_alternatives`
+- `test_excluded_seat_must_be_named_in_the_message`
 
 </details>
 

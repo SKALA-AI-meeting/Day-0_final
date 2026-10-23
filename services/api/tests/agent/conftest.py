@@ -424,7 +424,7 @@ class Harness:
             default={"content": "네, 그 얘기 더 해 봐요.", "proposes": None, "stance": None},
         )
         self.turn = FakeLLM(turn, default='{"speakers": [], "reason": "없음"}')
-        self.intent = FakeLLM(intent, default="not json")
+        self.intent = FakeLLM([model_reply(i) for i in intent], default="not json")
         self.slept: list[float] = []
         self.snapshots: list[dict[str, Any]] = []
         self.tools_seen: list[RunTools] = []
@@ -513,6 +513,17 @@ def intent_of(
         "addressed_to": list(to),
         "excluded": list(excluded),
     }
+
+
+def model_reply(result: Any) -> Any:
+    """계약 출력 형태(target_option_id·scenario_option_key)를 의도 분류 모델 응답 형태(target 한
+    칸)로 바꾼다. dict가 아니거나 이미 응답 형태면 그대로."""
+    if not isinstance(result, dict) or "target" in result or "target_option_id" not in result:
+        return result
+    out = {k: v for k, v in result.items() if k not in ("target_option_id", "scenario_option_key")}
+    out["target"] = result.get("target_option_id") or result.get("scenario_option_key")
+    out["wanted"] = None
+    return out
 
 
 def say(content: str, stance: dict | None = None, proposes: dict | None = None) -> dict:

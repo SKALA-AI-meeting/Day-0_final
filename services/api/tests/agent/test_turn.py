@@ -460,3 +460,14 @@ def test_counter_count_counts_only_explicit_alternatives(catalog):
     ]
     assert rules.counter_count(counted + ignored, own, rule) == 3
     assert rules.counter_count(ignored, own, rule) == 0
+
+
+async def test_excluded_seat_must_be_named_in_the_message(harness):
+    """분류가 이름을 부르지 않은 자리를 excluded로 내면(안 번호 "3번"을 자리로 읽음) 버린다."""
+    h = harness("solution")
+    h.server.confirm_keyword("water")
+    mid = h.candidate(
+        "3번은 보류예요. 다들 어떻게 보세요?", intent_of("question", excluded=("p3",))
+    )
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p2", "p3"]

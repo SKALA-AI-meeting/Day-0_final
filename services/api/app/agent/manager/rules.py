@@ -393,6 +393,25 @@ def recent_streak_seat(transcript: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def named_seats(text: str, catalog: Catalog) -> list[str]:
+    """메시지에서 "이름님"으로 부른 자리(메시지에 나온 순서)."""
+    found: list[tuple[int, str]] = []
+    for seat in SEATS:
+        name = catalog.name_of(seat)
+        given = name[1:] if len(name) >= 3 else name
+        hit = re.search(f"(?:{re.escape(name)}|{re.escape(given)})\\s*님", text)
+        if hit:
+            found.append((hit.start(), seat))
+    return [seat for _, seat in sorted(found)]
+
+
+def excluded_seats(text: str, excluded: list[str] | None, catalog: Catalog) -> list[str]:
+    """분류 excluded 중 메시지에서 실제로 이름을 부른 자리만(뺀다는 것은 그 동료를 불렀다는 사실을
+    전제한다. "3번은 보류"의 안 번호를 자리로 읽은 분류는 기록과 맞지 않아 버린다)."""
+    named = set(named_seats(text, catalog))
+    return [s for s in excluded or [] if s in named]
+
+
 def called_seats(
     text: str, addressed: list[str], catalog: Catalog, excluded: list[str] | None = None
 ) -> list[str]:
@@ -403,18 +422,23 @@ def called_seats(
     순서 = addressed_to 자리 먼저(메시지에 나온 순서), 그다음 나머지 부른 자리(메시지 순서).
     "지안님 말고 하람님"은 분류가 지안님을 excluded로 내므로 하람님만 답한다.
     """
-    found: list[tuple[int, str]] = []
-    for seat in SEATS:
-        name = catalog.name_of(seat)
-        given = name[1:] if len(name) >= 3 else name
-        hit = re.search(f"(?:{re.escape(name)}|{re.escape(given)})\\s*님", text)
-        if hit:
-            found.append((hit.start(), seat))
     skip = set(excluded or [])
-    order = [seat for _, seat in sorted(found) if seat not in skip]
+    order = [seat for seat in named_seats(text, catalog) if seat not in skip]
     targets = [s for s in addressed if s in SEATS and s not in skip]
     first = [s for s in order if s in targets] + [s for s in targets if s not in order]
     return first + [s for s in order if s not in first]
+
+
+def message_text(stimulus: dict[str, Any], transcript: list[dict[str, Any]]) -> str:
+    """자극 메시지의 본문(기록에 없으면 빈 문자열)."""
+    return next(
+        (
+            str(m.get("content") or "")
+            for m in transcript
+            if str(m.get("id")) == str(stimulus.get("message_id"))
+        ),
+        "",
+    )
 
 
 def rule_decision(
@@ -459,15 +483,8 @@ def rule_decision(
     quiet = catalog.seat_of("quiet")
     # 3. 지명 응답(최대 2명). 소극형은 이름이 불렸거나 전체 질문일 때만
     if kind == "message" and intent:
-        text = next(
-            (
-                str(m.get("content") or "")
-                for m in transcript
-                if str(m.get("id")) == str(stimulus.get("message_id"))
-            ),
-            "",
-        )
-        excluded = list(intent.get("excluded") or [])
+        text = message_text(stimulus, transcript)
+        excluded = excluded_seats(text, intent.get("excluded"), catalog)
         named = called_seats(text, intent.get("addressed_to") or [], catalog, excluded)
         if intent.get("intent") == "question" and not named and phase in DEBATE_PHASES:
             named = [s for s in (quiet, catalog.seat_of("critic")) if s and s not in excluded]

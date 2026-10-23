@@ -367,7 +367,13 @@ async def turn(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, An
     ):
         decision["llm_used"] = True
         # 지원자가 답하지 말라고 뺀 자리(의도 분류 excluded)는 턴 LLM이 골라도 넣지 않는다
-        excluded = set((state.get("intent") or {}).get("excluded") or [])
+        excluded = set(
+            rules.excluded_seats(
+                rules.message_text(state["stimulus"], state["transcript"]),
+                (state.get("intent") or {}).get("excluded"),
+                deps.catalog,
+            )
+        )
         decision["speakers"] = [
             s for s in await _turn_llm(state, deps, brief) if s["seat"] not in excluded
         ]
