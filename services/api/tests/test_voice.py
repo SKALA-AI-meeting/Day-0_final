@@ -552,3 +552,48 @@ async def test_voice_hand_turn_not_stolen_and_stale_not_replayed(api, voice_ctx)
         job = await db.get(SpeechJob, uuid.uuid5(uuid.UUID(late["id"]), "tts"))
         assert job.data["status"] == "canceled"
         assert job.data["error"] == "superseded"
+
+
+async def near_deadline(ctx, sess, seconds: float):
+    async with ctx.session_factory() as db:
+        s = await db.get(Session, sess.id)
+        s.phase_deadline_at = ctx.clock.now() + timedelta(seconds=seconds)
+        await db.commit()
+
+
+async def test_voice_forced_turn_before_phase_ends(api, voice_ctx):
+    """이 단계 지원자 발언이 없고 마감까지 75초(60+5+10) 이하면 동료 발언을 넘기고 강제한다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    await ready_two(api, ctx, sess)
+    await near_deadline(ctx, sess, 70)
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "USER_READY"
+    assert snap["priority"] == "forced"
+    assert snap["items"] == []
+    start, _ = await record_once(api, ctx, sess, snap)
+    async with ctx.session_factory() as db:
+        job = await db.get(SpeechJob, uuid.UUID(start["utterance_id"]))
+        assert job.data["turn_kind"] == "forced"
+
+
+async def test_voice_no_forced_turn_after_candidate_spoke(api, voice_ctx):
+    """이 단계에 이미 말했으면(일반 차례든 손들기든) 마감이 가까워도 강제하지 않는다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    snap = await snapshot(api, ctx, sess)
+    start, snap = await record_once(api, ctx, sess, snap)
+    payload = {
+        "client_msg_id": start["utterance_id"],
+        "content": snap["utterance"]["transcript"],
+        "voice_turn_id": snap["turn_id"],
+        "epoch": snap["epoch"],
+    }
+    await handle_send(ctx, sess.id, payload)
+    await ctx.mailboxes.drain()
+    await near_deadline(ctx, sess, 70)
+    await api.post_ai(sess, "p1", "그럼 이건 어때요", seq=4)
+    await snapshot(api, ctx, sess)
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "AI_SPEAKING"
+    assert not snap.get("priority")

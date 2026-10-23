@@ -58,6 +58,36 @@ def ready_hold(position, data: dict | None = None) -> timedelta:
 
 
 NOTICE_KINDS = ("consensus_fill", "timeout_fill")
+DEBATE_PHASES = ("keyword", "problem", "solution")
+# 강제 차례의 받아 적기·제출 여유(초). 녹음 60초가 단계 마감 안에 끝나도록 일찍 발동한다
+FORCED_MARGIN_SECONDS = 10
+
+
+def forced_lead(position) -> timedelta:
+    """단계 마감 몇 초 전에 강제 차례를 줄지: 발언 한도 + 자동 시작 대기(생각 시간) + 여유."""
+    policy = position.scenario["voice_policy"]
+    return timedelta(
+        seconds=policy["user_turn_seconds"] + think_seconds(position) + FORCED_MARGIN_SECONDS
+    )
+
+
+async def needs_forced_turn(db, session, position, data, now) -> bool:
+    """이 단계에 지원자 발언이 없고 마감이 가까우면 단계당 한 번 차례를 강제한다(개정 V16)."""
+    if session.phase not in DEBATE_PHASES or data.get("forced_phase") == session.phase:
+        return False
+    if now < session.phase_deadline_at - forced_lead(position):
+        return False
+    spoke = await db.scalar(
+        select(func.count())
+        .select_from(Message)
+        .where(
+            Message.session_id == session.id,
+            Message.channel == "room",
+            Message.sender == "candidate",
+            Message.phase == session.phase,
+        )
+    )
+    return not spoke
 
 
 def protected(job) -> bool:
@@ -98,6 +128,7 @@ async def sync(db, session, position, now):
         or data.get("generation") != session.generation
         or data.get("phase") != session.phase
     ):
+        forced_phase = data.get("forced_phase") if data.get("phase") == session.phase else None
         data = {
             "turn_id": str(uuid.uuid4()),
             "generation": session.generation,
@@ -105,11 +136,19 @@ async def sync(db, session, position, now):
             "state": "AI_GENERATING",
             "epoch": data.get("epoch"),
             "ready_at": iso(now),
+            "forced_phase": forced_phase,
         }
     if session.status != "in_progress" or now >= session.ends_at:
         data.update(blocked_reason="session_ending")
         state.data = data
         return {**data, "items": [], "server_now": iso(now)}, []
+    forced = await needs_forced_turn(db, session, position, data, now)
+    if forced and data["state"] == "USER_READY" and not data.get("priority"):
+        data.update(
+            priority="forced", ready_at=iso(now), release_ready=False, forced_phase=session.phase
+        )
+    elif forced and data["state"] in ("AI_GENERATING", "AI_SPEAKING"):
+        data["hand"] = {"raised_at": iso(now), "forced": True}
     if (
         data["state"] == "USER_READY"
         and not data.get("release_ready")
@@ -211,14 +250,17 @@ async def sync(db, session, position, now):
             pending = [jid for jid in pending if any(j.id == jid for j in jobs)]
             if not jobs:
                 data.pop("hand")
+                kind = "forced" if hand.get("forced") else "hand"
                 data.update(
                     state="USER_READY",
                     ready_at=iso(now),
-                    priority="hand",
-                    hand_turn=hand,
+                    priority=kind,
+                    hand_turn=None if kind == "forced" else hand,
                     release_ready=False,
                     blocked_reason=None,
                 )
+                if kind == "forced":
+                    data["forced_phase"] = session.phase
                 # 손들기 차례는 실행 중인 에이전트가 있어도 바로 준다. 이후에는 위쪽의
                 # "유지 시간 동안 내 차례 지키기"가 새 동료 발언이 빼앗지 못하게 막는다.
                 state.data = data
@@ -242,6 +284,7 @@ async def sync(db, session, position, now):
             "state": "AI_GENERATING",
             "epoch": data.get("epoch"),
             "ready_at": iso(now),
+            "forced_phase": data.get("forced_phase"),
         }
     if jobs and jobs[0].data["status"] == "ready":
         # 맨 앞 발언이 준비되면 뒤 발언·실행이 남아 있어도 먼저 재생한다(대기 최대 약 14초 단축).
