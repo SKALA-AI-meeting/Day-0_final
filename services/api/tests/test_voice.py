@@ -284,3 +284,75 @@ async def test_azure_paid_sku_rejected_before_synthesis(monkeypatch):
     assert len(requests) == 2
     assert all(r.url.host == "management.azure.com" for r in requests)
     assert len(set(VOICES.values())) == 3
+
+
+async def test_azure_fast_transcription_request(monkeypatch):
+    """받아 적기는 F0 확인 뒤 빠른 받아 적기 한 번 호출로 끝나고 이름 구문 목록을 함께 보낸다."""
+    import json
+    from types import SimpleNamespace
+
+    import azure.identity
+    import httpx
+    from app.voice.speech import FAST_TRANSCRIPTION_API, AzureSpeech
+
+    class Credential:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get_token(self, *args):
+            return SimpleNamespace(token="fake-access")
+
+    monkeypatch.setattr(azure.identity, "DefaultAzureCredential", Credential)
+    monkeypatch.setenv("AZURE_SPEECH_KEY", "fake-key")
+    monkeypatch.setenv("AZURE_SPEECH_REGION", "koreacentral")
+    monkeypatch.setenv(
+        "AZURE_SPEECH_RESOURCE_ID",
+        "/subscriptions/test/resourceGroups/test/providers/Microsoft.CognitiveServices/accounts/test",
+    )
+    requests = []
+    fast_status = 200
+
+    def respond(request):
+        requests.append(request)
+        if request.url.host == "management.azure.com":
+            if request.url.path.endswith("listKeys"):
+                return httpx.Response(200, json={"key1": "fake-key"})
+            return httpx.Response(200, json={"sku": {"name": "F0"}, "location": "koreacentral"})
+        if fast_status != 200:
+            return httpx.Response(fast_status, json={"error": {"code": "NotSupported"}})
+        return httpx.Response(200, json={"combinedPhrases": [{"text": "하람님 의견은요?"}]})
+
+    client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: client(transport=httpx.MockTransport(respond), **kwargs),
+    )
+    text = await AzureSpeech().transcribe(silence(), ["윤하람", "하람님"])
+    assert text == "하람님 의견은요?"
+    stt = requests[-1]
+    assert stt.url.host == "koreacentral.api.cognitive.microsoft.com"
+    assert stt.url.path == "/speechtotext/transcriptions:transcribe"
+    assert stt.url.params["api-version"] == FAST_TRANSCRIPTION_API
+    body = stt.content.decode("utf-8", "replace")
+    definition = json.loads(
+        body.split('name="definition"')[1].split("\r\n\r\n", 1)[1].split("\r\n--")[0]
+    )
+    assert definition == {"locales": ["ko-KR"], "phraseList": {"phrases": ["윤하람", "하람님"]}}
+    # 빠른 받아 적기가 거절되면 같은 파일을 연속 인식(예비 경로)으로 받아 적는다
+    fast_status = 403
+    fallback = []
+
+    async def continuous(self, frames, seconds, phrases):
+        fallback.append(list(phrases))
+        return "연속 인식 결과"
+
+    monkeypatch.setattr(AzureSpeech, "_transcribe_continuous", continuous)
+    assert await AzureSpeech().transcribe(silence(), ["윤하람"]) == "연속 인식 결과"
+    assert fallback == [["윤하람"]]

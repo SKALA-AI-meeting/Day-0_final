@@ -45,16 +45,18 @@ Google 교체안은 `ko-KR-Wavenet-C/A/D`처럼 서로 다른 ID를 동일 자�
 
 | 후보 | 무료량·초과 구조 | 턴 기반 적합성·제약 | 권장 |
 |---|---|---|---|
-| Azure Speech **F0 표준 ko-KR** | 월 5 audio hours. Standard/Custom 무료량 공유, F0 Batch 미지원 | 완성 파일을 서버에서 SDK continuous recognition으로 끝까지 읽고 최종 구간들을 합침. F0 동시 인식 1개 | 시연 우선, 지연 검증 조건 |
+| Azure Speech **F0 표준 ko-KR** | 월 5 audio hours. Standard/Custom 무료량 공유, F0 Batch 미지원 | 완성 파일을 빠른 받아 적기(fast transcription) REST 한 번으로 처리하고, 거절되면 SDK continuous recognition으로 끝까지 읽어 최종 구간들을 합침(개정 V11). F0 동시 인식 1개 | 시연 우선 |
 | Google STT **V1 / Standard / without data logging** | 계정당 월 첫 60분 무료, 기본 소비 모델 초과 $0.024/분 | 파일 전체 전사에 적합하지만 동기 요청 약 1분 한도 경계 확인 필요. 녹음 컨테이너·인코딩까지 포함해 검증 | 비교 후보 |
 | Google STT **V2** | 이 문서가 확인한 표준 기본 요금 구간은 $0.016/분부터. V1의 월 60분 무료를 적용하지 않음 | 비동기 할인 작업은 짧은 사용자 턴의 지연 요구와 따로 검토해야 함 | 초기 무료 전용 허용 목록 제외 |
 | 로컬 **faster-whisper / multilingual small, CPU int8** | 외부 API 비용 없음. 자체 CPU/GPU·메모리·전력 비용 | 완성 파일 입력·한국어 지정·최종 전사에 적합한 후보. CPU/GPU에 따른 처리 시간·오인식 검증 필요 | 개발/오프라인 교체 후보 |
 
 요금·버전·빈 응답 과금·채널별 계산은 [Google STT 가격표](https://cloud.google.com/speech-to-text/pricing), 동기 길이 제약은 [V1 인식 문서](https://docs.cloud.google.com/speech-to-text/docs/v1/speech-to-text-requests)를 따른다. 로컬 엔진은 [faster-whisper 공식 저장소](https://github.com/SYSTRAN/faster-whisper)에 CPU/GPU int8 지원이 명시되어 있다. `.en` 전용 모델을 한국어 기본 모델로 고르지 않고 다국어 Whisper 체크포인트를 사용한다. [Whisper 모델 구분](https://github.com/openai/whisper)
 
-Azure의 짧은 예제에 있는 `recognizeOnce`는 발언 중 무음이나 단일 구간에서 종료될 수 있어 60초 자유 발언 전체 처리에 쓰지 않는다. 서버가 업로드 완료된 파일을 continuous recognition으로 읽고 EOF까지 모은 결과만 한 전사로 확정한다. 브라우저가 녹음 중 오디오를 보내거나 부분 전사로 `message.send`를 여러 번 보내는 구조는 아니다. 서비스 상품명에 real-time이 있어도 사용자 경험은 완성 파일 기반의 턴 방식이다. [단일 인식 예제의 제한](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/get-started-speech-to-text), [파일 continuous recognition](https://learn.microsoft.com/azure/ai-services/speech-service/how-to-recognize-speech?pivots=programming-language-csharp)
+기본 경로는 빠른 받아 적기다. 업로드가 끝난 WAV를 `POST https://{region}.api.cognitive.microsoft.com/speechtotext/transcriptions:transcribe?api-version=2025-10-15`에 여러 부분 폼(`audio` + `definition` JSON `{"locales":["ko-KR"], "phraseList":{"phrases":[동료 이름…]}}`)으로 보내고 `combinedPhrases[].text`를 합친다. 10/23 F0 측정에서 소리 길이의 0.05~0.08배가 걸렸고(continuous는 약 0.4배) 동료 이름 8개를 모두 맞게 적었다. 사용한 날 요금은 0원이었다(리소스 주인이 포털 비용 관리에서 확인). Azure 요금표는 이 기능이 F0 무료량에 드는지 밝히지 않으므로, HTTP 오류로 거절되면 같은 파일을 아래 continuous 경로로 받아 적는다(둘 다 F0 안의 경로). [빠른 받아 적기](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/fast-transcription-create)
 
-**기존 설계의 STT 호출당 30초 timeout은 Azure 파일 continuous 경로에 그대로 적용하지 않는다.** 초기 제안은 `timeout = 입력 오디오 길이 + 30초`(최대 60초 발언이면 90초), 재시도는 남은 단계 마감과 quota를 다시 검사해 최대 1회다. 네트워크 I/O가 비동기여도 인식이 오디오 길이에 비례하면 대기 시간이 길 수 있다. 지연 목표를 못 맞추면 로컬 faster-whisper 또는 다른 완성 파일 STT를 다음 정책 버전으로 선택한다. 빠른 전사를 얻으려고 F0에서 지원하지 않는 유료 Fast/Batch로 자동 변경하지 않는다.
+예비 경로 설명: Azure의 짧은 예제에 있는 `recognizeOnce`는 발언 중 무음이나 단일 구간에서 종료될 수 있어 60초 자유 발언 전체 처리에 쓰지 않는다. 서버가 업로드 완료된 파일을 continuous recognition으로 읽고 EOF까지 모은 결과만 한 전사로 확정한다. 브라우저가 녹음 중 오디오를 보내거나 부분 전사로 `message.send`를 여러 번 보내는 구조는 아니다. 서비스 상품명에 real-time이 있어도 사용자 경험은 완성 파일 기반의 턴 방식이다. [단일 인식 예제의 제한](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/get-started-speech-to-text), [파일 continuous recognition](https://learn.microsoft.com/azure/ai-services/speech-service/how-to-recognize-speech?pivots=programming-language-csharp)
+
+**기존 설계의 STT 호출당 30초 timeout은 Azure 파일 continuous 경로에 그대로 적용하지 않는다.** 초기 제안은 `timeout = 입력 오디오 길이 + 30초`(최대 60초 발언이면 90초), 재시도는 남은 단계 마감과 quota를 다시 검사해 최대 1회다. 네트워크 I/O가 비동기여도 인식이 오디오 길이에 비례하면 대기 시간이 길 수 있다. 지연 목표를 못 맞추면 로컬 faster-whisper 또는 다른 완성 파일 STT를 다음 정책 버전으로 선택한다. 유료(S0) 리소스로 자동 변경하지 않는다. 빠른 받아 적기는 F0 리소스에서 동작함을 10/23에 확인해 기본 경로로 쓴다(위, 개정 V11). F0 확인(`verify`)은 그대로라 유료 리소스에는 호출하지 않는다.
 
 지원자는 한 명이므로 입력은 단일 채널로 정규화한다. AI TTS를 다시 STT에 넣지 않고, 4명 화자 분리·번역·발음 평가 기능도 사용하지 않는다. TTS 목소리 3개는 3배의 STT 채널이나 3배의 무료량을 뜻하지 않는다.
 

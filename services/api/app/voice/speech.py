@@ -2,6 +2,8 @@
 
 import asyncio
 import io
+import json
+import logging
 import os
 import threading
 import wave
@@ -13,7 +15,10 @@ import httpx
 
 from app.services.common import ServiceError
 
+log = logging.getLogger(__name__)
 VOICES = {"p1": "ko-KR-InJoonNeural", "p2": "ko-KR-SunHiNeural", "p3": "ko-KR-BongJinNeural"}
+# 빠른 받아 적기 API 버전. 구문 목록(phraseList)은 이 버전부터 지원한다(MS 문서)
+FAST_TRANSCRIPTION_API = "2025-10-15"
 
 
 class TtsService(Protocol):
@@ -142,9 +147,46 @@ class AzureSpeech:
             return response.content
 
     async def transcribe(self, audio: bytes, phrases: Sequence[str] = ()) -> str:
-        """phrases: 자주 나올 단어(동료 이름 등). Azure 구문 목록에 올려 알아듣게 돕는다."""
+        """빠른 받아 적기(fast transcription): 완성 파일을 요청 한 번으로 보내 결과를 바로 받는다.
+
+        10/23 측정에서 말한 길이의 0.05~0.08배가 걸렸다(연속 인식은 약 0.4배). 이름도 더 정확했다.
+        Azure 요금표는 이 기능이 F0 무료량에 드는지 밝히지 않으므로, 거절되면 같은 파일을 기존
+        연속 인식으로 받아 적는다(둘 다 F0 안의 경로라 유료 자동 전환은 없다).
+        phrases: 자주 나올 단어(동료 이름 등). 구문 목록으로 보내 그 단어로 알아듣게 돕는다.
+        """
         frames, seconds = pcm(audio)
         await self.verify()
+        try:
+            return await self._transcribe_fast(audio, phrases)
+        except httpx.HTTPError as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", "-")
+            log.warning(
+                "fast transcription 실패(%s %s), 연속 인식으로 대체", type(exc).__name__, status
+            )
+            return await self._transcribe_continuous(frames, seconds, phrases)
+
+    async def _transcribe_fast(self, audio: bytes, phrases: Sequence[str]) -> str:
+        definition: dict = {"locales": ["ko-KR"]}
+        if phrases:
+            definition["phraseList"] = {"phrases": list(phrases)}
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                f"https://{self.region}.api.cognitive.microsoft.com"
+                "/speechtotext/transcriptions:transcribe",
+                params={"api-version": FAST_TRANSCRIPTION_API},
+                headers={"Ocp-Apim-Subscription-Key": self.key},
+                files={
+                    "audio": ("speech.wav", audio, "audio/wav"),
+                    "definition": (None, json.dumps(definition), "application/json"),
+                },
+            )
+            response.raise_for_status()
+        return " ".join(p["text"] for p in response.json().get("combinedPhrases", [])).strip()
+
+    async def _transcribe_continuous(
+        self, frames: bytes, seconds: float, phrases: Sequence[str]
+    ) -> str:
+        """예비 경로: 완성 파일을 SDK 연속 인식으로 끝까지 읽고 최종 구간들을 합친다."""
 
         def recognize() -> str:
             import azure.cognitiveservices.speech as sdk
