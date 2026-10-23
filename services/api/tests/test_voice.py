@@ -143,16 +143,16 @@ async def test_voice_plays_first_ready_while_next_is_made(api, voice_ctx):
 
 
 async def test_voice_think_time_holds_turn(api, voice_ctx, clock):
-    """내 차례에는 생각 시간(기본 30초) + 여유 10초 동안 차례를 반납하지 않는다."""
+    """내 차례에는 생각 시간(기본 5초) + 여유 10초 동안 차례를 반납하지 않는다."""
     sess = await setup(api, voice_ctx)
     snap = await snapshot(api, voice_ctx, sess)
     assert snap["state"] == "USER_READY"
     think = controller.at(snap["think_deadline_at"]) - controller.at(snap["ready_at"])
-    assert think.total_seconds() == 30
-    clock.advance(seconds=35)
+    assert think.total_seconds() == 5
+    clock.advance(seconds=13)
     snap = await snapshot(api, voice_ctx, sess)
     assert not snap.get("release_ready")
-    clock.advance(seconds=6)
+    clock.advance(seconds=3)
     snap = await snapshot(api, voice_ctx, sess)
     assert snap["release_ready"] is True
 
@@ -173,7 +173,7 @@ async def record_once(api, ctx, sess, snap):
 
 
 async def test_voice_rerecord_once_with_fresh_time(api, voice_ctx, clock):
-    """받아 적은 글은 10초 확인 뒤 자동 제출 기준을 주고, 다시 녹음은 한 번만 새 60초로 허용한다."""
+    """받아 적은 글은 3초 확인 뒤 자동 제출 기준을 주고, 다시 녹음은 한 번만 새 60초로 허용한다."""
     ctx = voice_ctx
     sess = await setup(api, ctx)
     snap = await snapshot(api, ctx, sess)
@@ -183,7 +183,7 @@ async def test_voice_rerecord_once_with_fresh_time(api, voice_ctx, clock):
     # 채용 건의 동료 이름이 받아 적기 구문 목록으로 넘어간다(이름 오인식 → 호명 누락 방지)
     assert {"윤하람", "하람님", "한결님", "지안님"} <= set(ctx.speech.phrases)
     wait = (controller.at(u["confirm_deadline_at"]) - ctx.clock.now()).total_seconds()
-    assert 9.9 < wait <= 10  # 테스트 시계는 호출마다 마이크로초씩 흐른다
+    assert 2.9 < wait <= 3  # 테스트 시계는 호출마다 마이크로초씩 흐른다
     turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
     r = await post(api, sess, "rerecord", {**turn, "job_id": u["id"]})
     assert r.status_code == 200, r.text

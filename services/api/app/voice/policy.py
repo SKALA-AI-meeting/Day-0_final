@@ -9,10 +9,10 @@ def pinned_policy() -> dict:
     seconds = int(os.getenv("VOICE_USER_TURN_SECONDS", "60"))
     if not 1 <= seconds <= 60:
         raise ValueError("VOICE_USER_TURN_SECONDS must be 1..60")
-    think = int(os.getenv("VOICE_THINK_SECONDS", "30"))
+    think = int(os.getenv("VOICE_THINK_SECONDS", "5"))
     if not 0 <= think <= 60:
         raise ValueError("VOICE_THINK_SECONDS must be 0..60")
-    confirm = int(os.getenv("VOICE_CONFIRM_SECONDS", "10"))
+    confirm = int(os.getenv("VOICE_CONFIRM_SECONDS", "3"))
     if not 0 <= confirm <= 30:
         raise ValueError("VOICE_CONFIRM_SECONDS must be 0..30")
     return {
