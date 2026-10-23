@@ -166,7 +166,6 @@ def assemble(
             mission["timeout"]["warning_before_fraction"], session_minutes
         ),
         "fill_priority": mission["consensus_fill"]["filler_priority"],
-        "timeout_announcer_priority": mission["timeout"]["announcer_priority"],
         "timeout_stage_default": mission["timeout"]["stage_default"],
         "phrases": phrases,
         "proposal_template": [f["field"] for f in mission["proposal_template"]],
@@ -267,8 +266,12 @@ def catalog_options(
     return [{"scenario_option_key": o["key"], "label": o["label"]} for o in items]
 
 
-def phrase(scenario: dict[str, Any], key: str, **values: str) -> str:
+def phrase(scenario: dict[str, Any], key: str, variant: str | None = None, **values: str) -> str:
+    """고정 문장. 키가 변형별 문장(예: timeout_fill의 적용 규칙별)이면 variant로 고른다. 채용 건
+    복사본이 변형 없는 한 문장이면 그 문장을 쓴다."""
     template = scenario["phrases"][key]
+    if isinstance(template, dict):
+        template = template[variant]
     if "option" in values:
         # 조사 처리: 받침 있으면 "으로", 없거나 ㄹ 받침이면 "로" (문장 골격은 "{option}로")
         option = values["option"]

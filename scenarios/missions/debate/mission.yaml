@@ -118,13 +118,12 @@ consensus_fill:
 timeout:
   warning_before_fraction: "1/30"   # 마감 L/30 전 시스템 안내(60분 2분, 15분 30초)
   warning_phrase: time_warning
-  selection: [most_supporters, candidate_supported, first_proposed, stage_default]
+  selection: [candidate_support, most_support, earliest, default]   # 적용 규칙 id(slots.timeout_rule), 이 순서로 고른다(B3)
   stage_default:
     keyword: default_keyword        # water
     problem: locked_lead_or_p1      # 잠긴 기준안, 없으면 P1
     solution: s1
-  announcer_priority: [critic, quiet, stubborn]   # 지지자가 아니어도 된다
-  phrase: timeout_fill
+  phrase: timeout_fill              # 시스템 메시지, 적용 규칙별 문장(B4)
   proposal_auto_submit: true        # 기획안 단계 시간 초과면 그 시점 초안을 자동 제출(session.ended{reason: timeout})
 
 # 침묵 초대(docs/product/scenario.md 3.1). [초안: 수치]

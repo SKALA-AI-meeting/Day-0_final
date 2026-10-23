@@ -40,7 +40,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 
 ```
 입장·동의·시작 ─▶ keyword(10) ─확정─▶ problem(18) ─확정─▶ solution(18) ─확정─▶ proposal(14) ─제출─▶ completed ─큐─▶ 리포트
-                  └ 마감이면 api가 가장 많이 모인 의견으로 채우고 넘어감(resolution=timeout) ┘        └ 세션 만료면 현재 초안 자동 제출
+                  └ 마감이면 api가 선택 규칙으로 채우고 넘어감(resolution=timeout) ┘        └ 세션 만료면 현재 초안 자동 제출
 ```
 
 - 단계 예산(분)은 60분 기준 10·18·18·14이고 `session_minutes`에 비례한다(데모·e2e 15분 = 2.5·4.5·4.5·3.5, 카드·유휴 오프셋은 최소 20초).
@@ -71,7 +71,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 |---|---|
 | 지원자 확정 | `POST /sessions/{id}/slots/{phase}/confirm` → api가 칸을 `confirmed`(filled_by=candidate, resolution=consensus, 그 시점 지지 현황 스냅샷)로 바꾸고 다음 단계로 전환. 키워드는 버튼의 후보 키, 문제·해결책은 옵션 키·정규화 라벨 일치로만 안에 연결(LLM 없음) |
 | AI 합의 채우기 | 진행 매니저 `fill`의 `announce_fill` 분기 → `fill_slot{option_id, seat, content, run_id}`. api가 한 트랜잭션에서 `consensus.judge`(지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언, 대기 시간 없음)를 다시 검사하고 아니면 409 `no_consensus`(AI는 합의 전에 칸을 채울 수 없다, 아무것도 저장 안 함). 성공하면 칸 확정·공지 메시지(seq 5)·전환이 함께 커밋되므로 공지가 빠진 확정은 없다. 같은 run_id 재호출은 기존 결과 |
-| 단계 마감 | 스케줄러가 `now ≥ phase_deadline_at`이고 칸이 empty이면 **api `services/timeout.py`가 직접**: 시간 초과 선택 규칙으로 안을 고르고 우선순위 자리 이름으로 시나리오 고정 문장("시간이 다 돼서 대화에서 가장 많이 모인 의견인 X로 할게요")을 저장, 칸 `confirmed{resolution: timeout, filled_by: 그 자리}` → 전환. 그래프·LLM·MCP를 거치지 않는다 |
+| 단계 마감 | 스케줄러가 `now ≥ phase_deadline_at`이고 칸이 empty이면 **api `services/timeout.py`가 직접**: 시간 초과 선택 규칙으로 안을 고르고 적용된 규칙의 시나리오 고정 문장을 시스템 메시지로 저장, 칸 `confirmed{resolution: timeout, filled_by: system, timeout_rule}` → 전환. 그래프·LLM·MCP를 거치지 않는다 |
 | 전환 공통 | api `SessionService.advance_phase`: `phase`·`phase_started_at`·`phase_deadline_at` 갱신, `generation += 1`, 시스템 안내 메시지("지금 할 일"과 남은 시간, 시나리오 고정 문구) 저장, WS `slot.confirmed`·`phase.changed`·`timer`. keyword 확정이면 그 키워드 자료를 열고 WS `materials.opened`. proposal 시작이면 기획안 초안의 빈 칸(키워드·문제 상황·해결책)을 확정 칸 값으로 채운다. 이어서 `phase_started`를 메일박스에 넣기만 한다(기획안 단계 `phase_started` 실행이 `honesty_credit` 관찰을 남긴다) |
 | 마감 임박 | 단계 마감 `L/30` 전(60분 기준 2분, 압축 비율)에 시스템 안내 메시지 1건. 시점은 시나리오 데이터 |
 | 침묵 초대 | 토론 단계에서 침묵 초대 조건([product/scenario.md](../product/scenario.md) 3.1)이 참이고 그 단계 `invite_delivered`가 false면 스케줄러가 `idle`을 넣는다(같은 단계 idle이 큐·실행 중이면 안 넣음, 지원자 입력 중이면 다음 틱). 초대 메시지(`is_invite`)가 실제 게시돼야 `invite_delivered_phases`에 들어가고, 안 됐으면 다음 틱에 다시 넣는다. 묻는 자리는 시나리오의 `silence_inviter`(비판형) |
@@ -106,13 +106,13 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 
 - 입력: 그 단계의 안과 `stances` 이력. **현재 지지는 참여자당 하나**다 = 참여자별로 그 단계의 마지막 `support` 행의 안. 다른 안을 support하면 이전 지지를 대체한다(두 안을 동시에 지지하지 않는다). 그 뒤에 **같은 안에 대한 `oppose`·`withhold`(지원자 보류·기권)가 있으면 지지를 철회**한 것으로 보고 현재 지지는 null이다. 다른 안에 대한 oppose·withhold는 현재 지지를 바꾸지 않고, withhold는 반대자로 세지 않는다. 제안(propose)은 제안자의 지지를 포함한다. 지원자 support 행은 의도 분류가 지지로 세는 발언(`confidence = high`인 `propose`·`agree`이고 `reservation = false`)일 때만 생긴다([contracts/internal.md](../contracts/internal.md) "의도 분류 출력 스키마"). AI 입장은 항상 유효하다. 그 단계 지원자의 최신 발언이 지지로 세는 발언이면 그 대상 안도 입력이다.
 - 합의 결과 `consensus_option_id`: 한 안의 현재 지지자가 4명 중 3명 이상이고 **지원자가 그 지지자**이며 **지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언**이면 그 안, 아니면 null. 대기 시간 조건은 없다.
-- 시간 초과 결과 `timeout_option_id`: 지지자 최다 → 동률이면 지원자 지지 안 → 먼저 제안된 안 → 안이 없으면 단계 기준안(문제 상황은 카드가 잠근 `session_cards.locked_option_id`가 있으면 그것, 키워드는 `default_keyword`). 기준안 행이 없으면 채우기 트랜잭션에서 그 안을 만든다(proposer는 공지하는 자리).
+- 시간 초과 결과 `timeout_option_id`와 적용 규칙 `timeout_rule`: 지원자의 현재 지지 안(`candidate_support`) → 지지자 최다가 하나면 그 안(`most_support`) → 최다가 동률이거나 지지자가 없으면 그 안들 중 먼저 제안된 안(`earliest`) → 안이 없으면 단계 기준안(`default`: 키워드는 `default_keyword`, 문제 상황 P1, 해결책 S1. 카드가 잠근 문제 상황 기준안은 이미 안 행이 있어 앞 규칙에서 정해진다). 기준안 행이 없으면 채우기 트랜잭션에서 그 안을 만든다(proposer = `system`).
 - 두 값은 DebateState에 실리고, api의 `fill` 검사와 시간 초과 채우기가 같은 함수를 쓴다.
 - **같은 run에서 다시 판정하지 않음**: 그래프 `fill` 노드는 load 때 읽은 합의로 정한 `decision.fill`만 채운다. 이번 run의 AI 발언(비판형 이동 등)으로 지원자 포함 3/4 지지가 생겨도 그 run에서는 채우지 않고, 이후 run(지원자 메시지·침묵·카드 자극)이 지원자의 최신 발언과 함께 다시 판정한다.
 
 ### 시간 초과 채우기 (api가 직접, 그래프 없음)
 
-스케줄러가 `now ≥ phase_deadline_at`이고 칸이 empty인 토론 단계를 찾으면 api `services/timeout.py`가 한 트랜잭션으로: `timeout_option_id` 계산 → 공지 자리(시나리오의 시간 초과 우선순위 첫 자리, [product/scenario.md](../product/scenario.md)) 이름으로 시나리오 고정 문장("시간이 다 돼서 대화에서 가장 많이 모인 의견인 X로 할게요")을 messages에 저장(sender = 그 자리, `meta.kind = "timeout_fill"`) → 칸 confirmed(`resolution: timeout`, `filled_by` = 그 자리) → `advance_phase`. LLM·MCP·메일박스를 거치지 않는다. 그래프 자극에 `timeout`은 없다.
+스케줄러가 `now ≥ phase_deadline_at`이고 칸이 empty인 토론 단계를 찾으면 api `services/timeout.py`가 한 트랜잭션으로: `timeout_option_id`·`timeout_rule` 계산 → 적용된 규칙의 시나리오 고정 문장(`timeout_fill.<규칙 id>`, [product/scenario.md](../product/scenario.md) 1.4 "시간 초과 규칙")을 시스템 메시지로 messages에 저장(sender = `system`, `meta = {kind: "timeout_fill", timeout_rule}`) → 칸 confirmed(`resolution: timeout`, `filled_by: system`, `timeout_rule`, 지지 현황은 선택에 쓴 안들) → `advance_phase`. LLM·MCP·메일박스를 거치지 않는다. 그래프 자극에 `timeout`은 없다.
 
 ### 합의 채우기 (그래프 `fill` → `fill_slot`, 한 트랜잭션)
 

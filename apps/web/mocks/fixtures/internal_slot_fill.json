@@ -6,6 +6,7 @@
     "option_id": "opt-pb-p2",
     "filled_by": "p3",
     "resolution": "consensus",
+    "timeout_rule": null,
     "outcome": "consensus",
     "support": [
       {

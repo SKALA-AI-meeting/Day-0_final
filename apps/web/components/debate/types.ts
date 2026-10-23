@@ -54,7 +54,7 @@ export type Slot = {
   phase: SlotPhase;
   status: "empty" | "confirmed";
   value: string | null;
-  filled_by: "candidate" | Seat | null;
+  filled_by: "candidate" | Seat | "system" | null;
   resolution: Resolution | null;
   outcome?: Outcome | null;
   t_min: number | null;
@@ -167,7 +167,7 @@ export type ServerPayloads = {
   "slot.confirmed": {
     phase: SlotPhase;
     value: string;
-    filled_by: "candidate" | Seat;
+    filled_by: "candidate" | Seat | "system";
     resolution: Resolution;
     outcome?: Outcome;
     t_min: number;

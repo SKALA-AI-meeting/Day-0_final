@@ -111,7 +111,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 
 `seq`는 노드별 고정 슬롯이다: 화자1 발언=1, 화자2 발언=2, 칸 채우기 공지=5(`fill_slot` 트랜잭션에서 api가 저장). api 시간 초과 공지는 run_id `uuid5(session, "timeout:"+phase)`·seq 0(api 소유). 같은 run_id 재실행은 초안을 다시 생성하고, 게시는 api의 (run_id, seq) 멱등이 기존 메시지를 돌려준다. 그래서 재실행에서 다시 만든 초안의 입장이 원 게시와 다를 수 있다(`LLM_FAKE=1`에서는 같다).
 
-칸 채우기 공지 골격(시나리오 고정, 이름만 치환): consensus "그럼 X로 정리할게요." fill 노드가 LLM 없이 만들어 `fill_slot`의 `content`로 넘기고, api가 칸 확정과 같은 트랜잭션에서 저장한다. 칸 확정과 공지는 함께 남거나 함께 남지 않는다. 시간 초과 공지("시간이 다 돼서 대화에서 가장 많이 모인 의견인 X로 할게요.", R7)는 api가 게시한다.
+칸 채우기 공지 골격(시나리오 고정, 이름만 치환): consensus "그럼 X로 정리할게요." fill 노드가 LLM 없이 만들어 `fill_slot`의 `content`로 넘기고, api가 칸 확정과 같은 트랜잭션에서 저장한다. 칸 확정과 공지는 함께 남거나 함께 남지 않는다. 시간 초과 안내는 api가 적용된 선택 규칙의 고정 문장으로 시스템 메시지를 게시한다(페르소나 자리가 아니다, [product/scenario.md](../product/scenario.md) 1.4 "시간 초과 규칙").
 
 ### 끼어들기와 순서 (D17)
 

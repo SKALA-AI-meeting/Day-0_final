@@ -26,7 +26,7 @@
 
 ## 실행
 
-선행 조건: 전체 스택(`make up`)과 시드(`make seed-compose SEED_ARGS="--minutes 15"` 또는 `make seed`)가 끝나 "서비스기획 신입 (15분 데모)" 채용 건이 있고, `infra/.env`에 실제 키가 있다.
+선행 조건: 전체 스택(`make up`)과 시드(`make seed-compose SEED_ARGS="--minutes 15"` 또는 `make seed`)가 끝나 시드가 만든 15분 채용 건(이름은 `scripts/seed.py` `--position` 기본값 "서비스기획 신입")이 있고, `infra/.env`에 실제 키가 있다.
 
 ```
 make virtual-candidate MODE=scripted      # 대본형 1회(약 15분 + 리포트 대기)
@@ -37,9 +37,11 @@ uv run --project services/api python tests/eval/virtual_candidate/metrics.py <se
 
 두 모드는 서로 다른 세션이라 동시에 돌려도 된다. 기록은 `tests/e2e/records/virtual/<일시>-<mode>/`에 남고 git이 무시한다: `log.md`(시각 · 단계 · 행동 · 의도 · 직후 반응), `transcript.jsonl`(WS 프레임·REST 호출), `session.json`(내보내기), `metrics.json`. 측정 결과를 남길 때는 요약 수치만 `tests/e2e/records/`의 기준선 기록으로 옮긴다.
 
-환경 변수(모두 선택): `VC_API_URL`(기본 `http://localhost:8000`), `VC_POSITION`(채용 건 이름. 재시드로 같은 이름이 여럿이면 가장 최근 것), `VC_ADMIN_EMAIL`·`VC_ADMIN_PASSWORD`(없으면 `scripts/seed.py` 기본값), `VC_MODEL`(자율형 지원자 모델, 기본 `OPENAI_MODEL`), `VC_JUDGE_MODEL`(판정 모델, 기본 gpt-4o-mini), `VC_PG_CONTAINER`(내보내기에 쓰는 postgres 컨테이너, 기본 `infra-postgres-1`).
+환경 변수(모두 선택): `VC_API_URL`(기본 `http://localhost:8000`), `VC_POSITION`(채용 건 이름, 기본은 `scripts/seed.py` `--position` 기본값. 같은 이름 중 15분 채용 건만 보고 재시드로 여럿이면 가장 최근 것), `VC_ADMIN_EMAIL`·`VC_ADMIN_PASSWORD`(없으면 `scripts/seed.py` 기본값), `VC_MODEL`(자율형 지원자 모델, 기본 `OPENAI_MODEL`), `VC_JUDGE_MODEL`(판정 모델, 기본 gpt-4o-mini), `VC_PG_CONTAINER`(내보내기에 쓰는 postgres 컨테이너, 기본 `infra-postgres-1`).
 
 내보내기는 compose의 postgres 컨테이너에서 `psql`로 그 세션의 행만 읽는다(읽기 전용, 포트를 열지 않는다). 표는 sessions·positions(시나리오 복사본)·messages·message_intents·agent_runs·options·stances·slots·session_cards·observations·proposals·assistant_calls·material_views·connection_gaps·evaluation_runs·evaluations·reports이고, 초대 토큰 해시·이메일은 읽지 않는다.
+
+2026-10-23 저녁 이전에 기본값으로 돌린 기록(기준선 `tests/e2e/records/baseline-v1-20261023.md`와 그 뒤 가상 세션)은 기본 채용 건 이름이 시드가 만드는 이름과 달라 2026-10-22에 만든 "서비스기획 신입 (15분 데모)" 채용 건(그때의 시나리오 복사본)으로 진행됐다. 그 사이의 카탈로그·프롬프트 변경은 그 기록들의 세션에 반영되지 않았다(api 코드 변경은 반영됨).
 
 ## 지표
 
@@ -52,7 +54,7 @@ uv run --project services/api python tests/eval/virtual_candidate/metrics.py <se
 | 평가 실패 | `evaluate_failed` 수·비율, 사유 코드(`rationale`의 "사유: …")별 | 규칙 |
 | 요약 모순 | 요소 요약이 그 요소의 최종 차원 판단과 모순되는 요소 수 | LLM |
 | 거짓 합의 | AI 동료 합의 채움 중 직전 지원자 최신 발언이 명시적 동의가 아닌 것(의도 분류가 지지로 셌는지도 함께 기록) | LLM |
-| 시간 초과 안내 | 시간 초과 칸마다 지지 스냅샷으로 다시 계산한 적용 규칙(최다 지지·동률 지원자 안·동률 먼저 나온 안·지지 없음). 안내가 없는 칸과, 안내가 있는데 문구가 말하는 규칙("가장 많이 모인" = 최다 지지)이 실제 규칙과 다른 칸을 따로 센다. 안내한 동료가 그 안 지지자인지 | 규칙 |
+| 시간 초과 안내 | 시간 초과 칸마다 확정 시점 지지 스냅샷으로 다시 계산한 적용 규칙(`candidate_support`·`most_support`·`earliest`·`default`, [product/scenario.md](../product/scenario.md) 1.4). 안내가 없는 칸, 안내 문장이 채용 건 복사본의 그 규칙 문장(`timeout_fill.<규칙 id>`)과 다른 칸, 안내를 AI 동료 자리가 게시한 칸, 고른 안이 규칙과 다른 칸, 칸에 기록된 규칙(`timeout_rule`)이 다시 계산한 규칙과 다른 칸을 따로 센다 | 규칙 |
 | 입장 폴백 | 동료 발언 중 `stance_check = fallback` 비율 | 규칙 |
 | 자기 안 반복 | 동료 발언 중 그 단계에서 처음 지지한 자기 안을 다시 지지로 남긴 비율 | 규칙 |
 | 카드 | 도달한 단계의 카드 수, 발동, 전달(전달 자리 있음), 미발동 카드 | 규칙 |

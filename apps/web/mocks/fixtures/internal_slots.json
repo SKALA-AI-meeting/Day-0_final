@@ -6,6 +6,7 @@
     "option_id": "opt-kw-water",
     "filled_by": "candidate",
     "resolution": "consensus",
+    "timeout_rule": null,
     "outcome": "candidate_decision",
     "support": [
       {
@@ -31,6 +32,7 @@
     "option_id": "opt-pb-p2",
     "filled_by": "p3",
     "resolution": "consensus",
+    "timeout_rule": null,
     "outcome": "consensus",
     "support": [
       {
@@ -50,8 +52,9 @@
     "status": "confirmed",
     "value": "센서·데이터 기반 물 관리·경보",
     "option_id": "opt-sl-s1",
-    "filled_by": "p3",
+    "filled_by": "system",
     "resolution": "timeout",
+    "timeout_rule": "candidate_support",
     "outcome": "timeout",
     "support": [
       {

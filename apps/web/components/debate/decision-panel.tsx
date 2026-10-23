@@ -44,7 +44,7 @@ function Result({ slot, snap, flash }: { slot: Slot; snap: StateSnapshot; flash:
         </span>
       </div>
       <p className="text-callout font-semibold break-words">{slot.value}</p>
-      {filledBy && (
+      {filledBy && filledBy !== "system" && (
         <p className="text-caption text-muted">
           정한 사람 · {filledBy === "candidate" ? "나" : nameOf(snap, filledBy)}
         </p>

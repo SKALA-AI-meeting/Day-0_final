@@ -1,6 +1,6 @@
 """러너가 시나리오 카탈로그(scenarios/missions/debate)에서 읽는 값.
 
-카드 시각·단계, 자리-유형, 안 라벨.
+카드 시각·단계, 자리-유형, 안 라벨, 고정 문장.
 
 코드는 데이터를 해석만 한다. 카드 예정 시각은 단계 시작 + offset_min × (세션 분 / 60), 최소 20초.
 """
@@ -58,6 +58,25 @@ def phase_deadlines(session_minutes: int) -> dict[str, float]:
         total += BUDGET_MIN[phase] * session_minutes / 60
         result[phase] = total
     return result
+
+
+@cache
+def fixed_phrases() -> dict[str, Any]:
+    return _load("prompts/shared/fixed_phrases.yaml")
+
+
+def ro(word: str) -> str:
+    """조사 로/으로: 받침이 없거나 ㄹ 받침이면 로(api `scenario._ro`와 같은 규칙)."""
+    code = ord(word[-1]) - 0xAC00 if word else -1
+    if 0 <= code <= 11171 and code % 28 not in (0, 8):
+        return "으로"
+    return "로"
+
+
+def timeout_notice(rule: str, option: str, candidate: str) -> str:
+    """시간 초과 안내 문장(적용 규칙별, 결정 B4)."""
+    template = fixed_phrases()["timeout_fill"][rule].replace("{option}로", "{option}" + ro(option))
+    return template.format(option=option, candidate=candidate)
 
 
 def load_contract(name: str) -> Any:

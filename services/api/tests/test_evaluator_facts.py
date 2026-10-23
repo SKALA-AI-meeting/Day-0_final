@@ -86,7 +86,7 @@ def test_preempted_cards_when_candidate_confirms_before_card_time():
     fired = [{**c, "fired": c["card_id"] == "listening_pressure"} for c in schedule]
     partly = decision_facts([problem("candidate", "consensus", 120.0, 2.0)], options, (), fired)
     assert partly[0]["preempted_cards"] == ["flexibility_majority"]
-    for filled_by, resolution in (("p3", "consensus"), ("p3", "timeout")):
+    for filled_by, resolution in (("p3", "consensus"), ("system", "timeout")):
         row = decision_facts([problem(filled_by, resolution, 120.0, 2.0)], options, (), schedule)
         assert row[0]["preempted_cards"] == []
     # 초가 없으면 분으로 비교한다

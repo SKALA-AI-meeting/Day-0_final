@@ -16,7 +16,7 @@ uv run --with pytest pytest tests/test_contract_fixtures.py -q
 |---|---|---|
 | keyword | 0~8.2 | p3 바람·p1 불 제안, 카드 `persuasion_keyword`(3.0, p3), 침묵 초대(3.2, p3), 지원자 물 제안(`origin: invited`), p3는 끝까지 바람이라 합의 없음(물 지지 2/4), 지원자 버튼 확정(8.2, `consensus`·`candidate`) |
 | problem | 8.2~25.4 | 지원자 P1 제안, 카드 `flexibility_majority`·`listening_pressure` 공동 전달(11.2, `m-13` `card_ids` 2개, 기준안 `opt-pb-p2` 잠금·제안자 p1), 압박과 응답, 지원자 동의로 3/4 합의 → p3 `fill_slot` 공지(`m-19`, seq 5, `consensus_fill`) |
-| solution | 25.4~46 | 카드 `inclusion_silence`(27.4, p2)·`persuasion_solution`(30.4, p3), 지원자가 윤하람 초대, 시간 초과 채우기(46.0, p3 공지 `timeout_fill`, `timeout`) |
+| solution | 25.4~46 | 카드 `inclusion_silence`(27.4, p2)·`persuasion_solution`(30.4, p3), 지원자가 윤하람 초대, 시간 초과 채우기(46.0, 지원자가 지지한 S1을 `candidate_support` 규칙으로, 시스템 안내 `timeout_fill`, `timeout`·`filled_by: system`) |
 | proposal | 46~57 | `honesty_credit` 관찰(46.0), 연결 끊김 51.0~51.6, 제출 57.0 |
 
 id: 메시지 `m-01~31`(어시스턴트 채널 `ma-1·2`), 안 `opt-kw-*`·`opt-pb-*`·`opt-sl-*`, 관찰 `ob-1~6`, 지원자 `client_msg_id` `c-01~10`, run `run-*`, 평가 실행 `run-eval-sess-1-r1`, 어시스턴트 `ac-1`. 다른 세션 행(`sess-2~7`)은 관리자 목록·초대 예시에만 있다.

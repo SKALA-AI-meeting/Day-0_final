@@ -105,7 +105,7 @@ services/api/app/
 
 - 현재 지지 = **참여자당 하나**. 다른 안을 support하면 이전 지지를 대체하고, 같은 안에 대한 후속 `oppose`·`withhold`는 그 지지를 철회한다(R5-7·B1, withhold는 반대자로 세지 않음). 지원자 입장은 `confidence: high`이고 유보 표현이 없는 `agree`·`propose`만 지지로 센다(R4·B1).
 - consensus: 지원자 포함 4명 중 3명 이상 지지이고 `confirmed_option_id`가 그 안(지원자의 최신 발언이 그 안의 명시적 동의, B2). 성립 즉시 판정한다(합의 대기 시간 없음, R4).
-- timeout: 지지자 최다 → 동률이면 지원자 지지 안 → 먼저 제안된 안 → 없으면 단계 기준안(키워드는 `default_keyword`, 문제 상황은 잠긴 기준안). 기준안 행이 없으면 채우기 전에 만든다(proposer는 채우는 자리).
+- timeout(B3): 지원자의 현재 지지 안(`candidate_support`) → 지지자 최다가 하나면 그 안(`most_support`) → 최다가 동률이거나 지지자가 없으면 그 안들 중 먼저 제안된 안(`earliest`, 생성 시각이 같으면 저장 순서 `options.seq`) → 안이 없으면 단계 기준안(`default`: 키워드 `default_keyword`, 문제 상황 P1, 해결책 S1). 적용 규칙 id를 함께 돌려준다. 기준안 행이 없으면 채우기 때 만든다(proposer = `system`).
 - 같은 함수가 DebateState와 내부 `POST /slots/fill` 검사에 쓰인다. 그래서 AI는 합의 전에 칸을 채우지 못한다(409 `no_consensus`).
 
 ## 칸 (`confirm`·`fill`·시간 초과)
@@ -116,7 +116,7 @@ services/api/app/
 - 내부 `POST /internal/sessions/{id}/slots/fill{option_id, seat, content, run_id}` → `{slot, phase, message}`(debate-mcp `fill_slot`): 그래프의 합의 채우기 전용. 경로에 단계가 없고 대상 단계는 option의 phase다. `filled_by` 인자는 없고 `seat`가 공지 화자이자 `filled_by`다(`resolution=consensus`). 판정 순서: 같은 run_id로 이미 확정됐으면 기존 칸과 공지를 그대로 돌려준다. 아니면 409 `phase_not_open` → `slot_confirmed` → `no_consensus` 순서로 검사한다. 통과하면 **한 트랜잭션**에서 칸 confirmed → 공지 메시지 저장(sender=seat, `content`, (run_id, seq 5), `meta.kind=consensus_fill`) → `advance_phase("confirmed")`(generation +1). 커밋 뒤 WS는 `message.new`(공지) → `slot.confirmed` → `phase.changed` → `timer` 순서로 보낸다(이어서 시스템 안내 `message.new`). 409면 칸·공지 모두 저장하지 않는다. 시간 초과 채우기는 그래프가 하지 않는다(아래).
 - 모든 확정은 `status = empty`인 행만 바꾸는 조건부 갱신이다. 지원자 확정·합의 채우기·시간 초과가 겹치면 먼저 커밋한 쪽만 이기고 나머지는 409 `slot_confirmed`.
 
-**시간 초과 채우기 (`services/timeout.py`, R5-2)**: 그래프가 아니라 api가 결정적으로 직접 한다. 스케줄러가 마감 지난 `empty` 칸을 찾으면 `judge`의 `timeout_option_id`(필요하면 기준안 행 생성) → 시나리오 고정 문장(R7: "시간이 다 돼서 대화에서 가장 많이 모인 의견인 X로 할게요.", 이름만 치환)을 우선순위 자리 이름으로 게시(고정 자리에서는 서지안 `p3`, 우선순위 정본은 [product/scenario.md](../product/scenario.md)) → 칸 확정(`resolution=timeout`, `filled_by`=게시한 자리) → `advance_phase("timeout")`. LLM 없음, 멱등 키 `(session, phase)`.
+**시간 초과 채우기 (`services/timeout.py`, R5-2)**: 그래프가 아니라 api가 결정적으로 직접 한다. 스케줄러가 마감 지난 `empty` 칸을 찾으면 `judge`의 `timeout_option_id`·`timeout_rule`(필요하면 기준안 행 생성, proposer = `system`) → 적용된 규칙의 시나리오 고정 문장(`timeout_fill.<규칙 id>`, 안·지원자 이름만 치환, 규칙과 문장 정본은 [product/scenario.md](../product/scenario.md) 1.4)을 시스템 메시지로 게시 → 칸 확정(`resolution=timeout`, `filled_by=system`, `timeout_rule`) → `advance_phase("timeout")`. LLM 없음, 멱등 키 `(session, phase)`.
 
 ## 기획안
 
@@ -206,7 +206,7 @@ e2e·단계별 테스트가 15분을 처음부터 기다리지 않게 하는 두
 - 조립: 자리 3개가 강한결·윤하람·서지안 고정, 카드 6장·차원 19개, `offset_min` 환산 최소 20초, `avatar` 파일 이름에 유형 이름이 없음, 자료 원문이 `catalog_version`별로 시드. 지원자 응답(`/state`, entry, consent, start)에 `persona_type`이 없다.
 - 이름·입장: 입장·consent·resume 응답에 `session_id`, 입장 응답에 초대 이름, 시작 전 `/state`에 참여자 이름·아바타, consent의 `display_name`이 `/state.participants`·디브리핑에 쓰이고 비우면 별칭, `/assets/...` 이미지가 200.
 - 메일박스: 가짜 시계·가짜 그래프로 자극이 직렬 처리됨, 메시지 저장 시 generation +1이고 그 자극의 generation이 저장 값, `message.ack`이 의도 분류 전에 나감, `agent_runs`가 `queued`로 저장된 뒤 enqueue, 단계 전환 뒤 꺼낸 이전 단계 메시지가 그 메시지 단계의 카탈로그로 분류·저장되고 턴·발언만 skipped, 게시 직전 generation이 바뀌면 남은 화자 버림, `phase_started`는 enqueue만, 같은 run_id의 finished run은 재실행 안 됨, 낡은 message 자극도 의도 분류·안·지지 반영은 되고 그래프만 skipped, 200초 넘은 started run 재실행.
-- 단계·칸: 지원자 확정 → `slot.confirmed`·`phase.changed`·`timer` 순서와 keyword 확정 시 `materials.opened`, 마감 누적 이월, keyword 후보 밖 422, problem·solution 확정의 문자열·카탈로그 키 연결과 불일치 시 `option_id=null`(LLM 호출 0), AI fill의 합의 전 409 `no_consensus`(칸·공지 0건), AI fill 성공 시 칸 확정과 공지(seq 5, `consensus_fill`)가 같은 트랜잭션이고 WS가 `message.new` → `slot.confirmed` → `phase.changed` → `timer`, 같은 run_id 재호출은 기존 칸·공지, 409 검사 순서 `phase_not_open` → `slot_confirmed` → `no_consensus`, 동시 확정 시 하나만 성공, 마감 시 api 결정적 채우기(우선순위 자리 이름·R7 문구·LLM 0), proposal 진입 시 기획안 앞 3칸 채우기.
+- 단계·칸: 지원자 확정 → `slot.confirmed`·`phase.changed`·`timer` 순서와 keyword 확정 시 `materials.opened`, 마감 누적 이월, keyword 후보 밖 422, problem·solution 확정의 문자열·카탈로그 키 연결과 불일치 시 `option_id=null`(LLM 호출 0), AI fill의 합의 전 409 `no_consensus`(칸·공지 0건), AI fill 성공 시 칸 확정과 공지(seq 5, `consensus_fill`)가 같은 트랜잭션이고 WS가 `message.new` → `slot.confirmed` → `phase.changed` → `timer`, 같은 run_id 재호출은 기존 칸·공지, 409 검사 순서 `phase_not_open` → `slot_confirmed` → `no_consensus`, 동시 확정 시 하나만 성공, 마감 시 api 결정적 채우기(시스템 메시지·적용 규칙별 문구·`timeout_rule` 기록·LLM 0), proposal 진입 시 기획안 앞 3칸 채우기.
 - 합의 판정 단위 테스트: 3/4 즉시 성립(대기 없음), 지원자의 최신 발언이 그 안의 명시적 동의가 아니면 합의 없음, confidence low·유보 표현이 든 지원자 agree 미집계, 다른 안 support가 이전 지지를 대체, 같은 안 후속 oppose·withhold가 지지 철회(withhold는 반대자 아님), 카탈로그 안을 지원자가 먼저 말하면 같은 option_id·proposer=candidate이고 이후 AI propose도 같은 행.
 - 메시지·WS: ack·증분·재연결 후 `/state`, `origin`(초대 뒤 첫 발언만 invited), 의도 분류 → 안·입장 반영, 분류 실패 시 other, 모든 프레임에 연속 `seq`, typing 6초 만료.
 - 시간(가짜 시계 단위 테스트 + 15분 실 스택 1~2개, R3): 단계 마감 → `phase.changed` 15초 안, 마감 임박 안내 1건, 침묵 초대 조건에서 `invite_delivered=false`인 동안 idle 재enqueue(대기 중이면 중복 없음), 카드 예정 시각에 card_due, 담당 전원 delivered 전까지 새 run_id로 재enqueue(큐·실행 중이면 중복 없음, 카드당 최대 3회·30초 간격), `ends_at` 자동 제출과 큐 발행.

@@ -4,9 +4,9 @@ priority: P0
 minutes: 15
 expect:
   slots:
-    keyword: { resolution: timeout }
-    problem: { resolution: timeout }
-    solution: { resolution: timeout }
+    keyword: { resolution: timeout, filled_by: system }
+    problem: { resolution: timeout, filled_by: system }
+    solution: { resolution: timeout, filled_by: system }
   cards: [persuasion_keyword, flexibility_majority, listening_pressure, inclusion_silence, persuasion_solution, honesty_credit]
 steps:
   - at: 0.3

@@ -51,12 +51,18 @@ type ScriptFrame = {
   seq: number;
   payload: Record<string, unknown>;
 };
-type Keyword = { key: string; label: string; materials: Material[] };
+type Keyword = {
+  key: string;
+  label: string;
+  default_problem: string;
+  default_solution: string;
+  materials: Material[];
+};
 type Script = {
   session_minutes: number;
   phase_deadlines: Record<Phase, number>;
   stage_start: Record<Phase, string>;
-  fixed_phrases: { consensus_fill: string; timeout_fill: string };
+  fixed_phrases: { consensus_fill: string; timeout_fill: Record<string, string> };
   keywords: Keyword[];
   frames: ScriptFrame[];
 };
@@ -131,7 +137,7 @@ function prepare(fixture: unknown): StateSnapshot {
     );
     snap.slots = snap.slots.map((s) =>
       s.status === "confirmed"
-        ? { ...s, resolution: "timeout", outcome: "timeout", filled_by: "p3" }
+        ? { ...s, resolution: "timeout", outcome: "timeout", filled_by: "system" }
         : s,
     );
     if (snap.messages.length) {
@@ -367,7 +373,7 @@ function confirmSlot(
   s: Server,
   phase: SlotPhase,
   value: string,
-  filledBy: "candidate" | Seat,
+  filledBy: "candidate" | Seat | "system",
   resolution: "consensus" | "timeout",
 ) {
   const t = round(now(s));
@@ -503,10 +509,21 @@ function fillOption(s: Server, phase: SlotPhase) {
   return fromFixture ?? kw.label;
 }
 
+/** 조사 로/으로: 받침이 없거나 ㄹ 받침이면 로(api scenario._ro와 같은 규칙) */
+function ro(word: string) {
+  const code = (word.at(-1)?.charCodeAt(0) ?? 0) - 0xac00;
+  return code >= 0 && code <= 11171 && code % 28 !== 0 && code % 28 !== 8 ? "으로" : "로";
+}
+
+/** mock은 안·지지를 기록하지 않으므로 시간 초과는 늘 "나온 안 없음" 규칙(default)으로 단계 기준안을
+ *  고른다: 키워드는 첫 후보(default_keyword 물), 문제 상황·해결책은 확정 키워드의 첫 안(P1·S1) */
 function timeoutFill(s: Server, phase: SlotPhase) {
-  const option = fillOption(s, phase);
-  message(s, "p3", SCRIPT.fixed_phrases.timeout_fill.replace("{option}", option));
-  confirmSlot(s, phase, option, "p3", "timeout");
+  const kw = SCRIPT.keywords.find((k) => k.label === s.snap.slots[0]?.value) ?? SCRIPT.keywords[0];
+  const option =
+    phase === "keyword" ? kw.label : phase === "problem" ? kw.default_problem : kw.default_solution;
+  const text = SCRIPT.fixed_phrases.timeout_fill.default.replace("{option}로", option + ro(option));
+  message(s, "system", text);
+  confirmSlot(s, phase, option, "system", "timeout");
 }
 
 // ── MockSocket ───────────────────────────────────────────────

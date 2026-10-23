@@ -174,7 +174,13 @@ def assert_1_phases(b: dict[str, Any]) -> list[str]:
         if not slot or slot["status"] != "confirmed":
             out.append(f"{phase} 칸이 confirmed가 아님")
             continue
-        if slot["filled_by"] not in SEATS or slot["resolution"] not in ("consensus", "timeout"):
+        # 시간 초과는 시스템이 채운다(결정 B4)
+        filler_ok = (
+            slot["filled_by"] == "system"
+            if slot["resolution"] == "timeout"
+            else (slot["filled_by"] in SEATS)
+        )
+        if not filler_ok or slot["resolution"] not in ("consensus", "timeout"):
             out.append(
                 f"{phase} 칸 값 이상: filled_by={slot['filled_by']} resolution={slot['resolution']}"
             )
@@ -240,7 +246,7 @@ def assert_2_turns(b: dict[str, Any]) -> list[str]:
     for frame in frames(b, "message.new"):
         p = frame["payload"]
         kind = (by_id.get(p["id"], {}).get("meta") or {}).get("kind")
-        if p["sender"] in ("p1", "p2", "p3") and kind not in ("consensus_fill", "timeout_fill"):
+        if p["sender"] in ("p1", "p2", "p3") and kind != "consensus_fill":
             for start, stop in b["typing_intervals"]:
                 if start + TYPING_GRACE_SECONDS <= frame["_at"] <= stop:
                     out.append(f"지원자 입력 중에 {p['sender']} 게시 ({p['id']})")
@@ -290,10 +296,7 @@ def _quiet_speech(b: dict[str, Any]) -> list[str]:
         if m["sender"] != quiet:
             continue
         kind = (m.get("meta") or {}).get("kind")
-        if "inclusion_silence" in (m.get("card_ids") or []) or kind in (
-            "consensus_fill",
-            "timeout_fill",
-        ):
+        if "inclusion_silence" in (m.get("card_ids") or []) or kind == "consensus_fill":
             continue
         intent = (last_candidate or {}).get("intent") or {}
         called = quiet in (intent.get("addressed_to") or []) or (
@@ -660,11 +663,18 @@ def assert_7_timeout(b: dict[str, Any]) -> list[str]:
     slots = slots_by_phase(b)
     for phase in catalog.PHASES[:3]:
         slot = slots.get(phase) or {}
-        if slot.get("resolution") != "timeout" or slot.get("filled_by") not in ("p1", "p2", "p3"):
+        if slot.get("resolution") != "timeout" or slot.get("filled_by") != "system":
             out.append(
-                f"{phase} 칸이 timeout/자리 id가 아님: "
+                f"{phase} 칸이 timeout/system이 아님: "
                 f"{slot.get('resolution')}/{slot.get('filled_by')}"
             )
+        notices = [
+            m
+            for m in messages(b)
+            if (m.get("meta") or {}).get("kind") == "timeout_fill" and m.get("phase") == phase
+        ]
+        if len(notices) != 1 or notices[0]["sender"] != "system":
+            out.append(f"{phase} 시간 초과 안내가 시스템 메시지 1건이 아님: {notices}")
     proposal = b.get("proposal") or {}
     if not proposal.get("auto_submitted"):
         out.append("자동 제출(auto_submitted)이 아님")

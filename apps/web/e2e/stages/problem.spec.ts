@@ -1,4 +1,4 @@
-// problem: 수용 카드 발언 표시, advance{to: deadline} 뒤 시간 초과 결과(R7 문구)와 입력 잠김
+// problem: 수용 카드 발언 표시, advance{to: deadline} 뒤 시간 초과 결과(적용 규칙별 시스템 안내)와 입력 잠김
 import { expect, test } from "@playwright/test";
 
 import { type Seed, advance, internalGet, room, seed, shot } from "./helpers";
@@ -35,9 +35,7 @@ test("수용 카드 발언 → 시간 초과 채우기 → 입력 닫힘", async
   await shot(page, "problem", "02-수용 카드");
 
   await advance(s.sessionId, "deadline");
-  await expect(
-    room(page).getByText("시간이 다 돼서 대화에서 가장 많이 모인 의견인", { exact: false }),
-  ).toBeVisible();
+  await expect(room(page).getByText("시간 안에 정하지 못", { exact: false })).toBeVisible();
   const result = page.locator('[data-slot="problem"]');
   await expect(result).toContainText("시간 초과");
   await expect(page.locator('[data-slot-input="problem"]')).toHaveCount(0);
@@ -49,6 +47,5 @@ test("수용 카드 발언 → 시간 초과 채우기 → 입력 닫힘", async
     "/slots",
   );
   const problem = slots.find((x) => x.phase === "problem");
-  expect(problem).toMatchObject({ resolution: "timeout" });
-  expect(["p1", "p2", "p3"]).toContain(problem?.filled_by);
+  expect(problem).toMatchObject({ resolution: "timeout", filled_by: "system" });
 });

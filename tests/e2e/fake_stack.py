@@ -842,6 +842,7 @@ class FakeStack:
         option: dict[str, Any] | None,
         filled_by: str,
         resolution: str,
+        timeout_rule: str | None = None,
     ) -> None:
         """칸 확정 → slot.confirmed → 단계 전환(phase.changed·timer·materials.opened).
 
@@ -855,6 +856,7 @@ class FakeStack:
             "option_id": option["id"] if option else None,
             "filled_by": filled_by,
             "resolution": resolution,
+            "timeout_rule": timeout_rule,
             "support": support,
             "confirmed_at": iso(s.now()),
             "t_min": s.t_min(),
@@ -1358,35 +1360,34 @@ class FakeStack:
         self.try_fill(s, phase)
 
     def timeout_fill(self, s: Session, phase: str) -> None:
+        """시간 초과 선택(결정 B3): 지원자 지지 안 → 최다 지지 → 먼저 나온 안 → 기준안."""
         stances = s.stances[phase]
-        counts = {
-            o["id"]: sum(1 for v in stances.values() if v == o["id"])
-            for o in s.options
-            if o["phase"] == phase
-        }
-        chosen = None
-        if counts:
-            top = max(counts.values())
-            tied = [o for o in s.options if o["phase"] == phase and counts[o["id"]] == top]
-            mine = stances.get("candidate")
-            chosen = next((o for o in tied if o["id"] == mine), tied[0])
+        options = [o for o in s.options if o["phase"] == phase]
+        counts = {o["id"]: sum(1 for v in stances.values() if v == o["id"]) for o in options}
+        mine = next((o for o in options if o["id"] == stances.get("candidate")), None)
+        if not options:
+            rule = "default"
+            if phase == "keyword":
+                chosen = self.option_for(s, phase, "water", "물", "system", None)
+            else:
+                rows = catalog.keywords()[s.keyword_key][
+                    "problems" if phase == "problem" else "solutions"
+                ]
+                chosen = self.option_for(s, phase, rows[0]["key"], rows[0]["label"], "system", None)
+        elif mine is not None:
+            rule, chosen = "candidate_support", mine
         else:
-            key = "water" if phase == "keyword" else None
-            chosen = (
-                self.option_for(s, phase, key, "물", "p3", None) if phase == "keyword" else None
-            )
-        if chosen is None:
-            problems = catalog.keywords()[s.keyword_key][
-                "problems" if phase == "problem" else "solutions"
-            ]
-            chosen = self.option_for(s, phase, problems[0]["key"], problems[0]["label"], "p3", None)
+            top = max(counts.values())
+            tied = [o for o in options if counts[o["id"]] == top]
+            rule = "most_support" if top > 0 and len(tied) == 1 else "earliest"
+            chosen = tied[0]
         self.post(
             s,
-            "p3",
-            f"시간이 다 돼서 대화에서 가장 많이 모인 의견인 {chosen['label']}로 할게요.",
-            meta={"kind": "timeout_fill"},
+            "system",
+            catalog.timeout_notice(rule, chosen["label"], s.display_name),
+            meta={"kind": "timeout_fill", "timeout_rule": rule},
         )
-        self.confirm_slot(s, phase, chosen["label"], chosen, "p3", "timeout")
+        self.confirm_slot(s, phase, chosen["label"], chosen, "system", "timeout", rule)
 
     def advance(self, s: Session, body: dict[str, Any]) -> httpx.Response:
         if s.status != "in_progress":
