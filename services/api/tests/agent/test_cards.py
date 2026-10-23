@@ -1,5 +1,7 @@
 """카드 전달·기준안·관찰과 계약 테스트 C5(testing.md "수용·경청 카드")."""
 
+import re
+
 import pytest
 from conftest import intent_of, say
 
@@ -312,7 +314,6 @@ async def test_moved_critic_support_overrides_structured_oppose(harness, via):
 
 async def test_pressure_counts_from_the_card_message_up_to_three(harness):
     """압박 횟수는 카드 첫 발언부터 센다(카드 전 발언 제외). 카드 발언 포함 최대 3회."""
-    from app.agent.manager.rules import PRESSURE_FOLLOWUP
 
     support_p2 = {"option_id": "water_p2", "stance": "support"}
     h = problem(
@@ -344,14 +345,19 @@ async def test_pressure_counts_from_the_card_message_up_to_three(harness):
         h.snapshots.clear()
         mid = h.candidate(f"한결님, {text}", intent_of("oppose", key="water_p2", to=("p1",)))
         await h.run("message", message_id=mid)
-        followups.append(PRESSURE_FOLLOWUP in h.snapshots[0]["text"])
-    # 카드 발언(1회) + 재반박 2회 = 3회, 그 뒤에는 재반박 지시가 없다
-    assert followups == [True, True, False]
+        followups.append(_pressure_round(h.snapshots[0]["text"]))
+    # 카드 발언(1회) + 재반박 2회 = 3회(회차는 사실로, 장면 목적은 cards.yaml followup_purpose),
+    # 그 뒤에는 카드 차례 블록이 없다
+    assert followups == [2, 3, None]
+
+
+def _pressure_round(text: str) -> int | None:
+    found = re.search(r"압박 발언 (\d)회째, 최대 3회", text)
+    return int(found.group(1)) if found else None
 
 
 async def test_pressure_count_is_not_limited_to_the_recent_window(harness):
     """카드 발언·재반박이 최근 대화 30개 밖으로 밀려도 압박 횟수가 다시 시작되지 않는다."""
-    from app.agent.manager.rules import PRESSURE_FOLLOWUP
 
     support_p2 = {"option_id": "water_p2", "stance": "support"}
     h = problem(
@@ -374,7 +380,7 @@ async def test_pressure_count_is_not_limited_to_the_recent_window(harness):
     h.snapshots.clear()
     mid = h.candidate("한결님, 그래도 가뭄이에요.", intent_of("oppose", key="water_p2", to=("p1",)))
     await h.run("message", message_id=mid)
-    assert PRESSURE_FOLLOWUP not in h.snapshots[0]["text"]  # 이미 3회
+    assert _pressure_round(h.snapshots[0]["text"]) is None  # 이미 3회
 
 
 async def test_critic_count_survives_restart(harness):

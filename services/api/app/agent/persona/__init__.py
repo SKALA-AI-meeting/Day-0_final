@@ -44,9 +44,44 @@ OUTPUT_RULE = (
     '출력은 JSON 객체 하나다: {"content": "게시할 1~3문장", "proposes": null 또는 '
     '{"scenario_option_key": "키", "label": "라벨"}, "stance": null 또는 '
     '{"option_id": "안 id 또는 키", "stance": "support" 또는 "oppose"}}. '
-    "입장을 표현하지 않는 발언이면 stance는 null이다. "
-    "proposes·stance는 [내 입장 계획]의 안만 쓸 수 있다."
+    "stance는 이번 발언이 어떤 안의 지지·반대를 새로 밝히거나 되풀이해 밝힐 때만 채운다. "
+    "질문에 답하거나 묻거나 받아 주는 발언이면 null이다. "
+    "proposes·stance에 쓸 수 있는 안은 [내 입장]의 내 안뿐이다."
 )
+# 인용 대조(quote_check): 코드가 모은 출처(그 사람의 이 단계 발언·입장 기록)로 LLM이 판단한다
+QUOTE_SYSTEM = (
+    "토론 발언 초안이 다른 참여자의 말이나 입장을 그 사람 것으로 돌린 부분(이름을 붙였든 "
+    '"아까 그렇게 말씀하셨죠"처럼 붙이지 않았든)을 찾고, 출처(그 사람이 이 단계에서 실제로 한 '
+    "발언과 기록된 입장)와 맞는지 판단한다. 출력은 JSON 객체 하나: "
+    '{"attributions": [{"target": "자리 id 또는 candidate", "claim": "돌린 내용", '
+    '"verdict": "supported" | "contradicted" | "not_found"}]}. '
+    "supported는 출처에 같은 뜻의 말이나 입장이 있을 때, contradicted는 출처의 말·입장과 반대일 "
+    "때, not_found는 출처에 없을 때다. 초안 자신의 주장이나 질문은 넣지 않는다. "
+    "돌린 부분이 없으면 빈 목록이다."
+)
+QUOTE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "attributions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string"},
+                    "claim": {"type": "string"},
+                    "verdict": {
+                        "type": "string",
+                        "enum": ["supported", "contradicted", "not_found"],
+                    },
+                },
+                "required": ["target", "claim", "verdict"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["attributions"],
+    "additionalProperties": False,
+}
 # 페르소나 컨텍스트에서 빼는 DebateState 필드(docs/contracts/internal.md DebateState)
 HIDDEN_STATE_KEYS = ("card_progress", "cost_left", "candidate_intents", "first_spoke_at")
 
@@ -87,7 +122,7 @@ def build_messages(
     ds: dict[str, Any],
     names: dict[str, str],
     transcript: list[dict[str, Any]],
-    card_text: str | None,
+    card: dict[str, Any] | None,
     bans: list[str],
     violation: str | None = None,
     notice: str | None = None,
@@ -134,26 +169,15 @@ def build_messages(
         )
     blocks.append("[토론 상태]\n" + "\n".join(status))
 
-    if plan.declared:
-        ident = plan.option_id or plan.key
-        move = " 지원자 안으로 옮김." if plan.moved else ""
-        if move_pending(plan, ds):
-            move += " 이번 발언에서 이 안을 지지한다고 밝힌다."
-        lock = " 지지를 바꾸지 않는다." if not plan.can_move else ""
-        blocks.append(f"[내 입장 계획]\n이번 단계에서 미는 안: {plan.label} ({ident}).{move}{lock}")
-    else:
-        blocks.append(
-            "[내 입장 계획]\n아직 입장을 밝히지 않음. 어떤 안도 지지하거나 반대하지 않는다."
-        )
-
+    blocks.append("[내 입장]\n" + stance_text(plan, ds))
     blocks.append("[상황]\n" + situation_text(situation, names))
     if notice:
         blocks.append(
             f'[정해진 안내]\n이번 발언 맨 앞에 코드가 "{notice}"를 붙인다. '
             "이 문장을 다시 쓰지 말고 이어질 한두 문장만 쓴다. 이전에 안내했다고 말하지 않는다."
         )
-    if card_text:
-        blocks.append(f"[카드 지시]\n{card_text}")
+    if card:
+        blocks.append("[카드 차례]\n" + card_text(card))
     if bans:
         blocks.append("[지킬 것]\n" + "\n".join(f"- {b}" for b in bans))
     mine = my_lines(transcript, seat)
@@ -169,8 +193,36 @@ def build_messages(
     return [SystemMessage(system), HumanMessage("\n\n".join(blocks))]
 
 
+def stance_text(plan: StancePlan, ds: dict[str, Any]) -> str:
+    """내 입장을 상태 사실로(지시 없음, C2). 무엇을 어떻게 말할지는 성향이 정한다."""
+    if not plan.declared:
+        return (
+            "- 이 단계의 내 안: 아직 없음 (칸이 정해지기 전까지 어느 안도 내 지지로 기록되지 않음)"
+        )
+    ident = plan.option_id or plan.key
+    recorded = support_of(ds, plan.seat) == plan.option_id if plan.option_id else False
+    lines = [
+        f"- 이 단계의 내 안: {plan.label} ({ident})",
+        f"- 이 안 지지를 말로 밝혔는지: {'예 (기록됨)' if recorded else '아니요 (아직 기록 없음)'}",
+        f"- 이 단계에서 지지를 옮길 수 있는지: {_yes(plan.can_move)}",
+    ]
+    return "\n".join(lines)
+
+
+def card_text(card: dict[str, Any]) -> str:
+    """카드 차례의 사실(코드)과 설계된 장면의 목적(cards.yaml `purpose`, 데이터)."""
+    turn = "예" if card.get("turn") else "아니요 (앞 카드 발언을 이어가는 차례)"
+    pressure = card.get("pressure")
+    if pressure:
+        turn += f" (이 단계 압박 발언 {pressure[0]}회째, 최대 {pressure[1]}회)"
+    lines = [f"- 이번 발언이 내 카드 차례: {turn}"]
+    for purpose in card.get("purposes") or []:
+        lines.append(f"- 이 장면의 목적: {purpose}")
+    return "\n".join(lines)
+
+
 def situation_text(situation: dict[str, Any], names: dict[str, str]) -> str:
-    """진행 매니저가 정한 상황 정보를 사실 문장으로(지시 없음, C1)."""
+    """진행 매니저가 정한 상황 정보를 사실 문장으로(지시 없음, C1·C2)."""
     target = situation.get("reply_to")
     if target:
         sender = _display(target.get("sender"), names)
@@ -190,6 +242,25 @@ def situation_text(situation: dict[str, Any], names: dict[str, str]) -> str:
     else:
         who = ", ".join(_display(p, names) for p in reacted) if reacted else "아직 없음"
         lines.append(f"- {REACTION_LABEL}: {who}")
+    toward = situation.get("toward_mine")
+    if toward is not None:
+        line = (
+            "- 내가 입장을 밝힌 뒤 내 안을 두고 온 지원자 메시지: "
+            f"반대 {toward['oppose']}개, 보류 {toward['withhold']}개, 질문 {toward['question']}개"
+        )
+        if toward.get("last"):
+            line += f' (마지막: "{toward["last"]}")'
+        lines.append(line)
+    counters = situation.get("counters")
+    if counters is not None:
+        labels = ", ".join(counters.get("labels") or []) or "없음"
+        lines.append(f"- 내가 입장을 밝힌 뒤 지원자가 지지한 다른 안: {counters['n']}개 ({labels})")
+    move = situation.get("move")
+    if move:
+        lines.append(
+            f"- 내 지지가 옮겨졌는데 아직 말로 밝히지 않음: 예 ({move.get('from') or '없음'} → "
+            f"{move.get('to')}, 지원자 안)"
+        )
     return "\n".join(lines)
 
 
@@ -313,20 +384,26 @@ def plan_violation(draft: Draft, plan: StancePlan, ds: dict[str, Any]) -> str | 
 
 
 def sentence_violation(judged: dict[str, Any] | None, plan: StancePlan) -> str | None:
-    """문장 판정(의도 분류 형식)이 계획과 다른 입장을 말하는지."""
+    """문장 판정(의도 분류 형식)이 기록될 입장과 다른 **명시적 지지 이동**을 말하는지(C2).
+
+    거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(propose·agree), 자기 안 철회(oppose·
+    withhold), 입장이 없어야 할 때의 안 지지뿐이다. 유보가 든 동의("그 말도 맞지만…")·low·질문·
+    되짚기는 통과한다. 게시 문장과 저장 입장이 갈라지지 않게 구조화 stance가 자기 안 support여도
+    문장이 다른 안을 지지하면 거부한다.
+    """
     if not judged or judged.get("confidence") != "high":
         return None
     intent = judged.get("intent")
     target = {v for v in (judged.get("target_option_id"), judged.get("scenario_option_key")) if v}
-    if intent in ("propose", "agree"):
-        if not plan.declared and (target or judged.get("new_option_label")):
+    moves = intent in ("propose", "agree") and not judged.get("reservation")
+    if not plan.declared:
+        if moves and (target or judged.get("new_option_label")):
             return "문장이 입장을 밝힘"
-        if plan.declared and (
-            judged.get("new_option_label") or (target and not target & plan.targets)
-        ):
-            return "문장이 계획과 다른 안을 지지함"
-    if intent == "oppose" and plan.declared and target & plan.targets:
-        return "문장이 자기 계획 안에 반대함"
+        return None
+    if moves and (judged.get("new_option_label") or (target and not target & plan.targets)):
+        return "문장이 계획과 다른 안을 지지함"
+    if intent in ("oppose", "withhold") and target & plan.targets:
+        return "문장이 자기 계획 안을 철회함"
     return None
 
 
@@ -412,6 +489,85 @@ def stance_fallback(
 def safe_draft(catalog: Catalog, seat: str, mine: list[str] | None = None) -> Draft:
     """자리별 안전 문구(safe_<type>.md 한 줄). 내 최근 발언과 겹치지 않는 줄을 고른다."""
     return Draft(content=pick_fixed(catalog.safe_phrases(seat), mine or []), fixed=True)
+
+
+# ---- quote_check -----------------------------------------------------------------------------
+def quote_targets(
+    content: str, seat: str, names: dict[str, str], situation: dict[str, Any]
+) -> list[str]:
+    """인용 대조 대상(결정적 게이트): 초안에 이름(성 포함·제외, "님" 유무)이 나온 다른 참여자와,
+    지원자 메시지에 답할 때의 지원자(이름 없는 귀속 "아까 그렇게 말씀하셨죠"). 없으면 빈 목록."""
+    found: list[str] = []
+    for participant, name in names.items():
+        if participant == seat or not name:
+            continue
+        forms = {name, name[1:]} if len(name) >= 3 else {name}
+        if any(form and form in content for form in forms):
+            found.append(participant)
+    target = situation.get("reply_to") or {}
+    if target.get("sender") == "candidate" and "candidate" not in found:
+        found.append("candidate")
+    return found
+
+
+def quote_sources(
+    targets: list[str],
+    *,
+    phase_messages: list[dict[str, Any]],
+    ds: dict[str, Any],
+    names: dict[str, str],
+) -> str:
+    """대상마다 코드가 모은 출처: 이 단계 전체 발언(대화 창과 무관)과 기록된 입장."""
+    parts: list[str] = []
+    for target in targets:
+        spoken = [str(m.get("content") or "") for m in phase_messages if m.get("sender") == target]
+        stances: list[str] = []
+        if target == "candidate":
+            for row in ds.get("candidate_intents") or []:
+                if row.get("intent") not in ("propose", "agree", "oppose", "withhold"):
+                    continue
+                key = row.get("target_option_id") or row.get("scenario_option_key")
+                option = option_by_id(ds, key) or option_by_key(ds, key)
+                label = (option or {}).get("label") or row.get("new_option_label") or key
+                stances.append(
+                    f"{row.get('intent')}: {label}"
+                    + (" (유보 표현 있음)" if row.get("reservation") else "")
+                )
+        else:
+            for option in ds.get("options") or []:
+                if target in (option.get("supporters") or []):
+                    stances.append(f"support: {option.get('label')}")
+                if target in (option.get("opposers") or []):
+                    stances.append(f"oppose: {option.get('label')}")
+        parts.append(
+            json.dumps(
+                {
+                    "target": target,
+                    "name": _display(target, names),
+                    "messages": spoken,
+                    "stances": stances,
+                },
+                ensure_ascii=False,
+            )
+        )
+    return "\n".join(parts)
+
+
+def quote_verdict(result: dict[str, Any]) -> str | None:
+    """LLM 판정 결과에서 거부 사유(코드가 결과를 정한다). 문제 없으면 None."""
+    rows = result.get("attributions") if isinstance(result, dict) else None
+    if not isinstance(rows, list):
+        raise ValueError("quote result has no attributions")
+    bad = [
+        r for r in rows if isinstance(r, dict) and r.get("verdict") in ("contradicted", "not_found")
+    ]
+    if not bad:
+        return None
+    first = bad[0]
+    return (
+        f"{first.get('target')}의 이 단계 발언·입장 기록에 없는 말을 그 사람 것으로 돌림: "
+        f"{first.get('claim')}"
+    )
 
 
 def to_json(draft: Draft) -> str:

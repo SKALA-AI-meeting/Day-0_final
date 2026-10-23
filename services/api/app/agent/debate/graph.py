@@ -1,9 +1,10 @@
 """토론 그래프(docs/architecture/agents.md "토론 그래프"): 진행 매니저 + 페르소나 3.
 
 ```
-load → cards → turn ─┬─ (화자마다) respond → guard → stance_check → wait_typing → apply ─┐
-                     │                                                               ├→ fill → END
-                     └─ 화자 0명 ────────────────────────────────────────────────────────┘
+load → cards → turn ─┬─ (화자마다) respond → guard → stance_check → quote_check
+                     │                        → wait_typing → apply ─┐
+                     │                                               ├→ fill → END
+                     └─ 화자 0명 ────────────────────────────────────────┘
 ```
 
 typing start는 respond 시작, stop은 apply 끝(또는 버림·미룸)에서 보낸다. 실행은 api 메일박스가
@@ -45,17 +46,20 @@ TYPING_WAIT_SECONDS = 10.0
 TYPING_POLL_SECONDS = 0.5
 SPEAKER_GAP_SECONDS = (1.0, 3.0)
 FILL_SEQ = 5
+QUOTE_TRANSCRIPT_LIMIT = 200  # 인용 대조 출처: 이 단계 전체 발언(debate-mcp get_transcript 상한)
 
 Sleep = Callable[[float], Awaitable[None]]
 
 
 @dataclass
 class DebateLLMs:
-    """역할별 래퍼(roles.py make_llm). intent는 stance_check 문장 판정·의도 재분류에 쓴다."""
+    """역할별 래퍼(roles.py make_llm). intent는 stance_check 문장 판정·의도 재분류에, quote는
+    quote_check 인용 대조에 쓴다(실행 코드는 같은 의도 분류 모델 래퍼, 없으면 대조를 건너뛴다)."""
 
     persona: BaseLLM
     turn: BaseLLM
     intent: BaseLLM | None = None
+    quote: BaseLLM | None = None
 
 
 @dataclass
@@ -127,15 +131,25 @@ def _reply_to(state: DebateState) -> str | None:
 
 def _situation(state: DebateState, deps: DebateDeps) -> dict[str, Any]:
     spk = _current(state)
+    seat = spk["seat"]
     intents = rules.intent_map(state["ds"], state["stimulus"], state.get("intent"))
+    plan = _plan_for(state, deps, seat)
+    move = None
+    if persona.move_pending(plan, state["ds"]):
+        before = rules.option_by_id(state["ds"], rules.support_of(state["ds"], seat))
+        move = {"from": (before or {}).get("label"), "to": plan.label}
     return rules.situation(
-        spk["seat"],
+        seat,
         spk,
         _reply_to(state),
         state["transcript"],
         intents,
         deps.catalog,
         state["ds"].get("open_mentions"),
+        ds=state["ds"],
+        stance_targets=plan.targets if plan.declared else None,
+        since=(state["ds"].get("first_spoke_at") or {}).get(seat),
+        move=move,
     )
 
 
@@ -200,15 +214,30 @@ def _plan_for(state: DebateState, deps: DebateDeps, seat: str) -> StancePlan:
     return rules.stance_plan(seat, state["phase"], _plan_context(state, deps))
 
 
-def _card_text(state: DebateState, deps: DebateDeps, seat: str, card_ids: list[str]) -> str | None:
-    texts = [rules.CARD_INSTRUCTIONS[c] for c in card_ids if c in rules.CARD_INSTRUCTIONS]
-    if not card_ids and state["phase"] == "problem" and seat == deps.catalog.seat_of("stubborn"):
+def _card_info(
+    state: DebateState, deps: DebateDeps, seat: str, card_ids: list[str]
+) -> dict[str, Any] | None:
+    """카드 차례의 사실과 설계된 장면 목적(cards.yaml `purpose`, 데이터). 카드 시각·담당은 바꾸지
+    않는다. 압박 카드는 첫 발언 뒤에도 최대 MAX_PRESSURE회까지 `followup_purpose`로 이어진다."""
+    purposes = [
+        str((deps.catalog.card(c) or {}).get("purpose") or "")
+        for c in card_ids
+        if (deps.catalog.card(c) or {}).get("purpose")
+    ]
+    info: dict[str, Any] = {"turn": bool(card_ids), "purposes": purposes, "pressure": None}
+    if state["phase"] == "problem" and seat == deps.catalog.seat_of("stubborn"):
         card = rules.card_progress(state["ds"]).get("listening_pressure") or {}
         count = rules.pressure_count(card, seat)
         # 카드 첫 발언을 포함해 압박 발언은 최대 MAX_PRESSURE회(이번 발언이 그다음 회차)
         if card.get("delivered") and count < rules.MAX_PRESSURE:
-            texts.append(rules.PRESSURE_FOLLOWUP)
-    return " ".join(texts) or None
+            info["pressure"] = (count + 1, rules.MAX_PRESSURE)
+            if not card_ids:
+                followup = (deps.catalog.card("listening_pressure") or {}).get("followup_purpose")
+                if followup:
+                    info["purposes"].append(str(followup))
+    if not info["turn"] and not info["purposes"]:
+        return None
+    return info
 
 
 def _typing_off(deps: DebateDeps, seat: str) -> None:
@@ -536,7 +565,7 @@ async def _generate(
         ds=state["ds"],
         names=state["names"],
         transcript=state["transcript"],
-        card_text=_card_text(state, deps, seat, spk.get("card_ids") or []),
+        card=_card_info(state, deps, seat, spk.get("card_ids") or []),
         bans=rules.preempt_bans(seat, state["phase"], state["ds"], deps.catalog, brief),
         violation=violation,
         notice=_first_notice(state),
@@ -705,6 +734,74 @@ async def stance_check(state: DebateState, runtime: Runtime[DebateDeps]) -> dict
     )
     fixed.meta = {**meta, "stance_check": "fallback"}
     return {"draft": asdict(fixed)}
+
+
+async def _quote_violation(
+    state: DebateState, deps: DebateDeps, draft: persona.Draft
+) -> tuple[str | None, str]:
+    """(거부 사유, 결과 표식). 코드가 출처를 모으고 LLM이 판단한다(C2 인용 대조).
+
+    표식 `none`은 대상 없음(호출 0), `skipped`는 모델 없음·타임아웃·JSON 오류(게시, 관측만).
+    """
+    seat = _current(state)["seat"]
+    targets = persona.quote_targets(draft.content, seat, state["names"], _situation(state, deps))
+    if not targets or deps.llms.quote is None:
+        return None, "none"
+    rows = await deps.tools.code.call(
+        "get_transcript", {"phase": state["phase"], "limit": QUOTE_TRANSCRIPT_LIMIT}
+    )
+    messages = _data(rows) if isinstance(_data(rows), list) else state["transcript"]
+    user = f"[초안]\n{draft.content}\n\n[출처]\n" + persona.quote_sources(
+        targets, phase_messages=messages, ds=state["ds"], names=state["names"]
+    )
+    try:
+        result = await deps.llms.quote.complete_json(
+            "quote",
+            persona.QUOTE_SYSTEM,
+            user,
+            persona.QUOTE_SCHEMA,
+            usage=deps.usage,
+            trace=deps.trace(state, f"quote_check:{seat}"),
+        )
+        reason = persona.quote_verdict(result)
+    except (LLMUnavailable, ValueError) as exc:
+        log.warning("quote_check %s skipped: %s", seat, exc)
+        return None, "skipped"
+    return reason, "pass" if reason is None else "rejected"
+
+
+async def quote_check(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, Any]:
+    """인용 대조: 다른 참여자의 말·입장을 기록에 없이 돌렸으면 재생성 1회(guard → 입장 판정 → 인용
+    판정 순으로 다시) → 그래도 거부면 자리별 안전 문구. 고정 문장·비용 상한은 검사하지 않는다."""
+    if not state.get("draft"):
+        return {}
+    deps = runtime.context
+    draft, plan = _restore(state)
+    if draft.fixed or draft.meta.get("cost_cap"):
+        return {}
+    reason, mark = await _quote_violation(state, deps, draft)
+    if reason is None:
+        draft.meta = {**draft.meta, "quote_check": mark}
+        return {"draft": asdict(draft)}
+    spk = _current(state)
+    meta = {**draft.meta, "quote_check": "regenerated", "quote_violation": reason}
+    try:
+        again = await _generate(state, deps, spk, plan, f"인용 오류({reason})", _spent(draft))
+    except LLMUnavailable:
+        again = None
+    if again is not None and again.content and _guard_check(state, deps, again.content).ok:
+        found, judged = await _violation(state, deps, again, plan)
+        second, _ = (None, "") if found else await _quote_violation(state, deps, again)
+        if not found and second is None:
+            _settle_stance(again, judged, plan, state["ds"])
+            again.content = _guard_check(state, deps, again.content).text
+            again.meta = {**meta, "tools_used": _spent(again)}
+            return {"draft": asdict(again)}
+    safe = persona.safe_draft(
+        deps.catalog, spk["seat"], persona.my_lines(state["transcript"], spk["seat"])
+    )
+    safe.meta = {**meta, "quote_check": "safe"}
+    return {"draft": asdict(safe)}
 
 
 async def wait_typing(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, Any]:
@@ -975,6 +1072,7 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> CompiledStat
         ("respond", respond),
         ("guard", guard),
         ("stance_check", stance_check),
+        ("quote_check", quote_check),
         ("wait_typing", wait_typing),
         ("apply", apply),
         ("fill", fill),
@@ -986,7 +1084,8 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> CompiledStat
     builder.add_conditional_edges("turn", after_turn, ["respond", "fill"])
     builder.add_edge("respond", "guard")
     builder.add_edge("guard", "stance_check")
-    builder.add_edge("stance_check", "wait_typing")
+    builder.add_edge("stance_check", "quote_check")
+    builder.add_edge("quote_check", "wait_typing")
     builder.add_conditional_edges("wait_typing", after_wait, ["apply", END])
     builder.add_conditional_edges("apply", after_apply, ["respond", "fill", END])
     builder.add_edge("fill", END)

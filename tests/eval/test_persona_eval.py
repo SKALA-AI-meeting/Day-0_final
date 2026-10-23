@@ -40,7 +40,7 @@ def test_scripts_cover_the_four_metrics():
     sessions = pe.load_scripts()["sessions"]
     steps = [s for session in sessions for s in session["steps"] if "say" in s]
     kinds = {s["kind"] for s in steps}
-    assert {"evidence", "progress", "named", "leak", "question"} <= kinds
+    assert {"evidence", "progress", "named", "leak", "question", "ack"} <= kinds
     assert any(s.get("misquote") for s in steps)
     assert {"listening_pressure", "persuasion_solution"} <= {
         s["card"] for session in sessions for s in session["steps"] if "card" in s
@@ -154,8 +154,9 @@ async def test_persona_quality_live():
     for run in range(repeat):
         for session in pe.load_scripts()["sessions"]:
             h = h_mod.Harness(catalog, session["seed"]["phase"])
+            intent = make_llm("intent")
             h.runner.llms = DebateLLMs(
-                persona=make_llm("persona"), turn=make_llm("turn"), intent=make_llm("intent")
+                persona=make_llm("persona"), turn=make_llm("turn"), intent=intent, quote=intent
             )
             got, used = await pe.run_session(h, session, run)
             events += got

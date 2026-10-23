@@ -17,6 +17,10 @@ debate·rag MCP와 가짜 hub)에 LLM만 갈아 끼운다. 지원자 발언은 �
 - 귀속 판정(attribution, LLM): 게시된 동료 발언 전체에서 귀속을 뽑아 supported/overstated/
   unsupported/undeterminable로 판정(`judge_attributions`, 모듈 tests/eval/attribution.py). 위 규칙
   misquote는 보조 신호로 남긴다
+- 호응 뒤 자기 안 밀기(push_after_ack): 짧은 호응(kind ack) 뒤 다음 지원자 발언 전 동료 발언 중
+  입장(`meta.stance`)을 다시 기록한 비율. 반대·다른 안 없이 자기 안을 되풀이하는 정도의 대리 지표
+- 인용 대조(quote_check): 발언의 `meta.quote_check` 분포(none·pass·regenerated·safe·skipped)
+- 지연: 자극 한 번의 그래프 실행 시간(ms) p95(인용 대조 추가 비용 관측)
 """
 
 import importlib.util
@@ -112,11 +116,19 @@ def _ai_since(h, start: int) -> list[dict[str, Any]]:
             "id": m.get("id"),
             "seat": m["sender"],
             "content": m["content"],
-            "meta": m.get("meta") or {},
+            "meta": {**(m.get("meta") or {}), "stance": _stance_of(h, m["id"])},
         }
         for m in h.server.messages[start:]
         if m["sender"] in ("p1", "p2", "p3")
     ]
+
+
+def _stance_of(h, message_id: str) -> dict[str, Any] | None:
+    """그 발언으로 저장된 입장(set_stance 호출 기록)."""
+    for name, args in reversed(h.server.calls):
+        if name == "set_stance" and args.get("source_message_id") == message_id:
+            return {"option_id": args.get("option_id"), "stance": args.get("stance")}
+    return None
 
 
 async def run_session(h, session: dict[str, Any], run: int = 0) -> tuple[list[dict[str, Any]], int]:
@@ -169,6 +181,7 @@ async def run_session(h, session: dict[str, Any], run: int = 0) -> tuple[list[di
                 "message_id": mid,
             }
         calls += result.usage.get("llm_calls", 0)
+        event["latency_ms"] = result.usage.get("latency_ms")
         event["decision"] = (result.decision or {}).get("speakers")
         event["error"] = result.error
         event["posts"] = _ai_since(h, start)
@@ -388,6 +401,39 @@ def safety(events: list[dict[str, Any]], prompts: dict[str, str]) -> dict[str, A
     return {"violations": len(found), "details": found}
 
 
+def push_after_ack(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """짧은 호응(ack) 뒤 다음 지원자 발언 전 동료 발언 중 입장을 다시 기록한 비율."""
+    n = pushed = 0
+    for i, event in enumerate(events):
+        if event.get("kind") != "ack":
+            continue
+        for post in following(events, i, 3):
+            n += 1
+            pushed += bool(post["meta"].get("stance"))
+    return {"n": n, "pushed": pushed, "rate": _rate(pushed, n)}
+
+
+def quote_checks(events: list[dict[str, Any]]) -> dict[str, int]:
+    posts = [p for e in events for p in e["posts"]]
+    out = {k: 0 for k in ("none", "pass", "regenerated", "safe", "skipped")}
+    for post in posts:
+        mark = post["meta"].get("quote_check")
+        if mark in out:
+            out[mark] += 1
+    return out
+
+
+def latency(events: list[dict[str, Any]]) -> dict[str, Any]:
+    values = sorted(int(e["latency_ms"]) for e in events if e.get("latency_ms") is not None)
+    if not values:
+        return {"n": 0, "p50_ms": None, "p95_ms": None}
+    return {
+        "n": len(values),
+        "p50_ms": values[len(values) // 2],
+        "p95_ms": values[min(len(values) - 1, int(len(values) * 0.95))],
+    }
+
+
 def fallbacks(events: list[dict[str, Any]]) -> dict[str, int]:
     posts = [p for e in events for p in e["posts"]]
     return {
@@ -418,6 +464,9 @@ def score(
         "replies": replies(events),
         "safety": safety(events, prompts),
         "misquote": misquote(events),
+        "push_after_ack": push_after_ack(events),
+        "quote_check": quote_checks(events),
+        "latency": latency(events),
         "attribution": attribution_result,
         "fallbacks": fallbacks(events),
     }
