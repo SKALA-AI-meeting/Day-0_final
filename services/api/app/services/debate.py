@@ -898,6 +898,39 @@ async def debate_state(
     }
     current = result.get("current_support", {p: None for p in consensus.PARTICIPANTS})
     order = {p: i for i, p in enumerate(sc.PHASES)}
+    # 이 단계 지원자 메시지의 저장된 의도(진행 매니저 설득 가능 규칙 횟수, 프로세스 메모리에 기대지
+    # 않음)와 AI 자리별 이 단계 첫 발언 시각
+    candidate_intents = (
+        (
+            await db.execute(
+                select(MessageIntent, Message.created_at)
+                .join(Message, Message.id == MessageIntent.message_id)
+                .where(
+                    MessageIntent.session_id == session.id,
+                    Message.phase == phase,
+                    Message.sender == "candidate",
+                    Message.channel == "room",
+                )
+                .order_by(Message.created_at)
+            )
+        ).all()
+        if debate_phase
+        else []
+    )
+    first_spoke = dict(
+        (
+            await db.execute(
+                select(Message.sender, func.min(Message.created_at))
+                .where(
+                    Message.session_id == session.id,
+                    Message.phase == phase,
+                    Message.channel == "room",
+                    Message.sender.in_(SEATS),
+                )
+                .group_by(Message.sender)
+            )
+        ).all()
+    )
     return {
         "phase": phase,
         "generation": session.generation,
@@ -951,6 +984,20 @@ async def debate_state(
             for c in cards
         ],
         "cost_left": budget.cost_left(session),
+        "candidate_intents": [
+            {
+                "message_id": str(i.message_id),
+                "created_at": iso(created),
+                "intent": i.intent,
+                "target_option_id": _str(i.target_option_id),
+                "scenario_option_key": i.scenario_option_key,
+                "new_option_label": i.new_option_label,
+                "confidence": i.confidence,
+                "reservation": i.reservation,
+            }
+            for i, created in candidate_intents
+        ],
+        "first_spoke_at": {seat: iso(first_spoke.get(seat)) for seat in SEATS},
     }
 
 

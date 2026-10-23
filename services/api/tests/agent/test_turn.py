@@ -471,3 +471,21 @@ async def test_excluded_seat_must_be_named_in_the_message(harness):
     )
     run = await h.run("message", message_id=mid)
     assert [s["seat"] for s in run.decision["speakers"]] == ["p2", "p3"]
+
+
+async def test_excluded_seat_named_without_honorific(harness):
+    """이름을 "님" 없이 불러 뺀 경우도 뺀다("서지안 말고 하람님", "지안 말고 하람님")."""
+    for text in ("서지안 말고 하람님 생각은요?", "지안 말고 하람님 생각은요?"):
+        h = harness("solution")
+        h.server.confirm_keyword("water")
+        mid = h.candidate(text, intent_of("question", to=("p2",), excluded=("p3",)))
+        run = await h.run("message", message_id=mid)
+        assert [s["seat"] for s in run.decision["speakers"]] == ["p2"], text
+
+
+def test_excluded_seats_is_a_name_fact_check(catalog):
+    from app.agent.manager import rules
+
+    assert rules.excluded_seats("서지안 말고요", ["p3"], catalog) == ["p3"]
+    assert rules.excluded_seats("지안님 빼고", ["p3"], catalog) == ["p3"]
+    assert rules.excluded_seats("3번은 보류", ["p3"], catalog) == []

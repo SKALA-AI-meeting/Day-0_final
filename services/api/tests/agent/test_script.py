@@ -28,6 +28,7 @@ async def mailbox(h, text: str):
         seats=SEATS,
         message_id=mid,
     )
+    h.server.intents[mid] = dict(result)
     h.server.apply_candidate(result)
     return await h.run("message", message_id=mid)
 

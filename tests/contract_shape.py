@@ -739,6 +739,19 @@ DEBATE_STATE = {
     ],
     "card_progress": CARD_PROGRESS,
     "cost_left": NUM,
+    "candidate_intents": [
+        {
+            "message_id": str,
+            "created_at": TS,
+            "intent": INTENT,
+            "target_option_id": Opt(str),
+            "scenario_option_key": Opt(str),
+            "new_option_label": Opt(str),
+            "confidence": Enum("high", "low"),
+            "reservation": bool,
+        }
+    ],
+    "first_spoke_at": {k: Opt(TS) for k in ("p1", "p2", "p3")},
 }
 CONTRIBUTIONS = {
     "options": [CONTRIBUTION_OPTION],

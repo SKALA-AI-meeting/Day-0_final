@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 238개(live 3개 포함, `make test`는 live를 뺀다).
+총 242개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -161,7 +161,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_cards.py</code> (16)</summary>
+<details><summary><code>tests/agent/test_cards.py</code> (17)</summary>
 
 - `test_c5_lead_lock_joint_delivery_and_observations`
 - `test_c5_api_lock_is_used`
@@ -178,6 +178,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_moved_critic_support_overrides_structured_oppose` ×2
 - `test_pressure_counts_from_the_card_message_up_to_three`
 - `test_pressure_count_is_not_limited_to_the_recent_window`
+- `test_critic_count_survives_restart`
 
 </details>
 
@@ -264,7 +265,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_turn.py</code> (29)</summary>
+<details><summary><code>tests/agent/test_turn.py</code> (31)</summary>
 
 - `test_phase_started_keyword_pushers_and_problem_react`
 - `test_second_speaker_sees_the_first_speakers_line`
@@ -295,6 +296,8 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_llm_fault_persona_timeout_skips_one_speaker`
 - `test_counter_count_counts_only_explicit_alternatives`
 - `test_excluded_seat_must_be_named_in_the_message`
+- `test_excluded_seat_named_without_honorific`
+- `test_excluded_seats_is_a_name_fact_check`
 
 </details>
 
@@ -313,7 +316,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_c02_consensus_fill.py</code> (8)</summary>
+<details><summary><code>tests/test_c02_consensus_fill.py</code> (9)</summary>
 
 - `test_fill_in_same_run_after_candidate_agrees`
 - `test_fill_accepts_ai_support_added_after_candidate_agreed`
@@ -323,6 +326,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_reserved_agreement_is_not_support`
 - `test_withhold_withdraws_support_and_is_not_opposition`
 - `test_withhold_without_target_withdraws_current_support`
+- `test_low_confidence_withhold_withdraws_support_then_timeout_follows_majority`
 
 </details>
 

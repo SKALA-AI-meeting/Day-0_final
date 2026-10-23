@@ -393,22 +393,32 @@ def recent_streak_seat(transcript: list[dict[str, Any]]) -> str | None:
     return None
 
 
-def named_seats(text: str, catalog: Catalog) -> list[str]:
-    """메시지에서 "이름님"으로 부른 자리(메시지에 나온 순서)."""
+def _name_forms(seat: str, catalog: Catalog) -> list[str]:
+    """자리 표시 이름의 두 형태(성까지 붙인 이름, 세 글자 이상이면 성을 뗀 이름)."""
+    name = catalog.name_of(seat)
+    return [name, name[1:]] if len(name) >= 3 else [name]
+
+
+def named_seats(text: str, catalog: Catalog, *, honorific: bool = True) -> list[str]:
+    """메시지에서 이름으로 부른 자리(메시지에 나온 순서). honorific이면 "이름님"만, 아니면 "님"
+    유무와 상관없이 이름이 나온 자리."""
     found: list[tuple[int, str]] = []
     for seat in SEATS:
-        name = catalog.name_of(seat)
-        given = name[1:] if len(name) >= 3 else name
-        hit = re.search(f"(?:{re.escape(name)}|{re.escape(given)})\\s*님", text)
+        forms = "|".join(re.escape(f) for f in _name_forms(seat, catalog))
+        pattern = f"(?:{forms})\\s*님" if honorific else f"(?:{forms})"
+        hit = re.search(pattern, text)
         if hit:
             found.append((hit.start(), seat))
     return [seat for _, seat in sorted(found)]
 
 
 def excluded_seats(text: str, excluded: list[str] | None, catalog: Catalog) -> list[str]:
-    """분류 excluded 중 메시지에서 실제로 이름을 부른 자리만(뺀다는 것은 그 동료를 불렀다는 사실을
-    전제한다. "3번은 보류"의 안 번호를 자리로 읽은 분류는 기록과 맞지 않아 버린다)."""
-    named = set(named_seats(text, catalog))
+    """분류 excluded 중 메시지에 이름이 실제로 나온 자리만("님" 유무 무관).
+
+    뺀다는 것은 그 동료를 이름으로 가리켰다는 사실을 전제한다. "3번은 보류"의 안 번호를 자리로
+    읽은 분류는 기록과 맞지 않아 버린다.
+    """
+    named = set(named_seats(text, catalog, honorific=False))
     return [s for s in excluded or [] if s in named]
 
 

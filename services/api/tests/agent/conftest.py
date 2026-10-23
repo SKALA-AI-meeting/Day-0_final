@@ -47,6 +47,7 @@ class FakeServer:
         self.support: dict[str, str | None] = {p: None for p in ("candidate", *SEATS)}
         # 지원자의 이 단계 최신 발언이 지지로 세는 발언이면 그 안(api candidate_confirmed)
         self.confirmed: str | None = None
+        self.intents: dict[str, dict[str, Any]] = {}  # message_intents(저장된 분류)
         self.opposers: dict[str, set[str]] = {}
         self.slots: dict[str, dict[str, Any]] = {}
         self.cards: dict[str, dict[str, Any]] = {}
@@ -200,6 +201,15 @@ class FakeServer:
             "confirmed": [s for s in self.slots.values() if s["status"] == "confirmed"],
             "card_progress": [self.card_row(c) for c in self.cards.values()],
             "cost_left": self.cost_left,
+            "candidate_intents": [
+                {"message_id": m["id"], "created_at": at, **self.intents[m["id"]]}
+                for m, at in self.timed()
+                if m["sender"] == "candidate" and m["id"] in self.intents
+            ],
+            "first_spoke_at": {
+                seat: next((at for m, at in self.timed() if m["sender"] == seat), None)
+                for seat in SEATS
+            },
             "seats": [{"seat": "candidate", "display_name": self.candidate_name}]
             + [
                 {"seat": s, "display_name": self.catalog.name_of(s), "avatar_url": f"/a/{s}.png"}
@@ -218,6 +228,14 @@ class FakeServer:
                 if m["sender"] in SEATS and m["phase"] == start["phase"]:
                     spoken[m["sender"]] = spoken.get(m["sender"], 0) + 1
         return {**card, "trigger_message_id": trigger, "spoken_since_trigger": spoken}
+
+    def timed(self) -> list[tuple[dict[str, Any], str]]:
+        """이 단계 메시지와 저장 순서대로 매긴 시각(api의 created_at 대역)."""
+        return [
+            (m, f"2026-10-21T01:{i // 60:02d}:{i % 60:02d}Z")
+            for i, m in enumerate(self.messages)
+            if m.get("phase") == self.phase
+        ]
 
     def room(self, sender: str | None = None) -> list[dict[str, Any]]:
         return [m for m in self.messages if sender is None or m["sender"] == sender]
@@ -483,6 +501,7 @@ class Harness:
         mid = self.server.candidate_says(content)
         if result is not None:
             intent_mod.remember(mid, result)
+            self.server.intents[mid] = dict(result)
             self.server.apply_candidate(result)
         return mid
 

@@ -48,10 +48,12 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
  "invite_delivered":false,"last_room_message_t_min":11.4,
  "confirmed":[{"phase":"keyword","value":"물","option_id":"...","resolution":"consensus","filled_by":"candidate"}],
  "card_progress":[{"card_id":"<card_id>","locked_option_id":"...","delivered":["p1"],"trigger_message_id":"...","spoken_since_trigger":{"p1":2}}],
- "cost_left":1.79}
+ "cost_left":1.79,
+ "candidate_intents":[{"message_id":"...","created_at":"...","intent":"propose","target_option_id":"...","scenario_option_key":null,"new_option_label":null,"confidence":"high","reservation":false}],
+ "first_spoke_at":{"p1":"...","p2":null,"p3":"..."}}
 ```
 
-`consensus_option_id`는 합의 판정 결과(없으면 null. 지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언일 때만 값이 있다, 아래 "의도 분류 출력 스키마"), `timeout_option_id`는 지금 마감되면 고를 안. 진행 매니저는 이 값을 그대로 쓴다. `card_progress`는 `session_cards` 행(처리가 시작된 카드)의 잠긴 기준안과 전달된 자리, 그 카드의 첫 발언(`observations.trigger_message_id`, 아직 없으면 null), 그 발언(포함)부터 같은 단계에서 AI 자리별 토론방 발언 수(`spoken_since_trigger`, 전체 기록 기준, 첫 발언이 없으면 `{}`. 진행 매니저의 압박 횟수)이고, 결정적 노드가 아직 전달되지 않은 담당 화자를 다음 run의 화자로 이어서 넣는다. **페르소나 컨텍스트에는 `card_progress`·`cost_left`를 넣지 않는다**(카드 brief와 자기 입장 계획만 그 화자에게). `cost_left` = `SESSION_COST_HARD_USD`(기본 $2) − `sessions.debate_cost_usd`(리포트 비용 제외, `services/budget.py`가 계산)이고 0 이하면 페르소나는 LLM 없이 고정 안전 문구만 게시한다. 그래프 `load`는 위 필드를 걸러 낸 DebateState를 페르소나 컨텍스트에 미리 넣어 조회 도구 왕복을 줄인다.
+`consensus_option_id`는 합의 판정 결과(없으면 null. 지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언일 때만 값이 있다, 아래 "의도 분류 출력 스키마"), `timeout_option_id`는 지금 마감되면 고를 안. 진행 매니저는 이 값을 그대로 쓴다. `card_progress`는 `session_cards` 행(처리가 시작된 카드)의 잠긴 기준안과 전달된 자리, 그 카드의 첫 발언(`observations.trigger_message_id`, 아직 없으면 null), 그 발언(포함)부터 같은 단계에서 AI 자리별 토론방 발언 수(`spoken_since_trigger`, 전체 기록 기준, 첫 발언이 없으면 `{}`. 진행 매니저의 압박 횟수)이고, 결정적 노드가 아직 전달되지 않은 담당 화자를 다음 run의 화자로 이어서 넣는다. `candidate_intents`는 그 단계 지원자 토론방 메시지의 저장된 의도 분류(`message_intents`, 메시지 순), `first_spoke_at`은 AI 자리별 그 단계 첫 토론방 발언 시각(없으면 null)이고, 진행 매니저가 설득 가능 규칙 횟수를 프로세스 메모리 없이 센다. **페르소나 컨텍스트에는 `card_progress`·`cost_left`·`candidate_intents`·`first_spoke_at`을 넣지 않는다**(카드 brief와 자기 입장 계획만 그 화자에게). `cost_left` = `SESSION_COST_HARD_USD`(기본 $2) − `sessions.debate_cost_usd`(리포트 비용 제외, `services/budget.py`가 계산)이고 0 이하면 페르소나는 LLM 없이 고정 안전 문구만 게시한다. 그래프 `load`는 위 필드를 걸러 낸 DebateState를 페르소나 컨텍스트에 미리 넣어 조회 도구 왕복을 줄인다.
 
 ### Contributions
 

@@ -375,3 +375,26 @@ async def test_pressure_count_is_not_limited_to_the_recent_window(harness):
     mid = h.candidate("한결님, 그래도 가뭄이에요.", intent_of("oppose", key="water_p2", to=("p1",)))
     await h.run("message", message_id=mid)
     assert PRESSURE_FOLLOWUP not in h.snapshots[0]["text"]  # 이미 3회
+
+
+async def test_critic_count_survives_restart(harness):
+    """설득 가능 규칙 횟수는 저장된 의도(DebateState candidate_intents)에서 센다. 프로세스 메모리가
+    비어도(재시작) 같은 결과다."""
+    from app.agent import intent as intent_mod
+
+    support_p2 = {"option_id": "water_p2", "stance": "support"}
+    h = problem(
+        harness,
+        persona=[say("침수가 먼저예요.", support_p2), say("저도 침수 쪽이에요.", support_p2)],
+    )
+    h.candidate("가뭄 문제가 제일 커요.", intent_of("propose", key="water_p1"))
+    await h.run("card_due", card_id=FLEX)
+    p1 = option_id(h, "water_p1")
+    h.candidate("가뭄으로 가요.", intent_of("propose", option_id=p1))
+    h.candidate("저는 계속 가뭄이 맞다고 봐요.", intent_of("propose", option_id=p1))
+    h.persona.script += [say("듣고 보니 가뭄 쪽이 맞네요.", {"option_id": p1, "stance": "support"})]
+    mid = h.candidate("지안님 어떻게 보세요?", intent_of("question", to=("p3",)))
+    intent_mod._cache.clear()  # 재시작: 분류 결과 메모리가 비었다
+
+    await h.run("message", message_id=mid)
+    assert h.server.support["p3"] == p1

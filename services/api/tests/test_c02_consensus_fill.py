@@ -209,3 +209,35 @@ async def test_withhold_without_target_withdraws_current_support(api, classifier
     assert (await _debate_state(api, sess))["current_support"]["candidate"] == option_id
     await api.say(sess, "음 아직 고르지 않을게요")
     assert (await _debate_state(api, sess))["current_support"]["candidate"] is None
+
+
+async def test_low_confidence_withhold_withdraws_support_then_timeout_follows_majority(
+    api, ctx, clock, classifier
+):
+    """대상 없는 low 보류도 지원자의 현재 지지를 철회한다(지지를 줄이는 쪽만, 결정 B1 구현 세부).
+    합의는 생기지 않고, 시간 초과는 남은 지지로 고른다."""
+    from datetime import datetime
+
+    from app.scheduler import tick
+
+    sess = await api.new_session(minutes=60)
+    await to_phase(api, sess, "problem")
+    p2 = await api.ai_support(sess, "p1", "problem", *P2)
+    classifier.rules["가뭄이 커요"] = high("propose", "water_p1")
+    classifier.rules["음 잘 모르겠네요"] = {"intent": "withhold", "confidence": "low"}
+    await api.say(sess, "가뭄이 커요")
+    state = await _debate_state(api, sess)
+    p1 = state["current_support"]["candidate"]
+    assert p1 and p1 != p2 and state["timeout_option_id"] == p1  # 동률이면 지원자 지지 안
+
+    await api.say(sess, "음 잘 모르겠네요")
+    state = await _debate_state(api, sess)
+    assert state["current_support"]["candidate"] is None
+    assert state["consensus_option_id"] is None and state["timeout_option_id"] == p2
+
+    session = (await api.internal.get(f"/internal/sessions/{sess.id}")).json()
+    clock.set(datetime.fromisoformat(session["phase_deadline_at"]))
+    await tick(ctx)
+    slots = (await api.internal.get(f"/internal/sessions/{sess.id}/slots")).json()
+    problem = next(s for s in slots if s["phase"] == "problem")
+    assert (problem["option_id"], problem["resolution"]) == (p2, "timeout")
