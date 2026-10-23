@@ -29,8 +29,8 @@ session:
     type_label: 고집형
     name: 강한결
     avatar: avatar-01.png
-    prompt: prompts/persona_stubborn.md
-    safe_phrase: prompts/safe_stubborn.md
+    prompt: prompts/persona/persona_stubborn.md
+    safe_phrase: prompts/persona/safe_stubborn.md
     tone: 단정형 짧은 문장. "그건 아니죠, ~가 맞아요." 같은 근거를 반복
     rules:
       - 자기 안을 강하게, 반복해 민다
@@ -56,8 +56,8 @@ session:
     type_label: 소극형
     name: 윤하람
     avatar: avatar-02.png
-    prompt: prompts/persona_quiet.md
-    safe_phrase: prompts/safe_quiet.md
+    prompt: prompts/persona/persona_quiet.md
+    safe_phrase: prompts/persona/safe_quiet.md
     tone: 짧고 머뭇거림. "음… 저는…", "아니에요, 먼저 하세요"
     rules:
       - 스스로 주장하지 않는다
@@ -82,8 +82,8 @@ session:
     type_label: 비판형
     name: 서지안
     avatar: avatar-03.png
-    prompt: prompts/persona_critic.md
-    safe_phrase: prompts/safe_critic.md
+    prompt: prompts/persona/persona_critic.md
+    safe_phrase: prompts/persona/safe_critic.md
     tone: 질문형·반론형. "근데 그게 정말 ~일까요? 근거가 있어요?"
     rules:
       - 반대 역할. 지지가 모이는 안의 약점을 짚고 근거를 요구한다

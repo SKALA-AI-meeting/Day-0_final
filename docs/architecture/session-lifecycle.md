@@ -56,7 +56,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 3. api(메일박스 안, 자극을 꺼낸 순서대로): **실시간 의도 분류**(작은 모델, 입력 단계는 저장된 `messages.phase`이고 그 단계 카탈로그 안 전체 포함, 타임아웃 10초, 재시도 없음) → `message_intents` 저장 → 토론 상태 누적: 제안이면 안 행(시나리오 키면 그 키 행, 아니면 자유 안, 최초 제안자 = candidate), confidence high인 제안·동의·반대면 `stances` 행(참여자당 현재 지지 하나, 다른 안 지지는 대체, 같은 안 반대는 철회). 실패하면 `intent=other`(fallback=true)로 두고 진행. 안·입장도 `messages.phase` 단계에 저장한다. **자극이 낡았어도 이 단계는 반드시 수행**한다
 4. 자극이 낡았으면(단계가 현재 단계와 다름, 또는 generation이 현재 값보다 작아 뒤의 메시지 자극이 응답을 맡음) 턴 선택·페르소나 발언 생성 없이 `skipped`. 아니면 토론 그래프 실행:
    - `load`(결정적): DebateState(합의·시간 초과 후보, `card_progress`, `cost_left` 포함)와 최근 대화를 읽어 페르소나용으로 걸러 컨텍스트에 미리 넣는다
-   - `turn`(턴 매니저): 규칙(지원자가 부른 사람, 미전달 카드 화자, 침묵 초대, 합의 성립 → `fill = {option_id, seat}`)을 먼저 적용하고, 규칙 결과가 0명이고 자극이 `message`일 때만 LLM이 **화자 0~2명**과 목적을 정한다
+   - `turn`(진행 매니저): 규칙(지원자가 부른 사람, 미전달 카드 화자, 침묵 초대, 합의 성립 → `fill = {option_id, seat}`)을 먼저 적용하고, 규칙 결과가 0명이고 자극이 `message`일 때만 LLM이 **화자 0~2명**과 목적을 정한다
    - 화자마다 `typing` 시작 → `respond`(페르소나 에이전트 LLM. 자기 자리의 성향·입장 계획·카드 brief·기억, 허용 도구만) → `guard`(금지 문구 검사, 걸리면 재생성 1회 → 안전 문구) → `stance_check`(입장 계획 밖이면 응답 전체 재생성 1회 → `stance_fallback` 고정 문구) → `wait_typing`(지원자 입력 중이면 최대 10초, 그래도 입력 중이면 미게시·자극 재큐·`deferred`) → generation 확인(바뀌었으면 남은 화자 버림) → `apply`(결정적): debate-mcp `post_message{expected_generation, card_ids?}`(한 발언이 여러 카드를 전달할 수 있음), 안을 처음 밀면 `propose_option`, 입장을 표현하면 `set_stance`, 카드의 첫 발언이면 카드마다 assessment-mcp `record_observation` → `typing` 종료. 둘째 화자는 1~3초 간격
    - `fill`(결정적): `apply`가 이번 발언의 입장을 저장한 **뒤** 지지를 다시 읽어 판정한다. 지원자 포함 3/4 지지 안이 있고 칸이 empty면 `announce_fill` 분기: 지지자 중 우선순위 자리와 고정 문장 "그럼 X로 정리할게요"를 정해 `fill_slot{option_id, seat, content, run_id}`를 한 번 부른다. 일반 발언 루프(respond → apply)와 LLM을 거치지 않는다. api가 한 트랜잭션으로 합의 재검사 → 칸 confirmed → 공지 메시지 저장(seq 5, `meta.kind=consensus_fill`) → generation +1을 하고 WS `message.new`·`slot.confirmed`를 보낸다. 409면 아무것도 저장하지 않고 끝낸다
 5. debate-mcp → api `/internal/*` → 저장(멱등) → 세션 송신 큐 → WS(`seq` 붙임)
@@ -70,7 +70,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 | 사건 | 처리 |
 |---|---|
 | 지원자 확정 | `POST /sessions/{id}/slots/{phase}/confirm` → api가 칸을 `confirmed`(filled_by=candidate, resolution=consensus, 그 시점 지지 현황 스냅샷)로 바꾸고 다음 단계로 전환. 키워드는 버튼의 후보 키, 문제·해결책은 옵션 키·정규화 라벨 일치로만 안에 연결(LLM 없음) |
-| AI 합의 채우기 | 턴 매니저 `fill`의 `announce_fill` 분기 → `fill_slot{option_id, seat, content, run_id}`. api가 한 트랜잭션에서 `consensus.judge`(지원자 포함 3/4 지지, 대기 시간 없음)를 다시 검사하고 아니면 409 `no_consensus`(AI는 합의 전에 칸을 채울 수 없다, 아무것도 저장 안 함). 성공하면 칸 확정·공지 메시지(seq 5)·전환이 함께 커밋되므로 공지가 빠진 확정은 없다. 같은 run_id 재호출은 기존 결과 |
+| AI 합의 채우기 | 진행 매니저 `fill`의 `announce_fill` 분기 → `fill_slot{option_id, seat, content, run_id}`. api가 한 트랜잭션에서 `consensus.judge`(지원자 포함 3/4 지지, 대기 시간 없음)를 다시 검사하고 아니면 409 `no_consensus`(AI는 합의 전에 칸을 채울 수 없다, 아무것도 저장 안 함). 성공하면 칸 확정·공지 메시지(seq 5)·전환이 함께 커밋되므로 공지가 빠진 확정은 없다. 같은 run_id 재호출은 기존 결과 |
 | 단계 마감 | 스케줄러가 `now ≥ phase_deadline_at`이고 칸이 empty이면 **api `services/timeout.py`가 직접**: 시간 초과 선택 규칙으로 안을 고르고 우선순위 자리 이름으로 시나리오 고정 문장("시간이 다 돼서 대화에서 가장 많이 모인 의견인 X로 할게요")을 저장, 칸 `confirmed{resolution: timeout, filled_by: 그 자리}` → 전환. 그래프·LLM·MCP를 거치지 않는다 |
 | 전환 공통 | api `SessionService.advance_phase`: `phase`·`phase_started_at`·`phase_deadline_at` 갱신, `generation += 1`, 시스템 안내 메시지("지금 할 일"과 남은 시간, 시나리오 고정 문구) 저장, WS `slot.confirmed`·`phase.changed`·`timer`. keyword 확정이면 그 키워드 자료를 열고 WS `materials.opened`. proposal 시작이면 기획안 초안의 빈 칸(키워드·문제 상황·해결책)을 확정 칸 값으로 채운다. 이어서 `phase_started`를 메일박스에 넣기만 한다(기획안 단계 `phase_started` 실행이 `honesty_credit` 관찰을 남긴다) |
 | 마감 임박 | 단계 마감 `L/30` 전(60분 기준 2분, 압축 비율)에 시스템 안내 메시지 1건. 시점은 시나리오 데이터 |
@@ -120,7 +120,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 
 ## 그래프 자극 (stimulus)
 
-토론 그래프는 자극마다 한 번 실행된다. 자극은 아래 **4종**이고 `agent_runs.stimulus`·턴 매니저 결정의 `stimulus`·State 스냅샷 `active_runs[].stimulus`가 같은 값을 쓴다. `timeout`(api가 직접 채움)·`room_quiet`는 없다.
+토론 그래프는 자극마다 한 번 실행된다. 자극은 아래 **4종**이고 `agent_runs.stimulus`·진행 매니저 결정의 `stimulus`·State 스냅샷 `active_runs[].stimulus`가 같은 값을 쓴다. `timeout`(api가 직접 채움)·`room_quiet`는 없다.
 
 | type | 발생 | 함께 오는 값 | run_id |
 |---|---|---|---|

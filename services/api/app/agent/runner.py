@@ -50,7 +50,7 @@ class Stimulus:
 class RunResult:
     """docs/architecture/agents.md RunResult + 메일박스 상태(agent-spike 7절).
 
-    decision은 턴 매니저 결정 스키마(docs/contracts/internal.md), usage는 agent_runs.usage
+    decision은 진행 매니저 결정 스키마(docs/contracts/internal.md), usage는 agent_runs.usage
     {llm_calls, retries, tokens_in, tokens_out, cost_usd, latency_ms, tool_calls}.
     """
 

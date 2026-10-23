@@ -23,6 +23,7 @@ GUARD_PATTERNS = (
     / "missions"
     / "debate"
     / "prompts"
+    / "shared"
     / "guard_patterns.yaml"
 )
 # 평가 텍스트 금지 패턴은 카탈로그 데이터(워커 검증과 같은 목록)가 정본이다

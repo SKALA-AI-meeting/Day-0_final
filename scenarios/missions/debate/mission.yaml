@@ -11,7 +11,14 @@
 #   personas.yaml  세션 페르소나 3명(고정)과 확장용 페르소나(조립에 쓰지 않음)
 #   cards.yaml     카드 6장과 흐름 이벤트
 #   rubric.yaml    BARS 척도(정본 docs/product/rubric.md)
-#   prompts/       페르소나·턴 매니저·의도 분류·어시스턴트·평가 에이전트 프롬프트, 고정 문장, 금지 패턴, 프롬프트 픽스처
+#   prompts/       역할별 프롬프트(키 규칙은 scenarios/version.py prompt_files)
+#     manager/     진행 매니저: turn_manager.md
+#     persona/     토론 동료: persona_<type>.md, safe_<type>.md, common_rules.md, stance_fallback.yaml
+#     intent/      의도 분류: intent.md
+#     assistant/   어시스턴트: assistant.md
+#     evaluator/   평가자: common.md, <element>.md
+#     shared/      여러 역할 공용: fixed_phrases.yaml(고정 문장), guard_patterns.yaml(금지 패턴)
+#     fixtures/    프롬프트 픽스처(채용 건에 복사하지 않음)
 #   assets/avatars/ 임시 프로필 이미지(파일 이름은 중립 번호, 유형 이름 금지)
 #   tests/         카탈로그 정합성 검사(pytest). 조립·실행 코드는 이 폴더를 읽지 않는다
 
@@ -105,7 +112,7 @@ consensus_fill:
   candidate_must_support: true      # 지원자의 현재 지지(confidence=high인 propose·agree)가 그 안
   wait_min: 0                       # 대기 없음, 즉시(R4)
   filler_priority: [critic, quiet, stubborn]   # 그 안의 지지자 중 첫 번째
-  phrase: consensus_fill            # prompts/fixed_phrases.yaml 키
+  phrase: consensus_fill            # prompts/shared/fixed_phrases.yaml 키
 
 # 시간 초과(docs/product/scenario.md 1.4). api가 결정적으로 직접 채운다(그래프 자극 아님). [초안: 경고 시점과 순위 규칙]
 timeout:

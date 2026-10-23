@@ -267,7 +267,8 @@ def test_leak_cases_cover_the_seven_prompts():
         "credit_preemption",
         "inclusion_preemption",
     ]
-    notices = yaml.safe_load((MISSION / "prompts" / "fixed_phrases.yaml").read_text("utf-8"))
+    phrases = MISSION / "prompts" / "shared" / "fixed_phrases.yaml"
+    notices = yaml.safe_load(phrases.read_text("utf-8"))
     for case in cases:
         assert case["channel"] in ("room", "assistant")
         assert (case["target_seat"] is None) == (case["channel"] == "assistant")
@@ -311,8 +312,9 @@ async def test_intent_live(live_report):
 
     data = evaluate.load_intent()
     llm = make_llm("intent")
-    # 운영 메일박스와 같은 입력: 채용 건에 복사된 카탈로그 prompts/intent.md를 지시로 넘긴다
-    instructions = (MISSION / "prompts" / "intent.md").read_text("utf-8")
+    # 운영 메일박스와 같은 입력: 채용 건에 복사된 intent.md(카탈로그 prompts/intent/intent.md)를
+    # 지시로 넘긴다
+    instructions = (MISSION / "prompts" / "intent" / "intent.md").read_text("utf-8")
     outputs = await _classify_all(classify, llm, data, data["cases"], instructions)
     decided = await _classify_all(classify, llm, data, data["decided_cases"], instructions)
     score = evaluate.score_intent(data["cases"], outputs)

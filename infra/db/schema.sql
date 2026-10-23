@@ -185,7 +185,7 @@ CREATE TABLE agent_runs (                    -- 자극 실행 기록이자 메�
   generation int,
   status text NOT NULL DEFAULT 'queued'
     CHECK (status IN ('queued','started','finished','deferred','skipped','failed')),
-  decision jsonb,                           -- 턴 매니저 결정 스키마
+  decision jsonb,                           -- 진행 매니저 결정 스키마
   usage jsonb NOT NULL DEFAULT '{}'::jsonb, -- llm_calls·retries·tokens_in/out·latency_ms·tool_calls·cost_usd
   queued_at timestamptz NOT NULL DEFAULT now(),
   started_at timestamptz,

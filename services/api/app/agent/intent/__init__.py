@@ -10,7 +10,8 @@ api 메일박스(`services/debate.py`)가 `message` 자극마다 그래프 전�
 - 카탈로그 키가 이미 행이 있는 안을 가리키면 그 option_id로 바꾼다(최초 제안자 보존).
 - `message_id`를 주면 결과를 프로세스 메모리에 남겨 토론 그래프가 같은 메시지를 다시 분류하지 않고
   읽는다(`recall`). 재시작으로 비면 그래프가 필요할 때만 다시 분류한다.
-- 지시 프롬프트는 채용 건 복사본 `prompts/intent.md`를 `instructions`로 받는다(없으면 내장 요약).
+- 지시 프롬프트는 채용 건 복사본의 `intent.md`(카탈로그 `prompts/intent/intent.md`)를
+  `instructions`로 받는다(없으면 내장 요약).
 """
 
 import json

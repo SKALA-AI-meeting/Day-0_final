@@ -23,7 +23,7 @@
 | `assets/avatars/*` | 페르소나 프로필 이미지(D13-3). 실존 인물이 아닌 일관된 스타일의 일러스트, 유형을 암시하지 않는 중립 표정·파일 이름(`avatar-01.png` 등). **지금 이미지는 임시**이고 교체는 파일과 `avatar` 경로만 바꾼다. api 공개 앱이 `/assets/missions/<mission_id>/avatars/<file>`로 서빙 |
 | `cards.yaml` | 카드 6장: `card_id`, `element`, `stage_id`, `offset_min`(단계 시작 기준 시각, 유일한 트리거), `actor`, `content`, `window`, `preempt_ban`, `debrief`, `report_template`(리포트 요소 섹션의 "관련 카드 장면"에 "설계된 장면" 표시와 함께 보이는 고정 설명 문장. 평가 판단이 아님). 흐름 이벤트 문구 |
 | `rubric.yaml` | BARS 척도: `rubric_version`, 요소별 차원(`dimension_id`·이름·정의·핵심 카드), 차원별 수준 1~5 앵커와 담당자 참고 문구, 기록 없음 사유. 내용과 id는 [product/rubric.md](rubric.md)가 정본 |
-| `prompts/*.md` | 페르소나 system prompt, 턴 매니저 prompt, 시간 초과 고정 문장, 디브리핑 문장, 평가 에이전트 프롬프트 `evaluator/common.md`(공통 지침: 판단 순서·근거 규칙·출력 형식, [product/rubric.md](rubric.md) 2장) + `evaluator/<element>.md`(요소별 특수 지침). `prompt_versions` = 공통 파일과 요소 파일 5개 각각의 해시 맵(파일별 개별 해시, 형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave, R5-14) |
+| `prompts/<역할>/` | 역할 폴더(`manager`·`persona`·`intent`·`assistant`·`evaluator`, 공용 `shared`, 픽스처 `fixtures`)별 프롬프트([architecture/agents.md](../architecture/agents.md) "프롬프트와 카탈로그"). 페르소나 system prompt, 진행 매니저 prompt, 시간 초과 고정 문장, 디브리핑 문장, 평가 에이전트 프롬프트 `evaluator/common.md`(공통 지침: 판단 순서·근거 규칙·출력 형식, [product/rubric.md](rubric.md) 2장) + `evaluator/<element>.md`(요소별 특수 지침). `prompt_versions` = 공통 파일과 요소 파일 5개 각각의 해시 맵(파일별 개별 해시, 형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave, R5-14) |
 
 ### 1.2 단계와 칸
 

@@ -21,8 +21,8 @@ from langchain_core.messages import (
 )
 
 from app.agent.catalog import SEATS, Catalog, render
-from app.agent.debate.rules import StancePlan, option_by_id, option_by_key, support_of
 from app.agent.llm import BaseLLM, Trace, Usage, parse_json_object
+from app.agent.manager.rules import StancePlan, option_by_id, option_by_key, support_of
 from app.agent.mcp_client import ToolScope, for_model
 
 log = logging.getLogger(__name__)

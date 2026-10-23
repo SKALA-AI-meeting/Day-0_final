@@ -32,7 +32,7 @@
 | 모델 | 작은 모델(`MODEL_INTENT`) | 평가 역할 모델(`MODEL_EVALUATOR`) |
 | 입력 | 메시지 한 개와 짧은 앞 맥락 | 세션 대화 전체, 칸 기록, 기획안, 카드 발생 기록, 사실 지표, Contributions, 이 척도(창으로 자르지 않음) |
 | 출력 | `{intent: propose·agree·oppose·question·other, target_option, confidence: high·low}`(지지로 세는 것은 high인 propose·agree뿐) | 차원별 `{dimension_id, level∣null, no_record_reason?, evidence_refs[], rationale, confidence}` |
-| 쓰임 | 토론 진행: 안별 지지자 누적, 턴 매니저 판단, 칸 채움·시간 초과 안 선택, 침묵 초대 조건, 안 행 생성(최초 제안자) | 평가: 차원 수준과 근거 |
+| 쓰임 | 토론 진행: 안별 지지자 누적, 진행 매니저 판단, 칸 채움·시간 초과 안 선택, 침묵 초대 조건, 안 행 생성(최초 제안자) | 평가: 차원 수준과 근거 |
 | 실패 | `other`로 두고 진행 | 형식 오류·근거 부재면 그 요소를 1회 재요청, 그래도 실패한 차원은 `evaluate_failed` |
 | 평가 영향 | 없음. 평가 에이전트에는 참고 입력이며 원문과 다르면 원문을 따른다 | 있음 |
 

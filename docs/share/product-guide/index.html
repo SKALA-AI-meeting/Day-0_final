@@ -437,9 +437,9 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       <table class="stack">
         <thead><tr><th>자리</th><th>이름</th><th>유형(성향 id)</th><th>프롬프트</th><th>행동 요약</th></tr></thead>
         <tbody>
-          <tr><td data-label="자리"><code>p1</code></td><td data-label="이름">강한결</td><td data-label="유형(성향 id)">고집형 <code>stubborn</code></td><td data-label="프롬프트"><code>prompts/persona_stubborn.md</code></td><td data-label="행동 요약">단정형 짧은 문장. 자기 안을 반복해 밀고 확정 전에는 지지를 바꾸지 않습니다. 확정되면 따릅니다.</td></tr>
-          <tr><td data-label="자리"><code>p2</code></td><td data-label="이름">윤하람</td><td data-label="유형(성향 id)">소극형 <code>quiet</code></td><td data-label="프롬프트"><code>prompts/persona_quiet.md</code></td><td data-label="행동 요약">머뭇거림. 이름이 불리거나 전체 질문을 받을 때만 자기 안을 자료 근거와 함께 말합니다.</td></tr>
-          <tr><td data-label="자리"><code>p3</code></td><td data-label="이름">서지안</td><td data-label="유형(성향 id)">비판형 <code>critic</code></td><td data-label="프롬프트"><code>prompts/persona_critic.md</code></td><td data-label="행동 요약">질문형·반론형. 지지가 모이는 안의 약점을 짚고 근거를 묻습니다. 침묵 초대 담당입니다.</td></tr>
+          <tr><td data-label="자리"><code>p1</code></td><td data-label="이름">강한결</td><td data-label="유형(성향 id)">고집형 <code>stubborn</code></td><td data-label="프롬프트"><code>prompts/persona/persona_stubborn.md</code></td><td data-label="행동 요약">단정형 짧은 문장. 자기 안을 반복해 밀고 확정 전에는 지지를 바꾸지 않습니다. 확정되면 따릅니다.</td></tr>
+          <tr><td data-label="자리"><code>p2</code></td><td data-label="이름">윤하람</td><td data-label="유형(성향 id)">소극형 <code>quiet</code></td><td data-label="프롬프트"><code>prompts/persona/persona_quiet.md</code></td><td data-label="행동 요약">머뭇거림. 이름이 불리거나 전체 질문을 받을 때만 자기 안을 자료 근거와 함께 말합니다.</td></tr>
+          <tr><td data-label="자리"><code>p3</code></td><td data-label="이름">서지안</td><td data-label="유형(성향 id)">비판형 <code>critic</code></td><td data-label="프롬프트"><code>prompts/persona/persona_critic.md</code></td><td data-label="행동 요약">질문형·반론형. 지지가 모이는 안의 약점을 짚고 근거를 묻습니다. 침묵 초대 담당입니다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -998,13 +998,13 @@ make stage-advance SID=&lt;id&gt; TO=deadline      # 시간 당겨 시간 초과
           </tr>
           <tr>
             <td data-label="과제"><b>페르소나 말투 바꾸기</b></td>
-            <td data-label="고칠 파일·문서"><ul><li><code>docs/product/scenario.md</code> 2.1</li><li><code>prompts/persona_&lt;type&gt;.md</code>(강한결 <code>stubborn</code> · 윤하람 <code>quiet</code> · 서지안 <code>critic</code>), <code>prompts/common_rules.md</code>, <code>personas.yaml</code>(tone·rules·must_not)</li><li>필요하면 <code>prompts/guard_patterns.yaml</code>, <code>stance_fallback.yaml</code></li></ul></td>
+            <td data-label="고칠 파일·문서"><ul><li><code>docs/product/scenario.md</code> 2.1</li><li><code>prompts/persona/persona_&lt;type&gt;.md</code>(강한결 <code>stubborn</code> · 윤하람 <code>quiet</code> · 서지안 <code>critic</code>), <code>prompts/persona/common_rules.md</code>, <code>personas.yaml</code>(tone·rules·must_not)</li><li>필요하면 <code>prompts/shared/guard_patterns.yaml</code>, <code>prompts/persona/stance_fallback.yaml</code></li></ul></td>
             <td data-label="꼭 돌릴 검증"><ul><li><code>make test</code></li><li><code>make eval-live</code> 1회(페르소나 응답 품질·유출 질문, 결과 파일을 PR에 링크)</li><li><code>make e2e-stages</code></li></ul></td>
             <td data-label="주의"><ul><li>바꾸는 것은 말투뿐입니다. 누가 어떤 안을 밀지·합의·카드 시각은 데이터와 결정적 코드가 정합니다.</li><li>유형이 지원자 화면에 드러나면 안 됩니다(아바타 파일은 <code>avatar-NN.png</code> 같은 중립 이름, 덮어쓰지 않고 새 파일로).</li></ul></td>
           </tr>
           <tr>
             <td data-label="과제"><b>카드 추가·수정</b></td>
-            <td data-label="고칠 파일·문서"><ul><li><code>docs/product/scenario.md</code> 4장, <code>docs/product/rubric.md</code>(핵심 카드), <code>docs/architecture/agents.md</code> 카드 표</li><li><code>scenarios/missions/debate/cards.yaml</code></li><li>카드별 지시·선점 금지 <code>services/api/app/agent/debate/rules.py</code>, 필요하면 <code>services/api/app/services/facts.py</code></li></ul></td>
+            <td data-label="고칠 파일·문서"><ul><li><code>docs/product/scenario.md</code> 4장, <code>docs/product/rubric.md</code>(핵심 카드), <code>docs/architecture/agents.md</code> 카드 표</li><li><code>scenarios/missions/debate/cards.yaml</code></li><li>카드별 지시·선점 금지 <code>services/api/app/agent/manager/rules.py</code>, 필요하면 <code>services/api/app/services/facts.py</code></li></ul></td>
             <td data-label="꼭 돌릴 검증"><ul><li><code>make test</code>(카드 문구·창 대조, 스케줄러·카드 테스트)</li><li><code>make e2e-stages</code></li><li>실 스택 <code>make e2e</code>(<code>all_five</code> 15분) 1회</li></ul></td>
             <td data-label="주의"><ul><li>카드 시각은 단계 시작 기준 고정이고 15분 압축 값은 최소 20초입니다. 시각을 바꾸면 테스트의 시각 단언도 함께 바뀝니다.</li><li>선점 금지 문구와 리포트용 고정 문장(<code>report_template</code>)을 함께 정합니다.</li></ul></td>
           </tr>

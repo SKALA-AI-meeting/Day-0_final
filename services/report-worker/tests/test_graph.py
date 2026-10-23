@@ -341,10 +341,11 @@ async def test_llm_fault_evaluator_timeout_requeues_then_succeeds(h, monkeypatch
 
 
 def _catalog_copy(tmp_path):
-    """임시 카탈로그(프롬프트 폴더만). 채용 건 생성 뒤 파일이 바뀌는 상황을 만든다."""
+    """임시 카탈로그(프롬프트 폴더와 키 규칙만). 채용 건 생성 뒤 파일이 바뀌는 상황을 만든다."""
     src = SCENARIOS / "missions" / "debate" / "prompts"
     folder = tmp_path / "missions" / "debate" / "prompts"
     shutil.copytree(src, folder)
+    shutil.copy(SCENARIOS / "version.py", tmp_path / "version.py")
     return folder
 
 
@@ -361,7 +362,7 @@ def _change_catalog(folder):
     for name in ("common", *ELEMENTS):
         path = folder / "evaluator" / f"{name}.md"
         path.write_text(path.read_text(encoding="utf-8") + CHANGED, encoding="utf-8")
-    guard = folder / "guard_patterns.yaml"
+    guard = folder / "shared" / "guard_patterns.yaml"
     data = yaml.safe_load(guard.read_text(encoding="utf-8"))
     data["evaluator_forbidden"]["patterns"].append(".")
     guard.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")

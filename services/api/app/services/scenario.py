@@ -48,6 +48,17 @@ def catalog_version(scenarios_dir: Path, mission_id: str = DEFAULT_MISSION) -> s
     return _version_module(scenarios_dir.resolve()).catalog_version(mission_id, scenarios_dir)
 
 
+def prompt_texts(
+    scenarios_dir: Path, mission_id: str = DEFAULT_MISSION, *, copied_only: bool = False
+) -> dict[str, str]:
+    """프롬프트 키 → 본문. 키 규칙(역할 폴더 → 키)은 scenarios/version.py `prompt_files`."""
+    prompts_dir = scenarios_dir / "missions" / mission_id / "prompts"
+    files = _version_module(scenarios_dir.resolve()).prompt_files(
+        prompts_dir, copied_only=copied_only
+    )
+    return {key: path.read_text(encoding="utf-8") for key, path in files.items()}
+
+
 def mission_root(scenarios_dir: Path, mission_id: str) -> Path:
     root = scenarios_dir / "missions" / mission_id
     if not (root / "mission.yaml").is_file():
@@ -73,12 +84,8 @@ def assemble(
     cards = _yaml(root / "cards.yaml")
     keywords = _yaml(root / "keywords.yaml")
     rubric = _yaml(root / "rubric.yaml")
-    phrases = _yaml(root / "prompts" / "fixed_phrases.yaml")
-    prompts = {
-        p.relative_to(root / "prompts").as_posix(): p.read_text(encoding="utf-8")
-        for p in sorted((root / "prompts").rglob("*"))
-        if p.is_file() and "fixtures" not in p.parts
-    }
+    prompts = prompt_texts(scenarios_dir, mission_id, copied_only=True)
+    phrases = yaml.safe_load(prompts["fixed_phrases.yaml"])
 
     seats = []
     for persona in sorted(personas["session"], key=lambda p: p["seat"]):

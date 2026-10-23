@@ -12,14 +12,15 @@
 ## 순서
 
 1. **문서 먼저**: 규칙이나 표가 바뀌면 [product/scenario.md](../product/scenario.md)·[product/rubric.md](../product/rubric.md)를 고친다. 기획 방향이 바뀌는 변경이면 [decisions.md](../decisions.md)에 날짜·이유·대안을 적는다.
-2. **카탈로그 수정**: `mission.yaml`·`keywords.yaml`·`personas.yaml`·`cards.yaml`·`rubric.yaml`·`materials/<keyword>/*.md`·`prompts/` 중 해당 파일.
+2. **카탈로그 수정**: `mission.yaml`·`keywords.yaml`·`personas.yaml`·`cards.yaml`·`rubric.yaml`·`materials/<keyword>/*.md`·`prompts/<역할>/` 중 해당 파일.
+   - 프롬프트는 역할 폴더(`manager`·`persona`·`intent`·`assistant`·`evaluator`, 공용 `shared`, 픽스처 `fixtures`)에 둔다. 실행 코드와 채용 건 복사본은 역할 폴더를 뗀 키(`turn_manager.md`, 평가자만 `evaluator/common.md`)로 찾는다. 새 역할 폴더를 만들면 `scenarios/version.py` `PROMPT_KEY_PREFIX`에 등록한다(등록하지 않으면 조립이 실패한다). 역할별로 읽는 파일은 `docs/agents/<역할>.md`(예: [agents/persona.md](../agents/persona.md)).
    - `rubric.yaml`의 차원·앵커·담당자 참고 문구·기록 없음 사유는 rubric.md 3장·5장 표와 글자 그대로 같아야 한다.
    - 키워드·카드 표는 scenario.md 2.4·4.2 표와 같아야 한다.
-   - 카드를 더하거나 `card_id`를 바꾸면 카드별 지시·선점 금지 사전이 있는 `services/api/app/agent/debate/rules.py`도 함께 고친다(카드별 담당과 고정 내용은 [architecture/agents.md](../architecture/agents.md) 카드 표).
+   - 카드를 더하거나 `card_id`를 바꾸면 카드별 지시·선점 금지 사전이 있는 `services/api/app/agent/manager/rules.py`도 함께 고친다(카드별 담당과 고정 내용은 [architecture/agents.md](../architecture/agents.md) 카드 표).
    - 아바타는 파일을 덮어쓰지 않고 새 중립 이름(`avatar-NN.png`)으로 더한 뒤 `personas.yaml`의 `avatar`를 바꾼다(진행 중 채용 건이 옛 경로를 쓰기 때문).
 3. **정합 검사**: `make test`(루트의 `scenarios/missions/debate/tests`가 카탈로그 ↔ 문서 표, 프롬프트 픽스처를 대조한다). 계약 예시(`tests/fixtures/contracts/`)에 카탈로그 값이 들어 있으면 함께 고친다.
 4. **프롬프트 확인**: 페르소나·의도 분류·평가 프롬프트를 바꿨으면 `make eval-live`로 실제 모델 결과를 한 번 남긴다(기준선과 비교). 평가 프롬프트를 바꾸면 `prompt_versions` 해시가 바뀌어 리포트에 새 버전이 기록된다.
-5. **시드·재색인**: 자료나 카탈로그가 바뀌면 새 `catalog_version`으로 원문 시드와 재색인을 한다. 로컬 개발 모드는 `make seed`(원문 시드 → 관리자·채용 건 → rag-mcp `reindex_materials`), 격리 e2e 스택은 `make e2e-stack-seed`. api·rag-mcp·report-worker는 카탈로그를 마운트로 읽으므로 컨테이너 재빌드는 필요 없다.
+5. **시드·재색인**: 자료나 카탈로그가 바뀌면 새 `catalog_version`으로 원문 시드와 재색인을 한다. 로컬 개발 모드는 `make seed`(원문 시드 → 관리자·채용 건 → rag-mcp `reindex_materials`), 전체 compose는 `make seed-compose`, 격리 e2e 스택은 `make e2e-stack-seed`. 파일만 옮기거나 이름을 바꿔도 `catalog_version`이 바뀌므로 같은 절차가 필요하다. api·rag-mcp는 `scenarios/`를 마운트로 읽으므로 컨테이너 재빌드는 필요 없다. report-worker는 카탈로그를 마운트하지 않고 채용 건 복사본(`positions.scenario.prompts`)만 읽으므로 바뀐 평가 프롬프트는 새 채용 건 복사본으로만 전달된다(재빌드·시드 불필요).
 6. **새 채용 건으로 확인**: 관리자 화면 또는 `make stage`로 새 채용 건·세션을 만들어 바뀐 내용이 보이는지 본다. 기존 채용 건의 세션은 바뀌지 않는 것이 정상이다.
 
 ## 주의
