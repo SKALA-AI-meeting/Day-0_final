@@ -61,6 +61,7 @@ EXPORT_TABLES = (
 )
 ORDER = {"messages": "created_at, seq", "agent_runs": "queued_at"}
 PEERS = ("p1", "p2", "p3")
+INVITE_LINK = re.compile(r"/s/[A-Za-z0-9_-]{16,}")  # 초대 토큰이 든 경로·안내 문안
 CONFIRM_AFTER = 0.4  # 자율형: 단계 길이의 이 비율이 지나기 전 "이걸로 정하기"는 미룬다
 
 
@@ -133,13 +134,16 @@ class Driver:
             data = response.json()
         except ValueError:
             data = response.text
+        secret = ("token", "invite_url")  # 초대 링크도 인증 토큰을 담는다
         safe = (
-            {k: "<redacted>" if "token" in k else v for k, v in data.items()}
+            {k: "<redacted>" if any(x in k for x in secret) else v for k, v in data.items()}
             if isinstance(data, dict)
             else data
         )
+        safe = json.loads(INVITE_LINK.sub("/s/<invite>", json.dumps(safe, ensure_ascii=False)))
+        shown = INVITE_LINK.sub("/s/<invite>", path)
         if "auth" not in path:
-            self.record("rest", method=method, path=path, status=response.status_code, body=safe)
+            self.record("rest", method=method, path=shown, status=response.status_code, body=safe)
         return response.status_code, data
 
     async def must(self, method: str, path: str, **kw: Any) -> Any:
