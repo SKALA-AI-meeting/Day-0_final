@@ -183,7 +183,9 @@ async def live_answers(cases: list[dict[str, Any]], keyword: str) -> list[dict[s
         name = values.get("VC_POSITION", POSITION_NAME)
         position = newest_position(positions, name)
         if position is None:
-            raise RuntimeError(f"채용 건 없음: {name} (make seed 확인)")
+            raise RuntimeError(
+                f'15분 채용 건 없음: {name} (make seed-compose SEED_ARGS="--minutes 15" 확인)'
+            )
         invite = await http.post(
             f"/admin/positions/{position['id']}/invites",
             headers=admin,

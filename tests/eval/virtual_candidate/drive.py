@@ -6,8 +6,9 @@
     uv run --project services/api python tests/eval/virtual_candidate/drive.py --mode autonomous
 
 순서: 관리자 로그인(seed 기본 계정. 비밀번호는 env `VC_ADMIN_PASSWORD` 또는
-scripts/seed.py 기본값을 읽어 쓰고 출력하지 않음) → "서비스기획 신입 (15분 데모)" 채용 건에
-초대 → 동의·시작 → WS 연결 → 대본형은 scripted.yaml 장면을 단계 시각에, 자율형은
+scripts/seed.py 기본값을 읽어 쓰고 출력하지 않음) → `make seed-compose SEED_ARGS="--minutes 15"`가
+만드는 채용 건(이름은 scripts/seed.py `--position` 기본값) 중 15분이고 가장 최근 것에 초대
+→ 동의·시작 → WS 연결 → 대본형은 scripted.yaml 장면을 단계 시각에, 자율형은
 LLM(autonomous.md 성격)이 보이는 대화로 다음 행동을 고른다 → 제출(또는 자동 제출) →
 리포트 대기 → DB에서 세션 전체를 읽어 `session.json`으로 내보내고 metrics.py로 지표를 낸다.
 
@@ -38,7 +39,17 @@ ROOT = HERE.parents[2]
 sys.path[:0] = [str(ROOT / "tests")]
 from e2e.client import env  # noqa: E402
 
-POSITION_NAME = "서비스기획 신입 (15분 데모)"
+SEED = (ROOT / "scripts" / "seed.py").read_text("utf-8")
+SESSION_MINUTES = 15  # 가상 지원자·어시스턴트 평가셋은 15분 세션으로 돈다
+
+
+def seed_default(flag: str) -> str:
+    """scripts/seed.py argparse 문자열 기본값(관리자 계정·채용 건 이름)."""
+    found = re.search(rf'add_argument\("--{flag}", default="([^"]+)"', SEED)
+    return found.group(1) if found else ""
+
+
+POSITION_NAME = seed_default("position")
 KEYWORDS = yaml.safe_load(
     (ROOT / "scenarios" / "missions" / "debate" / "keywords.yaml").read_text("utf-8")
 )["keywords"]
@@ -65,25 +76,26 @@ INVITE_LINK = re.compile(r"/s/[A-Za-z0-9_-]{16,}")  # 초대 토큰이 든 경�
 CONFIRM_AFTER = 0.4  # 자율형: 단계 길이의 이 비율이 지나기 전 "이걸로 정하기"는 미룬다
 
 
-def newest_position(positions: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
-    """이름이 같은 채용 건 중 가장 최근에 만든 것. 재시드하면 같은 이름이 여럿 생기고 최신 것만
-    지금 카탈로그(시나리오 복사본)를 담는다. 목록은 만든 순서라 첫 항목은 가장 오래된 것이다."""
-    same = [p for p in positions if p["name"] == name]
+def newest_position(
+    positions: list[dict[str, Any]], name: str, minutes: int | None = SESSION_MINUTES
+) -> dict[str, Any] | None:
+    """이름이 같고 세션 길이가 minutes인 채용 건 중 가장 최근에 만든 것. 재시드하면 같은 이름이
+    여럿 생기고(60분 시드도 같은 이름) 최신 것만 지금 카탈로그(시나리오 복사본)를 담는다. 목록에
+    `session_minutes`가 없으면 길이로 거르지 않는다."""
+    same = [
+        p
+        for p in positions
+        if p["name"] == name and (minutes is None or p.get("session_minutes", minutes) == minutes)
+    ]
     return max(same, key=lambda p: p["created_at"]) if same else None
 
 
 def seed_admin(values: dict[str, str]) -> tuple[str, str]:
     """관리자 계정. env가 우선이고 없으면 scripts/seed.py의 argparse 기본값(값은 출력하지
     않는다)."""
-    seed = (ROOT / "scripts" / "seed.py").read_text("utf-8")
-
-    def default(flag: str) -> str:
-        found = re.search(rf'add_argument\("--{flag}", default="([^"]+)"', seed)
-        return found.group(1) if found else ""
-
     return (
-        values.get("VC_ADMIN_EMAIL") or default("email"),
-        values.get("VC_ADMIN_PASSWORD") or default("password"),
+        values.get("VC_ADMIN_EMAIL") or seed_default("email"),
+        values.get("VC_ADMIN_PASSWORD") or seed_default("password"),
     )
 
 
@@ -184,7 +196,10 @@ class Driver:
         name = self.values.get("VC_POSITION", POSITION_NAME)
         position = newest_position(positions, name)
         if position is None:
-            raise RuntimeError(f"채용 건 없음: {name} (make seed 확인)")
+            raise RuntimeError(
+                f"{SESSION_MINUTES}분 채용 건 없음: {name} "
+                '(make seed-compose SEED_ARGS="--minutes 15" 확인)'
+            )
         invite = await self.must(
             "POST",
             f"/admin/positions/{position['id']}/invites",
