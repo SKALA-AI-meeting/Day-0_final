@@ -419,6 +419,29 @@ def test_rubric_core_cards_exist(rubric, cards):
                 assert card_el[cid] == e["element"], (d["dimension_id"], cid)
 
 
+def test_rubric_scene_data(rubric, cards):
+    """결정 전후 구분과 보조 장면(평가 워커의 장면 계산 입력)."""
+    card_ids = {c["card_id"] for c in cards["cards"]}
+    phases = {"keyword", "problem", "solution", "proposal"}
+    timed = {}
+    for e in rubric["elements"]:
+        for d in e["dimensions"]:
+            if "decision_timing" in d:
+                assert d["decision_timing"] in ("before", "after") and d["core_cards"]
+                timed[d["dimension_id"]] = d["decision_timing"]
+            ids = [a["id"] for a in d["aux_scenes"]]
+            assert len(ids) == len(set(ids)) and "core" not in ids, d["dimension_id"]
+            for scene in d["aux_scenes"]:
+                assert scene["label"] and (scene.get("phases") or scene.get("cards"))
+                assert set(scene.get("phases") or []) <= phases
+                assert set(scene.get("cards") or []) <= card_ids
+    assert timed == {
+        "flex_openness": "before",
+        "flex_acceptance": "after",
+        "flex_forward": "after",
+    }
+
+
 # ---------- prompts ----------
 
 PROMPT_FILES = [

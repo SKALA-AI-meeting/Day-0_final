@@ -5,12 +5,12 @@
 ## 입력
 
 - assessment-mcp `get_session_record`(대화 전체·칸·기획안·사실 지표)·`get_rubric`·`get_contributions`
-- 평가 사실(결정 A1): api가 계산해 `facts`에 넣는 `decisions`(칸별 결정 시각·경로·적용 규칙·확정 시점 지지 현황·지원자 안 채택 여부)·`message_facts`(지원자 메시지별 답한 대상·먼저 정해진 칸·붙여넣기 의심)와, 워커가 척도·카드 발생 기록으로 계산하는 차원별 장면 구간·구간 안 지원자 메시지(`scenes.py`). 프롬프트에는 `[사실]` 블록과 메시지 행의 필드로 들어가고, 출력이 이 사실과 모순되면 워커가 거부한다([product/rubric.md](../product/rubric.md) 7.3)
+- 평가 사실(결정 A1): api가 계산해 `facts`에 넣는 `decisions`(칸별 결정 시각·경로·적용 규칙·확정 시점 지지 현황·지원자 안 채택 여부)·`message_facts`(지원자 메시지별 답한 대상·먼저 정해진 칸·붙여넣기 의심)와, 워커가 척도(`decision_timing`·`aux_scenes`)·카드 발생 기록으로 계산하는 차원별 핵심·보조 장면과 장면마다의 지원자 메시지(`scenes.py`). 프롬프트에는 `[사실]` 블록과 메시지 행의 필드로 들어가고, 출력이 이 사실과 모순되면 워커가 거부한다([product/rubric.md](../product/rubric.md) 7.3)
 - 채용 건 복사본(`positions.scenario.prompts`)의 평가 프롬프트와 평가 금지어. 복사본에 없으면 현재 파일로 채우지 않고 리포트 실패
 
 ## 출력
 
-- 요소마다 차원 행(수준 또는 기록 없음 사유·근거 참조·확신도) → 검증 → 최종 차원 행만으로 조립한 요소 요약(결정 A2) → assessment-mcp `save_evaluation`(형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave)
+- 요소마다 차원 행(수준 또는 기록 없음 사유·근거 참조·확신도) (근거마다 장면 id, 대표 행동 한 구절 `summary_line`) → 검증 → 최종 차원 행에서 코드가 조립한 요소 요약(결정 A2) → assessment-mcp `save_evaluation`(형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave)
 - `prompt_versions`(공통·요소 프롬프트 파일별 해시), `rubric_version`, `model`
 
 ## 데이터 파일 (`scenarios/missions/debate/`, 모두 채용 건 복사본으로 읽음)
@@ -26,8 +26,8 @@ report-worker는 `scenarios/`를 마운트하지 않는다. 카탈로그 파일�
 
 ## 코드 입구
 
-- `services/report-worker/report_worker/evaluate.py`: `run_evaluation`·`evaluate_element`·`check_dimension`·`check_facts`·`validate_output`·`assemble_summary`, 복사본 읽기 `pinned_catalog`
-- `services/report-worker/report_worker/scenes.py`: 차원별 장면 구간(`build_scenes`)과 `[사실]` 블록(`facts_block`)
+- `services/report-worker/report_worker/evaluate.py`: `run_evaluation`·`evaluate_element`·`check_dimension`·`check_facts`·`validate_output`·`build_summary`, 복사본 읽기 `pinned_catalog`
+- `services/report-worker/report_worker/scenes.py`: 차원별 핵심·보조 장면(`build_scenes`)과 `[사실]` 블록(`facts_block`)
 - `services/api/app/services/facts.py`: 평가 사실 `evaluator_facts`(순수 함수, 평가셋 실행기도 같은 함수를 부른다)
 - `services/report-worker/report_worker/graph.py`: 리포트 그래프의 `evaluate` 노드. 워커 전체가 평가자 역할이라 따로 역할 폴더를 두지 않는다
 - 모델 역할 키 `evaluator`, env `MODEL_EVALUATOR`(워커 `llm.py`)

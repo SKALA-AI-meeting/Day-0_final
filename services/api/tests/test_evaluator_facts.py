@@ -22,9 +22,16 @@ def slot(phase, option_id, filled_by, resolution, supporters, t):
     }
 
 
-def msg(id_, sender, t, addressed=None, content="짧은 말"):
+def msg(id_, sender, t, addressed=None, content="짧은 말", phase="keyword"):
     intent = {"addressed_to": addressed or []} if sender == "candidate" else None
-    return {"id": id_, "sender": sender, "content": content, "t_min": t, "intent": intent}
+    return {
+        "id": id_,
+        "sender": sender,
+        "content": content,
+        "phase": phase,
+        "t_min": t,
+        "intent": intent,
+    }
 
 
 def test_decision_path_and_candidate_adoption_follow_current_rule():
@@ -58,7 +65,7 @@ def test_message_facts_reply_target_and_decided_phases():
         msg("a2", "p2", 2.0),
         msg("c1", "candidate", 3.0),  # 부른 자리 없음 → 직전 AI 동료
         msg("c2", "candidate", 9.0, ["p1"]),  # p1을 부름 → p1의 직전 메시지
-        msg("c3", "candidate", 9.5, ["p3"]),  # 부른 자리의 메시지가 없음
+        msg("c3", "candidate", 9.0, ["p3"], phase="problem"),  # 부른 자리의 메시지가 없음
     ]
     slots = [slot("keyword", "kw", "candidate", "consensus", ["candidate"], 9.0)]
     rows = {r["message_id"]: r for r in message_facts(messages, slots, [])}
@@ -66,7 +73,8 @@ def test_message_facts_reply_target_and_decided_phases():
     assert rows["c1"]["reply_to"] == "a2" and rows["c1"]["addressed_to"] == []
     assert rows["c2"]["reply_to"] == "a1" and rows["c2"]["addressed_to"] == ["p1"]
     assert rows["c3"]["reply_to"] is None
-    assert rows["c2"]["decided_before"] == []  # 결정과 같은 시각은 결정 전
+    # 반올림한 분이 같아도 단계로 가른다: 키워드 단계 메시지는 키워드 결정 전, 문제 상황은 후
+    assert rows["c2"]["decided_before"] == []
     assert rows["c3"]["decided_before"] == ["keyword"]
 
 
@@ -90,5 +98,12 @@ def test_paste_suspect_needs_prior_answer_and_long_overlap():
     )
     rows = {r["message_id"]: r["paste_suspect"] for r in facts["message_facts"]}
     assert rows["c1"] is None and rows["c3"] is None
+    same_minute = evaluator_facts(  # 같은 분이어도 초가 답보다 앞서면 의심 아님
+        [{**messages[1], "at": 359.0}],
+        [],
+        [],
+        [{"call_id": "ac-1", "t_min": 6.0, "at": 360.0, "response": answer}],
+    )
+    assert same_minute["message_facts"][0]["paste_suspect"] is None
     assert rows["c2"]["call_id"] == "ac-1" and rows["c2"]["overlap"] >= PASTE_OVERLAP
     assert facts["decisions"] == []

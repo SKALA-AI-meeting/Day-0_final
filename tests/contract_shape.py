@@ -753,7 +753,17 @@ RUBRIC = {
                     "name": str,
                     "definition": str,
                     "core_cards": [CARD],
-                    "decision_timing": Opt(Enum("before", "after")),
+                    # 이 값이 생기기 전에 만든 채용 건의 척도 복사본에는 없다(결정 전후 자르기·보조
+                    # 장면 구분 없이 평가)
+                    "decision_timing?": Opt(Enum("before", "after")),
+                    "aux_scenes?": [
+                        {
+                            "id": str,
+                            "label": str,
+                            "phases?": [PHASE],
+                            "cards?": [CARD],
+                        }
+                    ],
                     "levels": [{"level": LEVEL, "anchor": str, "reviewer_hint": str}],
                 }
             ],

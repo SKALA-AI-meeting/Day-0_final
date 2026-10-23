@@ -111,6 +111,12 @@ def paste_overlap(message: str, response: str) -> float:
     return len(grams & _grams(response)) / len(grams)
 
 
+def _when(row: dict[str, Any]) -> float | None:
+    if row.get("at") is not None:
+        return row["at"]
+    return row.get("t_min")
+
+
 def message_facts(
     messages: list[dict[str, Any]],
     slots: list[dict[str, Any]],
@@ -118,14 +124,18 @@ def message_facts(
 ) -> list[dict[str, Any]]:
     """지원자 메시지마다 답한 대상·이미 정해진 칸·붙여넣기 의심.
 
-    messages는 SessionRecord `messages`(시간순), calls는 `{call_id, t_min, response}`.
+    messages는 SessionRecord `messages`(저장 순서), calls는 `{call_id, t_min, response}`.
+    순서는 반올림한 분이 아니라 저장 순서·단계로 정한다. 시각 비교가 필요한 붙여넣기만 `at`(세션
+    시작부터의 초, 반올림 없음)이 있으면 그 값을, 없으면 `t_min`을 쓴다(메시지·호출 모두 같은 키).
     - `addressed_to`: 의도 분류가 기록한 부른 자리
     - `reply_to`: 부른 자리가 있으면 그 자리들의 직전 메시지, 없으면 직전 AI 동료 메시지
       (없으면 null)
-    - `decided_before`: 이 메시지보다 먼저 확정된 칸의 단계
+    - `decided_before`: 이 메시지보다 먼저 확정된 칸의 단계. 칸 확정이 단계를 넘기므로 메시지의
+      단계(`messages.phase`)보다 앞 단계의 확정 칸이다
     - `paste_suspect`: 이 메시지 전에 받은 어시스턴트 답과 글자가 많이 겹치면 `{call_id, overlap}`
     """
-    decided = [(s["phase"], s["t_min"]) for s in slots if s.get("t_min") is not None]
+    order = {p: i for i, p in enumerate(sc.PHASES)}
+    decided = [s["phase"] for s in slots if s.get("t_min") is not None and s.get("filled_by")]
     out = []
     for index, m in enumerate(messages):
         if m["sender"] != "candidate":
@@ -135,7 +145,7 @@ def message_facts(
         reply = next((p["id"] for p in reversed(messages[:index]) if p["sender"] in targets), None)
         best = None
         for call in calls:
-            if call.get("t_min") is None or call["t_min"] > m["t_min"]:
+            if _when(call) is None or _when(call) >= _when(m):
                 continue
             overlap = paste_overlap(m["content"], call.get("response") or "")
             if overlap >= PASTE_OVERLAP and (best is None or overlap > best["overlap"]):
@@ -145,7 +155,10 @@ def message_facts(
                 "message_id": m["id"],
                 "addressed_to": addressed,
                 "reply_to": reply,
-                "decided_before": [p for p, t in decided if t < m["t_min"]],
+                "decided_before": sorted(
+                    (p for p in decided if order[p] < order.get(m.get("phase"), 0)),
+                    key=order.__getitem__,
+                ),
                 "paste_suspect": best,
             }
         )
@@ -164,6 +177,13 @@ def evaluator_facts(
         "decisions": decision_facts(slots, options, lead_option_ids),
         "message_facts": message_facts(messages, slots, calls),
     }
+
+
+def _seconds(session: Session, at: Any) -> float | None:
+    """세션 시작부터의 초(반올림 없음). 붙여넣기 판단의 앞뒤 비교용."""
+    if at is None or session.started_at is None:
+        return None
+    return (at - session.started_at).total_seconds()
 
 
 async def compute(db: AsyncSession, session: Session, position: Position) -> dict[str, Any]:
@@ -319,7 +339,9 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
                 "id": str(m.id),
                 "sender": m.sender,
                 "content": m.content,
+                "phase": m.phase,
                 "t_min": t_min(session, m.created_at) or 0.0,
+                "at": _seconds(session, m.created_at),
                 "intent": {"addressed_to": list(intents[m.id].addressed_to)}
                 if m.id in intents
                 else None,
@@ -332,6 +354,7 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
             {
                 "call_id": str(c.id),
                 "t_min": t_min(session, c.created_at) or 0.0,
+                "at": _seconds(session, c.created_at),
                 "response": responses.get(c.response_message_id, ""),
             }
             for c in calls

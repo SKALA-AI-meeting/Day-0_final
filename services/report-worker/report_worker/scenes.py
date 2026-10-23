@@ -1,25 +1,37 @@
-"""차원별 장면 구간과 그 안의 지원자 메시지(결정 A1). 기록과 척도만으로 계산하는 순수 함수.
+"""차원별 장면(핵심·보조)과 그 안의 지원자 메시지(결정 A1). 기록과 척도만으로 계산하는 순수 함수.
 
-정본은 `docs/product/rubric.md` 2.1·2.3·7.3이다.
+정본은 `docs/product/rubric.md` 2.1·2.5·7.3이다. 장면에 드는지는 반올림한 분이 아니라 메시지의
+저장 순서와 단계(`messages.phase`)로 정한다. 칸 확정은 단계를 넘기므로 어떤 칸의 결정 뒤 메시지는
+그 단계보다 뒤 단계의 메시지다.
 
-- 핵심 카드가 없는 차원은 세션 전체가 장면이다.
-- 핵심 카드가 있는 차원은 담당 동료 전원이 전달한(`delivered`) 핵심 카드의 관찰 창
-  (`observations[].window`)이 장면 구간이다. 하나도 없으면 장면이 없다(핵심 카드 미발생).
-- `decision_timing`이 있는 차원은 핵심 카드 단계의 칸 결정 시각에서 구간을 자른다: `before`는
-  결정 시각까지, `after`는 결정 뒤만. 칸이 정해지지 않았으면 `after` 구간은 없다.
+- 핵심 장면(`core`): 핵심 카드가 없으면 세션 전체. 있으면 담당 동료 전원이 전달한(`delivered`)
+  핵심 카드의 관찰 창(카드 `window` 규칙: 시작 = 단계 시작 ∣ 카드 첫 발언, 끝 = 그 단계 끝 ∣
+  제출). 하나도 없으면 핵심 장면이 없다(핵심 카드 미발생).
+- `decision_timing`이 있으면 핵심 카드 단계의 칸 결정에서 자른다: `before`는 그 단계 메시지까지,
+  `after`는 그 칸이 정해진 뒤(다음 단계부터)만. 칸이 정해지지 않았으면 `after` 핵심 장면은 없다.
+  척도 복사본에 이 값이 없으면(이전 채용 건) 자르지 않는다.
+- 보조 장면: 척도 `aux_scenes`(관찰 장면 표의 보조 행을 단계·카드 창으로 옮긴 데이터).
 
-평가 프롬프트의 `[사실]` 블록과 워커 검증(`evaluate.check_dimension`)이 같은 값을 쓴다.
+평가 프롬프트의 `[사실]` 블록과 워커 검증(`evaluate.check_facts`)이 같은 값을 쓴다.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
+PHASES = ("keyword", "problem", "solution", "proposal")
+ORDER = {p: i for i, p in enumerate(PHASES)}
+CORE = "core"
 PATHS = {
     "candidate_confirm": "지원자 확정",
     "ai_consensus_fill": "AI 동료 합의 채움",
     "timeout": "시간 초과",
 }
-PHASE_NAMES = {"keyword": "키워드", "problem": "문제 상황", "solution": "해결책"}
+PHASE_NAMES = {
+    "keyword": "키워드",
+    "problem": "문제 상황",
+    "solution": "해결책",
+    "proposal": "기획안",
+}
 
 
 @dataclass(frozen=True)
@@ -35,46 +47,47 @@ class Decision:
 
 @dataclass(frozen=True)
 class Scene:
+    scene_id: str
+    label: str
+    exists: bool
+    members: frozenset[str]  # 장면에 드는 메시지 id(보낸 자리 무관)
+    candidate_ids: tuple[str, ...]  # 그중 지원자 메시지(저장 순서)
+
+    def contains(self, message_id: str) -> bool:
+        return message_id in self.members
+
+
+@dataclass(frozen=True)
+class DimensionScenes:
     dimension_id: str
     session_wide: bool
-    windows: tuple[tuple[float, float], ...]
     cards: tuple[str, ...]  # 발동(전원 전달)한 핵심 카드
     timing: str | None  # before ∣ after ∣ None
     decision: Decision | None  # timing이 있을 때 핵심 카드 단계의 결정
-    candidate_ids: tuple[str, ...] = field(default=())
+    core: Scene
+    aux: tuple[Scene, ...]
+
+    def get(self, scene_id: str) -> Scene | None:
+        if scene_id == CORE:
+            return self.core
+        return next((s for s in self.aux if s.scene_id == scene_id), None)
 
     @property
-    def exists(self) -> bool:
-        return self.session_wide or bool(self.windows)
+    def ids(self) -> list[str]:
+        return [CORE, *(s.scene_id for s in self.aux)]
 
-    def contains(self, t_min: float) -> bool:
-        if self.session_wide:
-            return True
-        return any(self._inside(t_min, start, end) for start, end in self.windows)
+    def holding(self, message_id: str) -> list[str]:
+        """이 메시지가 드는 장면 id(핵심 먼저)."""
+        scenes = [self.core, *self.aux]
+        return [s.scene_id for s in scenes if s.exists and s.contains(message_id)]
 
-    def _inside(self, t: float, start: float, end: float) -> bool:
-        if not start <= t <= end:
-            return False
-        if self.decision is None:
-            return True
-        # 결정과 같은 시각의 메시지는 결정 전으로 본다(사실 decided_before와 같은 기준)
-        if self.timing == "after":
-            return t > self.decision.t_min
-        if self.timing == "before":
-            return t <= self.decision.t_min
-        return True
-
-    def describe(self) -> str:
-        if self.session_wide:
-            return "세션 전체"
-        if not self.windows:
-            return "장면 없음"
-        spans = ", ".join(f"{s}~{e}분" for s, e in self.windows)
-        cut = ""
-        if self.decision is not None:
-            side = "뒤" if self.timing == "after" else "전"
-            cut = f", {self.decision.describe()} {side}"
-        return f"{spans}({'·'.join(self.cards)}{cut})"
+    def is_before_decision(self, phase: str) -> bool:
+        """결정 뒤를 보는 차원에서 이 단계 메시지가 결정 전인지."""
+        return (
+            self.timing == "after"
+            and self.decision is not None
+            and ORDER.get(phase, 0) <= ORDER[self.decision.phase]
+        )
 
 
 def decisions(record: dict[str, Any]) -> dict[str, Decision]:
@@ -94,78 +107,139 @@ def decisions(record: dict[str, Any]) -> dict[str, Decision]:
     return out
 
 
-def build_scenes(record: dict[str, Any], rubric: dict[str, Any]) -> dict[str, Scene]:
-    """척도의 모든 차원에 대한 장면."""
-    stage_of = {c["card_id"]: c.get("stage_id") for c in rubric.get("cards", [])}
+def _card_members(
+    messages: list[dict[str, Any]], observation: dict[str, Any], rule: dict[str, Any] | None
+) -> set[str]:
+    """카드 관찰 창(cards.yaml `window`)에 드는 메시지. 저장 순서와 단계로만 가른다."""
+    rule = rule or {}
+    stage = observation["phase"]
+    start = 0
+    if rule.get("start") == "card_message":
+        index = next(
+            (i for i, m in enumerate(messages) if m["id"] == observation.get("trigger_message_id")),
+            None,
+        )
+        if index is not None:
+            start = index
+        else:  # 첫 발언 기록이 없으면 단계 시작부터
+            start = next((i for i, m in enumerate(messages) if m["phase"] == stage), len(messages))
+    end_rule = str(rule.get("end") or f"stage_end:{stage}")
+    end = "proposal" if end_rule == "submit" else end_rule.removeprefix("stage_end:")
+    return {
+        m["id"]
+        for i, m in enumerate(messages)
+        if i >= start and ORDER[stage] <= ORDER.get(m["phase"], 0) <= ORDER.get(end, 3)
+    }
+
+
+def _scene(
+    scene_id: str, label: str, exists: bool, members: set[str], messages: list[dict[str, Any]]
+) -> Scene:
+    ids = tuple(m["id"] for m in messages if exists and m["id"] in members)
+    candidates = tuple(m["id"] for m in messages if m["sender"] == "candidate" and m["id"] in ids)
+    return Scene(scene_id, label, exists, frozenset(ids), candidates)
+
+
+def build_scenes(record: dict[str, Any], rubric: dict[str, Any]) -> dict[str, DimensionScenes]:
+    """척도의 모든 차원에 대한 핵심·보조 장면."""
+    messages = record.get("messages", [])
+    rules = {c["card_id"]: c for c in rubric.get("cards", [])}
     fired = {
-        o["card_id"]: o["window"]
+        o["card_id"]: _card_members(messages, o, (rules.get(o["card_id"]) or {}).get("window"))
         for o in record.get("observations", [])
-        if o.get("delivered") and o.get("window")
+        if o.get("delivered")
     }
     decided = decisions(record)
-    candidate = [m for m in record.get("messages", []) if m.get("sender") == "candidate"]
-    scenes = {}
+    everything = {m["id"] for m in messages}
+    out = {}
     for element in rubric.get("elements", []):
         for dimension in element.get("dimensions", []):
-            core = list(dimension.get("core_cards") or [])
+            dimension_id = dimension["dimension_id"]
+            core_cards = list(dimension.get("core_cards") or [])
             timing = dimension.get("decision_timing")
-            decision = None
-            if timing and core:
-                decision = decided.get(stage_of.get(core[0]) or "")
-            cards = tuple(c for c in core if c in fired)
-            windows = []
-            for card in cards:
-                start, end = fired[card]["start_min"], fired[card]["end_min"]
-                if timing == "after":
+            stage = (rules.get(core_cards[0]) or {}).get("stage_id") if core_cards else None
+            decision = decided.get(stage or "") if timing else None
+            cards = tuple(c for c in core_cards if c in fired)
+            if not core_cards:
+                members, exists, label = everything, True, "세션 전체"
+            else:
+                members = set().union(*(fired[c] for c in cards)) if cards else set()
+                label = "·".join(
+                    f"{c} 카드 창({(rules.get(c) or {}).get('window', {}).get('label', '')})"
+                    for c in core_cards
+                )
+                if timing == "before" and decision is not None:
+                    members = {
+                        i for i in members if ORDER[_phase(messages, i)] <= ORDER[decision.phase]
+                    }
+                    label += f", {decision.describe()}까지"
+                elif timing == "after":
                     if decision is None:
-                        continue
-                    start = max(start, decision.t_min)
-                elif timing == "before" and decision is not None:
-                    end = min(end, decision.t_min)
-                if start <= end:
-                    windows.append((start, end))
-            scene = Scene(
-                dimension_id=dimension["dimension_id"],
-                session_wide=not core,
-                windows=tuple(windows),
+                        members = set()
+                        label += ", 그 칸이 정해지지 않아 결정 뒤가 없음"
+                    else:
+                        members = {
+                            i for i in members if ORDER[_phase(messages, i)] > ORDER[decision.phase]
+                        }
+                        label += f", {decision.describe()} 뒤"
+                # 장면은 카드가 발동했으면 있다(그 안에 메시지가 없어도). 결정 뒤를 보는데 칸이
+                # 정해지지 않았으면 없다
+                exists = bool(cards) and not (timing == "after" and decision is None)
+            aux = []
+            for spec in dimension.get("aux_scenes") or []:
+                phases = set(spec.get("phases") or [])
+                spec_members = {m["id"] for m in messages if m["phase"] in phases}
+                for card in spec.get("cards") or []:
+                    spec_members |= fired.get(card, set())
+                spec_exists = bool(phases) or any(c in fired for c in spec.get("cards") or [])
+                aux.append(_scene(spec["id"], spec["label"], spec_exists, spec_members, messages))
+            out[dimension_id] = DimensionScenes(
+                dimension_id=dimension_id,
+                session_wide=not core_cards,
                 cards=cards,
                 timing=timing,
                 decision=decision,
+                core=_scene(CORE, label, exists, members, messages),
+                aux=tuple(aux),
             )
-            ids = tuple(m["id"] for m in candidate if scene.exists and scene.contains(m["t_min"]))
-            scenes[dimension["dimension_id"]] = Scene(**{**scene.__dict__, "candidate_ids": ids})
-    return scenes
+    return out
 
 
-def after_any_decision(record_decisions: dict[str, Decision], t_min: float) -> bool:
-    return any(d.t_min < t_min for d in record_decisions.values())
+def _phase(messages: list[dict[str, Any]], message_id: str) -> str:
+    return next(m["phase"] for m in messages if m["id"] == message_id)
+
+
+def _scene_row(scene: Scene) -> dict[str, Any]:
+    return {
+        "id": scene.scene_id,
+        "label": scene.label,
+        "exists": scene.exists,
+        "candidate_messages": [f"msg:{i}" for i in scene.candidate_ids],
+        "candidate_message_count": len(scene.candidate_ids),
+    }
 
 
 def facts_block(
-    element_rubric: dict[str, Any], scenes: dict[str, Scene], record: dict[str, Any]
+    element_rubric: dict[str, Any], scenes: dict[str, DimensionScenes], record: dict[str, Any]
 ) -> dict[str, Any]:
-    """평가 프롬프트 `[사실]` 블록: 결정 기록과 이 요소 차원별 장면 구간·구간 안 지원자 메시지."""
+    """평가 프롬프트 `[사실]` 블록: 결정 기록과 이 요소 차원별 핵심·보조 장면."""
     facts = record.get("facts") or {}
     rows = []
     for dimension in element_rubric["dimensions"]:
-        scene = scenes[dimension["dimension_id"]]
+        dim = scenes[dimension["dimension_id"]]
         rows.append(
             {
-                "dimension_id": scene.dimension_id,
-                "scene": "session"
-                if scene.session_wide
-                else ("cards" if scene.windows else "none"),
-                "windows": [{"start_min": s, "end_min": e} for s, e in scene.windows],
-                "fired_core_cards": list(scene.cards),
+                "dimension_id": dim.dimension_id,
+                "fired_core_cards": list(dim.cards),
                 "decision_cut": None
-                if scene.decision is None
+                if dim.decision is None
                 else {
-                    "timing": scene.timing,
-                    "phase": scene.decision.phase,
-                    "t_min": scene.decision.t_min,
+                    "timing": dim.timing,
+                    "phase": dim.decision.phase,
+                    "t_min": dim.decision.t_min,
+                    "path": dim.decision.path,
                 },
-                "candidate_messages": [f"msg:{i}" for i in scene.candidate_ids],
-                "candidate_message_count": len(scene.candidate_ids),
+                "scenes": [_scene_row(dim.core), *(_scene_row(s) for s in dim.aux)],
             }
         )
     recorded = facts.get("decisions")

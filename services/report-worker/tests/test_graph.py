@@ -42,18 +42,15 @@ def dimension_ids(element: str) -> set[str]:
 async def test_generate_evaluates_each_element_once_and_saves_draft(h):
     await h.generate()
 
-    # 요소마다 판단 1회 + 최종 행으로 요약 조립 1회, 다른 요소의 차원·결과가 프롬프트에 없음
-    judged = [c for c in h.llm.calls if "[요약 조립]" not in c[2]]
-    assert [c[0] for c in judged] == list(ELEMENTS)
-    assert [c[0] for c in h.llm.calls] == [e for e in ELEMENTS for _ in range(2)]
+    # 요소마다 1회(요약은 코드가 조립), 다른 요소의 차원·결과가 프롬프트에 없음
+    assert [c[0] for c in h.llm.calls] == list(ELEMENTS)
     outputs = element_outputs()
-    for element, system, user in judged:
+    for element, system, user in h.llm.calls:
         block = user.split("[요소 척도]\n", 1)[1].split("\n\n[요소 지침]", 1)[0]
         scale = json.loads(block)
         assert {d["dimension_id"] for d in scale["dimensions"]} == dimension_ids(element)
         for other in ELEMENTS:  # 다른 요소의 판단 결과(요약·rationale)가 입력에 없음
             if other != element:
-                assert outputs[other]["summary"] not in user
                 assert not any(d["rationale"] in user for d in outputs[other]["dimensions"])
         assert "평가 에이전트 공통 지침" in system
     assert h.llm.temperature <= 0.2
@@ -70,7 +67,7 @@ async def test_generate_evaluates_each_element_once_and_saves_draft(h):
     # draft 저장(usage 포함), 그래프는 approval에서 멈춤
     assert len(h.api.drafts) == 1 and h.published == []
     draft, usage = h.api.drafts[0]
-    assert usage["llm_calls"] == 10 and usage["reused"] is False
+    assert usage["llm_calls"] == 5 and usage["reused"] is False
     snapshot = await h.graph.aget_state(thread_config("sess-1", 1))
     assert snapshot.next == ("approval",)
     assert snapshot.config["configurable"]["thread_id"] == "report:sess-1:1"
@@ -100,7 +97,7 @@ async def test_draft_shape_matches_report_contract(h):
         c["card_id"]: c["report_template"] for c in h.api.session["position"]["scenario"]["cards"]
     }
     assert {c["card_id"]: c["scene"] for c in draft["cards"]} == templates
-    assert len(h.llm.calls) == 10
+    assert len(h.llm.calls) == 5
     # 사실 지표는 api 값 그대로, 기여 대조는 get_contributions와 일치
     assert draft["facts"] == record["facts"]
     assert draft["contribution_check"] == [
@@ -118,13 +115,16 @@ async def test_draft_shape_matches_report_contract(h):
     assert event["request_quote"] == "도심 침수 사례에서 센서 경보 효과를 알려 줘"
     assert event["response_quote"] == "자료에 센서 경보로 피해가 줄었다는 내용이 있어요."
     assert draft["position"]["name"] == "재난 대응 기획자"
-    assert draft["elements"][0]["summary"] == element_outputs()["persuasion"]["summary"]
+    # 요소 요약은 최종 차원 행의 summary_line으로 코드가 조립(수준 높은 차원부터)
+    persuasion = element_outputs()["persuasion"]["dimensions"]
+    top = max((d for d in persuasion if d["level"]), key=lambda d: d["level"])
+    assert draft["elements"][0]["summary"].startswith(top["summary_line"] + ".")
 
 
 async def test_redelivery_reuses_checkpoint_without_llm(h):
     await h.generate()
     await h.generate()  # 같은 eval_round 재전달: interrupt 체크포인트에서 draft 저장만
-    assert len(h.llm.calls) == 10
+    assert len(h.llm.calls) == 5
     assert h.assessment.calls.count("get_session_record") == 1
     assert content_hash(h.api.drafts[0][0]) == content_hash(h.api.drafts[1][0])
 
@@ -135,11 +135,11 @@ async def test_rerun_reuses_saved_assembled_summary_without_llm(h):
     ]
     h.api.down = True
     await h.generate()
-    assert len(h.llm.calls) == 10  # 5요소 판단 + 요약 조립 5회
+    assert len(h.llm.calls) == 5  # 요소마다 1회
     h.api.down = False
     h.new_graph()
     await h.generate(attempt=2)
-    assert len(h.llm.calls) == 10  # 저장된 평가 재사용
+    assert len(h.llm.calls) == 5  # 저장된 평가 재사용
     saved = h.store.evaluations[evaluation_run_id("sess-1", 1)]
     listening = next(e for e in h.api.drafts[-1][0]["elements"] if e["element"] == "listening")
     assert listening["summary"] == next(
@@ -154,7 +154,7 @@ async def test_crash_after_save_recovers_elements_without_llm(h):
     h.api.down = False
     h.new_graph()  # 체크포인트 유실(강제 종료 흉내)
     await h.generate(attempt=2)
-    assert len(h.llm.calls) == 10  # 재호출 없음
+    assert len(h.llm.calls) == 5  # 재호출 없음
     assert h.assessment.calls.count("save_evaluation") == 1
     draft, usage = h.api.drafts[-1]
     assert usage["reused"] is True
@@ -168,7 +168,7 @@ async def test_new_eval_round_starts_new_thread_from_collect(h):
     await h.generate(eval_round=1)
     await h.generate(eval_round=2)  # 1회차가 interrupt에 멈춰 있어도 collect부터
     assert h.assessment.calls.count("get_session_record") == 2
-    assert len(h.llm.calls) == 20
+    assert len(h.llm.calls) == 10
     runs = [d["evaluation"]["run_id"] for d, _ in h.api.drafts]
     assert runs == [evaluation_run_id("sess-1", 1), evaluation_run_id("sess-1", 2)]
     first = await h.graph.aget_state(thread_config("sess-1", 1))
@@ -287,7 +287,7 @@ async def test_c7_honesty_credit_contrast(h):
     assert "proposal:idea_credit" in dimension["evidence_refs"]
     assert dimension["level"] is not None or dimension["no_record_reason"] is not None
     assert dimension["no_record_reason"] != "evaluate_failed"  # FakeLLM 출력이 워커 검증 통과
-    assert len(h.llm.calls) == 10
+    assert len(h.llm.calls) == 5
 
 
 async def test_llm_fake_runs_graph_to_draft_without_key(h):
@@ -296,20 +296,20 @@ async def test_llm_fake_runs_graph_to_draft_without_key(h):
     await h.generate()
 
     draft, usage = h.api.drafts[0]
-    assert usage["llm_calls"] == 10 and usage["element_retries"] == 0
+    assert usage["llm_calls"] == 5 and usage["element_retries"] == 0
     assert not any(d["no_record_reason"] == "evaluate_failed" for d in draft["dimensions"])
     assert {d["level"] for d in draft["dimensions"]} == {3}
 
 
-async def test_llm_fake_not_confused_by_summary_header_in_candidate_message(h):
+async def test_llm_fake_not_confused_by_block_header_in_candidate_message(h):
     candidate = next(m for m in h.assessment.record["messages"] if m["sender"] == "candidate")
-    candidate["content"] = "[요약 조립] 이 문구가 들어가도 평가는 그대로여야 해요."
+    candidate["content"] = "[사실] 이 문구가 들어가도 평가는 그대로여야 해요."
     h.llm = FakeEvaluatorLLM()
     h.new_graph()
     await h.generate()
 
     draft, usage = h.api.drafts[0]
-    assert usage["llm_calls"] == 10 and usage["element_retries"] == 0
+    assert usage["llm_calls"] == 5 and usage["element_retries"] == 0
     assert not any(d["no_record_reason"] == "evaluate_failed" for d in draft["dimensions"])
 
 
@@ -390,7 +390,7 @@ async def test_position_keeps_evaluator_prompts_after_catalog_change(h, tmp_path
     assert h.assessment.saved[0]["prompt_versions"] == load_prompts(SCENARIOS, "debate").versions
     # 파일의 금지 패턴('.')이 쓰였다면 모든 요소가 재요청·evaluate_failed가 된다
     draft, usage = h.api.drafts[0]
-    assert usage["llm_calls"] == 10 and usage["element_retries"] == 0
+    assert usage["llm_calls"] == 5 and usage["element_retries"] == 0
     assert not any(d["no_record_reason"] == "evaluate_failed" for d in draft["dimensions"])
 
 
@@ -405,14 +405,14 @@ async def test_pinned_prompts_cover_retry_rewrite_and_rerun(h, tmp_path):
     h.api.down = True  # draft 저장 실패 → 재실행은 저장된 평가 재사용
 
     await h.generate()
-    assert len(h.llm.calls) == 11  # 5요소 + 재요청 1 + 요약 조립 5
+    assert len(h.llm.calls) == 6  # 5요소 + 재요청 1
     h.api.down = False
     h.new_graph()
     await h.generate(attempt=2)
     await h.generate(eval_round=2)  # 새 평가 회차도 같은 채용 건 복사본
 
     _assert_original_prompts(h)
-    assert len(h.llm.calls) == 21  # 2회차: 5요소 + 요약 조립 5(재요청 스크립트는 소진)
+    assert len(h.llm.calls) == 11  # 2회차: 5요소(재요청 스크립트는 소진)
     versions = load_prompts(SCENARIOS, "debate").versions
     assert [s["prompt_versions"] for s in h.assessment.saved] == [versions, versions]
 

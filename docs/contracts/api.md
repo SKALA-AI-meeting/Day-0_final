@@ -87,7 +87,7 @@
 
 | 형식 | 가리키는 것 | 개수에 듦 |
 |---|---|---|
-| `msg:<message_id>` | 지원자 room 메시지. 평가 워커는 AI 동료·시스템 메시지 참조를 거부한다([product/rubric.md](../product/rubric.md) 2.2·7.3). 그 전에 저장된 평가의 AI 동료·시스템 메시지 참조는 맥락으로 표시한다 | 지원자 메시지만 |
+| `msg:<message_id>` | 지원자 room 메시지. 평가 워커는 AI 동료·시스템 메시지 참조를 거부한다([product/rubric.md](../product/rubric.md) 2.2·7.3). 장면을 만든 동료 발언의 맥락은 평가 입력 `[사실]` 블록(장면·결정 기록)과 세션 기록으로 주고, 리포트는 근거마다 앞뒤 맥락을 붙인다. 그 전에 저장된 평가의 AI 동료·시스템 메시지 참조는 맥락으로 표시한다 | 지원자 메시지만 |
 | `slot:<phase>` | 지원자가 확정한 칸(`filled_by = candidate`) | 예 |
 | `proposal:<field>` | 제출 기획안 필드(`idea_credit` 등, 필드 id는 [product/scenario.md](../product/scenario.md) 템플릿) | 예 |
 | `contribution:<option_id>` | Contributions 대조표 행(맥락) | 아니오(`hon_credit_record` 예외, [product/rubric.md](../product/rubric.md) 3.5) |

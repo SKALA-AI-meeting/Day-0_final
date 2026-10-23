@@ -73,7 +73,8 @@ def rubric_view(scenario: dict) -> dict[str, Any]:
                         "name": d["name"],
                         "definition": d["definition"],
                         "core_cards": d.get("core_cards", []),
-                        "decision_timing": d.get("decision_timing"),
+                        # 결정 전후 구분·보조 장면 구간. 이 값이 생기기 전에 복사된 척도에는 없다
+                        **{k: d[k] for k in ("decision_timing", "aux_scenes") if k in d},
                         "levels": [
                             {
                                 "level": lv["level"],
