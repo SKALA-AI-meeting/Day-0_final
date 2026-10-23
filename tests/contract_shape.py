@@ -1201,13 +1201,22 @@ SHAPES["voice_state"] = {
     ),
     "ready_at": str,
     "server_now": str,
-    "items": [{"id": str, "seat": str, "status": str, "duration_ms": Opt(NUM), "error": Opt(str)}],
+    "items": [
+        {
+            "id": str,
+            "message_id": str,
+            "seat": str,
+            "status": str,
+            "duration_ms": Opt(NUM),
+            "error": Opt(str),
+        }
+    ],
     "blocked_reason?": Opt(str),
     "release_ready?": bool,
     "utterance_id?": Opt(str),
     "speech_started_at?": str,
     "speech_deadline_at?": str,
-    "spoken_message_ids?": [str],
+    "heard_message_ids?": [str],
     "think_deadline_at?": str,
     "utterance?": {
         "id": str,

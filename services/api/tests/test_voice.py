@@ -98,21 +98,26 @@ async def test_voice_playback_barrier_and_single_message(api, voice_ctx):
         assert mine[0].meta["source"] == "voice"
 
 
-async def test_voice_spoken_ids_follow_playback_start(api, voice_ctx):
-    """동료 발언 글은 재생이 시작된 것만 spoken_message_ids에 들어간다(들은 범위만 화면에 표시)."""
+async def test_voice_heard_ids_follow_playback_end(api, voice_ctx):
+    """동료 발언은 재생이 끝난 것만 heard_message_ids에 들어간다(재생 중에는 자막만 보임)."""
     ctx = voice_ctx
     sess = await setup(api, ctx)
     first = await api.post_ai(sess, "p1", "물 부족을 생각해 봐요")
     await api.post_ai(sess, "p3", "다른 의견도 있어요")
     await snapshot(api, ctx, sess)
     snap = await snapshot(api, ctx, sess)
-    assert snap["spoken_message_ids"] == []
+    assert snap["heard_message_ids"] == []
     turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
     item = snap["items"][0]
+    assert item["message_id"] == first["id"]
     r = await post(api, sess, "playback", {**turn, "job_id": item["id"], "outcome": "start"})
     assert r.status_code == 200
     snap = await snapshot(api, ctx, sess)
-    assert snap["spoken_message_ids"] == [first["id"]]
+    assert snap["heard_message_ids"] == []
+    r = await post(api, sess, "playback", {**turn, "job_id": item["id"], "outcome": "ended"})
+    assert r.status_code == 200
+    snap = await snapshot(api, ctx, sess)
+    assert snap["heard_message_ids"] == [first["id"]]
 
 
 async def test_voice_think_time_holds_turn(api, voice_ctx, clock):

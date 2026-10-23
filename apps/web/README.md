@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 64개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 66개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -191,6 +191,13 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <details><summary><code>components/debate/saver.test.ts</code> (1)</summary>
 
 - flush는 진행 중인 저장이 끝날 때까지 기다리고, 실패하면 false라 제출이 멈춘다
+
+</details>
+
+<details><summary><code>components/debate/voice/caption.test.ts</code> (2)</summary>
+
+- 문장 끝 뒤 공백에서 나누고 빈 문장은 버린다
+- 재생 위치에 맞는 문장을 고른다(글자 수 비율)
 
 </details>
 

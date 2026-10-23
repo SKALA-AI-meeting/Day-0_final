@@ -53,7 +53,7 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
             if session.status == "in_progress":
                 await quota.admission(db, session, ctx.clock.now())
             snap, pending = await controller.sync(db, session, position, ctx.clock.now())
-            snap["spoken_message_ids"] = await controller.spoken_message_ids(db, session_id)
+            snap["heard_message_ids"] = await controller.heard_message_ids(db, session_id)
             if snap.get("state") == "USER_READY" and snap.get("ready_at"):
                 think = timedelta(seconds=controller.think_seconds(position))
                 snap["think_deadline_at"] = iso(controller.at(snap["ready_at"]) + think)

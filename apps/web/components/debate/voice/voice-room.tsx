@@ -6,9 +6,17 @@ import { Avatar, Button } from "@/components/ui";
 import { ChatRoom } from "../chat";
 import type { StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
+import { captionAt, sentences } from "./caption";
 import { finishOnce, normalize } from "./recorder";
 
-type Item = { id: string; seat: string; status: string; duration_ms: number; error?: string };
+type Item = {
+  id: string;
+  message_id: string;
+  seat: string;
+  status: string;
+  duration_ms: number;
+  error?: string;
+};
 export type VoiceSnapshot = {
   turn_id: string;
   epoch: string;
@@ -21,8 +29,8 @@ export type VoiceSnapshot = {
   speech_deadline_at?: string;
   speech_started_at?: string;
   utterance?: { id: string; status: string; transcript?: string; message_id?: string };
-  /** 재생이 시작된 동료 발언 id. 상태 조회(GET)에만 있다 */
-  spoken_message_ids?: string[];
+  /** 재생이 끝난 동료 발언 id. 상태 조회(GET)에만 있다 */
+  heard_message_ids?: string[];
   /** 내 차례(USER_READY)일 때 생각 시간이 끝나는 시각. 예전 채용 건이면 ready_at과 같다 */
   think_deadline_at?: string;
 };
@@ -61,7 +69,8 @@ export function VoiceRoom(props: Props) {
   const [active, setActive] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(60);
   const [level, setLevel] = useState(0);
-  const [spoken, setSpoken] = useState<string[]>([]);
+  const [heardIds, setHeardIds] = useState<string[]>([]);
+  const [caption, setCaption] = useState("");
   const stream = useRef<MediaStream | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
@@ -255,6 +264,13 @@ export function VoiceRoom(props: Props) {
         const sound = new Audio(url);
         player.current = sound;
         setActive(item.seat);
+        // 재생 위치에 맞춰 지금 말하는 문장 하나만 자막으로 보인다
+        const message = latest.current.snap.messages.find((m) => m.id === item.message_id);
+        const parts = sentences(message?.content ?? "");
+        setCaption(parts[0] ?? "");
+        sound.ontimeupdate = () => {
+          if (sound.duration) setCaption(captionAt(parts, sound.currentTime / sound.duration));
+        };
         await result("start");
         await new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => {
@@ -285,6 +301,7 @@ export function VoiceRoom(props: Props) {
         if (op === operation.current) {
           busy.current = false;
           setActive(null);
+          setCaption("");
           player.current = null;
         }
       }
@@ -305,8 +322,8 @@ export function VoiceRoom(props: Props) {
         const nextFence = `${next.generation}:${next.epoch}`;
         if (fence.current && nextFence !== fence.current) stopMedia();
         fence.current = nextFence;
-        const ids = next.spoken_message_ids ?? [];
-        setSpoken((prev) => (prev.join() === ids.join() ? prev : ids));
+        const ids = next.heard_message_ids ?? [];
+        setHeardIds((prev) => (prev.join() === ids.join() ? prev : ids));
         // 녹음 종료/업로드 중에는 서버의 직전 USER_SPEAKING 스냅샷을 표시하지 않는다.
         if (!busy.current || player.current) setVoice(next);
         const u = next.utterance;
@@ -396,15 +413,15 @@ export function VoiceRoom(props: Props) {
     } else if (voice?.state === "USER_READY") void record(voice);
   };
 
-  // 동료 발언은 재생이 시작된 것만 글로 보인다(목소리보다 글이 먼저 보이지 않게, V5 들은 범위).
+  // 동료 발언은 재생이 끝난 것만 대화 기록에 남는다(재생 중에는 자막, V5 들은 범위).
   // 지원자 발언과 시스템 안내는 바로 보인다.
   const heard = useMemo(() => {
-    const ids = new Set(spoken);
+    const ids = new Set(heardIds);
     return {
       ...props.snap,
       messages: props.snap.messages.filter((m) => !SEATS.has(m.sender) || ids.has(m.id)),
     };
-  }, [props.snap, spoken]);
+  }, [props.snap, heardIds]);
 
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="음성 회의">
@@ -439,6 +456,10 @@ export function VoiceRoom(props: Props) {
             </div>
           ))}
         </div>
+        {/* 자막 자리를 늘 비워 두어 문장이 바뀌어도 아래 대화 기록이 움직이지 않게 한다 */}
+        <p className="min-h-14 max-w-2xl text-center text-title3" aria-label="동료 발언 자막">
+          {caption}
+        </p>
         {!props.locked &&
           !error &&
           voice?.state === "USER_READY" &&

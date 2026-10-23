@@ -150,6 +150,7 @@ async def sync(db, session, position, now):
     items = [
         {
             "id": str(j.id),
+            "message_id": j.data["message_id"],
             "seat": j.data["seat"],
             "status": j.data["status"],
             "duration_ms": j.data.get("duration_ms"),
@@ -181,8 +182,9 @@ async def sync(db, session, position, now):
     return {**data, "items": items, "server_now": iso(now)}, pending
 
 
-async def spoken_message_ids(db, session_id) -> list[str]:
-    """재생이 시작된 동료 발언의 메시지 id. 화면은 이 발언만 글로 보여 준다(들은 범위, V5).
+async def heard_message_ids(db, session_id) -> list[str]:
+    """재생이 끝난 동료 발언의 메시지 id. 화면은 이 발언만 대화 기록에 글로 남긴다(들은 범위, V5).
+    재생 중인 발언은 화면이 자막으로 한 문장씩 보여 준다.
 
     0.75초마다 조회되므로 음성 파일(audio)은 읽지 않고 id만 꺼낸다.
     """
@@ -190,7 +192,7 @@ async def spoken_message_ids(db, session_id) -> list[str]:
         select(SpeechJob.data["message_id"].astext).where(
             SpeechJob.session_id == session_id,
             SpeechJob.kind == "tts",
-            SpeechJob.data.has_key("playback_started_at"),
+            SpeechJob.data["status"].astext == "heard",
         )
     )
     return list(rows)

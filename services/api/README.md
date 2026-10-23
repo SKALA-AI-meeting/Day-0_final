@@ -466,7 +466,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <details><summary><code>tests/test_voice.py</code> (7)</summary>
 
 - `test_voice_playback_barrier_and_single_message`
-- `test_voice_spoken_ids_follow_playback_start`
+- `test_voice_heard_ids_follow_playback_end`
 - `test_voice_think_time_holds_turn`
 - `test_voice_zero_speakers_stale_and_audio_validation`
 - `test_voice_quota_refuses_before_provider_and_other_session`
