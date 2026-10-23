@@ -146,9 +146,9 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 263개(live 3개 포함, `make test`는 live를 뺀다).
+총 285개(live 3개 포함, `make test`는 live를 뺀다).
 
-<details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
+<details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
 - `test_model_picks_tools_and_cites`
 - `test_tool_calls_capped_at_three`
@@ -158,6 +158,28 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_internal_material_ids_are_not_shown` ×4
 - `test_hide_ids_touches_only_known_id_notation` ×12
 - `test_ids_hidden_with_open_and_locked_lookups`
+- `test_cites_only_materials_actually_used`
+- `test_verbatim_span_counts_as_used`
+- `test_unrelated_answer_cites_nothing_even_with_tool_results`
+- `test_no_tool_results_means_no_source_line`
+- `test_ungrounded_number_regenerated_once`
+- `test_ungrounded_number_dropped_after_second_failure`
+- `test_all_sentences_dropped_falls_back_to_missing_text`
+- `test_numbers_from_the_question_are_allowed`
+- `test_long_answer_is_cut_at_sentence_end`
+- `test_trim_sentences_prefers_sentence_then_space_then_hard_cut`
+- `test_ungrounded_numbers_rules`
+- `test_named_title_wins_over_shared_year_numbers`
+- `test_regeneration_can_search_again`
+- `test_too_long_answer_is_regenerated_shorter_before_trimming`
+- `test_material_named_only_in_trimmed_off_part_is_not_cited`
+- `test_single_number_or_year_is_not_enough_to_cite`
+- `test_missing_mark_means_no_citation_and_is_hidden`
+- `test_numbers_from_earlier_questions_are_not_allowed`
+- `test_request_budget_stops_regeneration`
+- `test_exhausted_budget_skips_regeneration`
+- `test_request_timeout_without_any_draft_returns_fallback`
+- `test_request_timeout_during_regeneration_keeps_best_draft`
 
 </details>
 

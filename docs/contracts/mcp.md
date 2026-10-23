@@ -34,7 +34,7 @@
 |---|---|---|---|
 | search_materials | {session_id, query, top_k?=3} | [{material_id, title, chunk, score}]. 내부 GET /materials로 잠금·키워드·catalog_version 확인 후 열린 자료의 같은 버전 청크만. 잠겨 있으면 `not_released` | 조회 |
 | get_material | {session_id, material_id} | {material_id, title, content}. 내부 GET /materials/{material_id}(같은 catalog_version 본문). 열린 자료가 아니면 `not_released` | 조회 |
-| reindex_materials | {mission_id?} | {indexed, model, dim, catalog_version}. 현재 카탈로그 자료를 그 catalog_version으로 `material_chunks`에 색인(관리용, 이전 버전 행은 지우지 않음). 원문 `materials` 행은 `scripts/seed.py`가 같은 버전으로 시드. 에이전트에 노출하지 않음 | 변경 |
+| reindex_materials | {mission_id?} | {indexed, model, dim, catalog_version, index_version}. 현재 카탈로그 자료를 줄·문장 경계 청크(상한 400자, 앞 청크 끝 단위 겹침)로 `material_chunks`에 색인(관리용, 이전 키 행은 지우지 않음). 저장 키 `index_version` = catalog_version + 청크 규칙 버전(`-c<n>`). search_materials는 세션 catalog_version의 현재 키를 먼저 찾고, 없으면 같은 catalog_version의 옛 키(접미사 없는 행, 규칙 버전 전 색인)를 쓴다(먼저 만든 채용 건은 자기 색인을 그대로 봄). 둘 다 없으면 `upstream_unavailable`(reindex). 원문 `materials` 행은 `scripts/seed.py`가 같은 버전으로 시드. 에이전트에 노출하지 않음 | 변경 |
 
 ### assessment-mcp (`http://assessment-mcp:9103/mcp`, X-Assessment-Token 필수)
 
@@ -56,7 +56,7 @@
 | 진행 매니저 결정적 노드(load·cards·apply·fill) | debate-mcp 전부, assessment-mcp `record_observation` | 코드가 직접 호출 |
 | 진행 매니저 turn(LLM) | 없음 | 주입된 DebateState만 |
 | 페르소나 respond | `get_transcript`, `get_draft`(proposal 단계에서만 바인딩), `search_materials`, `get_material` | 모델 도구 호출, 응답당 3회. `get_debate_state`는 바인딩하지 않는다(DebateState는 load가 `card_progress`·`cost_left`를 걸러 컨텍스트에 주입). 최근 대화도 미리 들어가므로 `get_transcript`는 보통 부르지 않는다 |
-| 어시스턴트 | `search_materials`, `get_material` | 모델 tool-calling 루프, 요청당 최대 3회, 답에 인용 자료 id |
+| 어시스턴트 | `search_materials`, `get_material` | 모델 tool-calling 루프, 요청당 최대 3회, 답에는 실제로 쓴 자료 id만(코드가 제목·숫자·구간 겹침으로 판정) |
 | report-worker | `get_rubric`, `get_session_record`, `get_transcript_span`, `get_contributions`, `save_evaluation` | 코드가 직접 호출(평가 에이전트 LLM에는 도구를 바인딩하지 않고 입력 묶음을 주입). 평가 결과 재조회(`GET /evaluations`)·리포트 저장은 내부 REST |
 
 페르소나 respond의 출력은 구조화 `{content, proposes?: {scenario_option_key∣label}, stance?: {option_id, stance}}`이고, 결정적 `apply`가 guard 통과 뒤 `post_message` → `propose_option`/`set_stance` 순으로 반영한다(source_message_id = 방금 게시한 메시지). 카드 발언이면 `post_message`에 `card_ids`를 넣고(전달 기록, 공동 전달이면 여러 개), 그중 첫 발언인 카드마다 이어서 `record_observation`. 자리의 고정 안과 입장 변경 허용 범위는 시나리오 규칙(`stance_plan`)으로 노드 `stance_check`가 **게시 전에** 검사한다: 계획 밖 입장(자기 계획 안에 `oppose`하거나 문장으로 반대하는 것 포함, 또는 문장이 계획과 다른 입장을 말함)이면 응답 전체를 1회 재생성하고, 그래도 어긋나면 계획과 맞는 자리별 고정 문구(프롬프트 `stance_fallback`)로 바꿔 게시한다. 결과는 `messages.meta.stance_check`(`pass`∣`regenerated`∣`fallback`)에 남긴다. 게시 문장과 기록 입장은 항상 일치한다(문장만 게시하고 입장을 버리는 경우는 없다).

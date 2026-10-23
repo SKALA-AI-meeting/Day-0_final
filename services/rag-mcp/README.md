@@ -20,7 +20,7 @@
 |---|---|---|
 | 확정 키워드 자료만 검색(코사인 유사도 상위 top_k), 확정 전 `not_released` | `rag_mcp/tools.py`, `store.py` | [F-15, F-16](../../PRD.md) |
 | 열린 자료 전문 조회(api의 catalog_version 원문) | `rag_mcp/tools.py` | [F-15](../../PRD.md) |
-| 미션 폴더 해시(catalog_version)별 400자 청크 색인, 같은 버전은 덮어쓰고 다른 버전은 유지 | `rag_mcp/materials.py`, `store.py` | [F-06](../../PRD.md) 일부 |
+| 카탈로그 해시 + 청크 규칙 버전(`index_version`)별 청크 색인(줄·문장 경계, 상한 400자, 앞 청크 끝 단위 겹침), 같은 키는 덮어쓰고 다른 키는 유지. 현재 키가 없으면 같은 카탈로그의 옛 키 색인으로 검색(먼저 만든 채용 건) | `rag_mcp/materials.py`, `store.py` | [F-06](../../PRD.md) 일부 |
 | BGE-M3 임베딩(시작 때 1회 로드) | `rag_mcp/embedder.py` | - |
 
 자료 원문(`materials` 행)은 `scripts/seed.py`가 같은 catalog_version으로 넣고, rag-mcp는 `material_chunks`만 쓴다. api 오류 매핑·재시도는 `rag_mcp/client.py`. 기능별 검증 테스트는 [`docs/features.md`](../../docs/features.md)에 있다.
@@ -54,7 +54,7 @@ make seed
 |---|---|---|
 | `search_materials` | 확정된 키워드의 참고 자료에서 질문과 가까운 문단을 찾는다. | `query`, `session_id`, `top_k` |
 | `get_material` | 열린 참고 자료 하나의 전문을 읽는다. | `material_id`, `session_id` |
-| `reindex_materials` | 미션의 현재 카탈로그 버전으로 자료를 400자 청크로 나눠 다시 색인한다(관리용). | `mission_id` |
+| `reindex_materials` | 미션의 현재 카탈로그 버전으로 자료를 줄·문장 경계 청크(상한 400자)로 다시 색인한다(관리용). | `mission_id` |
 <!-- /gen:mcp-tools -->
 
 | 도구 | 오류 동작 |
@@ -78,7 +78,18 @@ make test                                                   # 전체
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 11개(live 1개 포함, `make test`는 live를 뺀다).
+총 18개(live 1개 포함, `make test`는 live를 뺀다).
+
+<details><summary><code>tests/test_chunk.py</code> (6)</summary>
+
+- `test_every_line_of_every_material_stays_whole`
+- `test_number_is_not_split_across_chunks`
+- `test_overlap_repeats_last_unit_of_previous_chunk`
+- `test_long_line_splits_at_sentence_then_space_boundaries`
+- `test_blank_lines_are_separators_only`
+- `test_index_version_folds_chunker_version`
+
+</details>
 
 <details><summary><code>tests/test_health.py</code> (1)</summary>
 
@@ -92,7 +103,7 @@ make test                                                   # 전체
 
 </details>
 
-<details><summary><code>tests/test_tools.py</code> (9)</summary>
+<details><summary><code>tests/test_tools.py</code> (10)</summary>
 
 - `test_tools_listed_async_with_descriptions`
 - `test_search_returns_confirmed_keyword_chunks_only`
@@ -103,6 +114,7 @@ make test                                                   # 전체
 - `test_error_codes_mapped_and_4xx_not_retried`
 - `test_invalid_input_returned_as_error_result`
 - `test_connection_failure_retried_once_then_upstream_unavailable`
+- `test_old_position_falls_back_to_legacy_index_of_its_catalog`
 
 </details>
 <!-- /gen:tests -->

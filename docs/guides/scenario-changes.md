@@ -7,7 +7,7 @@
 - `catalog_version`은 미션 폴더 전체(파일 경로와 내용)의 해시다(`scenarios/version.py`, 16자리). 미션 바로 아래 `tests/`와 점으로 시작하는 파일은 넣지 않는다. 자료·프롬프트·픽스처 본문 한 글자만 바꿔도 버전이 바뀐다.
 - 채용 건은 생성 때 그 시점의 시나리오 전체(자리·키워드·고정 입장·카드·척도·프롬프트·평가 프롬프트·금지 패턴·자료 목록)를 `positions.scenario`에 복사하고 `catalog_version`을 저장한다. 세션 실행과 평가는 그 복사본을 읽는다. 복사본에 필요한 값이 없으면 현재 파일로 채우지 않는다(세션 시작 409 `position_outdated`, 평가는 리포트 실패).
 - 그래서 **바꾼 시나리오를 반영하려면 새 채용 건을 만든다.** 기존 채용 건은 자기 복사본으로 계속 진행·평가된다.
-- 자료 원문(`materials`)과 검색 청크(`material_chunks`)는 `catalog_version`별로 저장되고 이전 버전 행을 지우지 않는다. 먼저 만든 채용 건은 자기 버전 원문을 계속 읽는다.
+- 자료 원문(`materials`)과 검색 청크(`material_chunks`)는 `catalog_version`별로 저장되고 이전 버전 행을 지우지 않는다. 먼저 만든 채용 건은 자기 버전 원문을 계속 읽는다. 청크 행의 키는 `catalog_version`에 rag-mcp 청크 규칙 버전을 붙인 값(`index_version`)이라, 청크 규칙(`services/rag-mcp/rag_mcp/materials.py` `CHUNKER_VERSION`)을 올린 배포에서는 `make seed-compose`(`reindex_materials`)로 현재 카탈로그를 새 키로 색인한다. 먼저 만든 채용 건은 같은 catalog_version의 옛 키 색인을 계속 쓰므로(검색이 현재 키 → 옛 키 순서로 찾음) 재색인 없이도 검색되고 결과도 그대로다. 현재 카탈로그의 색인이 어느 키로도 없을 때만 `upstream_unavailable`.
 
 ## 순서
 
