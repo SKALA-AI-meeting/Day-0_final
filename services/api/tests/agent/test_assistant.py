@@ -1,5 +1,6 @@
 """어시스턴트 tool-calling 루프(최대 3회, 인용, 잠금 안내, guard)."""
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 
@@ -474,10 +475,56 @@ async def test_request_budget_stops_regeneration(catalog, monkeypatch):
     assert result.content == "두 동네는 경보를 평균 25분 앞당겼다고 해요.\n출처: 도심 침수 사례"
 
 
-async def test_request_time_budget_stops_regeneration(catalog, monkeypatch):
+async def test_exhausted_budget_skips_regeneration(catalog, monkeypatch):
+    """예산이 없으면 재생성 없이 위반 문장을 뺀 초안, 남는 문장이 없으면 고정 문장."""
     from app.agent.assistant import runner as mod
 
-    monkeypatch.setattr(mod, "REQUEST_SECONDS", 0.0)
+    monkeypatch.setattr(mod._Loop, "_budget_left", lambda self: False)
     runner, llm, _ = grounded(catalog, ["하수관은 1,200km예요.", "이 답은 나오면 안 된다."])
     result = await runner.answer(uuid.uuid4(), "하수관 길이?", uuid.uuid4())
     assert len(llm.calls) == 1 and result.content == catalog.fixed["assistant_missing"]
+
+
+class SlowLLM(FakeLLM):
+    """대본의 float 항목은 그만큼 기다린 뒤 다음 항목을 돌려준다."""
+
+    async def _call(self, messages, **kwargs):
+        step = self.script[0] if self.script else None
+        if isinstance(step, float):
+            self.script.pop(0)
+            await asyncio.sleep(step)
+        return await super()._call(messages, **kwargs)
+
+
+def slow(catalog, script):
+    runner, _, server = grounded(catalog, [])
+    runner.llm = SlowLLM(script)
+    return runner, runner.llm
+
+
+async def test_request_timeout_without_any_draft_returns_fallback(catalog, monkeypatch):
+    from app.agent.assistant import runner as mod
+
+    monkeypatch.setattr(mod, "REQUEST_SECONDS", 0.05)
+    runner, llm = slow(catalog, [0.5, "늦은 답이에요."])
+    result = await runner.answer(uuid.uuid4(), "경보?", uuid.uuid4())
+    assert result.content == "잠시 후 다시 시도해 주세요." and result.usage["fallback_used"]
+
+
+async def test_request_timeout_during_regeneration_keeps_best_draft(catalog, monkeypatch):
+    """첫 초안은 받았고 재생성이 느리면, 확인되지 않는 수치 문장을 뺀 초안으로 답한다."""
+    from app.agent.assistant import runner as mod
+
+    monkeypatch.setattr(mod, "REQUEST_SECONDS", 0.3)
+    runner, llm = slow(
+        catalog,
+        [
+            tool_call("search_materials", query="경보"),
+            "경보를 5분 앞당겼어요. 두 동네는 경보를 평균 25분 앞당겼다고 해요.",
+            1.0,
+            "이 답은 나오면 안 된다.",
+        ],
+    )
+    result = await runner.answer(uuid.uuid4(), "경보?", uuid.uuid4())
+    assert result.content == "두 동네는 경보를 평균 25분 앞당겼다고 해요.\n출처: 도심 침수 사례"
+    assert not result.usage["fallback_used"]

@@ -146,9 +146,9 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 283개(live 3개 포함, `make test`는 live를 뺀다).
+총 285개(live 3개 포함, `make test`는 live를 뺀다).
 
-<details><summary><code>tests/agent/test_assistant.py</code> (42)</summary>
+<details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
 - `test_model_picks_tools_and_cites`
 - `test_tool_calls_capped_at_three`
@@ -177,7 +177,9 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_missing_mark_means_no_citation_and_is_hidden`
 - `test_numbers_from_earlier_questions_are_not_allowed`
 - `test_request_budget_stops_regeneration`
-- `test_request_time_budget_stops_regeneration`
+- `test_exhausted_budget_skips_regeneration`
+- `test_request_timeout_without_any_draft_returns_fallback`
+- `test_request_timeout_during_regeneration_keeps_best_draft`
 
 </details>
 

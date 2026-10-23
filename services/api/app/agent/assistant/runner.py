@@ -160,6 +160,20 @@ class _Loop:
     async def run(
         self, question: str, history: list[dict[str, str]]
     ) -> tuple[str, list[str], bool]:
+        """요청 전체(도구 루프·재생성 포함)를 REQUEST_SECONDS 안에 끝낸다. 시간이 다 되면 그때까지
+        검증을 통과한 가장 최근 초안으로 답하고, 그것도 없으면 고정 폴백 문장이다."""
+        self.best: str | None = None
+        try:
+            return await asyncio.wait_for(self._run(question, history), REQUEST_SECONDS)
+        except TimeoutError:
+            log.warning("assistant request timed out (%s)", self.trace.run_id)
+            if self.best:
+                return (*self._cite(self.best), False)
+            return FALLBACK_TEXT, [], True
+
+    async def _run(
+        self, question: str, history: list[dict[str, str]]
+    ) -> tuple[str, list[str], bool]:
         messages: list[BaseMessage] = [SystemMessage(self._system())]
         for turn in history[-HISTORY_TURNS * 2 :]:
             cls = HumanMessage if turn["role"] == "user" else AIMessage
@@ -179,6 +193,7 @@ class _Loop:
         missing = self.catalog.fixed.get("assistant_missing", MISSING_TEXT)
 
         bad = ungrounded_numbers(draft, given + self._pieces())
+        self._keep(drop_sentences(draft, bad))  # 시간이 다 되면 이것으로 답한다
         if bad:
             if self.retrieved:
                 reason = (
@@ -198,6 +213,7 @@ class _Loop:
             draft = drop_sentences(draft, bad)
             if not draft:
                 return missing, [], False
+            self._keep(draft)
 
         hits = self.guard.groups_hit(draft)
         if hits:
@@ -210,6 +226,7 @@ class _Loop:
             draft = drop_sentences(again, ungrounded_numbers(again, given + self._pieces()))
             if not draft:
                 return missing, [], False
+            self._keep(draft)
 
         if len(hide_ids(draft, self.retrieved)) > self.guard.max_chars:
             again = await self._regenerate(
@@ -221,6 +238,11 @@ class _Loop:
                 shorter = drop_sentences(again, ungrounded_numbers(again, given + self._pieces()))
                 draft = shorter or draft
         return (*self._cite(draft), False)
+
+    def _keep(self, draft: str) -> None:
+        """검증(숫자·guard)을 통과한 가장 최근 초안. 요청 시간이 다 되면 이것으로 답한다."""
+        if draft and not self.guard.groups_hit(draft):
+            self.best = draft
 
     def _budget_left(self) -> bool:
         return self.usage.llm_calls < MAX_LLM_CALLS and time.monotonic() < self.deadline
