@@ -5,6 +5,7 @@ import io
 import os
 import threading
 import wave
+from collections.abc import Sequence
 from typing import Protocol
 from xml.sax.saxutils import escape
 
@@ -20,7 +21,7 @@ class TtsService(Protocol):
 
 
 class SttService(Protocol):
-    async def transcribe(self, audio: bytes) -> str: ...
+    async def transcribe(self, audio: bytes, phrases: Sequence[str] = ()) -> str: ...
 
 
 def pcm(audio: bytes) -> tuple[bytes, float]:
@@ -56,6 +57,7 @@ class FakeSpeech:
     def __init__(self, transcript: str = "") -> None:
         self.transcript = transcript
         self.calls: list[tuple[str, str]] = []
+        self.phrases: list[str] = []  # 마지막 받아 적기에 넘어온 구문 목록(테스트 확인용)
 
     async def verify(self) -> None:
         return None
@@ -64,8 +66,9 @@ class FakeSpeech:
         self.calls.append((text, voice))
         return silence()
 
-    async def transcribe(self, audio: bytes) -> str:
+    async def transcribe(self, audio: bytes, phrases: Sequence[str] = ()) -> str:
         pcm(audio)
+        self.phrases = list(phrases)
         return self.transcript
 
 
@@ -138,7 +141,8 @@ class AzureSpeech:
             response.raise_for_status()
             return response.content
 
-    async def transcribe(self, audio: bytes) -> str:
+    async def transcribe(self, audio: bytes, phrases: Sequence[str] = ()) -> str:
+        """phrases: 자주 나올 단어(동료 이름 등). Azure 구문 목록에 올려 알아듣게 돕는다."""
         frames, seconds = pcm(audio)
         await self.verify()
 
@@ -153,6 +157,10 @@ class AzureSpeech:
             config = sdk.SpeechConfig(subscription=self.key, region=self.region)
             config.speech_recognition_language = "ko-KR"
             recognizer = sdk.SpeechRecognizer(config, sdk.audio.AudioConfig(stream=stream))
+            if phrases:
+                grammar = sdk.PhraseListGrammar.from_recognizer(recognizer)
+                for phrase in phrases:
+                    grammar.addPhrase(phrase)
             done = threading.Event()
             chunks, errors = [], []
 

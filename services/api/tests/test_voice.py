@@ -158,6 +158,8 @@ async def test_voice_rerecord_once_with_fresh_time(api, voice_ctx, clock):
     first, snap = await record_once(api, ctx, sess, snap)
     u = snap["utterance"]
     assert u["status"] == "ready"
+    # 채용 건의 동료 이름이 받아 적기 구문 목록으로 넘어간다(이름 오인식 → 호명 누락 방지)
+    assert {"윤하람", "하람님", "한결님", "지안님"} <= set(ctx.speech.phrases)
     wait = (controller.at(u["confirm_deadline_at"]) - ctx.clock.now()).total_seconds()
     assert 9.9 < wait <= 10  # 테스트 시계는 호출마다 마이크로초씩 흐른다
     turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}

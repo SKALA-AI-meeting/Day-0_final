@@ -32,6 +32,19 @@ def confirm_seconds(position) -> int:
     return position.scenario["voice_policy"].get("confirm_seconds", 0)
 
 
+def name_phrases(position) -> list[str]:
+    """받아 적기 구문 목록: 채용 건에 고정된 동료 이름(성 포함·성 뺀 이름)과 "님" 호칭.
+
+    이름을 틀리게 적으면(예: 윤하람→윤아람) 호명 감지가 놓치므로 받아 적는 단계에서 맞춘다.
+    """
+    phrases: list[str] = []
+    for seat in position.scenario.get("seats", []):
+        name = seat["name"]
+        given = name[1:] if len(name) >= 3 else name
+        phrases += [name, given, f"{name}님", f"{given}님"]
+    return phrases
+
+
 def ready_hold(position) -> timedelta:
     """내 차례(USER_READY)를 동료 발언·카드에 반납하지 않고 지켜 주는 시간."""
     return timedelta(seconds=think_seconds(position) + READY_GRACE_SECONDS)
@@ -284,6 +297,7 @@ async def capture(db, session, position, body, now):
                 "generation": session.generation,
                 "turn_id": body.turn_id,
                 "deadline": iso(deadline),
+                "phrases": name_phrases(position),
             },
         )
     )
@@ -420,7 +434,7 @@ async def run_job(ctx, job_id):
         if kind == "tts":
             result = await speech.synthesize(data["text"], data["voice"])
         else:
-            result = mask((await speech.transcribe(audio)).strip())
+            result = mask((await speech.transcribe(audio, data.get("phrases", []))).strip())
         error = None
     except Exception:
         result, error = None, "voice_speech_failed"
