@@ -435,11 +435,17 @@ async def test_missing_mark_means_no_citation_and_is_hidden(catalog):
             tool_call("search_materials", query="하수관 길이"),
             "열린 자료에는 하수관 길이가 없어요. 경보를 평균 25분 앞당겼다는 내용만 있어요. "
             "[자료 없음]",
+            tool_call("search_materials", query="하수관"),
+            "열린 자료에는 없어요. 도심 침수 사례에는 센서 얘기만 있어요. [자료 없음]",
         ],
     )
     result = await runner.answer(uuid.uuid4(), "하수관 길이?", uuid.uuid4())
     assert "[자료 없음]" not in result.content and "출처" not in result.content
     assert result.cited_material_ids == []
+    # 표식이 있어도 본문에 제목을 밝힌 자료는 인용한다(본문의 사실이 자기 신고보다 우선)
+    result = await runner.answer(uuid.uuid4(), "하수관 길이는?", uuid.uuid4())
+    assert "[자료 없음]" not in result.content
+    assert result.cited_material_ids == ["water_flood_cases"]
 
 
 async def test_numbers_from_earlier_questions_are_not_allowed(catalog):

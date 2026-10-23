@@ -293,7 +293,7 @@ class _Loop:
         for _ in range(3):  # 자르면 밝힌 자료·출처 줄이 바뀌므로 잘린 본문으로 다시 정한다
             declared = [m for m in self.retrieved if m in raw]  # id 표기는 지우기 전에 본다
             body = hide_ids(raw, self.retrieved)
-            cited = [] if absent else self._used(body, declared)
+            cited = self._used(body, declared, absent)
             missing = [self.retrieved[m] for m in cited if self.retrieved[m] not in body]
             line = SOURCE_PREFIX + ", ".join(missing) if missing else ""
             room = self.guard.max_chars - (len(line) + 1 if line else 0)
@@ -305,14 +305,15 @@ class _Loop:
             cited = [m for m in cited if self.retrieved[m] in body or m in raw]
         return (f"{body}\n{line}" if line else body), cited
 
-    def _used(self, body: str, declared: list[str]) -> list[str]:
+    def _used(self, body: str, declared: list[str], absent: bool = False) -> list[str]:
         """받은 자료 중 답에 쓴 것(받은 순서). 모델이 제목·id로 밝힌 자료가 있으면 그것만 본다.
         밝힌 자료가 없으면 근거가 충분한 자료만: 12자 이상 구간이 글자 그대로 있거나, 연도가 아닌
         숫자(단위 포함)가 서로 다른 값으로 둘 이상 그 조각에 있는 자료. 숫자 하나·연도만으로는
-        쓴 것으로 보지 않는다(여러 자료에 같이 나오는 값).
+        쓴 것으로 보지 않는다(여러 자료에 같이 나오는 값). `[자료 없음]` 표식(absent)이 있으면
+        추론 인용은 하지 않고, 본문에 밝힌 자료만 남긴다(표식보다 본문의 사실이 우선).
         """
         named = [m for m, t in self.retrieved.items() if m in declared or t in body]
-        if named:
+        if named or absent:
             return named
         numbers = {v + u for v, u in _numbers(body) if (u or len(v) >= 2) and not _is_year(v, u)}
         windows = _windows(body)
