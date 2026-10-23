@@ -59,16 +59,29 @@ def content_hash(content: dict[str, Any]) -> str:
 
 
 def element_outputs() -> dict[str, dict[str, Any]]:
-    """계약 픽스처 평가(internal_evaluations)를 요소별 LLM 출력 JSON으로 나눈다(워커 검증 통과)."""
+    """계약 픽스처 평가(internal_evaluations)를 요소별 LLM 출력 JSON으로 나눈다(워커 검증 통과).
+
+    근거는 판단 호출 출력 형식 `evidence: [{ref, scene}]`로 바꾸고, 지원자 메시지에는 그 메시지가
+    드는 장면 id(핵심 먼저)를 단다. 수준이 있는 행의 `summary_line`은 그 행의 판단 이유다.
+    """
+    from report_worker.scenes import build_scenes
+
     saved = load("internal_evaluations")
     rubric = load("internal_rubric")
+    scenes = build_scenes(load("session_record"), rubric)
     owner = {d["dimension_id"]: e["element"] for e in rubric["elements"] for d in e["dimensions"]}
-    outputs = {
-        e["element"]: {"element": e["element"], "summary": e["summary"], "dimensions": []}
-        for e in saved["elements"]
-    }
+    outputs = {e["element"]: {"dimensions": []} for e in saved["elements"]}
     for row in saved["dimensions"]:
-        outputs[owner[row["dimension_id"]]]["dimensions"].append({"no_record_reason": None, **row})
+        dim = scenes[row["dimension_id"]]
+        evidence = []
+        for ref in row["evidence_refs"]:
+            holding = dim.holding(ref[4:]) if ref.startswith("msg:") else []
+            evidence.append({"ref": ref, "scene": holding[0]} if holding else {"ref": ref})
+        out = {k: v for k, v in row.items() if k != "evidence_refs"}
+        out = {"no_record_reason": None, **out, "evidence": evidence}
+        if row["level"] is not None:
+            out["summary_line"] = row["rationale"].rstrip(".")
+        outputs[owner[row["dimension_id"]]]["dimensions"].append(out)
     return outputs
 
 

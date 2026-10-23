@@ -52,14 +52,14 @@
       "dimension_id": "pers_reasoning",
       "level": 3,
       "evidence_refs": ["msg:m-06", "msg:m-12"],
-      "rationale": "키워드와 문제 상황에서 자기 안에 이유를 붙였으나 근거를 넓히지는 않음.",
+      "rationale": "키워드 창에서 자기 안에 이유를 붙였고 문제 상황 보조 장면에서도 같았으나 근거를 넓히지는 않음.",
       "confidence": "medium"
     },
     {
       "dimension_id": "pers_counter_handling",
       "level": 3,
       "evidence_refs": ["msg:m-15"],
-      "rationale": "강한결의 일축에 우선순위 이유로 답했으나 근거를 보강하지 않음.",
+      "rationale": "문제 상황 보조 장면에서 강한결의 일축에 우선순위 이유로 답했으나 근거를 보강하지 않음.",
       "confidence": "medium"
     },
     {
@@ -73,13 +73,13 @@
       "dimension_id": "pers_convergence",
       "level": 4,
       "evidence_refs": ["msg:m-18", "slot:keyword"],
-      "rationale": "키워드를 직접 확정하고 문제 상황에서 조건을 붙여 결론으로 모음.",
+      "rationale": "키워드를 직접 확정하고 문제 상황 보조 장면에서도 조건을 붙여 결론으로 모음.",
       "confidence": "high"
     },
     {
       "dimension_id": "listen_engage",
       "level": 4,
-      "evidence_refs": ["msg:m-15", "msg:m-17", "msg:m-13"],
+      "evidence_refs": ["msg:m-15", "msg:m-17"],
       "rationale": "두 번의 압박 모두에 상대 근거를 받아 답함.",
       "confidence": "high"
     },
@@ -100,14 +100,14 @@
     {
       "dimension_id": "listen_civility",
       "level": 4,
-      "evidence_refs": ["msg:m-15", "msg:m-16", "msg:m-17"],
+      "evidence_refs": ["msg:m-15", "msg:m-17"],
       "rationale": "반복 압박에도 안에만 초점을 두고 차분하게 말함.",
       "confidence": "high"
     },
     {
       "dimension_id": "incl_notice_invite",
       "level": 3,
-      "evidence_refs": ["msg:m-24", "msg:m-21"],
+      "evidence_refs": ["msg:m-24"],
       "rationale": "머뭇거림 뒤 3분여 만에 이름을 불러 초대함.",
       "confidence": "medium"
     },
@@ -149,7 +149,7 @@
     {
       "dimension_id": "flex_acceptance",
       "level": 4,
-      "evidence_refs": ["msg:m-18", "msg:m-22"],
+      "evidence_refs": ["msg:m-22", "msg:m-27"],
       "rationale": "자기 안과 다른 결론을 받아들이고 관심사를 결정된 안에 연결함.",
       "confidence": "high"
     },

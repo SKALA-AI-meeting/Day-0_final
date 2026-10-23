@@ -180,6 +180,15 @@ async def test_facts_and_record_refs(api, ctx, classifier):
     assert (
         facts["credit_field_filled"] is True and facts["first_message_sec"]["keyword"] is not None
     )
+    # 평가자 사실(결정 A1): 칸 결정 경로와 지원자 메시지별 답한 대상·먼저 정해진 칸
+    assert [d["phase"] for d in facts["decisions"]] == [s["phase"] for s in facts["slot_records"]]
+    assert {d["path"] for d in facts["decisions"]} == {"candidate_confirm"}
+    problem = next(d for d in facts["decisions"] if d["phase"] == "problem")
+    assert problem["filled_by"] == "candidate" and problem["timeout_rule"] is None
+    first, second = facts["message_facts"]
+    assert first["reply_to"] is None and first["decided_before"] == []
+    assert second["reply_to"] is not None  # 직전 AI 동료(서지안) 초대 메시지
+    assert all(f["paste_suspect"] is None for f in facts["message_facts"])
 
     report_refs = {("slot", "problem"), ("proposal_submit", str(sess.id))}
     record = (

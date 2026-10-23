@@ -7,7 +7,6 @@ from report_worker.evaluate import (
     CAPPED_MARK,
     FAILED_SUMMARY,
     NOT_FIRED_MARK,
-    REWRITE_FALLBACK,
     EvalContext,
     RefIndex,
     element_level,
@@ -40,6 +39,24 @@ def element_rubric(element: str, rubric=RUBRIC) -> dict:
     return next(e for e in rubric["elements"] if e["element"] == element)
 
 
+def set_refs(row: dict, refs: list) -> None:
+    """판단 호출 출력의 근거를 바꾼다. 문자열만 주면 장면 id 없는 근거(핵심 장면)."""
+    row["evidence"] = list(refs)
+
+
+def evidence_refs(row: dict) -> list:
+    return [e["ref"] if isinstance(e, dict) else e for e in row["evidence"]]
+
+
+def tag_scene(output: dict, scene: str) -> None:
+    """지원자 메시지 근거마다 장면 id를 단다."""
+    for row in output["dimensions"]:
+        row["evidence"] = [
+            {"ref": e["ref"], "scene": scene} if e["ref"].startswith("msg:") else e
+            for e in row["evidence"]
+        ]
+
+
 def dim(output: dict, dimension_id: str) -> dict:
     return next(d for d in output["dimensions"] if d["dimension_id"] == dimension_id)
 
@@ -64,19 +81,19 @@ def test_fixture_outputs_pass_validation():
 
 
 def _no_evidence(o):
-    dim(o, "listen_understand")["evidence_refs"] = []
+    set_refs(dim(o, "listen_understand"), [])
 
 
 def _level4_one_unit(o):
-    dim(o, "listen_engage")["evidence_refs"] = ["msg:m-15", "msg:m-13"]  # 지원자 1 + 맥락 1
+    set_refs(dim(o, "listen_engage"), ["msg:m-15"])  # 지원자 근거 단위 1개
 
 
 def _context_only(o):
-    dim(o, "listen_understand")["evidence_refs"] = ["msg:m-13", "msg:m-16"]  # AI 메시지만
+    set_refs(dim(o, "listen_understand"), ["msg:m-13", "msg:m-16"])  # AI 메시지만
 
 
 def _other_session(o):
-    dim(o, "listen_understand")["evidence_refs"] = ["msg:other-session-m-99"]
+    set_refs(dim(o, "listen_understand"), ["msg:other-session-m-99"])
 
 
 def _level_and_reason(o):
@@ -113,9 +130,8 @@ CASES = [(d, f) for d, fs in BROKEN.items() for f in fs]
 async def test_invalid_dimension_retries_element_once_then_evaluate_failed(dimension_id, breaker):
     bad = copy.deepcopy(element_outputs()["listening"])
     breaker(bad)
-    rewritten = {"summary": "다시 쓴 요약"}
-    rows, summary, llm, usage = await run("listening", bad, copy.deepcopy(bad), rewritten)
-    assert len(llm.calls) == 3  # 요소 단위 1회 재요청 + evaluate_failed로 요약 재작성 1회
+    rows, summary, llm, usage = await run("listening", bad, copy.deepcopy(bad))
+    assert len(llm.calls) == 2  # 요소 단위 1회 재요청(요약은 코드가 조립)
     assert "[재요청]" in llm.calls[1][2] and dimension_id in llm.calls[1][2]
     assert usage["element_retries"] == 1
     assert rows[dimension_id]["level"] is None
@@ -124,7 +140,7 @@ async def test_invalid_dimension_retries_element_once_then_evaluate_failed(dimen
     others = [r for d, r in rows.items() if d != dimension_id]
     assert all(r["no_record_reason"] != "evaluate_failed" for r in others)  # 나머지는 재요청 결과
     assert summary["dimension_count"] == 4 and summary["no_record_count"] == 1
-    assert "[요약 재작성]" in llm.calls[2][2] and summary["summary"] == "다시 쓴 요약"
+    assert "기록 없음: 이해 확인(판단 보류" in summary["summary"]
 
 
 async def test_level4_with_one_candidate_unit_is_capped_to_3_medium_not_rejected():
@@ -133,11 +149,11 @@ async def test_level4_with_one_candidate_unit_is_capped_to_3_medium_not_rejected
     row = dim(out, "listen_engage")
     row["level"], row["confidence"] = 4, "high"
     rows, _, llm, usage = await run("listening", out)
-    assert len(llm.calls) == 2 and usage["element_retries"] == 0  # 상한 적용 → 요약 재작성 1회
+    assert len(llm.calls) == 1 and usage["element_retries"] == 0  # 상한 적용(거부 아님)
     capped = rows["listen_engage"]
     assert capped["level"] == 3 and capped["confidence"] == "medium"
     assert capped["rationale"].endswith(CAPPED_MARK)
-    assert capped["evidence_refs"] == ["msg:m-15", "msg:m-13"]
+    assert capped["evidence_refs"] == ["msg:m-15"]
 
 
 async def test_retry_prompt_names_dimension_and_reject_reason():
@@ -164,22 +180,27 @@ async def test_retry_result_replaces_first_output():
     _no_evidence(bad)
     good = element_outputs()["listening"]
     rows, summary, llm, _ = await run("listening", bad, good)
-    assert len(llm.calls) == 2
+    assert len(llm.calls) == 2  # 첫 출력·재요청
     assert all(r["no_record_reason"] is None for r in rows.values())
-    assert summary["summary"] == good["summary"]
+    assert dim(good, "listen_understand")["summary_line"] in summary["summary"]
 
 
-async def test_valid_output_calls_once():
-    rows, summary, llm, usage = await run("listening", element_outputs()["listening"])
+async def test_valid_output_calls_once_and_summary_is_assembled_from_rows():
+    out = element_outputs()["listening"]
+    rows, summary, llm, usage = await run("listening", out)
     assert len(llm.calls) == 1 and usage["element_retries"] == 0
+    # 수준이 높은 차원부터 각 행의 summary_line(행 순서 유지), 다른 내용 없음
+    lines = [dim(out, d)["summary_line"] for d in ("listen_engage", "listen_acknowledge")]
+    assert summary["summary"].startswith(f"{lines[0]}. {lines[1]}.")
+    assert summary["summary"].endswith(dim(out, "listen_understand")["summary_line"] + ".")
     assert summary["level"] == 4  # (4+3+4+4)/4 = 3.75 → 4
 
 
 async def test_confidence_over_cap_is_clamped_not_rejected():
     out = copy.deepcopy(element_outputs()["listening"])
     dim(out, "listen_understand")["confidence"] = "high"  # 근거 1개 → 최대 medium
-    rows, _, llm, _ = await run("listening", out)
-    assert len(llm.calls) == 1
+    rows, _, llm, usage = await run("listening", out)
+    assert usage["element_retries"] == 0
     assert rows["listen_understand"]["confidence"] == "medium"
     assert rows["listen_understand"]["level"] == 3
     assert rows["listen_understand"]["rationale"] == dim(out, "listen_understand")["rationale"]
@@ -194,41 +215,54 @@ async def test_core_card_not_fired_caps_low_and_one_persuasion_card_caps_medium(
         o for o in record["observations"] if o["card_id"] != "listening_pressure"
     ]
     out = copy.deepcopy(element_outputs()["listening"])
-    for row in out["dimensions"]:
-        row["rationale"] += " 보조 장면에서 관찰함."
+    tag_scene(out, "session")  # 보조 장면(세션 전체) 근거로 판단
     listening, _, _, _ = await run("listening", out, record=record)
     assert listening["listen_engage"]["level"] == 4
     assert listening["listen_engage"]["confidence"] == "low"
     persuasion, _, _, _ = await run("persuasion", element_outputs()["persuasion"], record=record)
-    assert persuasion["pers_convergence"]["confidence"] == "medium"  # 설득 카드 하나만 발동
+    # 핵심 1 + 보조 1, 근거 단위 2개: 설득 카드 하나만 발동해 최대 medium
+    assert persuasion["pers_reasoning"]["confidence"] == "medium"
+    # 지원자 메시지 근거가 모두 보조 장면이면 최대 low
+    assert persuasion["pers_convergence"]["confidence"] == "low"
 
 
 async def test_credit_record_counts_contribution_reference():
     out = copy.deepcopy(element_outputs()["honesty"])
-    assert dim(out, "hon_credit_record")["evidence_refs"] == [
+    assert evidence_refs(dim(out, "hon_credit_record")) == [
         "proposal:idea_credit",
         "contribution:opt-pb-p2",
     ]
-    rows, _, llm, _ = await run("honesty", out)
-    assert len(llm.calls) == 1 and rows["hon_credit_record"]["level"] == 4
+    rows, _, llm, usage = await run("honesty", out)
+    assert usage["element_retries"] == 0 and rows["hon_credit_record"]["level"] == 4
     # 다른 차원에서는 contribution이 개수에 들지 않는다
-    dim(out, "hon_process_truth")["evidence_refs"] = ["contribution:opt-pb-p2"]
+    set_refs(dim(out, "hon_process_truth"), ["contribution:opt-pb-p2"])
     rows, _, llm, _ = await run("honesty", out, copy.deepcopy(out))
     assert rows["hon_process_truth"]["no_record_reason"] == "evaluate_failed"
 
 
-async def test_forbidden_summary_retries_then_fixed_sentence():
+async def test_forbidden_summary_line_retries_like_rationale():
     out = copy.deepcopy(element_outputs()["listening"])
-    out["summary"] = "이 지원자는 합격 수준이다."
-    rows, summary, llm, _ = await run("listening", out, copy.deepcopy(out))
-    assert len(llm.calls) == 2
-    assert summary["summary"] == FAILED_SUMMARY
-    assert all(r["no_record_reason"] != "evaluate_failed" for r in rows.values())
+    dim(out, "listen_engage")["summary_line"] = "합격 수준으로 응답함"
+    rows, summary, llm, usage = await run("listening", out, copy.deepcopy(out))
+    assert len(llm.calls) == 2 and usage["element_retries"] == 1
+    assert rows["listen_engage"]["no_record_reason"] == "evaluate_failed"
+    assert "합격" not in summary["summary"]
+
+
+async def test_missing_summary_line_falls_back_to_first_rationale_sentence():
+    out = copy.deepcopy(element_outputs()["listening"])
+    row = dim(out, "listen_engage")
+    del row["summary_line"]
+    row["rationale"] = "압박마다 상대 근거를 받아 답함. 앵커 4에 맞음."
+    _, summary, _, usage = await run("listening", out)
+    assert usage["element_retries"] == 0
+    assert summary["summary"].startswith("압박마다 상대 근거를 받아 답함.")
+    assert "앵커 4" not in summary["summary"]
 
 
 async def test_unparseable_twice_fails_every_dimension():
     rows, summary, llm, _ = await run("listening", "not json", "{broken")
-    assert len(llm.calls) == 2
+    assert len(llm.calls) == 2  # 판단 1회 + 재요청 1회
     assert {r["no_record_reason"] for r in rows.values()} == {"evaluate_failed"}
     assert summary["level"] is None and summary["summary"] == FAILED_SUMMARY
 
@@ -272,39 +306,24 @@ async def test_partially_delivered_core_card_counts_as_not_fired():
     assert engage["rationale"] == dim(out, "listen_engage")["rationale"] + NOT_FIRED_MARK
 
 
-async def test_partially_delivered_core_card_with_support_mark_caps_low():
+async def test_partially_delivered_core_card_with_aux_scene_evidence_caps_low():
     out = copy.deepcopy(element_outputs()["listening"])
-    for row in out["dimensions"]:
-        row["rationale"] += " 보조 장면에서 관찰함."
+    tag_scene(out, "session")  # 보조 장면(세션 전체) 근거로 판단
     rows, _, _, _ = await run("listening", out, record=_partial_listening_card())
     assert rows["listen_engage"]["level"] == 4
     assert rows["listen_engage"]["confidence"] == "low"
 
 
-async def test_summary_rewritten_once_only_for_changed_element():
-    # 경청: 핵심 카드 미발생 → 차원이 바뀌어 요약 재작성 1회. 입력은 이 요소의 최종 차원 행뿐
-    record = _without_listening_card()
-    _, summary, llm, _ = await run(
-        "listening", element_outputs()["listening"], {"summary": "새 요약"}, record=record
+async def test_summary_lists_no_record_rows_by_state_without_llm():
+    # 경청: 핵심 카드 미발생 → event_not_fired로 바뀐 행은 요약에서 기록 없음으로만 보인다
+    out = element_outputs()["listening"]
+    _, summary, llm, _ = await run("listening", out, record=_without_listening_card())
+    assert len(llm.calls) == 1
+    assert summary["summary"] == (
+        "기록 없음: 응답성(이벤트 미발생), 이해 확인(이벤트 미발생), "
+        "타당성 인정(이벤트 미발생), 존중하는 반대(이벤트 미발생)."
     )
-    assert len(llm.calls) == 2 and summary["summary"] == "새 요약"
-    rewrite = llm.calls[1][2]
-    assert "[요약 재작성]" in rewrite and "event_not_fired" not in rewrite
-    assert "이벤트 미발생" in rewrite and "[세션 기록]" not in rewrite
-    assert element_outputs()["persuasion"]["summary"] not in rewrite
-    # 배려: 차원이 바뀌지 않음 → 추가 호출 없이 모델 요약 그대로
-    out = element_outputs()["inclusion"]
-    _, summary, llm, _ = await run("inclusion", out, record=record)
-    assert len(llm.calls) == 1 and summary["summary"] == out["summary"]
-
-
-@pytest.mark.parametrize("reply", ["not json", {"summary": ""}, {"summary": "합격 수준입니다."}])
-async def test_summary_rewrite_failure_uses_fixed_sentence(reply):
-    _, summary, llm, _ = await run(
-        "listening", element_outputs()["listening"], reply, record=_without_listening_card()
-    )
-    assert len(llm.calls) == 2  # 재작성은 1회만, 다시 요청하지 않음
-    assert summary["summary"] == REWRITE_FALLBACK
+    assert not any(dim(out, d)["summary_line"] in summary["summary"] for d in ("listen_engage",))
 
 
 def test_element_level_rounds_half_up_and_null_when_no_record():
@@ -319,14 +338,14 @@ def test_element_level_rounds_half_up_and_null_when_no_record():
 
 
 async def test_numeric_msg_refs_are_fixed_when_session_has_m_prefixed_id():
-    candidate = next(m["id"] for m in RECORD["messages"] if m["sender"] == "candidate")
-    assert candidate.startswith("m-")
+    candidate = "m-15"  # 경청 장면 구간 안 지원자 메시지
+    assert next(m for m in RECORD["messages"] if m["id"] == candidate)["sender"] == "candidate"
     output = copy.deepcopy(element_outputs()["listening"])
     row = output["dimensions"][0]
     row.update(level=3, no_record_reason=None, confidence="medium")
-    row["evidence_refs"] = [f"msg:{candidate[2:]}"]
-    rows, _, llm, _ = await run("listening", output)
-    assert len(llm.calls) == 1  # 재요청 없이 통과
+    set_refs(row, [f"msg:{candidate[2:]}"])
+    rows, _, llm, usage = await run("listening", output)
+    assert usage["element_retries"] == 0  # 재요청 없이 통과
     assert rows[row["dimension_id"]]["evidence_refs"] == [f"msg:{candidate}"]
 
 
@@ -335,9 +354,9 @@ async def test_fixed_numeric_ref_to_ai_message_does_not_count_as_evidence():
     output = copy.deepcopy(element_outputs()["listening"])
     row = output["dimensions"][0]
     row.update(level=3, no_record_reason=None, confidence="medium")
-    row["evidence_refs"] = [f"msg:{ai[2:]}"]  # 고쳐져도 AI 메시지라 근거 단위가 아님
+    set_refs(row, [f"msg:{ai[2:]}"])  # 고쳐져도 AI 메시지라 근거 단위가 아님
     rows, _, llm, _ = await run("listening", output, output)
-    assert len(llm.calls) == 3  # 검증 실패 → 요소 재요청 1회, evaluate_failed → 요약 재작성 1회
+    assert len(llm.calls) == 2  # 검증 실패 → 요소 재요청 1회
     assert rows[row["dimension_id"]]["no_record_reason"] == "evaluate_failed"
 
 
@@ -361,7 +380,8 @@ def test_with_refs_exposes_all_four_reference_kinds():
 
     record = {**RECORD, "contributions": CONTRIBUTIONS}
     shown = with_refs(record)
-    assert all(m["ref"] == f"msg:{m['id']}" for m in shown["messages"])
+    for m in shown["messages"]:  # 지원자 메시지에만 ref(AI·시스템 메시지는 근거가 아니다)
+        assert m.get("ref") == (f"msg:{m['id']}" if m["sender"] == "candidate" else None)
     assert all(s["ref"] == f"slot:{s['phase']}" for s in shown["slots"])
     assert shown["proposal"]["section_refs"]["idea_credit"] == "proposal:idea_credit"
     assert all(

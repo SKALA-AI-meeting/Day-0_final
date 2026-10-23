@@ -20,10 +20,10 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 | GET | /internal/sessions/{id}/observations | | [{observation_id, card_id, element, phase, fired_at, t_min, trigger_message_id, delivered: bool}] (`delivered`는 `session_cards` 기준) | assessment-mcp, 워커 |
 | GET | /internal/sessions/{id}/transcript_span?message_id=&before=5&after=3 | | {target: Message, before: [Message], after: [Message]}. room 메시지만, meta·intent 포함. 기본 앞 5·뒤 3. 리포트 근거의 앞뒤 맥락 표시용(평가 입력을 자르는 용도가 아님) | assessment-mcp |
 | GET | /internal/sessions/{id}/contributions | | Contributions(아래) | assessment-mcp |
-| GET | /internal/sessions/{id}/rubric | | {rubric_version, elements: [{element, name, dimensions: [{dimension_id, name, definition, core_cards: [card_id], levels: [{level: 1~5, anchor, reviewer_hint}]}]}], no_record_reasons: [{code, label}], cards: [{card_id, element, stage_id, window: {start: stage_start∣card_message, end: "stage_end:<phase>"∣submit, label}}]} (`positions.scenario`에 복사된 BARS 척도, 5요소·19차원, 형식은 [product/rubric.md](../product/rubric.md). `window`는 `cards.yaml` 값 그대로이며 관찰 창이지 평가 입력을 자르는 경계가 아니다) | assessment-mcp |
+| GET | /internal/sessions/{id}/rubric | | {rubric_version, elements: [{element, name, dimensions: [{dimension_id, name, definition, core_cards: [card_id], decision_timing?: before∣after∣null, aux_scenes?: [{id, label, phases?: [phase], cards?: [card_id], fields?: [proposal field]}], levels: [{level: 1~5, anchor, reviewer_hint}]}]}], no_record_reasons: [{code, label}], cards: [{card_id, element, stage_id, window: {start: stage_start∣card_message, end: "stage_end:<phase>"∣submit, label}}]} (`positions.scenario`에 복사된 BARS 척도, 5요소·19차원, 형식은 [product/rubric.md](../product/rubric.md). `window`는 `cards.yaml` 값 그대로이며 관찰 창이지 평가 입력을 자르는 경계가 아니다. `decision_timing`은 핵심 카드 단계의 칸 결정 전·후만 보는 차원, `aux_scenes`는 차원의 보조 장면(단계·카드 창)이다. 둘 다 `rubric.yaml` 값이고 워커가 장면을 계산할 때 쓴다. 이 값이 생기기 전에 복사된 척도에는 키가 없고, 그 채용 건은 결정 전후 자르기·보조 장면 없이 평가한다) | assessment-mcp |
 | POST | /internal/sessions/{id}/evaluations | `save_evaluation` 입력에서 session_id를 뺀 본문(아래 EvaluationSave) | {run_id, existing: bool, saved: int}. `evaluation_runs` 1행 + `evaluations` 차원 행을 **한 트랜잭션**으로 저장. (session_id, run_id)에 행이 있으면 저장하지 않고 `existing: true`(재시도 이어하기). api 검증 실패 422 `invalid_input`(아래 "검증 경계") | assessment-mcp |
 | GET | /internal/sessions/{id}/evaluations?run_id= | | {run_id, rubric_version, prompt_versions, model, elements: [ElementSummary], dimensions: [DimensionEvaluation], has_failed: bool, created_at}. run_id 생략 시 최신 실행. 요소 요약이 함께 오므로 저장 직후 장애가 나도 재실행이 체크포인트 없이 복구한다 | 워커 |
-| GET | /internal/sessions/{id}/facts | | {<지표 id>: 값} ([product/rubric.md](../product/rubric.md) 6장 사실 지표의 규칙 계산 값. 평가 결과를 쓰지 않음) | assessment-mcp, 워커 |
+| GET | /internal/sessions/{id}/facts | | {<지표 id>: 값} ([product/rubric.md](../product/rubric.md) 6장 사실 지표의 규칙 계산 값. 평가 결과를 쓰지 않음). 평가자 사실 `decisions`·`message_facts`(아래 SessionRecord)를 함께 준다 | assessment-mcp, 워커 |
 | GET | /internal/sessions/{id}/slots | | [slot 전체 필드 + support] | assessment-mcp, 워커 |
 | GET | /internal/sessions/{id}/assistant_calls | | [{id, request_message_id, response_message_id, request, response, cited_material_ids, created_at}]. `request`·`response`는 어시스턴트 대화 원문(text)이고 워커가 Report `ai_usage`의 `request_quote`·`response_quote`를 여기서 만든다(내부 messages는 토론방만 준다) | 워커 |
 | POST | /internal/sessions/{id}/report/draft | {content, usage?} | {status: "report_ready"} (멱등) | 워커 |
@@ -74,13 +74,19 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
  "slots":[{"phase":"problem","value":"...","option_id":"...","filled_by":"candidate","resolution":"consensus","support":[],"t_min":28.0}],
  "proposal":{"sections":{"idea_credit":"..."},"submitted_at":"...","auto_submitted":false},
  "observations":[{"card_id":"listening_pressure","element":"listening","phase":"problem","t_min":13.0,"trigger_message_id":"...","delivered":true,"window":{"start_min":13.0,"end_min":28.0}}],
- "facts":{"message_count":{"total":24}},
+ "facts":{"message_count":{"total":24},
+          "decisions":[{"phase":"problem","option_id":"...","value":"...","t_min":28.0,"path":"timeout","filled_by":"p3","timeout_rule":null,
+                        "support":[],"candidate_backed":true,"candidate_option_adopted":true}],
+          "message_facts":[{"message_id":"...","addressed_to":["p2"],"reply_to":"...","decided_before":["keyword"],"paste_suspect":null}]},
  "contributions":{"options":[],"slots":[]}}
 ```
 
 - `messages`는 room 채널 전체(시간순), 지원자 메시지에만 `origin`·`intent`. 어시스턴트 채널은 넣지 않고 `facts.assistant_calls`로만 보인다.
 - `observations[].window`는 카드의 `window` 규칙([product/scenario.md](../product/scenario.md) 4.2)으로 계산한 핵심 장면 위치다. 입력 경계가 아니다. `trigger_message_id`는 카드 첫 발언(장면을 찾는 용도), `delivered`는 담당 화자 전원 게시 여부.
 - `seats[].persona_type`은 장면을 찾는 용도로만 넣는다(관리자·워커 전용).
+- `facts.decisions`·`facts.message_facts`는 평가자 사실(결정 A1, [product/rubric.md](../product/rubric.md) 6장)이다. api `facts.evaluator_facts`가 이 기록 모양의 칸·메시지·Contributions와 DB의 어시스턴트 답 원문·카드 기준안(`session_cards.locked_option_id`)으로 계산한다. `decisions[].path`: `candidate_confirm`∣`ai_consensus_fill`∣`timeout`. `timeout_rule`은 칸에 적용 규칙이 기록돼 있을 때만 값이 있다(없으면 null). `message_facts`는 지원자 메시지마다 한 행이고 `reply_to`는 메시지 id, `paste_suspect`는 `{call_id, overlap}` 또는 null.
+- `decided_before`는 메시지 단계보다 앞 단계의 확정 칸이다(칸 확정이 단계를 넘긴다). `paste_suspect`의 앞뒤는 반올림 없는 초로 비교한다.
+- 워커는 이 기록과 척도로 차원별 핵심·보조 장면과 장면마다의 지원자 메시지(`report_worker/scenes.py`, 메시지 저장 순서와 단계로 계산)를 계산해 평가 프롬프트 `[사실]` 블록으로 주고, 같은 값으로 출력을 검증한다(아래 "검증 경계").
 
 ### EvaluationSave (`save_evaluation` 입력)
 
@@ -88,20 +94,20 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 
 ```json
 {"session_id":"...","run_id":"...","rubric_version":"...","prompt_versions":{"common":"<hash>","persuasion":"<hash>","listening":"<hash>","inclusion":"<hash>","flexibility":"<hash>","honesty":"<hash>"},"model":"...",
- "dimensions":[{"dimension_id":"listen_engage","level":4,"evidence_refs":["msg:<m1>","msg:<m2>","msg:<m0>"],
+ "dimensions":[{"dimension_id":"listen_engage","level":4,"evidence_refs":["msg:<m1>","msg:<m2>"],
                 "rationale":"세 번의 압박 중 두 번은 상대 근거를 받아 답함(앵커 4).","confidence":"high"},
                {"dimension_id":"listen_civility","level":null,"no_record_reason":"no_activity","evidence_refs":[],
                 "rationale":"핵심 창 안 지원자 메시지 없음.","confidence":null}],
  "elements":[{"element":"listening","level":4,"summary":"...","dimension_count":4,"no_record_count":1}]}
 ```
 
-평가 에이전트의 요소 하나 출력 예시(자리표시 값, 요소 level = (4+3+4)/3 = 3.67 → 4, `no_record_count` = 1):
+워커가 만든 요소 하나의 결과 예시(자리표시 값, 요소 level = (4+3+4)/3 = 3.67 → 4, `no_record_count` = 1. 판단 호출은 차원 행마다 `result`·`evidence: [{ref, scene}]`·`summary_line`을 내고, 워커가 `evidence_refs` 문자열로 바꿔 저장하며 `summary`는 최종 차원 행에서 코드가 조립한다):
 
 ```json
 {"element":"listening","level":4,"summary":"압박에 대체로 내용으로 응답하고 차분했으나 상대 근거 인정은 형식적이었습니다. 이해 확인 차원은 판단할 장면이 없었습니다.",
  "dimension_count":4,"no_record_count":1,
  "dimensions":[
-  {"dimension_id":"listen_engage","level":4,"evidence_refs":["msg:<m1>","msg:<m2>","msg:<m0>"],
+  {"dimension_id":"listen_engage","level":4,"evidence_refs":["msg:<m1>","msg:<m2>"],
    "rationale":"세 번의 압박 중 두 번은 상대 근거를 받아 답함(앵커 4). 보조 장면과 같은 방향.","confidence":"high"},
   {"dimension_id":"listen_understand","level":null,"no_record_reason":"not_applicable","evidence_refs":[],
    "rationale":"창 안 메시지가 모두 다른 참여자·주제를 향해 이해 확인을 볼 장면이 없음.","confidence":null},
@@ -124,17 +130,17 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 |---|---|---|
 | 본문 스키마·타입, 19개 차원이 빠짐없이 한 행씩(중복·없는 id 없음), level 1~5와 `no_record_reason` 배타·사유 코드 값, 기록 없음이면 confidence null, 요소 5행 | api(저장 전) | 422 `invalid_input`, 저장 안 함 |
 | 모든 `evidence_refs`가 형식 4종이고 **같은 세션의 실제 행** | api(저장 전) | 422 `invalid_input` |
-| LLM 출력 형식 오류(파싱·스키마, 위 api 항목과 같은 규칙을 저장 전에 미리 봄), level이 있는데 지원자 근거 단위 0개([product/rubric.md](../product/rubric.md) 2.2) | 워커(저장 전) | 그 **요소**를 차원별 거부 사유와 함께 1회 다시 요청 → 그래도 실패한 차원만 `evaluate_failed`(`rationale`에 사유 코드) |
+| LLM 출력 형식 오류(파싱·스키마, 위 api 항목과 같은 규칙을 저장 전에 미리 봄, `level`과 `no_record_reason` 동시), level이 있는데 지원자 근거 단위 0개([product/rubric.md](../product/rubric.md) 2.2), 사실 모순(핵심 장면에 지원자 메시지가 있는데 `no_activity`, 핵심 장면이 있는데 `event_not_fired`, 지원자가 아닌 메시지 근거, 근거에 단 장면 id가 그 차원에 없거나 그 메시지가 그 장면에 들지 않음, 결정 후 차원의 핵심 장면 근거가 결정 전 메시지. [product/rubric.md](../product/rubric.md) 7.3) | 워커(저장 전) | 그 **요소**를 차원별 거부 사유(사실 모순이면 어긴 사실과 장면별 지원자 메시지 포함)와 함께 1회 다시 요청 → 재요청에서 새로 실패한 차원은 첫 출력의 통과 행, 두 번 모두 실패한 차원만 `evaluate_failed`(`rationale`에 사유 코드: `format`·`missing`·`duplicate`·`forbidden`·`ref_not_in_session`·`no_candidate_evidence`·`activity_present`·`card_fired`·`peer_evidence`·`unknown_scene`·`out_of_scene`·`before_decision`) |
 | level 4·5인데 서로 다른 지원자 근거 단위 1개([product/rubric.md](../product/rubric.md) 2.2) | 워커 | 거부하지 않고 level 3·confidence 최대 medium으로 깎는다, `rationale` 끝에 상한 적용 표시 |
 | 확신도 상한([product/rubric.md](../product/rubric.md) 2.4) | 워커 | 거부하지 않고 상한으로 깎는다(clamp), `rationale`은 그대로 |
-| 핵심 카드가 하나도 발동하지 않았는데 `rationale`에 "보조 장면" 표시 없이 낸 수준([product/rubric.md](../product/rubric.md) 2.4) | 워커 | 거부하지 않고 `event_not_fired`(level·confidence null)로 바꾼다, `rationale` 끝에 변환 표시 |
-| 위 검증으로 차원 행이 바뀐 요소의 `summary` | 워커 | 최종 차원 행만 입력으로 1회 다시 쓴다(실패하면 고정 문장, 재요청 없음). 이 호출도 `usage.llm_calls`에 든다 |
+| 핵심 장면이 없는데(핵심 카드 미발생 등) 보조 장면 id를 단 지원자 근거 없이 낸 수준([product/rubric.md](../product/rubric.md) 2.4) | 워커 | 거부하지 않고 `event_not_fired`(level·confidence null)로 바꾼다, `rationale` 끝에 변환 표시 |
+| 요소 `summary` | 워커 | LLM을 다시 부르지 않고 최종 차원 행에서 결정적으로 조립한다(결정 A2): 수준 높은 차원부터 그 행의 `summary_line`(없으면 그 행 `rationale`의 첫 문장), 이어 "기록 없음: <이름>(<사유 표시>)". `summary_line`은 `rationale`과 같은 금지어 검사를 받는다. 모든 차원이 `evaluate_failed`면 고정 문장 |
 | 요소 level = 차원 평균 반올림(.5 올림) | 워커가 계산해 채움 | — (모델 값을 쓰지 않음) |
 | `rationale`·`summary` 금지어(합격·불합격·순위·추천·점수) | 워커 | 그 요소 1회 재요청 → 실패 차원 `evaluate_failed`, 실패한 summary는 고정 문장 |
 
 차원 행은 `evaluations`, 실행 메타와 요소 요약(`elements`)은 `evaluation_runs`에 한 트랜잭션으로 저장한다. draft는 `GET /evaluations`에서 둘을 함께 읽어 만든다(체크포인트에 의존하지 않음).
 
-**평가 호출 규칙**: 요소마다 별도 LLM 호출(`MODEL_EVALUATOR`, temperature 0~0.2), 다른 요소의 결과는 입력에 넣지 않는다. 재요청은 **요소 단위 1회**(형식 오류·근거 부재일 때)이고, 그래도 실패한 차원은 `level: null, no_record_reason: "evaluate_failed"`(화면 문구는 [product/rubric.md](../product/rubric.md) 5장)로 저장한다. **LLM 전송 실패·타임아웃은 저장하지 않고** 예외로 올려 큐 재시도(`attempt+1`)에 맡긴다. 워커는 근거를 고쳐 쓰지 않는다. 차원 판단을 바꾸는 예외는 근거 1개인 수준 4·5의 상한(수준 3·확신도 최대 medium), 확신도 clamp, 핵심 카드 미발생 변환(`event_not_fired`)뿐이고, 그로 바뀐 요소의 `summary`만 위 표대로 다시 쓴다.
+**평가 호출 규칙**: 요소마다 별도 LLM 호출(`MODEL_EVALUATOR`, temperature 0~0.2), 다른 요소의 결과는 입력에 넣지 않는다. 재요청은 **요소 단위 1회**(형식 오류·근거 부재·사실 모순일 때)이고, 그래도 실패한 차원은 `level: null, no_record_reason: "evaluate_failed"`(화면 문구는 [product/rubric.md](../product/rubric.md) 5장)로 저장한다. **LLM 전송 실패·타임아웃은 저장하지 않고** 예외로 올려 큐 재시도(`attempt+1`)에 맡긴다. 워커는 근거를 고쳐 쓰지 않는다. 차원 판단을 바꾸는 예외는 근거 1개인 수준 4·5의 상한(수준 3·확신도 최대 medium), 확신도 clamp, 핵심 카드 미발생 변환(`event_not_fired`)뿐이다. 판단 호출의 출력은 `{dimensions: [{dimension_id, result: 1~5 ∣ 기록 없음 사유 코드, evidence: [{ref, scene?}], context_refs?, rationale, summary_line?, confidence}]}`(요소 요약 없음. `scene`은 `[사실]`의 장면 id이고 없으면 핵심 장면. `context_refs`는 장면을 만든 AI 동료·시스템 메시지 표시로 저장하지 않는다. 예전 형식 `level`·`no_record_reason`·`evidence_refs` 문자열도 읽고, 둘 다 있는 행은 형식 오류)이고, 요소 `summary`는 위 표대로 최종 차원 행에서 코드가 조립한다. 평가 LLM 호출은 요소마다 1회(재요청 시 2회)다.
 
 ## 의도 분류 출력 스키마
 

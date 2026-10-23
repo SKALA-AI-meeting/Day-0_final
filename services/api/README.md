@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 213개(live 3개 포함, `make test`는 live를 뺀다).
+총 216개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -367,6 +367,14 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_ai_only_majority_is_not_consensus`
 - `test_support_for_other_option_replaces_and_later_oppose_withdraws`
 - `test_timeout_selection_most_then_candidate_then_first_then_default`
+
+</details>
+
+<details><summary><code>tests/test_evaluator_facts.py</code> (3)</summary>
+
+- `test_decision_path_and_candidate_adoption_follow_current_rule`
+- `test_message_facts_reply_target_and_decided_phases`
+- `test_paste_suspect_needs_prior_answer_and_long_overlap`
 
 </details>
 

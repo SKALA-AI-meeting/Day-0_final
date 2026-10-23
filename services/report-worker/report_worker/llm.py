@@ -129,46 +129,35 @@ class OpenAILLM:
 class FakeEvaluatorLLM:
     """`LLM_FAKE=1`: 호출 없이 요소 척도의 차원마다 고정 출력(비용 0, 키 불필요).
 
-    세션 기록에 지원자 메시지가 있으면 첫 지원자 메시지를 근거로 수준 3·medium, 없으면 no_activity.
-    요약 재작성 호출에는 고정 summary를 낸다.
-    워커 검증(근거 형식·개수·금지어)을 그대로 통과하고, 같은 입력에는 같은 출력을 낸다.
+    `[사실]`의 그 차원 핵심 장면에 지원자 메시지가 있으면 첫 메시지를 근거(장면 `core`)로 수준
+    3·medium, 핵심 장면이 없으면 event_not_fired, 있는데 지원자 메시지가 없으면 no_activity.
+    워커 검증(근거 형식·개수·금지어·사실 모순)을 그대로 통과하고, 같은 입력에는 같은 출력을 낸다.
     """
 
     model = "fake"
     temperature = 0.0
 
     async def complete(self, system: str, user: str) -> Completion:
-        # 호출 종류는 두 번째 블록 머리말로만 가린다(세션 본문에 같은 문자열이 있어도 섞이지 않게)
-        if user.split("\n\n", 2)[1].startswith("[요약 재작성]"):
-            out = {"summary": "고정 출력: 최종 차원 판단을 기준으로 다시 쓴 요약."}
-            return Completion(text=json.dumps(out, ensure_ascii=False))
-        scale = json.loads(user.split("[요소 척도]\n", 1)[1].split("\n\n[요소 지침]", 1)[0])
-        record = json.loads(user.split("[세션 기록]\n", 1)[1])
-        evidence = next(
-            (m["id"] for m in record.get("messages", []) if m.get("sender") == "candidate"), None
-        )
+        facts = json.loads(user.split("\n\n[사실]\n", 1)[1].split("\n\n[세션 기록]", 1)[0])
         dimensions = []
-        for dimension in scale["dimensions"]:
-            if evidence:
+        for dimension in facts["dimensions"]:
+            core = dimension["scenes"][0]
+            if core["candidate_messages"]:
                 row = {
                     "level": 3,
-                    "no_record_reason": None,
-                    "evidence_refs": [f"msg:{evidence}"],
-                    "rationale": "고정 출력: 지원자 메시지 한 건을 근거로 중간 수준으로 둔다.",
+                    "evidence": [{"ref": core["candidate_messages"][0], "scene": "core"}],
+                    "rationale": "고정 출력: 핵심 장면 지원자 메시지 한 건을 근거로 중간 수준.",
+                    "summary_line": "고정 출력: 핵심 장면 지원자 메시지 한 건으로 판단함",
                     "confidence": "medium",
                 }
             else:
+                reason = "no_activity" if core["exists"] else "event_not_fired"
                 row = {
                     "level": None,
-                    "no_record_reason": "no_activity",
-                    "evidence_refs": [],
-                    "rationale": "고정 출력: 지원자 행동 기록이 없다.",
+                    "no_record_reason": reason,
+                    "evidence": [],
+                    "rationale": "고정 출력: 핵심 장면에 지원자 메시지가 없다.",
                     "confidence": None,
                 }
             dimensions.append({"dimension_id": dimension["dimension_id"], **row})
-        out = {
-            "element": scale["element"],
-            "summary": "고정 출력: 지원자 메시지 기록을 기준으로 한 요약.",
-            "dimensions": dimensions,
-        }
-        return Completion(text=json.dumps(out, ensure_ascii=False))
+        return Completion(text=json.dumps({"dimensions": dimensions}, ensure_ascii=False))

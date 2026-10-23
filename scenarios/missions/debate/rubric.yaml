@@ -2,6 +2,9 @@
 # [초안] 차원 구성·정의·앵커·예시 발언은 사용자 검토 대상이다(rubric.md 머리말). 내용을 바꾸려면 rubric.md를 먼저 고친다.
 # api가 채용 건 생성 때 positions.scenario.rubric으로 복사하고 assessment-mcp get_rubric이 그 복사본을 내준다.
 # get_rubric의 cards[{card_id, element, window}]는 cards.yaml에서 만든다. no_record_reasons.priority는 겹칠 때 앞선 순서(1이 먼저).
+# aux_scenes는 관찰 장면 표의 보조 행을 단계(phases)·카드 창(cards)으로 옮긴 보조 장면 구간이다(id는 차원 안에서 고유).
+# fields는 그 보조 장면에서 근거로 달 수 있는 제출 기획안 필드(proposal:<field>)다.
+# decision_timing(before∣after)은 핵심 카드 단계의 칸 결정 전·후 행동만 보는 차원이다(rubric.md 3.4). 평가 워커가 핵심 장면을 그 칸 결정 전·후(메시지 단계)로 자른다.
 rubric_version: debate-bars-2026-10-21-draft1
 draft: true
 source: docs/product/rubric.md (정본). 이 파일의 문장은 정본 표와 글자 그대로 같아야 한다(tests/test_catalog.py가 검사).
@@ -20,6 +23,9 @@ elements:
     - persuasion_keyword
     - persuasion_solution
     core_scene: persuasion_keyword 창(키워드 단계 전체)과 persuasion_solution 창(반론 메시지 ~ 해결책 단계 끝)
+    aux_scenes:
+    - { id: problem_stage, label: "문제 상황 단계(기준안·압박에 맞서 자기 안을 근거로 설명)", phases: [problem] }
+    - { id: proposal_stage, label: "기획안 단계(근거 논리 다듬기, 결론 이유 정리)", phases: [proposal] }
     levels:
     - level: 5
       anchor: 두 창 모두에서 주장마다 이유를 붙이고, 이유가 둘 이상이거나 자료·사례로 구체화되어 주장과 분명히 연결된다
@@ -51,6 +57,9 @@ elements:
     - persuasion_keyword
     - persuasion_solution
     core_scene: persuasion_keyword 창(키워드 단계 전체)과 persuasion_solution 창(반론 메시지 ~ 해결책 단계 끝)
+    aux_scenes:
+    - { id: problem_stage, label: "문제 상황 단계(기준안·압박에 맞서 자기 안을 근거로 설명)", phases: [problem] }
+    - { id: proposal_stage, label: "기획안 단계(근거 논리 다듬기, 결론 이유 정리)", phases: [proposal] }
     levels:
     - level: 5
       anchor: 반론의 핵심 논점을 정확히 짚어 답하고 새 근거나 보완책으로 안을 강화한다. 두 창 또는 여러 반론에서 일관된다
@@ -82,6 +91,9 @@ elements:
     - persuasion_keyword
     - persuasion_solution
     core_scene: persuasion_keyword 창(키워드 단계 전체)과 persuasion_solution 창(반론 메시지 ~ 해결책 단계 끝)
+    aux_scenes:
+    - { id: problem_stage, label: "문제 상황 단계(기준안·압박에 맞서 자기 안을 근거로 설명)", phases: [problem] }
+    - { id: proposal_stage, label: "기획안 단계(근거 논리 다듬기, 결론 이유 정리)", phases: [proposal] }
     levels:
     - level: 5
       anchor: 경쟁 안의 논점을 정확히 요약·인정하고, 명시한 기준으로 자기 안과 비교해 차이를 설명한다
@@ -113,6 +125,9 @@ elements:
     - persuasion_keyword
     - persuasion_solution
     core_scene: persuasion_keyword 창(키워드 단계 전체)과 persuasion_solution 창(반론 메시지 ~ 해결책 단계 끝)
+    aux_scenes:
+    - { id: problem_stage, label: "문제 상황 단계(기준안·압박에 맞서 자기 안을 근거로 설명)", phases: [problem] }
+    - { id: proposal_stage, label: "기획안 단계(근거 논리 다듬기, 결론 이유 정리)", phases: [proposal] }
     levels:
     - level: 5
       anchor: 나온 안과 논점을 정리하고, 절충이나 비교 결론을 이유와 함께 제안해 다른 참여자의 생각을 묻는다
@@ -148,6 +163,9 @@ elements:
     core_cards:
     - listening_pressure
     core_scene: 첫 압박 메시지 ~ 문제 상황 단계 끝
+    aux_scenes:
+    - { id: persuasion_cards, label: "설득 카드 창(지원자 안의 약점 질문)", cards: [persuasion_keyword, persuasion_solution] }
+    - { id: session, label: "세션 전체(선택적 응답, 압박 뒤 강한결을 대하는 말)", phases: [keyword, problem, solution, proposal] }
     levels:
     - level: 5
       anchor: 압박이 반복돼도 매번 상대 발언의 내용에 직접 답하고, 다른 참여자 의견까지 이어받아 대화를 넓힌다
@@ -178,6 +196,9 @@ elements:
     core_cards:
     - listening_pressure
     core_scene: 첫 압박 메시지 ~ 문제 상황 단계 끝
+    aux_scenes:
+    - { id: persuasion_cards, label: "설득 카드 창(지원자 안의 약점 질문)", cards: [persuasion_keyword, persuasion_solution] }
+    - { id: session, label: "세션 전체(선택적 응답, 압박 뒤 강한결을 대하는 말)", phases: [keyword, problem, solution, proposal] }
     levels:
     - level: 5
       anchor: 상대 주장의 핵심과 근거를 정확히 되짚고, 확인 질문으로 이해를 검증한 뒤 자기 의견을 잇는다
@@ -208,6 +229,9 @@ elements:
     core_cards:
     - listening_pressure
     core_scene: 첫 압박 메시지 ~ 문제 상황 단계 끝
+    aux_scenes:
+    - { id: persuasion_cards, label: "설득 카드 창(지원자 안의 약점 질문)", cards: [persuasion_keyword, persuasion_solution] }
+    - { id: session, label: "세션 전체(선택적 응답, 압박 뒤 강한결을 대하는 말)", phases: [keyword, problem, solution, proposal] }
     levels:
     - level: 5
       anchor: 상대 의견의 구체적 타당점을 인정하고 그것을 자기 생각이나 절충에 실제로 반영한다
@@ -238,6 +262,9 @@ elements:
     core_cards:
     - listening_pressure
     core_scene: 첫 압박 메시지 ~ 문제 상황 단계 끝
+    aux_scenes:
+    - { id: persuasion_cards, label: "설득 카드 창(지원자 안의 약점 질문)", cards: [persuasion_keyword, persuasion_solution] }
+    - { id: session, label: "세션 전체(선택적 응답, 압박 뒤 강한결을 대하는 말)", phases: [keyword, problem, solution, proposal] }
     levels:
     - level: 5
       anchor: 세 번째 재반박에도 안에만 초점을 두고 차분하며, 교착을 상대를 존중하는 말로 다룬다(경계 설정, 다른 의견 듣기 제안)
@@ -273,6 +300,8 @@ elements:
     core_cards:
     - inclusion_silence
     core_scene: 머뭇거림 메시지 ~ 해결책 단계 끝(칸 확정 기록 포함)
+    aux_scenes:
+    - { id: session, label: "세션 전체(덜 말한 동료에게 묻기, 미표명자 확인, 발언 돌리기)", phases: [keyword, problem, solution, proposal] }
     levels:
     - level: 5
       anchor: 머뭇거림 직후 소극형 동료를 지명해 구체적으로 초대하고, 대답할 여유를 주며 다른 대화를 잠시 멈춘다
@@ -303,6 +332,8 @@ elements:
     core_cards:
     - inclusion_silence
     core_scene: 머뭇거림 메시지 ~ 해결책 단계 끝(칸 확정 기록 포함)
+    aux_scenes:
+    - { id: session, label: "세션 전체(덜 말한 동료에게 묻기, 미표명자 확인, 발언 돌리기)", phases: [keyword, problem, solution, proposal] }
     levels:
     - level: 5
       anchor: 소극형 동료의 안을 정확히 되짚고 질문하거나 확장해 다른 동료까지 그 안을 검토하게 만든다
@@ -332,6 +363,7 @@ elements:
     negative_signals: 미표명자 확인 없이 일부와만 결정, 미표명자의 발언을 막거나 끊음
     core_cards: []
     core_scene: 세션 전체(세 토론 단계의 확정 국면)
+    aux_scenes: []
     levels:
     - level: 5
       anchor: 두 단계 이상에서 확정 전에 의견을 안 낸 사람을 이름으로 확인하고 대답을 들은 뒤 진행한다
@@ -361,6 +393,7 @@ elements:
     negative_signals: 재촉·질책, 놀림, 대답 끊기, 유도형 질문, 공개적 소극성 지적
     core_cards: []
     core_scene: 세션 전체
+    aux_scenes: []
     levels:
     - level: 5
       anchor: 부담을 낮추는 말로 초대하고, 대답 뒤 인정하며 다시 말할 여지를 남긴다
@@ -396,6 +429,11 @@ elements:
     core_cards:
     - flexibility_majority
     core_scene: flexibility_majority 카드 시각 ~ 해결책 단계 끝
+    decision_timing: before
+    aux_scenes:
+    - { id: keyword_stage, label: "키워드 단계(채택 안 된 키워드에 대한 반응, 칸 확정 방식)", phases: [keyword] }
+    - { id: solution_stage, label: "해결책 단계(반론 뒤 자기 안 보완·통합)", phases: [solution] }
+    - { id: proposal_stage, label: "기획안 단계(제출본 problem 필드)", phases: [proposal], fields: [problem] }
     levels:
     - level: 5
       anchor: 다수안의 근거를 구체적으로 짚어 인정하고, 자기 안과 비교한 뒤 통합안 또는 근거 있는 입장 조정을 스스로 내놓는다
@@ -426,6 +464,9 @@ elements:
     core_cards:
     - flexibility_majority
     core_scene: flexibility_majority 카드 시각 ~ 해결책 단계 끝
+    aux_scenes:
+    - { id: keyword_stage, label: "키워드 단계(채택 안 된 키워드에 대한 반응, 칸 확정 방식)", phases: [keyword] }
+    - { id: proposal_stage, label: "기획안 단계(제출본 problem 필드)", phases: [proposal], fields: [problem] }
     levels:
     - level: 5
       anchor: 결정 방법을 제안하거나 반대 의견을 명시적으로 확인한 뒤, 자기 안이 아니어도 합의된 안으로 확정·정리한다
@@ -456,6 +497,10 @@ elements:
     core_cards:
     - flexibility_majority
     core_scene: flexibility_majority 카드 시각 ~ 해결책 단계 끝
+    decision_timing: after
+    aux_scenes:
+    - { id: keyword_decided, label: "키워드 결정 뒤 문제 상황 단계(채택 안 된 키워드에 대한 반응)", phases: [problem] }
+    - { id: proposal_stage, label: "기획안 단계(해결책 결정 뒤, 제출본 problem 필드)", phases: [proposal], fields: [problem] }
     levels:
     - level: 5
       anchor: 결과를 분명히 받아들이고 자기 안의 쓸 만한 요소를 결정된 안에 연결해 팀이 쓸 수 있게 넘긴다. 재론 없음
@@ -486,6 +531,10 @@ elements:
     core_cards:
     - flexibility_majority
     core_scene: flexibility_majority 카드 시각 ~ 해결책 단계 끝
+    decision_timing: after
+    aux_scenes:
+    - { id: keyword_decided, label: "키워드 결정 뒤 문제 상황 단계(채택 안 된 키워드에 대한 반응)", phases: [problem] }
+    - { id: proposal_stage, label: "기획안 단계(해결책 결정 뒤, 제출본 problem 필드)", phases: [proposal], fields: [problem] }
     levels:
     - level: 5
       anchor: 결정된 문제를 전제로 해결책을 근거와 함께 내고, 다른 참여자 안과 연결하거나 논의를 정리해 결론으로 이끈다
@@ -520,6 +569,8 @@ elements:
     core_cards:
     - honesty_credit
     core_scene: 기획안 단계 시작 ~ 제출(자동 제출 포함)
+    aux_scenes:
+    - { id: session, label: "세션 전체(잘못 돌린 공 정정, 처음 낸 사람 확인)", phases: [keyword, problem, solution, proposal] }
     levels:
     - level: 5
       anchor: 채택된 AI 동료 안 전원과 본문에 쓴 부가 아이디어까지 제안자 이름과 아이디어를 짝지어 적고, 자기 원안·보완·공동을 사실대로 구분한다. 대조표와 모두 일치
@@ -549,6 +600,7 @@ elements:
     negative_signals: 남의 안을 직후에 자기 새 제안처럼 재진술, "제가 아까 말한 빗물 저금통"(실제 윤하람), 정정받고도 주장 유지
     core_cards: []
     core_scene: 세션 전체(AI 동료 아이디어가 나오는 순간)
+    aux_scenes: []
     levels:
     - level: 5
       anchor: 남의 아이디어를 다룰 때 일관되게 원 제안자를 밝히고, 자기에게 잘못 돌아온 공을 스스로 정정하거나 보완 부분을 구분해 말한다
@@ -578,6 +630,7 @@ elements:
     negative_signals: 반대가 남았는데 "다 동의하셨죠"라고 단정, 타인의 반대를 동의로 요약, `timeout` 결과를 "전원 합의"로 기재
     core_cards: []
     core_scene: 각 단계 칸 확정·시간 초과 ~ 제출
+    aux_scenes: []
     levels:
     - level: 5
       anchor: 합의 상태를 정확히 요약하고 남은 이견까지 드러낸다. 기획안에도 시간 초과나 소수 의견을 사실대로 적는다

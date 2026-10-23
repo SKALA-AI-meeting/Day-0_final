@@ -538,6 +538,30 @@ FACTS = {
     "assistant_calls": [{"call_id": str, "t_min": NUM, "cited_material_ids": [str]}],
     "material_views": [{"material_id": str, "t_min": NUM}],
     "connection_gaps": [GAP],
+    # 평가자 사실(결정 A1, rubric.md 6장)
+    "decisions": [
+        {
+            "phase": SLOT_PHASE,
+            "option_id": Opt(str),
+            "value": Opt(str),
+            "t_min": NUM,
+            "path": Enum("candidate_confirm", "ai_consensus_fill", "timeout"),
+            "filled_by": PARTICIPANT,
+            "timeout_rule": Opt(str),
+            "support": SUPPORT,
+            "candidate_backed": bool,
+            "candidate_option_adopted": bool,
+        }
+    ],
+    "message_facts": [
+        {
+            "message_id": str,
+            "addressed_to": [SEAT],
+            "reply_to": Opt(str),
+            "decided_before": [SLOT_PHASE],
+            "paste_suspect": Opt({"call_id": str, "overlap": NUM}),
+        }
+    ],
 }
 REPORT = {
     "session_id": str,
@@ -729,6 +753,18 @@ RUBRIC = {
                     "name": str,
                     "definition": str,
                     "core_cards": [CARD],
+                    # 이 값이 생기기 전에 만든 채용 건의 척도 복사본에는 없다(결정 전후 자르기·보조
+                    # 장면 구분 없이 평가)
+                    "decision_timing?": Opt(Enum("before", "after")),
+                    "aux_scenes?": [
+                        {
+                            "id": str,
+                            "label": str,
+                            "phases?": [PHASE],
+                            "cards?": [CARD],
+                            "fields?": [str],
+                        }
+                    ],
                     "levels": [{"level": LEVEL, "anchor": str, "reviewer_hint": str}],
                 }
             ],
