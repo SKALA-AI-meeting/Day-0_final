@@ -270,11 +270,13 @@ async def test_ungrounded_number_dropped_after_second_failure(catalog):
         [
             tool_call("search_materials", query="제한 급수"),
             "2018년에는 3일이었어요. 2025년에는 21일이에요.",
-            "2019년은 4일이에요. 2025년은 21일이에요.",
+            "2019년은 4일이에요. 최근 5년 동안 제한 급수 일수가 세 배 넘게 늘었어요.",
         ],
     )
     result = await runner.answer(uuid.uuid4(), "연도별 제한 급수 일수?", uuid.uuid4())
-    assert result.content == "2025년은 21일이에요.\n출처: 지역별 물 부족 통계"
+    assert result.content == (
+        "최근 5년 동안 제한 급수 일수가 세 배 넘게 늘었어요.\n출처: 지역별 물 부족 통계"
+    )
     assert result.cited_material_ids == ["water_stats"]
 
 
@@ -391,3 +393,85 @@ async def test_too_long_answer_is_regenerated_shorter_before_trimming(catalog):
         == "제한 급수 일수가 세 배 넘게 늘었어요. 2025년은 21일이에요.\n출처: 지역별 물 부족 통계"
     )
     assert "자를 넘는다" in llm.calls[-1].messages[-1].content
+
+
+# ---- 리뷰 반영: 최종 본문 기준 인용, 근거 강도, 자료 없음 표식, 이번 질문 숫자만, 요청 예산 ----
+
+
+async def test_material_named_only_in_trimmed_off_part_is_not_cited(catalog):
+    """자른 뒤 지원자에게 보이지 않는 부분에서만 밝힌 자료는 인용하지 않는다."""
+    head = "제한 급수 일수가 세 배 넘게 늘었어요(자료: 지역별 물 부족 통계). "
+    tail = "그리고 경보는 평균 25분 앞당겼어요(자료: 도심 침수 사례)."
+    filler = "이 문장은 길이를 채우려고 붙인 설명이에요. " * 20
+    runner, _, _ = grounded(
+        catalog,
+        [tool_call("search_materials", query="자료"), head + filler + tail, head + filler + tail],
+    )
+    result = await runner.answer(uuid.uuid4(), "둘 다 알려 줘", uuid.uuid4())
+    assert "도심 침수 사례" not in result.content and len(result.content) <= 400
+    assert result.cited_material_ids == ["water_stats"]
+
+
+async def test_single_number_or_year_is_not_enough_to_cite(catalog):
+    """제목 없이 숫자 하나(특히 연도)만 겹치는 자료는 인용하지 않는다. 둘 이상이면 인용한다."""
+    runner, _, _ = grounded(
+        catalog,
+        [tool_call("search_materials", query="2025년"), "2025년에는 정해진 계획이 없어요."],
+    )
+    result = await runner.answer(uuid.uuid4(), "2025년 계획?", uuid.uuid4())
+    assert result.cited_material_ids == [] and "출처" not in result.content
+    runner, _, _ = grounded(
+        catalog,
+        [tool_call("search_materials", query="센서"), "두 동네에서 38%만 받았고 25분이에요."],
+    )
+    result = await runner.answer(uuid.uuid4(), "센서?", uuid.uuid4())
+    assert result.cited_material_ids == ["water_flood_cases"]
+
+
+async def test_missing_mark_means_no_citation_and_is_hidden(catalog):
+    runner, _, _ = grounded(
+        catalog,
+        [
+            tool_call("search_materials", query="하수관 길이"),
+            "열린 자료에는 하수관 길이가 없어요. 경보를 평균 25분 앞당겼다는 내용만 있어요. "
+            "[자료 없음]",
+        ],
+    )
+    result = await runner.answer(uuid.uuid4(), "하수관 길이?", uuid.uuid4())
+    assert "[자료 없음]" not in result.content and "출처" not in result.content
+    assert result.cited_material_ids == []
+
+
+async def test_numbers_from_earlier_questions_are_not_allowed(catalog):
+    runner, _, _ = grounded(catalog, ["네.", "아까 말한 7개 동네 기준이에요.", "자료에는 없어요."])
+    sid = uuid.uuid4()
+    await runner.answer(sid, "7개 동네에 설치하면?", uuid.uuid4())
+    result = await runner.answer(sid, "그 수는?", uuid.uuid4())
+    assert "7개" not in result.content
+
+
+async def test_request_budget_stops_regeneration(catalog, monkeypatch):
+    """호출 예산을 다 쓰면 재생성 없이 지금 초안(확인되지 않는 수치 문장 제거)으로 답한다."""
+    from app.agent.assistant import runner as mod
+
+    monkeypatch.setattr(mod, "MAX_LLM_CALLS", 2)
+    runner, llm, _ = grounded(
+        catalog,
+        [
+            tool_call("search_materials", query="경보"),
+            "경보를 5분 앞당겼어요. 두 동네는 경보를 평균 25분 앞당겼다고 해요.",
+            "이 답은 나오면 안 된다.",
+        ],
+    )
+    result = await runner.answer(uuid.uuid4(), "경보?", uuid.uuid4())
+    assert len(llm.calls) == 2
+    assert result.content == "두 동네는 경보를 평균 25분 앞당겼다고 해요.\n출처: 도심 침수 사례"
+
+
+async def test_request_time_budget_stops_regeneration(catalog, monkeypatch):
+    from app.agent.assistant import runner as mod
+
+    monkeypatch.setattr(mod, "REQUEST_SECONDS", 0.0)
+    runner, llm, _ = grounded(catalog, ["하수관은 1,200km예요.", "이 답은 나오면 안 된다."])
+    result = await runner.answer(uuid.uuid4(), "하수관 길이?", uuid.uuid4())
+    assert len(llm.calls) == 1 and result.content == catalog.fixed["assistant_missing"]

@@ -24,7 +24,7 @@
 | 의도 분류 `intent` | 10초 | 0 | 0.0 | `other`(fallback) |
 | 진행 매니저 `turn` | 15초 | 2 | 0.0 | 기본 응답 자리(그 메시지 직전에 말한 AI 자리, 없으면 비판형 > 고집형) |
 | 페르소나 `persona` | 20초 | 2 | 0.7 | 그 발언 생략, `llm_failures+1` |
-| 어시스턴트 `assistant` | 30초 | 2 | 0.3 | "잠시 후 다시 시도해 주세요" |
+| 어시스턴트 `assistant` | 30초 | 2 | 0.3 | "잠시 후 다시 시도해 주세요". 요청 단위 예산은 따로 LLM 호출 7회·90초(`runner.py` `MAX_LLM_CALLS`·`REQUEST_SECONDS`): 넘으면 재생성(숫자·guard·길이) 없이 지금 초안(확인되지 않는 수치 문장 제거)으로 답한다 |
 | 평가 에이전트 `evaluator` | 60초 | 2 | 0.1 | 저장 없이 예외 → 큐 재시도(attempt+1) |
  키는 모델 id로 고른다(gpt-4o-mini → 제한 키, 그 외 gpt-* → 개인 키, gemini-* → Gemini 키). 규칙은 공용 LLM 래퍼 한 곳. 프롬프트·규칙 수정으로 안 되는 역할만 사용자 결정으로 올린다(`docs/decisions.md`).
 

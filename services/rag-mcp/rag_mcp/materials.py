@@ -14,7 +14,10 @@ from pathlib import Path
 import yaml
 
 CHUNK_CHARS = 400
-OVERLAP_CHARS = 100  # 앞 청크 끝 단위가 이 길이 이하면 다음 청크 머리에 겹친다
+OVERLAP_CHARS = 100
+# 청크 규칙 버전. 규칙이 바뀌면 올린다. 색인 키(index_version)에 들어가 옛 규칙의 색인은 검색되지
+# 않고(upstream_unavailable "reindex") 다시 색인해야 한다.
+CHUNKER_VERSION = 2  # 앞 청크 끝 단위가 이 길이 이하면 다음 청크 머리에 겹친다
 SENTENCE_END = re.compile(r"(?<=[.!?。])\s+")
 DEFAULT_MISSION = "debate"
 
@@ -83,6 +86,11 @@ def _split(line: str, size: int) -> list[str]:
         if sentence:
             out.append(sentence)
     return out
+
+
+def index_version(catalog_version: str) -> str:
+    """`material_chunks.catalog_version`에 저장하는 색인 키: 카탈로그 해시 + 청크 규칙 버전."""
+    return f"{catalog_version}-c{CHUNKER_VERSION}"
 
 
 def catalog_version(scenarios_dir: Path, mission_id: str = DEFAULT_MISSION) -> str:

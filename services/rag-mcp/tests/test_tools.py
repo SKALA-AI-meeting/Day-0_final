@@ -111,7 +111,8 @@ async def test_reindex_idempotent_and_keeps_previous_version(
     again = await call(mcp_client, "reindex_materials", {})
     assert first == again
     assert first["data"]["dim"] == 1024 and first["data"]["model"] == "fake-1024"
-    old = first["data"]["catalog_version"]
+    old = first["data"]["index_version"]
+    assert old == materials.index_version(first["data"]["catalog_version"])
     count = "SELECT count(*) FROM material_chunks WHERE catalog_version = $1"
     assert await db.fetchval(count, old) == first["data"]["indexed"]
     keys = {
@@ -122,7 +123,7 @@ async def test_reindex_idempotent_and_keeps_previous_version(
     doc = scenarios / "missions" / "debate" / "materials" / "water" / "water_stats.md"
     doc.write_text(doc.read_text(encoding="utf-8") + "\n- 추가 문단\n", encoding="utf-8")
     second = await call(mcp_client, "reindex_materials", {})
-    new = second["data"]["catalog_version"]
+    new = second["data"]["index_version"]
     assert new != old
     assert await db.fetchval(count, old) == first["data"]["indexed"]
     assert await db.fetchval(count, new) == second["data"]["indexed"]
@@ -157,3 +158,14 @@ async def test_connection_failure_retried_once_then_upstream_unavailable(mcp_cli
     out = await call(mcp_client, "search_materials", {"query": "침수", "session_id": "s1"})
     assert out["error"]["code"] == "upstream_unavailable" and out["error"]["retryable"] is True
     assert len(api.requests) == 2
+
+
+async def test_stale_index_from_older_chunker_is_not_searched(mcp_client, api, db, monkeypatch):
+    """청크 규칙 버전이 바뀌면 색인 키가 달라져 옛 색인은 검색되지 않고 재색인을 요구한다."""
+    indexed = await call(mcp_client, "reindex_materials", {})
+    assert indexed["ok"] is True
+    api.handler = session_materials("water")
+    monkeypatch.setattr(materials, "CHUNKER_VERSION", materials.CHUNKER_VERSION + 1)
+    out = await call(mcp_client, "search_materials", {"query": "침수", "session_id": "s1"})
+    assert out["ok"] is False and out["error"]["code"] == "upstream_unavailable"
+    assert "reindex" in out["error"]["message"]

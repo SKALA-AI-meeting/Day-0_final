@@ -78,7 +78,10 @@ async def test_runner_scores_fake_assistant():
     }
     case = next(c for c in ae.load_cases()["cases"] if c["id"] == "a08")
     llm = FakeLLM(
-        [tool_call("search_materials", query="센서 경보"), "경보를 평균 25분 앞당겼어요."]
+        [
+            tool_call("search_materials", query="센서 경보"),
+            "도심 침수 사례를 보면 경보를 평균 25분 앞당겼어요.",
+        ]
     )
 
     @asynccontextmanager
@@ -109,9 +112,9 @@ async def test_runner_scores_fake_assistant():
         ae.corpus("water"),
         ae.max_chars(),
     )
-    # 받은 자료 4개 중 답의 숫자("25분")가 있는 자료만 인용하고 그 제목을 출처 줄로 붙인다(결정 D1)
+    # 받은 자료 4개 중 본문에 제목을 밝힌 자료만 인용한다(결정 D1). 제목이 있어 출처 줄은 없다
     assert row["tools"] == 1 and row["cited"] == ["water_flood_cases"]
-    assert result.content.endswith("\n출처: 도심 침수 사례")
+    assert "출처:" not in result.content
     assert row["pass"], row["problems"]
 
 

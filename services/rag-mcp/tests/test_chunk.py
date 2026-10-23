@@ -52,3 +52,7 @@ def test_long_line_splits_at_sentence_then_space_boundaries():
 
 def test_blank_lines_are_separators_only():
     assert materials.chunk("첫 줄\n\n\n둘째 줄\n") == ["첫 줄\n둘째 줄"]
+
+
+def test_index_version_folds_chunker_version():
+    assert materials.index_version("abc123") == f"abc123-c{materials.CHUNKER_VERSION}"

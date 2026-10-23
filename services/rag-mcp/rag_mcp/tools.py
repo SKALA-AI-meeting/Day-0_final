@@ -42,13 +42,11 @@ async def search_materials(
     if data["locked"] or not data.get("keyword_key"):
         return fail("not_released", "materials open after the keyword is confirmed")
     titles = {m["material_id"]: m["title"] for m in data["materials"]}
-    version = data["catalog_version"]
+    version = materials.index_version(data["catalog_version"])
     conf = client.current_settings()
     try:
         if not await store.has_version(conf.database_url, version):
-            return fail(
-                "upstream_unavailable", f"no index for catalog_version {version}; reindex", True
-            )
+            return fail("upstream_unavailable", f"no index {version}; reindex", True)
         if not titles:
             return ok([])
         vector = (await embed(get_embedder(conf.embedding_model), [query]))[0]
@@ -88,15 +86,18 @@ async def reindex_materials(
 ) -> dict[str, Any]:
     """미션의 현재 카탈로그 버전으로 자료를 줄·문장 경계 청크(상한 400자)로 다시 색인한다(관리용).
 
-    같은 버전은 덮어써서 몇 번 불러도 결과가 같고, 다른 버전의 청크는 지우지 않아 진행 중인 채용
-    건이 자기 버전으로 계속 검색할 수 있다. 결과는 {indexed: 색인된 청크 수, model, dim,
-    catalog_version}. 에이전트에는 노출하지 않는다.
+    색인 키는 카탈로그 버전 + 청크 규칙 버전(index_version)이다. 같은 키는 덮어써서 몇 번 불러도
+    결과가 같고, 다른 키의 청크는 지우지 않아 진행 중인 채용 건이 자기 버전으로 계속 검색할 수
+    있다. 청크 규칙이 바뀌면 키가 달라져 다시 색인하기 전까지 검색이 upstream_unavailable이다.
+    결과는 {indexed: 색인된 청크 수, model, dim, catalog_version, index_version}. 에이전트에는
+    노출하지 않는다.
     """
     conf = client.current_settings()
     try:
-        version = materials.catalog_version(conf.scenarios_dir, mission_id)
+        catalog = materials.catalog_version(conf.scenarios_dir, mission_id)
     except FileNotFoundError:
         return fail("not_found", f"mission {mission_id} not found")
+    version = materials.index_version(catalog)
     pieces = [
         (m.material_id, m.keyword_key, no, text)
         for m in materials.load_materials(conf.scenarios_dir, mission_id)
@@ -117,6 +118,7 @@ async def reindex_materials(
             "indexed": len(chunks),
             "model": embedder.model,
             "dim": embedder.dim,
-            "catalog_version": version,
+            "catalog_version": catalog,
+            "index_version": version,
         }
     )

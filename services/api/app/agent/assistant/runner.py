@@ -22,6 +22,7 @@ agent(LLM, 도구 바인딩) ⇄ tools(search_materials·get_material) … 최�
 import asyncio
 import logging
 import re
+import time
 import uuid
 from collections import defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -46,7 +47,12 @@ SOURCE_PREFIX = "출처: "
 FALLBACK_TEXT = "잠시 후 다시 시도해 주세요."
 LOCKED_TEXT = "키워드가 정해지면 자료를 찾을 수 있어요."
 MISSING_TEXT = "질문하신 내용은 열린 자료에 없어요."
+MISSING_MARK = "[자료 없음]"  # 모델이 "자료에 없다"고 답할 때 끝에 붙이는 표식(구조화 자기 신고)
 SPAN_CHARS = 12  # 이 길이 이상 글자 그대로 겹치면 그 자료를 쓴 것으로 본다
+# 요청 하나의 예산(harness.md "역할별 모델" 어시스턴트 행). 도구 루프 최대 4회 + 재생성(숫자·guard·
+# 길이) 안에서 끝나야 하고, 넘으면 재생성 없이 지금 초안(확인되지 않는 수치 문장 제거)으로 답한다.
+MAX_LLM_CALLS = 7
+REQUEST_SECONDS = 90.0
 
 # 숫자 토큰(쉼표·소수점 포함)과 바로 뒤 단위 한 글자. 평가셋(tests/eval/assistant_eval.py)의 채점
 # 규칙과 같다.
@@ -146,6 +152,7 @@ class _Loop:
         self.texts: dict[str, list[str]] = defaultdict(list)  # material_id → 받은 조각(청크·전문)
         self.history: list[BaseMessage] = []  # 도구 왕복을 포함한 이번 응답의 메시지(재생성용)
         self.locked = False
+        self.deadline = time.monotonic() + REQUEST_SECONDS
 
     def _system(self) -> str:
         return self.catalog.prompts.get("assistant.md", "").strip()
@@ -167,8 +174,8 @@ class _Loop:
             return self.catalog.fixed.get("assistant_locked", LOCKED_TEXT), [], False
         if not draft:
             return FALLBACK_TEXT, [], True
-        # 지원자가 쓴 숫자(질문·앞 질문)는 자료에 없어도 된다. 앞 답의 숫자는 다시 찾아야 한다.
-        given = [question, *(t["content"] for t in history if t["role"] == "user")]
+        # 지원자가 이번 질문에 쓴 숫자는 자료에 없어도 된다. 앞 질문·앞 답의 숫자는 다시 찾는다.
+        given = [question]
         missing = self.catalog.fixed.get("assistant_missing", MISSING_TEXT)
 
         bad = ungrounded_numbers(draft, given + self._pieces())
@@ -215,9 +222,16 @@ class _Loop:
                 draft = shorter or draft
         return (*self._cite(draft), False)
 
+    def _budget_left(self) -> bool:
+        return self.usage.llm_calls < MAX_LLM_CALLS and time.monotonic() < self.deadline
+
     async def _regenerate(self, draft: str, reason: str) -> str | None:
         """같은 입력(도구 결과 포함)에 앞 답과 고칠 이유를 붙여 도구 루프를 한 번 더 돈다(남은 도구
-        예산 안에서 다시 찾을 수 있다). LLM 실패면 None."""
+        예산 안에서 다시 찾을 수 있다). 요청 예산(호출 수·시간)을 다 썼거나 LLM 실패면 None이고,
+        호출한 쪽은 지금 초안으로 답한다."""
+        if not self._budget_left():
+            log.info("assistant request budget exhausted, keeping draft (%s)", self.trace.run_id)
+            return None
         note = HumanMessage(f"[다시 쓰기] {reason}")
         try:
             return await self._agent([*self.history, AIMessage(draft), note])
@@ -231,7 +245,11 @@ class _Loop:
         specs = await self.rag.specs()
         history = self.history = list(messages)
         while True:
-            bind = specs if specs and len(self.tool_calls) < MAX_TOOL_CALLS else None
+            # 도구를 더 부르면 호출이 하나 더 생기므로 예산이 남았을 때만 묶는다
+            tools_ok = (
+                len(self.tool_calls) < MAX_TOOL_CALLS and self.usage.llm_calls + 1 < MAX_LLM_CALLS
+            )
+            bind = specs if specs and tools_ok else None
             message = await self.llm.ainvoke(
                 history, usage=self.usage, trace=self.trace, tools=bind
             )
@@ -266,40 +284,57 @@ class _Loop:
 
     def _cite(self, text: str) -> tuple[str, list[str]]:
         """쓴 자료만 인용하고, 본문에 제목이 없는 인용 자료는 출처 줄로 붙인다. 출처 줄 자리를 뺀
-        상한 안의 문장 끝에서 자르고, 잘려 나간 자료는 인용에서 뺀다. 쓴 자료가 없으면 인용도
-        출처 줄도 없다.
+        상한 안의 문장 끝에서 자른다. 인용은 지원자에게 보이는 최종 본문(잘린 뒤)에서 정한다.
+        모델이 `[자료 없음]` 표식을 붙였으면 표식을 떼고 인용하지 않는다.
         """
-        declared = [m for m in self.retrieved if m in text]  # id 표기는 지우기 전에 본다
-        body = hide_ids(text, self.retrieved)
-        for _ in range(3):  # 자르면서 제목이 떨어져 나가면 인용·출처 줄이 바뀌므로 다시 맞춘다
-            cited = self._used(body, declared)
+        absent = MISSING_MARK in text
+        raw = text.replace(MISSING_MARK, "").strip()
+        body, line, cited = raw, "", []
+        for _ in range(3):  # 자르면 밝힌 자료·출처 줄이 바뀌므로 잘린 본문으로 다시 정한다
+            declared = [m for m in self.retrieved if m in raw]  # id 표기는 지우기 전에 본다
+            body = hide_ids(raw, self.retrieved)
+            cited = [] if absent else self._used(body, declared)
             missing = [self.retrieved[m] for m in cited if self.retrieved[m] not in body]
             line = SOURCE_PREFIX + ", ".join(missing) if missing else ""
             room = self.guard.max_chars - (len(line) + 1 if line else 0)
             if len(body) <= room:
                 break
-            body = trim_sentences(body, room)
+            raw = trim_sentences(raw, room)
+        else:
+            body = trim_sentences(body, self.guard.max_chars - (len(line) + 1 if line else 0))
+            cited = [m for m in cited if self.retrieved[m] in body or m in raw]
         return (f"{body}\n{line}" if line else body), cited
 
     def _used(self, body: str, declared: list[str]) -> list[str]:
         """받은 자료 중 답에 쓴 것(받은 순서). 모델이 제목·id로 밝힌 자료가 있으면 그것만 본다.
-        밝힌 자료가 없으면 본문의 숫자(단위 포함)나 12자 이상 구간이 조각에 글자 그대로 있는 자료.
+        밝힌 자료가 없으면 근거가 충분한 자료만: 12자 이상 구간이 글자 그대로 있거나, 연도가 아닌
+        숫자(단위 포함)가 서로 다른 값으로 둘 이상 그 조각에 있는 자료. 숫자 하나·연도만으로는
+        쓴 것으로 보지 않는다(여러 자료에 같이 나오는 값).
         """
         named = [m for m, t in self.retrieved.items() if m in declared or t in body]
         if named:
             return named
-        numbers = {v + u for v, u in _numbers(body) if u or len(v) >= 2}
+        numbers = {v + u for v, u in _numbers(body) if (u or len(v) >= 2) and not _is_year(v, u)}
         windows = _windows(body)
         used = []
         for material_id in self.retrieved:
             pieces = self.texts.get(material_id) or []
-            if numbers and any(
-                v + u in numbers or (u and v in numbers) for p in pieces for v, u in _numbers(p)
-            ):
+            if windows and any(w in _squash(p) for p in pieces for w in windows):
                 used.append(material_id)
-            elif windows and any(w in _squash(p) for p in pieces for w in windows):
+                continue
+            found = {
+                v
+                for p in pieces
+                for v, u in _numbers(p)
+                if v + u in numbers or (u and v in numbers and not _is_year(v, ""))
+            }
+            if len(found) >= 2:
                 used.append(material_id)
         return used
+
+
+def _is_year(value: str, unit: str) -> bool:
+    return len(value) == 4 and unit in ("", "년")
 
 
 def _numbers(text: str) -> list[tuple[str, str]]:
