@@ -660,7 +660,15 @@ OPTION = {
     "created_at": TS,
     "existing": bool,
 }
-CARD_PROGRESS = [{"card_id": CARD, "locked_option_id": Opt(str), "delivered": [SEAT]}]
+CARD_PROGRESS = [
+    {
+        "card_id": CARD,
+        "locked_option_id": Opt(str),
+        "delivered": [SEAT],
+        "trigger_message_id?": Opt(str),
+        "spoken_since_trigger?": Map(int),
+    }
+]
 DEBATE_STATE = {
     "phase": PHASE,
     "generation": int,

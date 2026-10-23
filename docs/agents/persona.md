@@ -19,8 +19,8 @@
 |---|---|
 | `prompts/persona/persona_<type>.md` (키 `persona_<type>.md`) | 성향·말투·행동 규칙·must_not |
 | `prompts/persona/common_rules.md` (키 `common_rules.md`) | 모든 자리 공통 규칙과 코드가 붙이는 블록 순서 |
-| `prompts/persona/safe_<type>.md` (키 `safe_<type>.md`) | guard 2회 실패·비용 상한 때 쓰는 자리별 안전 문구 |
-| `prompts/persona/stance_fallback.yaml` (키 `stance_fallback.yaml`) | 계획 밖 입장 2회 때 쓰는 자리·상황별 고정 문구 |
+| `prompts/persona/safe_<type>.md` (키 `safe_<type>.md`) | guard 2회 실패·비용 상한 때 쓰는 자리별 안전 문구(한 줄에 하나, 직전에 쓴 줄은 건너뜀) |
+| `prompts/persona/stance_fallback.yaml` (키 `stance_fallback.yaml`) | 계획 밖 입장 2회 때 쓰는 자리·상황별 고정 문구(`text`·`alternatives`, 직전에 쓴 문구는 건너뜀) |
 | `prompts/shared/guard_patterns.yaml` (키 `guard_patterns.yaml`) | 금지 패턴·`max_chars` |
 | `prompts/shared/fixed_phrases.yaml` (키 `fixed_phrases.yaml`) | 정해진 안내문(`notices`) |
 | `personas.yaml` | 이름·성향 설명·고정 입장 |

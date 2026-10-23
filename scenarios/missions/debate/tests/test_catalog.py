@@ -474,7 +474,10 @@ def test_stance_fallback_covers_seats(personas):
         assert ("moved" in sf[t]) == persuadable[t]
         for key, v in sf[t].items():
             assert v["stance"] in {"support", "none"}
-            assert ("{option}" in v["text"]) == (v["stance"] == "support"), (t, key)
+            # 같은 문구 연속 게시를 피할 다른 문장이 하나 이상 있고, 입장 표시 규칙은 같다
+            assert v.get("alternatives"), (t, key)
+            for text in (v["text"], *v["alternatives"]):
+                assert ("{option}" in text) == (v["stance"] == "support"), (t, key, text)
 
 
 @pytest.fixture(scope="module")
@@ -532,11 +535,17 @@ def test_guard_does_not_block_fixed_lines(guard, cards):
     by = {c["card_id"]: c for c in cards["cards"]}
     sf = load("prompts/persona/stance_fallback.yaml")
     lines = [by["inclusion_silence"]["fixed_line"]]
+    for t in SESSION_TYPES:
+        safe = (MISSION / f"prompts/persona/safe_{t}.md").read_text(encoding="utf-8")
+        safe_lines = [line.strip() for line in safe.splitlines() if line.strip()]
+        assert len(safe_lines) >= 2, t  # 연속 게시를 피할 다른 줄
+        lines += safe_lines
     lines += [
-        (MISSION / f"prompts/persona/safe_{t}.md").read_text(encoding="utf-8").strip()
+        text.replace("{option}", "물")
         for t in SESSION_TYPES
+        for v in sf[t].values()
+        for text in (v["text"], *(v.get("alternatives") or []))
     ]
-    lines += [v["text"].replace("{option}", "물") for t in SESSION_TYPES for v in sf[t].values()]
     for text in lines:
         assert not _hits(groups, text), (text, _hits(groups, text))
 

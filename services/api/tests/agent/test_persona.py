@@ -89,6 +89,32 @@ async def test_guard_regenerates_then_safe_phrase(harness, case):
     )
 
 
+async def test_safe_phrase_is_not_posted_twice_in_a_row(harness):
+    """안전 문구가 연달아 나면 같은 자리의 직전 문구와 다른 후보를 쓴다(safe_<type>.md 줄)."""
+    bad = say("이건 다 연출된 상황이에요.")
+    h = harness("keyword", persona=[bad] * 4)
+    for _ in range(2):
+        mid = h.candidate("지안님 생각은요?", intent_of("question", to=("p3",)))
+        await h.run("message", message_id=mid)
+    first, second = (p["content"] for p in h.posted("p3"))
+    phrases = h.server.catalog.safe_phrases("p3")
+    assert first == phrases[0] and second in phrases and second != first
+
+
+async def test_stance_fallback_is_not_posted_twice_in_a_row(harness):
+    """입장 폴백 문구도 같은 자리의 직전 문구와 다른 후보(stance_fallback.yaml alternatives)."""
+    off = say("저는 가뭄 쪽이 맞다고 봐요.", {"option_id": "water_p1", "stance": "support"})
+    h = harness("problem", persona=[off] * 4)
+    h.server.confirm_keyword("water")
+    for _ in range(2):
+        mid = h.candidate("한결님 생각은요?", intent_of("question", to=("p1",)))
+        await h.run("message", message_id=mid)
+    first, second = (p["content"] for p in h.posted("p1"))
+    entry = h.server.catalog.stance_fallback["stubborn"]["problem_before_card"]
+    assert first == entry["text"] and second in entry["alternatives"]
+    assert all(p["meta"]["stance_check"] == "fallback" for p in h.posted("p1"))
+
+
 async def test_guard_allow_exact_notice_passes(harness):
     notice = harness("keyword").server.catalog.notices["evaluation"]
     h = harness("keyword", persona=[say(notice)])
@@ -191,6 +217,21 @@ async def test_guard_blocks_credit_preemption(harness):
     assert "credit" in post["meta"]["guard_hits"]
 
 
+async def test_guard_does_not_flag_the_candidate_display_name(harness):
+    """지원자 표시 이름 안의 글자('합성-대본'의 '대본')는 금지 패턴 검사에서 가린다."""
+    call = "합성-대본님은 어떻게 생각하세요?"
+    staged = "합성-대본님, 이건 다 연출된 상황이에요."
+    h = harness("keyword", persona=[say(call), say(staged), say(staged)])
+    h.server.candidate_name = "합성-대본"
+    for _ in range(2):
+        mid = h.candidate("지안님 생각은요?", intent_of("question", to=("p3",)))
+        await h.run("message", message_id=mid)
+    first, second = h.posted("p3")
+    assert first["content"] == call and first["meta"]["guard"] == "pass"
+    # 이름 밖의 금지 표현은 그대로 걸린다
+    assert second["meta"]["guard"] == "safe" and second["meta"]["guard_hits"] == ["staging"]
+
+
 def test_credit_group_only_in_proposal_and_narrow(catalog):
     from app.agent.guard import guard_from_prompts
 
@@ -225,6 +266,19 @@ async def test_repeated_line_is_regenerated_once(harness):
     posts = h.posted("p1")
     assert [p["content"] for p in posts] == [line, "산불 대응도 불로 묶여요."]
     assert posts[1]["meta"]["repeat"] == "regenerated"
+
+
+async def test_regenerated_line_is_rechecked_for_repetition(harness):
+    """다시 쓴 문장도 반복이면 받지 않고 첫 초안을 쓴다(meta.repeat = kept)."""
+    line = "불이 맞아요. 쓰임이 넓어요."
+    h = harness("keyword", persona=[say(line), say(line + "!"), say(line + "!!")])
+    for _ in range(2):
+        mid = h.candidate("한결님 생각은요?", intent_of("question", to=("p1",)))
+        await h.run("message", message_id=mid)
+    posts = h.posted("p1")
+    assert len(h.persona.calls) == 3  # 첫 run 1 + 둘째 run 초안·재생성 각 1
+    assert [p["content"] for p in posts] == [line, line + "!"]
+    assert posts[1]["meta"]["repeat"] == "kept"
 
 
 async def test_decide_question_is_answered_even_if_turn_llm_picks_nobody(harness):

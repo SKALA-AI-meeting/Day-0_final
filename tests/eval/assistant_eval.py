@@ -169,7 +169,7 @@ async def live_answers(cases: list[dict[str, Any]], keyword: str) -> list[dict[s
     from e2e.client import env
 
     sys.path[:0] = [str(HERE / "virtual_candidate")]
-    from drive import POSITION_NAME, seed_admin
+    from drive import POSITION_NAME, newest_position, seed_admin
 
     values = env()
     base = values.get("VC_API_URL", "http://localhost:8000")
@@ -181,7 +181,9 @@ async def live_answers(cases: list[dict[str, Any]], keyword: str) -> list[dict[s
         admin = {"Authorization": f"Bearer {login.json()['token']}"}
         positions = (await http.get("/admin/positions", headers=admin)).json()
         name = values.get("VC_POSITION", POSITION_NAME)
-        position = next(p for p in positions if p["name"] == name)
+        position = newest_position(positions, name)
+        if position is None:
+            raise RuntimeError(f"채용 건 없음: {name} (make seed 확인)")
         invite = await http.post(
             f"/admin/positions/{position['id']}/invites",
             headers=admin,

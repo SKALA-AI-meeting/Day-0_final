@@ -65,6 +65,13 @@ INVITE_LINK = re.compile(r"/s/[A-Za-z0-9_-]{16,}")  # 초대 토큰이 든 경�
 CONFIRM_AFTER = 0.4  # 자율형: 단계 길이의 이 비율이 지나기 전 "이걸로 정하기"는 미룬다
 
 
+def newest_position(positions: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
+    """이름이 같은 채용 건 중 가장 최근에 만든 것. 재시드하면 같은 이름이 여럿 생기고 최신 것만
+    지금 카탈로그(시나리오 복사본)를 담는다. 목록은 만든 순서라 첫 항목은 가장 오래된 것이다."""
+    same = [p for p in positions if p["name"] == name]
+    return max(same, key=lambda p: p["created_at"]) if same else None
+
+
 def seed_admin(values: dict[str, str]) -> tuple[str, str]:
     """관리자 계정. env가 우선이고 없으면 scripts/seed.py의 argparse 기본값(값은 출력하지
     않는다)."""
@@ -175,7 +182,7 @@ class Driver:
         self.admin = data["token"]
         positions = await self.must("GET", "/admin/positions", token=self.admin)
         name = self.values.get("VC_POSITION", POSITION_NAME)
-        position = next((p for p in positions if p["name"] == name), None)
+        position = newest_position(positions, name)
         if position is None:
             raise RuntimeError(f"채용 건 없음: {name} (make seed 확인)")
         invite = await self.must(

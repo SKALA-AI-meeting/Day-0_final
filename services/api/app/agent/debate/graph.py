@@ -29,7 +29,7 @@ from langgraph.runtime import Runtime
 from app.agent import intent as intent_mod
 from app.agent import persona
 from app.agent.catalog import DEBATE_PHASES, Catalog, render
-from app.agent.guard import guard_from_prompts
+from app.agent.guard import GuardResult, guard_from_prompts
 from app.agent.llm import BaseLLM, LLMUnavailable, Trace, Usage, parse_json_object
 from app.agent.manager import rules
 from app.agent.manager.rules import PlanContext, StancePlan
@@ -171,11 +171,10 @@ def _plan_for(state: DebateState, deps: DebateDeps, seat: str) -> StancePlan:
 def _card_text(state: DebateState, deps: DebateDeps, seat: str, card_ids: list[str]) -> str | None:
     texts = [rules.CARD_INSTRUCTIONS[c] for c in card_ids if c in rules.CARD_INSTRUCTIONS]
     if not card_ids and state["phase"] == "problem" and seat == deps.catalog.seat_of("stubborn"):
-        delivered = (rules.card_progress(state["ds"]).get("listening_pressure") or {}).get(
-            "delivered"
-        )
-        count = rules.pressure_count(state.get("transcript") or [], seat, "problem")
-        if delivered and count <= rules.MAX_PRESSURE:
+        card = rules.card_progress(state["ds"]).get("listening_pressure") or {}
+        count = rules.pressure_count(card, seat)
+        # 카드 첫 발언을 포함해 압박 발언은 최대 MAX_PRESSURE회(이번 발언이 그다음 회차)
+        if card.get("delivered") and count < rules.MAX_PRESSURE:
             texts.append(rules.PRESSURE_FOLLOWUP)
     return " ".join(texts) or None
 
@@ -448,8 +447,9 @@ async def respond(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str,
                 content=line, fixed=True, meta={**meta, "kind": "card_fixed_line"}
             )
             return {"plan": asdict(plan), "draft": asdict(draft)}
+    mine = persona.my_lines(state["transcript"], seat)
     if _cost_left(state) <= 0:
-        draft = persona.safe_draft(deps.catalog, seat)
+        draft = persona.safe_draft(deps.catalog, seat, mine)
         draft.meta = {**meta, "cost_cap": True}
         return {"plan": asdict(plan), "draft": asdict(draft)}
     try:
@@ -463,14 +463,18 @@ async def respond(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str,
             "llm_failed": True,
             "last_error": f"persona_llm_unavailable:{seat}",
         }
-    if persona.repeats(draft.content, persona.my_lines(state["transcript"], seat)):
-        # 같은 문장 반복은 1회만 다시 쓰게 한다(실패하거나 비면 첫 초안을 그대로 쓴다)
-        meta["repeat"] = "regenerated"
+    if persona.repeats(draft.content, mine):
+        # 같은 문장 반복은 1회만 다시 쓰게 하고 다시 쓴 문장도 같은 검사를 한다(실패하거나 비거나
+        # 여전히 반복이면 첫 초안을 그대로 쓴다)
+        meta["repeat"] = "kept"
         try:
             again = await _generate(state, deps, spk, plan, persona.REPEAT_VIOLATION, _spent(draft))
-            draft = again if again.content else draft
         except LLMUnavailable:
-            pass
+            again = None
+        if again is not None and again.content and not persona.repeats(again.content, mine):
+            draft, meta["repeat"] = again, "regenerated"
+        elif again is not None:
+            draft.meta["tools_used"] = _spent(again)  # 버린 재생성이 쓴 도구도 예산에서 뺀다
     draft.meta = {**meta, "tools_used": _spent(draft)}
     return {"plan": asdict(plan), "draft": asdict(draft)}
 
@@ -536,14 +540,22 @@ def _restore(state: DebateState) -> tuple[persona.Draft, StancePlan]:
     return draft, plan
 
 
+def _guard_check(state: DebateState, deps: DebateDeps, text: str) -> GuardResult:
+    """금지 패턴 검사. 지원자 표시 이름은 가리고 본다(지원자가 정한 이름이 패턴에 걸리지 않게).
+
+    동료 이름은 카탈로그 데이터라 패턴이 그 이름을 직접 쓰므로(credit 그룹) 가리지 않는다.
+    """
+    checker = guard_from_prompts(deps.catalog.prompts)
+    return checker.check(text, state["phase"], [state["names"].get("candidate") or ""])
+
+
 async def guard(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, Any]:
     """금지 패턴 → 같은 입력 재생성 1회 → 자리별 안전 문구. 400자 초과는 자른다."""
     if not state.get("draft"):
         return {}
     deps = runtime.context
     draft, plan = _restore(state)
-    checker = guard_from_prompts(deps.catalog.prompts)
-    result = checker.check(draft.content, state["phase"])
+    result = _guard_check(state, deps, draft.content)
     if result.ok or draft.fixed:
         draft.content = result.text
         return {"draft": asdict(draft)}
@@ -554,9 +566,11 @@ async def guard(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, A
         again = await _generate(state, deps, spk, plan, violation, _spent(draft))
     except LLMUnavailable:
         again = None
-    second = checker.check(again.content, state["phase"]) if again else None
+    second = _guard_check(state, deps, again.content) if again else None
     if again is None or second is None or not second.ok or not again.content:
-        safe = persona.safe_draft(deps.catalog, spk["seat"])
+        safe = persona.safe_draft(
+            deps.catalog, spk["seat"], persona.my_lines(state["transcript"], spk["seat"])
+        )
         safe.meta = {**meta, "guard": "safe"}
         return {"draft": asdict(safe)}
     again.content = second.text
@@ -635,20 +649,21 @@ async def stance_check(state: DebateState, runtime: Runtime[DebateDeps]) -> dict
         return {"draft": asdict(draft)}
     spk = _current(state)
     meta = {**draft.meta, "stance_check": "regenerated", "stance_violation": found}
-    checker = guard_from_prompts(deps.catalog.prompts)
     try:
         again = await _generate(state, deps, spk, plan, f"계획 밖 입장({found})", _spent(draft))
     except LLMUnavailable:
         again = None
-    if again is not None and checker.check(again.content, state["phase"]).ok and again.content:
+    if again is not None and _guard_check(state, deps, again.content).ok and again.content:
         second, judged = await _violation(state, deps, again, plan)
         if not second:
             _settle_stance(again, judged, plan, state["ds"])
-            again.content = checker.check(again.content, state["phase"]).text
+            again.content = _guard_check(state, deps, again.content).text
             again.meta = {**meta, "tools_used": _spent(again)}
             return {"draft": asdict(again)}
     pending = persona.move_pending(plan, state["ds"])
-    fixed = persona.stance_fallback(deps.catalog, spk["seat"], plan, pending)
+    fixed = persona.stance_fallback(
+        deps.catalog, spk["seat"], plan, pending, persona.my_lines(state["transcript"], spk["seat"])
+    )
     fixed.meta = {**meta, "stance_check": "fallback"}
     return {"draft": asdict(fixed)}
 
@@ -764,7 +779,17 @@ async def apply(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, A
         *(state.get("posted") or []),
         {"seat": seat, "message_id": message_id, "stance": stance_written, "card_ids": card_ids},
     ]
-    update.update({"posted": posted_list, "observed": observed})
+    # 같은 run의 다음 화자가 방금 게시한 발언을 최근 대화·자기 기억에서 보게 한다
+    seen = {
+        "id": message_id,
+        "sender": seat,
+        "content": message.get("content", content),
+        "phase": message.get("phase", state["phase"]),
+        "is_invite": message.get("is_invite", spk["purpose"] == "invite"),
+        "t_min": message.get("t_min"),
+    }
+    transcript = [*(state.get("transcript") or []), seen][-TRANSCRIPT_LIMIT:]
+    update.update({"posted": posted_list, "observed": observed, "transcript": transcript})
     if idx + 1 < len(_speakers(state)):
         low, high = deps.speaker_gap
         await deps.sleep(random.uniform(low, high))

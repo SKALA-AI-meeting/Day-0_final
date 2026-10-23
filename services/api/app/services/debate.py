@@ -22,6 +22,7 @@ from app.masking import mask
 from app.models import (
     Message,
     MessageIntent,
+    Observation,
     Option,
     Position,
     Session,
@@ -825,6 +826,22 @@ async def debate_state(
     cards = (
         await db.scalars(select(SessionCard).where(SessionCard.session_id == session.id))
     ).all()
+    # 카드의 첫 발언(관찰 trigger)과 그 뒤 AI 자리별 발언 수(대화 창과 무관한 전체 기록).
+    # 진행 매니저가 이 수로 압박 발언 횟수를 센다
+    triggers = {
+        card_id: message_id
+        for card_id, message_id in (
+            await db.execute(
+                select(Observation.card_id, Observation.trigger_message_id).where(
+                    Observation.session_id == session.id
+                )
+            )
+        ).all()
+    }
+    spoken_since = {
+        card_id: await _spoken_since(db, session.id, message_id)
+        for card_id, message_id in triggers.items()
+    }
     current = result.get("current_support", {p: None for p in consensus.PARTICIPANTS})
     order = {p: i for i, p in enumerate(sc.PHASES)}
     return {
@@ -874,11 +891,36 @@ async def debate_state(
                 "card_id": c.card_id,
                 "locked_option_id": _str(c.locked_option_id),
                 "delivered": list(c.delivered_seats),
+                "trigger_message_id": _str(triggers.get(c.card_id)),
+                "spoken_since_trigger": spoken_since.get(c.card_id) or {},
             }
             for c in cards
         ],
         "cost_left": budget.cost_left(session),
     }
+
+
+async def _spoken_since(
+    db: AsyncSession, session_id: uuid.UUID, message_id: uuid.UUID | None
+) -> dict[str, int]:
+    """trigger 메시지(포함)부터 같은 단계에서 AI 자리별 토론방 발언 수."""
+    if message_id is None:
+        return {}
+    trigger = await db.get(Message, message_id)
+    if trigger is None:
+        return {}
+    rows = await db.execute(
+        select(Message.sender, func.count())
+        .where(
+            Message.session_id == session_id,
+            Message.channel == "room",
+            Message.phase == trigger.phase,
+            Message.sender.in_(("p1", "p2", "p3")),
+            Message.created_at >= trigger.created_at,
+        )
+        .group_by(Message.sender)
+    )
+    return {sender: int(n) for sender, n in rows.all()}
 
 
 def _str(value: Any) -> str | None:

@@ -321,6 +321,7 @@ def fallbacks(events: list[dict[str, Any]]) -> dict[str, int]:
         "stance_regenerated": sum(p["meta"].get("stance_check") == "regenerated" for p in posts),
         "stance_fallback": sum(p["meta"].get("stance_check") == "fallback" for p in posts),
         "repeat_regenerated": sum(p["meta"].get("repeat") == "regenerated" for p in posts),
+        "repeat_kept": sum(p["meta"].get("repeat") == "kept" for p in posts),
         "no_reply_steps": sum(not e["posts"] for e in events if e["kind"] not in ("card",)),
         "run_errors": sum(bool(e.get("error")) for e in events),
     }

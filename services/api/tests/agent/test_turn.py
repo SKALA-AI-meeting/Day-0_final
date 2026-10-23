@@ -49,6 +49,21 @@ async def test_phase_started_keyword_pushers_and_problem_react(harness):
     assert p.server.support["p1"] is None and not p.server.options
 
 
+async def test_second_speaker_sees_the_first_speakers_line(harness):
+    """같은 run의 둘째 화자 컨텍스트(최근 대화)에 첫 화자가 방금 게시한 발언이 들어간다."""
+    h = harness(
+        "keyword",
+        persona=[
+            say("불이 맞아요. 쓰임이 넓어요.", {"option_id": "fire", "stance": "support"}),
+            say("바람이죠.", WIND),
+        ],
+    )
+    await h.run("phase_started")
+    assert [s["seat"] for s in h.snapshots] == ["p1", "p3"]
+    recent = h.snapshots[1]["text"].rsplit("[최근 대화]", 1)[1]
+    assert "강한결: 불이 맞아요. 쓰임이 넓어요." in recent
+
+
 async def test_proposal_phase_started_has_no_speakers(harness):
     h = harness("proposal")
     run = await h.run("phase_started")
@@ -78,6 +93,24 @@ async def test_named_order_follows_the_message_not_the_classifier(harness):
     mid = h.candidate("윤하람님 생각도 궁금해요.", intent_of("other", confidence="low"))
     run = await h.run("message", message_id=mid)
     assert [s["seat"] for s in run.decision["speakers"]] == ["p2"] and not h.turn.calls
+
+
+async def test_classifier_addressed_seat_answers_first(harness):
+    """분류가 대상으로 본 자리가 메시지에서 먼저 불린 자리보다 먼저 답한다(지안님 말고 하람님)."""
+    h = harness("solution")
+    h.server.confirm_keyword("water")
+    mid = h.candidate("지안님 말고 하람님 생각은 어때요?", intent_of("question", to=("p2",)))
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]][0] == "p2"
+
+
+async def test_named_seat_missed_by_the_classifier_still_answers(harness):
+    """분류가 일부 호명을 놓쳐도 "이름님"으로 부른 자리는 모두 답한다(C1)."""
+    h = harness("solution")
+    h.server.confirm_keyword("water")
+    mid = h.candidate("한결님, 하람님 생각은요?", intent_of("question", to=("p2",)))
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p2", "p1"]
 
 
 async def test_quiet_only_when_called_or_asked_all(harness):
