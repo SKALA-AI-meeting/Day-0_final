@@ -80,6 +80,18 @@ def seed_admin(values: dict[str, str]) -> tuple[str, str]:
     )
 
 
+def redact(path: str, data: Any) -> tuple[str, Any]:
+    """기록·오류 메시지용 (경로, 본문). 토큰 필드·초대 링크·안내 문안 속 초대 토큰을 가린다."""
+    secret = ("token", "invite_url")  # 초대 링크도 인증 토큰을 담는다
+    safe = (
+        {k: "<redacted>" if any(x in k for x in secret) else v for k, v in data.items()}
+        if isinstance(data, dict)
+        else data
+    )
+    safe = json.loads(INVITE_LINK.sub("/s/<invite>", json.dumps(safe, ensure_ascii=False)))
+    return INVITE_LINK.sub("/s/<invite>", path), safe
+
+
 def keyword_entry(label_or_key: str | None) -> dict[str, Any] | None:
     return next((k for k in KEYWORDS if label_or_key in (k["key"], k["label"])), None)
 
@@ -134,14 +146,7 @@ class Driver:
             data = response.json()
         except ValueError:
             data = response.text
-        secret = ("token", "invite_url")  # 초대 링크도 인증 토큰을 담는다
-        safe = (
-            {k: "<redacted>" if any(x in k for x in secret) else v for k, v in data.items()}
-            if isinstance(data, dict)
-            else data
-        )
-        safe = json.loads(INVITE_LINK.sub("/s/<invite>", json.dumps(safe, ensure_ascii=False)))
-        shown = INVITE_LINK.sub("/s/<invite>", path)
+        shown, safe = redact(path, data)
         if "auth" not in path:
             self.record("rest", method=method, path=shown, status=response.status_code, body=safe)
         return response.status_code, data
@@ -149,7 +154,8 @@ class Driver:
     async def must(self, method: str, path: str, **kw: Any) -> Any:
         status, data = await self.call(method, path, **kw)
         if status >= 400:
-            raise RuntimeError(f"{method} {path} → {status} {data}")
+            shown, safe = redact(path, data)  # 오류 메시지·traceback에도 초대 토큰을 남기지 않는다
+            raise RuntimeError(f"{method} {shown} → {status} {safe}")
         return data
 
     async def state(self) -> dict[str, Any]:

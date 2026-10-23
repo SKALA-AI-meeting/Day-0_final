@@ -6,6 +6,7 @@
 
 import importlib.util
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -207,6 +208,39 @@ def test_bars_scoring_reports_exact_within1_and_distribution():
     assert score["within1"] == 1.0 and score["exact"] == 0.0
     assert set(score["diff_distribution"]) <= {-1, 1}
     assert evaluate.spread([{"a": 3}, {"a": 4}, {"a": 3}]) == {"a": 1}
+    one = sessions[0]
+    dims = list(one["expected"])
+    blank = {one["id"]: {d: None if d == dims[0] else one["expected"][d]["level"] for d in dims}}
+    got = evaluate.score_bars([one], blank)  # 사람 라벨이 수준인데 기록 없음 = 불일치
+    assert got["n"] == len(dims) and got["model_no_record"] == 1
+    assert got["exact"] == (len(dims) - 1) / len(dims)
+    human = {**one, "expected": {dims[0]: {"level": None, "no_record_reason": "no_activity"}}}
+    assert evaluate.score_bars([human], {one["id"]: {}})["human_no_record"] == {"n": 1, "agree": 1}
+
+
+def test_bars_diagnostics_use_dimension_window():
+    sessions = {s["id"]: s for s in evaluate.load_bars()["sessions"]}
+    scene = sessions["bars_activity_missed"]  # inclusion_silence 창 7.5~11.5분, 지원자 8.1분 발언
+
+    def row(dim, reason):
+        return {"dimension_id": dim, "level": None, "no_record_reason": reason, "rationale": ""}
+
+    record = scene["record"]
+    early = {
+        **scene,
+        "record": {
+            **record,
+            "observations": [
+                {**record["observations"][0], "window": {"start_min": 0.0, "end_min": 1.0}}
+            ],
+        },
+    }
+    rows = [row("incl_notice_invite", "no_activity"), row("incl_shared_decision", "no_activity")]
+    got = evaluate.bars_diagnostics([scene], {scene["id"]: rows})
+    assert got["activity_missed"] == 2  # 카드 창 안 + 세션 전체 차원
+    got = evaluate.bars_diagnostics([early], {scene["id"]: rows})
+    assert got["activity_missed"] == 1  # 창 밖 발언만 있으면 카드 차원은 no_activity가 맞다
+    assert got["missed_levels"] == {"no_activity": 1}  # 사람 라벨이 있는 incl_notice_invite
 
 
 # ---- 유출·유도 질문 ---------------------------------------------------------------------------
@@ -370,6 +404,8 @@ async def test_bars_live(live_report):
     }
     scenes = evaluate.score_bars([s for s in sessions if s.get("scene")], outputs)
     diagnostics = evaluate.bars_diagnostics(sessions, all_rows)
+    if os.environ.get("BARS_EVAL_DUMP"):  # 원자료(차원 행, 다시 채점용)
+        Path(os.environ["BARS_EVAL_DUMP"]).write_text(json.dumps(all_rows, ensure_ascii=False))
     live_report.append(
         f"## 평가 에이전트 BARS\n\n```json\n{json.dumps(score, ensure_ascii=False, indent=2)}\n```"
         "\n\n## 평가 에이전트 BARS 장면 세션"

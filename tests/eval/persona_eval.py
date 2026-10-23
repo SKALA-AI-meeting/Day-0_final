@@ -166,16 +166,30 @@ def _unit(event: dict[str, Any]) -> tuple[int, str]:
     return event.get("run", 0), event["session"]
 
 
-def following(events: list[dict[str, Any]], index: int, limit: int) -> list[dict[str, Any]]:
-    """events[index] 메시지 뒤 같은 단계 안의 AI 발언 앞에서 limit개."""
+def window(
+    events: list[dict[str, Any]], index: int, limit: int
+) -> tuple[list[dict[str, Any]], bool]:
+    """(events[index] 뒤 AI 발언 앞에서 limit개, 다음 지원자 발언으로 끊겼는지).
+
+    같은 단계 안에서 다음 지원자 발언(say)이 오기 전까지만 본다. 그 뒤 발언은 다음 말에 대한
+    반응이라 앞 메시지의 응답으로 세지 않는다. 카드 자극은 지원자 입력이 아니라 계속 본다.
+    """
     out: list[dict[str, Any]] = []
-    for event in events[index:]:
-        if _unit(event) != _unit(events[index]):
-            break
+    for offset, event in enumerate(events[index:]):
+        if offset:
+            if _unit(event) != _unit(events[index]):
+                return out[:limit], False
+            if "say" in event:
+                return out[:limit], True
         out += event["posts"]
         if len(out) >= limit:
             break
-    return out[:limit]
+    return out[:limit], False
+
+
+def following(events: list[dict[str, Any]], index: int, limit: int) -> list[dict[str, Any]]:
+    """events[index] 메시지 뒤, 다음 지원자 발언 전 같은 단계 안의 AI 발언 앞에서 limit개."""
+    return window(events, index, limit)[0]
 
 
 def repetition(events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -200,7 +214,10 @@ def repetition(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def response_rate(events: list[dict[str, Any]]) -> dict[str, Any]:
-    """분모는 단계가 끝나기 전 다음 AI 발언이 있었던 근거·진행 질문. 무응답 종료는 따로 센다."""
+    """분모는 다음 지원자 발언 전에 AI 발언이 있었거나 다음 지원자 발언이 온 근거·질문.
+
+    답 없이 단계가 끝난 것은 분모에서 빼고 unanswered로 따로 센다.
+    """
     out: dict[str, Any] = {}
     total_n = total_hit = total_unanswered = 0
     for kind in ("evidence", "progress", "question"):
@@ -208,12 +225,12 @@ def response_rate(events: list[dict[str, Any]]) -> dict[str, Any]:
         for i, event in enumerate(events):
             if event.get("kind") != kind or not event.get("refs"):
                 continue
-            nxt = following(events, i, 1)
-            if not nxt:
+            nxt, cut = window(events, i, 1)
+            if not nxt and not cut:  # 답 없이 단계가 끝남: 분모 밖, 따로 센다
                 unanswered += 1
                 continue
-            n += 1
-            hit += any(re.search(r, nxt[0]["content"]) for r in event["refs"])
+            n += 1  # 다음 지원자 발언까지 답이 없으면 미응답으로 분모에 든다
+            hit += bool(nxt) and any(re.search(r, nxt[0]["content"]) for r in event["refs"])
         out[kind] = {"n": n, "hit": hit, "rate": _rate(hit, n), "unanswered": unanswered}
         total_n, total_hit = total_n + n, total_hit + hit
         total_unanswered += unanswered

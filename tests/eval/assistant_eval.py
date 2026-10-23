@@ -189,13 +189,21 @@ async def live_answers(cases: list[dict[str, Any]], keyword: str) -> list[dict[s
                 "email": "eval@example.test",
             },
         )
-        invite.raise_for_status()
+        if invite.status_code >= 400:
+            raise RuntimeError(f"초대 생성 실패 {invite.status_code}")
         token = invite.json()["invite_url"].rstrip("/").split("/")[-1]
-        consent = (await http.post(f"/s/{token}/consent", json={"display_name": "평가셋"})).json()
+        agreed = await http.post(f"/s/{token}/consent", json={"display_name": "평가셋"})
+        if agreed.status_code >= 400:
+            raise RuntimeError(f"POST /s/<invite>/consent → {agreed.status_code}")
+        consent = agreed.json()
         sid = consent["session_id"]
         auth = {"Authorization": f"Bearer {consent['session_token']}"}
         try:
-            (await http.post(f"/s/{token}/start", headers=auth)).raise_for_status()
+            started = await http.post(f"/s/{token}/start", headers=auth)
+            if (
+                started.status_code >= 400
+            ):  # raise_for_status는 초대 토큰이 든 URL을 메시지에 담는다
+                raise RuntimeError(f"POST /s/<invite>/start → {started.status_code}")
             confirm = await http.post(
                 f"/sessions/{sid}/slots/keyword/confirm",
                 headers=auth,

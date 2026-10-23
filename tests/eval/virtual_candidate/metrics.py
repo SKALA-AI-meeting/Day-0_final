@@ -238,7 +238,10 @@ def consensus_metrics(s: Session) -> dict[str, Any]:
         "slot_resolution": dict(resolution),
         "ai_fills": fills,
         "timeouts": timeouts,
-        "timeout_notice_wrong": sum(not t["notice_matches_rule"] for t in timeouts),
+        "timeout_notice_missing": sum(not t["notice_present"] for t in timeouts),
+        "timeout_notice_wrong": sum(
+            t["notice_present"] and not t["notice_matches_rule"] for t in timeouts
+        ),
         "timeout_announcer_not_supporter": sum(t["announcer_not_supporter"] for t in timeouts),
     }
 
@@ -301,13 +304,20 @@ def _timeout_row(s: Session, phase: str, slot: dict[str, Any]) -> dict[str, Any]
         ),
         None,
     )
-    says_most = bool(notice and "가장 많이 모인" in notice["content"])
-    matches = (rule == "most_support") if says_most else rule != "most_support"
+    # 안내가 있는지와, 있으면 그 문구가 말하는 규칙이 실제 규칙과 같은지를 따로 본다.
+    # 지금 안내 문구는 하나("가장 많이 모인 의견")라 최다 지지 규칙일 때만 맞다.
+    claimed = None
+    if notice:
+        claimed = "most_support" if "가장 많이 모인" in notice["content"] else "unstated"
+    says_most = claimed == "most_support"
+    matches = notice is not None and claimed == rule
     supporters = next((x.get("supporters") or [] for x in support if x["option_id"] == chosen), [])
     return {
         "phase": phase,
         "rule": rule,
         "support_counts": sorted(counts.values(), reverse=True),
+        "notice_present": notice is not None,
+        "notice_claims": claimed,
         "notice_says_most": says_most,
         "notice_matches_rule": matches,
         "announcer": notice["sender"] if notice else None,

@@ -218,7 +218,7 @@ sessions:
       listen_civility: { level: 4, evidence: [m5, m8] }
 
   - id: bars_decision_timing
-    scene: decision_timing      # 결정 전 주장(정상 행동)을 결정 후 재론으로 읽지 않는다
+    scene: decision_timing      # 결정 전 주장(정상 행동)을 결정 후 재론으로 읽지 않는다. AI 합의 채움 직후 해결책 단계가 열린다
     element: flexibility
     record:
       session: { id: bars-8, elements: [persuasion, listening, inclusion, flexibility, honesty], session_minutes: 15, started_at: "2026-10-21T01:00:00Z", completed_at: "2026-10-21T01:15:00Z", connection_gaps: [] }
@@ -230,8 +230,8 @@ sessions:
         - { id: m5, sender: candidate, content: "가뭄이 매일 영향을 준다는 건 맞아요. 그래도 침수는 피해 규모가 커서 저는 침수가 낫다고 봐요.", phase: problem, t_min: 4.0, origin: spontaneous, is_invite: false, card_ids: [], intent: { intent: oppose, target_option_id: opt-pb-p1, addressed_to: [] } }
         - { id: m6, sender: candidate, content: "침수 쪽으로 다시 생각해 주시면 좋겠어요. 반지하 피해가 크잖아요.", phase: problem, t_min: 4.6, origin: spontaneous, is_invite: false, card_ids: [], intent: { intent: propose, target_option_id: null, addressed_to: [] } }
         - { id: m7, sender: p3, content: "그럼 가뭄으로 생활용수 제한이 잦아짐으로 정리할게요.", phase: problem, t_min: 5.2, origin: null, is_invite: false, card_ids: [], intent: null }
-        - { id: m8, sender: candidate, content: "네, 가뭄으로 정해졌으니 그걸로 가요. 제가 말한 침수 자료는 근거 참고로만 쓸게요.", phase: problem, t_min: 5.6, origin: spontaneous, is_invite: false, card_ids: [], intent: { intent: agree, target_option_id: opt-pb-p1, addressed_to: [] } }
-        - { id: m9, sender: system, content: "해결책 단계예요. 정한 문제의 해결 방향 하나를 함께 정해 주세요.", phase: solution, t_min: 7.0, origin: null, is_invite: false, card_ids: [], intent: null }
+        - { id: m8, sender: system, content: "해결책 단계예요. 정한 문제의 해결 방향 하나를 함께 정해 주세요.", phase: solution, t_min: 5.2, origin: null, is_invite: false, card_ids: [], intent: null }
+        - { id: m9, sender: candidate, content: "네, 가뭄으로 정해졌으니 그걸로 가요. 제가 말한 침수 자료는 근거 참고로만 쓸게요.", phase: solution, t_min: 5.6, origin: spontaneous, is_invite: false, card_ids: [], intent: { intent: other, target_option_id: null, addressed_to: [] } }
         - { id: m10, sender: candidate, content: "가뭄이면 제한 급수 일정을 미리 알려 주는 센서 경보가 맞을 것 같아요. 공지가 늦는 게 문제였으니까요.", phase: solution, t_min: 7.4, origin: spontaneous, is_invite: false, card_ids: [], intent: { intent: propose, target_option_id: null, addressed_to: [] } }
         - { id: m11, sender: candidate, content: "하람님 빗물 저금통은 가뭄 때 저수로도 쓰니까 같이 넣으면 어때요?", phase: solution, t_min: 8.5, origin: spontaneous, is_invite: false, card_ids: [], intent: { intent: propose, target_option_id: null, addressed_to: [p2] } }
       slots:
@@ -245,8 +245,8 @@ sessions:
       contributions: { options: [{ option_id: opt-pb-p1, phase: problem, label: 가뭄으로 생활용수 제한이 잦아짐, first_proposer: p1, source_message_id: m3, t_min: 3.3, adopted: true }], slots: [] }
     expected:
       flex_openness: { level: 4, evidence: [m5, m6] }
-      flex_decision_respect: { level: 3, evidence: [m8] }
-      flex_acceptance: { level: 4, evidence: [m8, m10] }
+      flex_decision_respect: { level: 3, evidence: [m9] }
+      flex_acceptance: { level: 4, evidence: [m9, m10] }
       flex_forward: { level: 5, evidence: [m10, m11] }
 
   - id: bars_protest

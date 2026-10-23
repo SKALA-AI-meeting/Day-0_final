@@ -34,6 +34,9 @@ def test_scripts_cover_the_four_metrics():
 def _event(session, seat_lines, *, to=None, decision=None, **step):
     posts = [{"seat": s, "content": c, "meta": {}} for s, c in seat_lines]
     intent = {"addressed_to": list(to or [])}
+    kind = step.get("kind", "named")
+    if kind not in ("card", "phase_started"):
+        step.setdefault("say", "지원자 발언")  # 실행기 사건처럼 지원자 입력 표시
     return {
         "session": session,
         "kind": step.pop("kind", "named"),
@@ -76,6 +79,12 @@ def test_scoring_rules():
         _event("problem", [("p3", "침수 피해가 크다는 말 맞아요.")], misquote="가뭄에 동의하셨"),
     ]
     assert pe.misquote(quoted)["misquote"] == 1
+    late = [  # 다음 지원자 발언 뒤에 나온 답은 앞 질문의 응답이 아니다
+        _event("solution", [], kind="evidence", refs=["침수"]),
+        _event("solution", [("p1", "침수가 크다는 건 맞아요.")], kind="named", to=["p1"]),
+    ]
+    assert pe.response_rate(late)["evidence"] == {"n": 1, "hit": 0, "rate": 0.0, "unanswered": 0}
+    assert pe.misquote([{**late[0], "misquote": "침수"}, late[1]])["misquote"] == 0
 
 
 async def test_runner_follows_the_graph_with_fake_llms():
