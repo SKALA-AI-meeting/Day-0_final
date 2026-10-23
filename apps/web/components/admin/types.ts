@@ -109,7 +109,7 @@ export type Evidence =
       value: string;
       resolution: "consensus" | "timeout";
       outcome?: Outcome | null;
-      filled_by: Seat;
+      filled_by: Sender;
       support: SupportEntry[];
     })
   | (EvidenceBase & { kind: "proposal"; field: string; quote: string })
@@ -118,7 +118,7 @@ export type Evidence =
       option_id: string;
       phase: PhaseId;
       label: string;
-      first_proposer: Seat | null;
+      first_proposer: Sender | null;
       adopted?: boolean;
     });
 
@@ -160,11 +160,11 @@ export type ReportSlot = {
   phase: PhaseId;
   value: string;
   option_id: string | null;
-  filled_by: Seat;
+  filled_by: Sender;
   resolution: "consensus" | "timeout";
   outcome?: Outcome | null;
   t_min: number;
-  first_proposer: Seat | null;
+  first_proposer: Sender | null;
   support: SupportEntry[];
 };
 

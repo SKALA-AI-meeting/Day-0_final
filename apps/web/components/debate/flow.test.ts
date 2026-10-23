@@ -83,14 +83,14 @@ test("15분 데모: 표시 이름이 토론방에 쓰이고, 정하기·자료·
     code: "phase_not_open",
   });
 
-  // 대본으로 기획안 단계까지: 문제 상황 합의 채우기, 해결책 시간 초과(R7 문구)
+  // 대본으로 기획안 단계까지: 문제 상황 합의 채우기, 해결책 시간 초과(시스템 안내)
   mockControls().skipTo("proposal");
   state = await call<StateSnapshot>("GET", `/sessions/${session_id}/state`);
   expect(state.session.phase).toBe("proposal");
   expect(state.slots.map((s) => s.resolution)).toEqual(["consensus", "consensus", "timeout"]);
   expect(
-    state.messages.some((m) =>
-      m.content.startsWith("시간이 다 돼서 대화에서 가장 많이 모인 의견인"),
+    state.messages.some(
+      (m) => m.sender === "system" && m.content.startsWith("시간 안에 정하지 못해"),
     ),
   ).toBe(true);
   expect(state.proposal.sections.keyword).toBe("물");

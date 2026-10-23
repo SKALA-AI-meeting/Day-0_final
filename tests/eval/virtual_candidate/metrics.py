@@ -242,7 +242,9 @@ def consensus_metrics(s: Session) -> dict[str, Any]:
         "timeout_notice_wrong": sum(
             t["notice_present"] and not t["notice_matches_rule"] for t in timeouts
         ),
-        "timeout_announcer_not_supporter": sum(t["announcer_not_supporter"] for t in timeouts),
+        "timeout_announcer_persona": sum(t["announcer"] in PEERS for t in timeouts),
+        "timeout_choice_wrong": sum(not t["choice_matches_rule"] for t in timeouts),
+        "timeout_rule_unrecorded": sum(t["recorded_rule"] != t["rule"] for t in timeouts),
     }
 
 
@@ -275,28 +277,25 @@ def _fill_row(s: Session, phase: str, slot: dict[str, Any]) -> dict[str, Any]:
 
 
 def _timeout_row(s: Session, phase: str, slot: dict[str, Any]) -> dict[str, Any]:
-    """안내 문구(timeout_fill)가 실제 선택 규칙과 맞는지. 스냅샷 지지 수로 적용 규칙을 다시
-    계산한다."""
+    """시간 초과 선택과 안내가 규칙(결정 B3·B4)과 맞는지. 확정 시점 지지 스냅샷(안 생성 순)으로
+    적용 규칙을 다시 계산하고, 칸에 기록된 규칙·고른 안·안내 문장(채용 건 복사본의 규칙별 문장)을
+    그 규칙과 대조한다."""
     support = slot.get("support") or []
     counts = {x["option_id"]: len(x.get("supporters") or []) for x in support}
     chosen = slot.get("option_id")
-    top = max(counts.values(), default=0)
-    tied = [o for o, c in counts.items() if c == top]
     candidate_pick = next(
         (x["option_id"] for x in support if "candidate" in (x.get("supporters") or [])), None
     )
+    top = max(counts.values(), default=0)
+    tied = [o for o, c in counts.items() if c == top]
     if not counts:
-        rule = "default_no_options"
-    elif top == 0:
-        rule = "earliest_no_support"
-    elif len(tied) > 1 and chosen == candidate_pick:
-        rule = "tie_candidate"
-    elif len(tied) > 1:
-        rule = "tie_earliest"
-    elif chosen in tied:
-        rule = "most_support"
+        rule, expected = "default", chosen
+    elif candidate_pick:
+        rule, expected = "candidate_support", candidate_pick
+    elif top > 0 and len(tied) == 1:
+        rule, expected = "most_support", tied[0]
     else:
-        rule = "other"
+        rule, expected = "earliest", tied[0]
     notice = next(
         (
             m
@@ -305,25 +304,44 @@ def _timeout_row(s: Session, phase: str, slot: dict[str, Any]) -> dict[str, Any]
         ),
         None,
     )
-    # 안내가 있는지와, 있으면 그 문구가 말하는 규칙이 실제 규칙과 같은지를 따로 본다.
-    # 지금 안내 문구는 하나("가장 많이 모인 의견")라 최다 지지 규칙일 때만 맞다.
+    # 안내가 있는지와, 있으면 그 문장이 어느 규칙의 문장인지를 따로 본다
     claimed = None
     if notice:
-        claimed = "most_support" if "가장 많이 모인" in notice["content"] else "unstated"
-    says_most = claimed == "most_support"
-    matches = notice is not None and claimed == rule
-    supporters = next((x.get("supporters") or [] for x in support if x["option_id"] == chosen), [])
+        label = (s.options.get(chosen) or {}).get("label") or slot.get("value") or ""
+        claimed = next(
+            (r for r, text in _timeout_notices(s, label).items() if text == notice["content"]),
+            "unstated",
+        )
     return {
         "phase": phase,
         "rule": rule,
+        "recorded_rule": slot.get("timeout_rule"),
         "support_counts": sorted(counts.values(), reverse=True),
+        "choice_matches_rule": chosen == expected,
         "notice_present": notice is not None,
         "notice_claims": claimed,
-        "notice_says_most": says_most,
-        "notice_matches_rule": matches,
+        "notice_matches_rule": notice is not None and claimed == rule,
         "announcer": notice["sender"] if notice else None,
-        "announcer_not_supporter": bool(notice and notice["sender"] not in supporters),
+        "filled_by": slot.get("filled_by"),
         "candidate_supported_chosen": candidate_pick == chosen if candidate_pick else None,
+    }
+
+
+def _ro(word: str) -> str:
+    code = ord(word[-1]) - 0xAC00 if word else -1
+    return "으로" if 0 <= code <= 11171 and code % 28 not in (0, 8) else "로"
+
+
+def _timeout_notices(s: Session, label: str) -> dict[str, str]:
+    """규칙별 안내 문장(채용 건 복사본의 고정 문장, api `scenario.phrase`와 같은 치환)."""
+    templates = (s.scenario.get("phrases") or {}).get("timeout_fill") or {}
+    if isinstance(templates, str):  # 규칙별 문장 전의 채용 건
+        templates = {"legacy": templates}
+    return {
+        rule: t.replace("{option}로", "{option}" + _ro(label)).format(
+            option=label, candidate=s.name or "지원자"
+        )
+        for rule, t in templates.items()
     }
 
 

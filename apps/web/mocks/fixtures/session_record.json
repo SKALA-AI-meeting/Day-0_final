@@ -380,8 +380,8 @@
     },
     {
       "id": "m-29",
-      "sender": "p3",
-      "content": "시간이 다 돼서 대화에서 가장 많이 모인 의견인 센서·데이터 기반 물 관리·경보로 할게요.",
+      "sender": "system",
+      "content": "시간 안에 정하지 못해 김지원님이 지지한 센서·데이터 기반 물 관리·경보로 다음 단계로 넘어가요.",
       "phase": "solution",
       "t_min": 46.0,
       "origin": null,
@@ -423,6 +423,7 @@
       "option_id": "opt-kw-water",
       "filled_by": "candidate",
       "resolution": "consensus",
+      "timeout_rule": null,
       "outcome": "candidate_decision",
       "support": [
         {
@@ -446,6 +447,7 @@
       "option_id": "opt-pb-p2",
       "filled_by": "p3",
       "resolution": "consensus",
+      "timeout_rule": null,
       "outcome": "consensus",
       "support": [
         {
@@ -463,8 +465,9 @@
       "phase": "solution",
       "value": "센서·데이터 기반 물 관리·경보",
       "option_id": "opt-sl-s1",
-      "filled_by": "p3",
+      "filled_by": "system",
       "resolution": "timeout",
+      "timeout_rule": "candidate_support",
       "outcome": "timeout",
       "support": [
         {
@@ -647,7 +650,7 @@
       {
         "phase": "solution",
         "option_id": "opt-sl-s1",
-        "filled_by": "p3",
+        "filled_by": "system",
         "resolution": "timeout",
         "support": [
           {
@@ -765,8 +768,8 @@
         "value": "센서·데이터 기반 물 관리·경보",
         "t_min": 46.0,
         "path": "timeout",
-        "filled_by": "p3",
-        "timeout_rule": null,
+        "filled_by": "system",
+        "timeout_rule": "candidate_support",
         "support": [
           {
             "option_id": "opt-sl-s1",
@@ -953,7 +956,7 @@
         "phase": "solution",
         "option_id": "opt-sl-s1",
         "first_proposer": "candidate",
-        "filled_by": "p3",
+        "filled_by": "system",
         "resolution": "timeout"
       }
     ]

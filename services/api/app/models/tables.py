@@ -211,6 +211,7 @@ class Slot(Base):
     option_id: Mapped[uuid.UUID | None] = _uuid("options.id")
     filled_by: Mapped[str | None] = mapped_column(Text)
     resolution: Mapped[str | None] = mapped_column(Text)
+    timeout_rule: Mapped[str | None] = mapped_column(Text)
     support: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     confirmed_at: Mapped[datetime | None] = mapped_column(TZ)
     run_id: Mapped[uuid.UUID | None] = _uuid()

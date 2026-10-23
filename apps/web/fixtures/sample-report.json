@@ -1269,8 +1269,8 @@
               },
               {
                 "id": "m-29",
-                "sender": "p3",
-                "content": "시간이 다 돼서 대화에서 가장 많이 모인 의견인 센서·데이터 기반 물 관리·경보로 할게요.",
+                "sender": "system",
+                "content": "시간 안에 정하지 못해 김지원님이 지지한 센서·데이터 기반 물 관리·경보로 다음 단계로 넘어가요.",
                 "t_min": 46.0
               },
               {
@@ -1980,7 +1980,7 @@
       {
         "phase": "solution",
         "option_id": "opt-sl-s1",
-        "filled_by": "p3",
+        "filled_by": "system",
         "resolution": "timeout",
         "support": [
           {
@@ -2104,7 +2104,7 @@
       "phase": "solution",
       "value": "센서·데이터 기반 물 관리·경보",
       "option_id": "opt-sl-s1",
-      "filled_by": "p3",
+      "filled_by": "system",
       "resolution": "timeout",
       "t_min": 46.0,
       "first_proposer": "candidate",

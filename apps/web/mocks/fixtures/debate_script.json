@@ -15,7 +15,12 @@
   },
   "fixed_phrases": {
     "consensus_fill": "그럼 {option}로 정리할게요.",
-    "timeout_fill": "시간이 다 돼서 대화에서 가장 많이 모인 의견인 {option}로 할게요."
+    "timeout_fill": {
+      "candidate_support": "시간 안에 정하지 못해 {candidate}님이 지지한 {option}로 다음 단계로 넘어가요.",
+      "most_support": "시간 안에 정하지 못해 지금 지지가 가장 많은 {option}로 다음 단계로 넘어가요.",
+      "earliest": "시간 안에 정하지 못했고 지지가 가장 많은 안이 하나로 정해지지 않아 먼저 나온 {option}로 다음 단계로 넘어가요.",
+      "default": "시간 안에 정하지 못했고 나온 안이 없어 이 단계의 기본 안인 {option}로 다음 단계로 넘어가요."
+    }
   },
   "keywords": [
     {
@@ -1063,8 +1068,8 @@
       "seq": 75,
       "payload": {
         "id": "m-29",
-        "sender": "p3",
-        "content": "시간이 다 돼서 대화에서 가장 많이 모인 의견인 센서·데이터 기반 물 관리·경보로 할게요.",
+        "sender": "system",
+        "content": "시간 안에 정하지 못해 김지원님이 지지한 센서·데이터 기반 물 관리·경보로 다음 단계로 넘어가요.",
         "phase": "solution",
         "is_invite": false,
         "t_min": 11.5,
@@ -1080,7 +1085,7 @@
       "payload": {
         "phase": "solution",
         "value": "센서·데이터 기반 물 관리·경보",
-        "filled_by": "p3",
+        "filled_by": "system",
         "resolution": "timeout",
         "t_min": 11.5
       }

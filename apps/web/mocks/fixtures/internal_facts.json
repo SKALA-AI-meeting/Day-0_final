@@ -76,7 +76,7 @@
     {
       "phase": "solution",
       "option_id": "opt-sl-s1",
-      "filled_by": "p3",
+      "filled_by": "system",
       "resolution": "timeout",
       "support": [
         {
@@ -194,8 +194,8 @@
       "value": "센서·데이터 기반 물 관리·경보",
       "t_min": 46.0,
       "path": "timeout",
-      "filled_by": "p3",
-      "timeout_rule": null,
+      "filled_by": "system",
+      "timeout_rule": "candidate_support",
       "support": [
         {
           "option_id": "opt-sl-s1",

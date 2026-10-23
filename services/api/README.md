@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 242개(live 3개 포함, `make test`는 live를 뺀다).
+총 247개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -330,9 +330,11 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_c03_timeout.py</code> (2)</summary>
+<details><summary><code>tests/test_c03_timeout.py</code> (4)</summary>
 
-- `test_timeout_fills_most_supported_option_without_graph`
+- `test_timeout_fills_candidate_supported_option_with_system_notice`
+- `test_timeout_withheld_candidate_falls_to_most_support`
+- `test_timeout_tie_takes_earliest_option`
 - `test_timeout_without_options_uses_default_keyword`
 
 </details>
@@ -380,14 +382,17 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_consensus.py</code> (6)</summary>
+<details><summary><code>tests/test_consensus.py</code> (9)</summary>
 
 - `test_three_of_four_with_candidate_is_consensus_immediately`
 - `test_consensus_needs_latest_candidate_message_to_confirm`
 - `test_withhold_withdraws_support_without_opposing`
 - `test_ai_only_majority_is_not_consensus`
 - `test_support_for_other_option_replaces_and_later_oppose_withdraws`
-- `test_timeout_selection_most_then_candidate_then_first_then_default`
+- `test_timeout_candidate_support_wins_over_majority`
+- `test_timeout_withheld_candidate_falls_to_most_support`
+- `test_timeout_tie_or_no_support_takes_earliest`
+- `test_timeout_without_options_uses_default`
 
 </details>
 

@@ -127,6 +127,9 @@ PHASE = Enum("keyword", "problem", "solution", "proposal")
 SLOT_PHASE = Enum("keyword", "problem", "solution")
 SEAT = Enum("p1", "p2", "p3")
 PARTICIPANT = Enum("candidate", "p1", "p2", "p3")
+# 칸을 정한 쪽·안의 최초 제안자. system은 시간 초과 채우기(B4)와 그때 만든 기준안 행
+FILLER = Enum("candidate", "p1", "p2", "p3", "system")
+TIMEOUT_RULE = Enum("candidate_support", "most_support", "earliest", "default")  # 결정 B3
 SENDER = Enum("candidate", "p1", "p2", "p3", "system")
 AI_SENDER = Enum("p1", "p2", "p3", "system")  # 내부 게시·MCP post_message
 PERSONA = Enum("stubborn", "quiet", "critic")
@@ -247,7 +250,7 @@ _SLOT_PUBLIC = {
     "phase": SLOT_PHASE,
     "status": Enum("empty", "confirmed"),
     "value": Opt(str),
-    "filled_by": Opt(PARTICIPANT),
+    "filled_by": Opt(FILLER),
     "resolution": Opt(RESOLUTION),
     "outcome": Opt(OUTCOME),
     "t_min": Opt(NUM),
@@ -257,8 +260,9 @@ _SLOT_FULL = {
     "status": Enum("empty", "confirmed"),
     "value": Opt(str),
     "option_id": Opt(str),
-    "filled_by": Opt(PARTICIPANT),
+    "filled_by": Opt(FILLER),
     "resolution": Opt(RESOLUTION),
+    "timeout_rule": Opt(TIMEOUT_RULE),
     "outcome": Opt(OUTCOME),
     "support": Opt(SUPPORT),
     "confirmed_at": Opt(TS),
@@ -419,7 +423,7 @@ CONTRIBUTION_OPTION = {
     "option_id": str,
     "phase": SLOT_PHASE,
     "label": str,
-    "first_proposer": PARTICIPANT,
+    "first_proposer": FILLER,
     "source_message_id": Opt(str),
     "t_min": NUM,
     "adopted": bool,
@@ -443,7 +447,7 @@ EVIDENCE = Tagged(
             "phase": SLOT_PHASE,
             "value": str,
             "resolution": RESOLUTION,
-            "filled_by": PARTICIPANT,
+            "filled_by": FILLER,
             "support": SUPPORT,
             "t_min": NUM,
             "record_ref": RECORD_REF,
@@ -526,7 +530,7 @@ FACTS = {
         {
             "phase": SLOT_PHASE,
             "option_id": Opt(str),
-            "filled_by": PARTICIPANT,
+            "filled_by": FILLER,
             "resolution": RESOLUTION,
             "support": SUPPORT,
             "t_min": NUM,
@@ -554,8 +558,8 @@ FACTS = {
             "value": Opt(str),
             "t_min": NUM,
             "path": Enum("candidate_confirm", "ai_consensus_fill", "timeout"),
-            "filled_by": PARTICIPANT,
-            "timeout_rule": Opt(str),
+            "filled_by": FILLER,
+            "timeout_rule": Opt(TIMEOUT_RULE),
             "support": SUPPORT,
             "candidate_backed": bool,
             "candidate_option_adopted": bool,
@@ -634,11 +638,11 @@ REPORT = {
             "phase": SLOT_PHASE,
             "value": str,
             "option_id": Opt(str),
-            "filled_by": PARTICIPANT,
+            "filled_by": FILLER,
             "resolution": RESOLUTION,
             "outcome": OUTCOME,
             "t_min": NUM,
-            "first_proposer": Opt(PARTICIPANT),
+            "first_proposer": Opt(FILLER),
             "support": [{"option_id": str, "label": str, "supporters": [PARTICIPANT]}],
         }
     ],
@@ -690,7 +694,7 @@ OPTION = {
     "option_id": str,
     "phase": SLOT_PHASE,
     "label": str,
-    "proposer": PARTICIPANT,
+    "proposer": FILLER,
     "scenario_option_key": Opt(str),
     "created_at": TS,
     "existing": bool,
@@ -714,7 +718,7 @@ DEBATE_STATE = {
         {
             "option_id": str,
             "label": str,
-            "proposer": PARTICIPANT,
+            "proposer": FILLER,
             "scenario_option_key": Opt(str),
             "created_at": TS,
             "supporters": [PARTICIPANT],
@@ -734,7 +738,7 @@ DEBATE_STATE = {
             "value": str,
             "option_id": Opt(str),
             "resolution": RESOLUTION,
-            "filled_by": PARTICIPANT,
+            "filled_by": FILLER,
         }
     ],
     "card_progress": CARD_PROGRESS,
@@ -759,8 +763,8 @@ CONTRIBUTIONS = {
         {
             "phase": SLOT_PHASE,
             "option_id": Opt(str),
-            "first_proposer": Opt(PARTICIPANT),
-            "filled_by": PARTICIPANT,
+            "first_proposer": Opt(FILLER),
+            "filled_by": FILLER,
             "resolution": RESOLUTION,
         }
     ],
@@ -912,7 +916,7 @@ WS_SERVER = {
     "slot.confirmed": {
         "phase": SLOT_PHASE,
         "value": str,
-        "filled_by": PARTICIPANT,
+        "filled_by": FILLER,
         "resolution": RESOLUTION,
         "outcome": OUTCOME,
         "t_min": NUM,

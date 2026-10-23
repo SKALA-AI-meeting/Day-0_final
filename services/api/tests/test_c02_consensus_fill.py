@@ -228,7 +228,7 @@ async def test_low_confidence_withhold_withdraws_support_then_timeout_follows_ma
     await api.say(sess, "가뭄이 커요")
     state = await _debate_state(api, sess)
     p1 = state["current_support"]["candidate"]
-    assert p1 and p1 != p2 and state["timeout_option_id"] == p1  # 동률이면 지원자 지지 안
+    assert p1 and p1 != p2 and state["timeout_option_id"] == p1  # 지원자 지지 안이 먼저(B3)
 
     await api.say(sess, "음 잘 모르겠네요")
     state = await _debate_state(api, sess)
@@ -240,4 +240,8 @@ async def test_low_confidence_withhold_withdraws_support_then_timeout_follows_ma
     await tick(ctx)
     slots = (await api.internal.get(f"/internal/sessions/{sess.id}/slots")).json()
     problem = next(s for s in slots if s["phase"] == "problem")
-    assert (problem["option_id"], problem["resolution"]) == (p2, "timeout")
+    assert (problem["option_id"], problem["resolution"], problem["timeout_rule"]) == (
+        p2,
+        "timeout",
+        "most_support",
+    )

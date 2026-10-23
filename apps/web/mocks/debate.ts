@@ -56,7 +56,7 @@ type Script = {
   session_minutes: number;
   phase_deadlines: Record<Phase, number>;
   stage_start: Record<Phase, string>;
-  fixed_phrases: { consensus_fill: string; timeout_fill: string };
+  fixed_phrases: { consensus_fill: string; timeout_fill: Record<string, string> };
   keywords: Keyword[];
   frames: ScriptFrame[];
 };
@@ -131,7 +131,7 @@ function prepare(fixture: unknown): StateSnapshot {
     );
     snap.slots = snap.slots.map((s) =>
       s.status === "confirmed"
-        ? { ...s, resolution: "timeout", outcome: "timeout", filled_by: "p3" }
+        ? { ...s, resolution: "timeout", outcome: "timeout", filled_by: "system" }
         : s,
     );
     if (snap.messages.length) {
@@ -367,7 +367,7 @@ function confirmSlot(
   s: Server,
   phase: SlotPhase,
   value: string,
-  filledBy: "candidate" | Seat,
+  filledBy: "candidate" | Seat | "system",
   resolution: "consensus" | "timeout",
 ) {
   const t = round(now(s));
@@ -504,9 +504,10 @@ function fillOption(s: Server, phase: SlotPhase) {
 }
 
 function timeoutFill(s: Server, phase: SlotPhase) {
+  // mock은 지지 현황을 계산하지 않으므로 대본 안을 최다 지지 규칙 문구로 알린다
   const option = fillOption(s, phase);
-  message(s, "p3", SCRIPT.fixed_phrases.timeout_fill.replace("{option}", option));
-  confirmSlot(s, phase, option, "p3", "timeout");
+  message(s, "system", SCRIPT.fixed_phrases.timeout_fill.most_support.replace("{option}", option));
+  confirmSlot(s, phase, option, "system", "timeout");
 }
 
 // ── MockSocket ───────────────────────────────────────────────

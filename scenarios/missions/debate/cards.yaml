@@ -112,7 +112,7 @@ flow_events:
   - { event_id: stage_start, when: 각 단계 시작, by: system, phrase: stage_start }
   - { event_id: time_warning, when: 단계 마감 L/30 전, by: system, phrase: time_warning }
   - { event_id: consensus_fill, when: 칸 채움 조건 충족 즉시, by: filler_seat, phrase: consensus_fill }
-  - { event_id: timeout_fill, when: 단계 마감, by: announcer_seat, phrase: timeout_fill }
+  - { event_id: timeout_fill, when: 단계 마감, by: system, phrase: timeout_fill }
   - { event_id: silence_invite, when: 침묵 초대 조건, by: critic, phrase: silence_invite }
   - { event_id: submit, when: 지원자 제출 또는 자동 제출, by: system, phrase: null }
 

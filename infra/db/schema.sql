@@ -104,7 +104,7 @@ CREATE TABLE options (
   session_id uuid NOT NULL REFERENCES sessions(id),
   phase text NOT NULL CHECK (phase IN ('keyword','problem','solution')),
   label text NOT NULL,
-  proposer text NOT NULL CHECK (proposer IN ('candidate','p1','p2','p3')),   -- 최초 제안자
+  proposer text NOT NULL CHECK (proposer IN ('candidate','p1','p2','p3','system')),   -- 최초 제안자(system: 시간 초과가 만든 기준안)
   scenario_option_key text,
   source_message_id uuid REFERENCES messages(id),
   created_at timestamptz NOT NULL DEFAULT now()
@@ -153,8 +153,9 @@ CREATE TABLE slots (                         -- start에서 keyword·problem·so
   status text NOT NULL DEFAULT 'empty' CHECK (status IN ('empty','confirmed')),
   value text,
   option_id uuid REFERENCES options(id),
-  filled_by text CHECK (filled_by IN ('candidate','p1','p2','p3')),
+  filled_by text CHECK (filled_by IN ('candidate','p1','p2','p3','system')),   -- system: 시간 초과
   resolution text CHECK (resolution IN ('consensus','timeout')),
+  timeout_rule text CHECK (timeout_rule IN ('candidate_support','most_support','earliest','default')),   -- 시간 초과 선택에 적용된 규칙
   support jsonb,                            -- 확정 순간 [{option_id, supporters}]
   confirmed_at timestamptz,
   run_id uuid,
@@ -163,7 +164,8 @@ CREATE TABLE slots (                         -- start에서 keyword·problem·so
     (status = 'empty' AND value IS NULL AND filled_by IS NULL AND resolution IS NULL)
     OR (status = 'confirmed' AND value IS NOT NULL AND filled_by IS NOT NULL
         AND resolution IS NOT NULL AND confirmed_at IS NOT NULL)
-  )
+  ),
+  CHECK (timeout_rule IS NULL OR resolution = 'timeout')
 );
 
 CREATE TABLE proposals (

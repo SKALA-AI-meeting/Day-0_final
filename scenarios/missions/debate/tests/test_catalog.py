@@ -97,7 +97,13 @@ def test_rules_match_doc(mission, keywords):
     assert mission["consensus_fill"]["candidate_must_support"] is True
     assert mission["consensus_fill"]["wait_min"] == 0
     assert mission["consensus_fill"]["filler_priority"] == ["critic", "quiet", "stubborn"]
-    assert mission["timeout"]["announcer_priority"] == ["critic", "quiet", "stubborn"]
+    assert mission["timeout"]["selection"] == [
+        "candidate_support",
+        "most_support",
+        "earliest",
+        "default",
+    ]
+    assert "announcer_priority" not in mission["timeout"]
     assert Fraction(mission["timeout"]["warning_before_fraction"]) * 60 == 2
     assert mission["timeout"]["stage_default"] == {
         "keyword": "default_keyword",
@@ -484,10 +490,14 @@ def test_persona_prompts_do_not_name_types():
 def test_fixed_phrases_match_doc():
     fp = load("prompts/shared/fixed_phrases.yaml")
     assert fp["consensus_fill"].replace("{option}", "X") == "그럼 X로 정리할게요."
-    assert (
-        fp["timeout_fill"].replace("{option}", "X")
-        == "시간이 다 돼서 대화에서 가장 많이 모인 의견인 X로 할게요."
-    )
+    # 시간 초과 안내는 적용 규칙마다 한 문장이고 그 규칙을 말한다(B4)
+    timeout_fill = fp["timeout_fill"]
+    assert list(timeout_fill) == load("mission.yaml")["timeout"]["selection"]
+    assert all("{option}로" in t for t in timeout_fill.values())
+    assert "{candidate}님이 지지한" in timeout_fill["candidate_support"]
+    assert "지지가 가장 많은" in timeout_fill["most_support"]
+    assert "먼저 나온" in timeout_fill["earliest"]
+    assert "나온 안이 없어" in timeout_fill["default"]
     assert fp["silence_invite"].replace("{candidate}", "OO") == "OO님은 어떻게 생각하세요?"
     assert fp["time_warning"].replace("{remaining}", "2분") == "이 단계 2분 남았어요."
     assert fp["invalid_keyword"] == "이번엔 네 개 중에서 골라야 해요."

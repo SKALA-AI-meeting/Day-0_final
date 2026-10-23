@@ -132,6 +132,7 @@ def slot_full(session: Session, slot: Slot) -> dict[str, Any]:
     return {
         **slot_public(session, slot),
         "option_id": str(slot.option_id) if slot.option_id else None,
+        "timeout_rule": slot.timeout_rule,
         "support": slot.support,
         "confirmed_at": iso(slot.confirmed_at),
     }

@@ -386,6 +386,7 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
             "value": s.value,
             "filled_by": s.filled_by,
             "resolution": s.resolution,
+            "timeout_rule": s.timeout_rule,
             "support": s.support or [],
             "t_min": t_min(session, s.confirmed_at),
             "at": _seconds(session, s.confirmed_at),

@@ -92,7 +92,7 @@
       "phase": "solution",
       "option_id": "opt-sl-s1",
       "first_proposer": "candidate",
-      "filled_by": "p3",
+      "filled_by": "system",
       "resolution": "timeout"
     }
   ]

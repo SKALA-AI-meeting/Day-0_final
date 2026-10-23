@@ -2,15 +2,19 @@
 # 치환 변수: {option} 안 라벨, {candidate} 지원자 표시 이름, {stage} 단계 이름, {remaining} 남은 시간 문자열("2분", "30초"),
 #            {keywords} 키워드 후보 라벨 나열("물·불·나무·바람").
 # 조사 처리(로/으로 등)는 코드가 라벨 끝 글자로 고른다. 문서 골격의 "X로"는 {option}로 적는다.
-# 문서가 확정한 문장: consensus_fill(docs/architecture/agents.md·docs/contracts/README.md), timeout_fill(R7), time_warning 골격, silence_invite 골격,
+# 문서가 확정한 문장: consensus_fill(docs/architecture/agents.md·docs/contracts/README.md), timeout_fill(B4), time_warning 골격, silence_invite 골격,
 # invalid_keyword, assistant_locked. 나머지는 [초안].
 version: 1
 
 # 칸 채우기 공지(합의, 지지자 중 우선순위 자리 이름으로 fill_slot이 저장)
 consensus_fill: 그럼 {option}로 정리할게요.
 
-# 시간 초과 공지(api가 우선순위 첫 자리 이름으로 게시, 지지자가 아니어도 됨)
-timeout_fill: 시간이 다 돼서 대화에서 가장 많이 모인 의견인 {option}로 할게요.
+# 시간 초과 안내(api가 시스템 메시지로 게시). 키는 실제 적용된 선택 규칙(slots.timeout_rule, B3·B4)
+timeout_fill:
+  candidate_support: 시간 안에 정하지 못해 {candidate}님이 지지한 {option}로 다음 단계로 넘어가요.
+  most_support: 시간 안에 정하지 못해 지금 지지가 가장 많은 {option}로 다음 단계로 넘어가요.
+  earliest: 시간 안에 정하지 못했고 지지가 가장 많은 안이 하나로 정해지지 않아 먼저 나온 {option}로 다음 단계로 넘어가요.
+  default: 시간 안에 정하지 못했고 나온 안이 없어 이 단계의 기본 안인 {option}로 다음 단계로 넘어가요.
 
 # 침묵 초대(서지안). 골격만 고정이고 실제 문장은 페르소나가 만들 수 있다
 silence_invite: "{candidate}님은 어떻게 생각하세요?"

@@ -667,6 +667,7 @@ async def confirm(
     support: list[dict],
     now: datetime,
     run_id: uuid.UUID | None = None,
+    timeout_rule: str | None = None,
 ) -> Slot:
     """empty인 행만 바꾸는 조건부 갱신. 지면 409 slot_confirmed."""
     row = await db.scalar(
@@ -678,6 +679,7 @@ async def confirm(
             option_id=option_id,
             filled_by=filled_by,
             resolution=resolution,
+            timeout_rule=timeout_rule,
             support=support,
             confirmed_at=now,
             run_id=run_id,

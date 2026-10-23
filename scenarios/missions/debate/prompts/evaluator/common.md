@@ -39,7 +39,7 @@
 
 `[사실]`은 코드가 기록에서 계산한 값이다. 대화를 읽은 인상과 다르면 **`[사실]`을 따른다.** 워커는 `[사실]`과 모순되는 출력을 거부하고 다시 요청한다.
 
-- `decisions[]`: 칸마다 결정 시각(`t_min`), 결정 경로(`path`: `candidate_confirm` 지원자 확정 ∣ `ai_consensus_fill` AI 동료 합의 채움 ∣ `timeout` 시간 초과), 채운 자리(`filled_by`), 시간 초과에 적용된 규칙(`timeout_rule`, 기록이 없으면 null), 확정 시점 지지 현황(`support`), 지원자 안 여부(`candidate_backed`: 지원자가 처음 냈거나 확정 때 지지한 안), 지원자 안 채택 여부(`candidate_option_adopted`: 지원자 안이고 AI 동료 합의 채움이거나 지지 3명 이상인 지원자 확정. 시간 초과로 정해진 칸은 채택이 아니다), 선결정한 카드(`preempted_cards`: 지원자가 그 카드 예정 시각 전에 칸을 직접 확정해 생기지 않은 카드).
+- `decisions[]`: 칸마다 결정 시각(`t_min`), 결정 경로(`path`: `candidate_confirm` 지원자 확정 ∣ `ai_consensus_fill` AI 동료 합의 채움 ∣ `timeout` 시간 초과), 채운 쪽(`filled_by`: 지원자·AI 동료 자리, 시간 초과는 `system`), 시간 초과에 적용된 선택 규칙(`timeout_rule`: `candidate_support` 지원자가 지지하던 안 ∣ `most_support` 지지 최다 안 ∣ `earliest` 최다가 하나로 정해지지 않아 먼저 나온 안 ∣ `default` 나온 안이 없어 기준안. 시간 초과가 아니거나 기록이 없으면 null), 확정 시점 지지 현황(`support`), 지원자 안 여부(`candidate_backed`: 지원자가 처음 냈거나 확정 때 지지한 안), 지원자 안 채택 여부(`candidate_option_adopted`: 지원자 안이고 AI 동료 합의 채움이거나 지지 3명 이상인 지원자 확정. 시간 초과로 정해진 칸은 채택이 아니다), 선결정한 카드(`preempted_cards`: 지원자가 그 카드 예정 시각 전에 칸을 직접 확정해 생기지 않은 카드).
 - `dimensions[]`: 이 요소 차원마다
   - `fired_core_cards`: 발동한(담당 동료 전원이 전달한) 핵심 카드.
   - `decision_cut`: 결정 전·후만 보는 차원이면 그 칸 결정(`timing`: `before` 결정까지 ∣ `after` 결정 뒤만, 결정 단계·시각·경로). 핵심 장면은 이미 이 결정에서 잘려 있다.
