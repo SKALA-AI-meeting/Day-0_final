@@ -4,5 +4,7 @@
   "scenario_option_key": "water",
   "new_option_label": null,
   "confidence": "high",
-  "addressed_to": []
+  "reservation": false,
+  "addressed_to": [],
+  "excluded": []
 }

@@ -133,7 +133,10 @@ def _plan_context(state: DebateState, deps: DebateDeps) -> PlanContext:
         if ctx.lead and key == ctx.lead.get("key") and ctx.lead.get("option_id"):
             targets.add(ctx.lead["option_id"])
         if declared and targets:
-            ctx.counter_count = rules.counter_count(_phase_intents(state, critic), targets)
+            rule = deps.catalog.persona(critic).get("persuadable") or {}
+            ctx.counter_count = rules.counter_count(
+                _phase_intents(state, critic), targets, rule if isinstance(rule, dict) else {}
+            )
     return ctx
 
 
@@ -363,7 +366,11 @@ async def turn(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, An
         )
     ):
         decision["llm_used"] = True
-        decision["speakers"] = await _turn_llm(state, deps, brief)
+        # 지원자가 답하지 말라고 뺀 자리(의도 분류 excluded)는 턴 LLM이 골라도 넣지 않는다
+        excluded = set((state.get("intent") or {}).get("excluded") or [])
+        decision["speakers"] = [
+            s for s in await _turn_llm(state, deps, brief) if s["seat"] not in excluded
+        ]
         decision["reason"] = decision.get("reason") or "턴 LLM 화자 선택"
     critic = deps.catalog.seat_of("critic")
     if state.get("notice") and not decision["speakers"] and decision["fill"] is None and critic:
@@ -850,7 +857,8 @@ async def fill(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, An
     """합의 채우기 전용 분기: `fill_slot{option_id, seat, content, run_id}` 한 번(공지
     post_message 없음).
 
-    이번 run에 입장을 저장했으면 지지를 다시 읽어 판정한다(같은 run 재판정).
+    채우는 것은 load 때 이미 합의가 있던 run(`decision.fill`)뿐이다. 이번 run의 AI 발언으로 지지가
+    바뀌어도 같은 run에서 다시 판정하지 않고, 이후 run이 지원자의 최신 발언과 함께 다시 본다(B2).
     """
     deps = runtime.context
     if (
@@ -861,14 +869,6 @@ async def fill(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, An
     decision = dict(state["decision"])
     target = decision.get("fill")
     ds = state["ds"]
-    if any(p.get("stance") for p in state.get("posted") or []):
-        fresh = _data(await deps.tools.code.call("get_debate_state", {}))
-        if isinstance(fresh, dict):
-            ds = fresh
-            consensus = fresh.get("consensus_option_id")
-            if consensus and rules.slot_empty(fresh) and fresh.get("phase") == state["phase"]:
-                seat = rules.fill_seat(fresh, consensus, deps.catalog)
-                target = {"option_id": consensus, "seat": seat} if seat else None
     if not target:
         return {}
     option = rules.option_by_id(ds, target["option_id"]) or {}

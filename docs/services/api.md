@@ -89,9 +89,9 @@ services/api/app/
 ## 지원자 메시지 처리 (`services/debate.py`)
 
 1. WS `message.send{client_msg_id, content}` → in_progress 확인(아니면 오류 프레임 `session_ending`) → 마스킹 → 저장(`(session_id, client_msg_id)` 멱등, `phase`, `origin`: 같은 단계에서 지원자를 부른 초대 메시지(`is_invite`) 뒤 첫 지원자 발언이면 `invited`, 아니면 `spontaneous`)과 `sessions.generation` +1을 한 커밋 → `message.ack{run_id}`·`message.new` 브로드캐스트(ack은 의도 분류를 기다리지 않는다) → `agent_runs` 행 `queued` → `message` 자극 enqueue.
-2. 메일박스가 그 자극을 꺼내면 낡았는지와 상관없이 먼저 **실시간 의도 분류**(`agent/intent`, `MODEL_INTENT`, 타임아웃 10초, 재시도 없음)를 한다. 입력은 메시지·**저장된 `messages.phase`**·그 단계의 **카탈로그 안 전체**(아직 발언되지 않은 것 포함, `scenario_option_key`와 라벨)와 그 단계의 이미 생긴 안 목록·직전 5개(R5-6). 메일박스가 밀린 사이 단계가 바뀌어도 현재 단계의 카탈로그로 분류하지 않는다. 출력은 `confidence: high|low`를 포함한다(R4·R5-22). `message_intents` 저장 → 토론 상태 반영:
-   - `propose`: 대상이 카탈로그 안이면 그 `scenario_option_key`로 안 행을 찾거나 만든다(없으면 proposer=candidate, source_message_id=이 메시지). 이후 AI가 같은 안을 propose해도 같은 행을 쓰므로 최초 제안자가 보존된다. 카탈로그 밖이면 `new_option_label`로 자유 안을 만든다. 그다음 support.
-   - `agree`+target이면 support, `oppose`+target이면 oppose. `question`·`other`는 입장 없음.
+2. 메일박스가 그 자극을 꺼내면 낡았는지와 상관없이 먼저 **실시간 의도 분류**(`agent/intent`, `MODEL_INTENT`, 타임아웃 10초, 재시도 없음)를 한다. 입력은 메시지·**저장된 `messages.phase`**·그 단계의 **카탈로그 안 전체**(아직 발언되지 않은 것 포함, `scenario_option_key`와 라벨)와 그 단계의 이미 생긴 안 목록·직전 5개(R5-6). 메일박스가 밀린 사이 단계가 바뀌어도 현재 단계의 카탈로그로 분류하지 않는다. 출력은 `confidence: high|low`, 대상 안에 대한 유보 표현 `reservation`, 지원자가 뺀 자리 `excluded`를 포함한다(R4·R5-22·B1). `message_intents` 저장 → 토론 상태 반영(지지로 세는 발언 = high인 `propose`·`agree`이고 `reservation = false`):
+   - `propose`: 대상이 카탈로그 안이면 그 `scenario_option_key`로 안 행을 찾거나 만든다(없으면 proposer=candidate, source_message_id=이 메시지). 이후 AI가 같은 안을 propose해도 같은 행을 쓰므로 최초 제안자가 보존된다. 카탈로그 밖이면 `new_option_label`로 자유 안을 만든다(안 행은 confidence·유보와 상관없이). 지지로 세는 발언이면 그다음 support.
+   - `agree`+target이면 지지로 세는 발언일 때 support, `oppose`+target(high)이면 oppose, `withhold`+target이면 withhold(그 안 지지 철회, 대상이 없으면 지금 지지하는 안 철회, confidence와 상관없이). 유보 표현이 든 제안·동의, `question`·`other`는 입장 없음.
    - 실패·스키마 위반은 `intent=other`·`fallback=true`로 두고 진행.
 3. 자극이 낡지 않았으면 이어서 토론 그래프 `stimulus=message` 실행(AgentRunner). 낡았으면 그래프를 부르지 않고 `skipped`로 닫는다(뒤의 메시지 자극이 함께 처리). 그래프 결과의 게시·안·입장·칸 채우기는 debate-mcp → 내부 API로 들어온다.
 
@@ -101,10 +101,10 @@ services/api/app/
 
 ## 합의 판정과 시간 초과 선택 (`services/consensus.py`)
 
-순수 함수 `judge(options, stances, default_option_id=None)`(`services/consensus.py`)가 합의 안·시간 초과 안·참여자별 현재 지지를 함께 돌려준다. 지원자 입장은 의도 분류가 `confidence: high`일 때만 `stances` 행이 되므로 입력은 안과 입장 이력뿐이다. 수치·우선순위는 [product/scenario.md](../product/scenario.md)가 정본이고 계약은 입력과 결과만 고정한다.
+순수 함수 `judge(options, stances, default_option_id=None, confirmed_option_id=None)`(`services/consensus.py`)가 합의 안·시간 초과 안·참여자별 현재 지지를 함께 돌려준다. 지원자 support 행은 의도 분류가 지지로 세는 발언일 때만 생기므로 입력은 안과 입장 이력, 그리고 그 단계 지원자의 최신 발언이 지지로 세는 발언이면 그 대상 안(`confirmed_option_id`, `candidate_confirmed`가 `message_intents`에서 읽음)이다. 수치·우선순위는 [product/scenario.md](../product/scenario.md)가 정본이고 계약은 입력과 결과만 고정한다.
 
-- 현재 지지 = **참여자당 하나**. 다른 안을 support하면 이전 지지를 대체하고, 같은 안에 대한 후속 `oppose`는 그 지지를 철회한다(R5-7). 지원자 입장은 `confidence: high`인 `agree`·`propose`만 지지로 센다(R4).
-- consensus: 지원자 포함 4명 중 3명 이상 지지. 성립 즉시 판정한다(합의 대기 시간 없음, R4).
+- 현재 지지 = **참여자당 하나**. 다른 안을 support하면 이전 지지를 대체하고, 같은 안에 대한 후속 `oppose`·`withhold`는 그 지지를 철회한다(R5-7·B1, withhold는 반대자로 세지 않음). 지원자 입장은 `confidence: high`이고 유보 표현이 없는 `agree`·`propose`만 지지로 센다(R4·B1).
+- consensus: 지원자 포함 4명 중 3명 이상 지지이고 `confirmed_option_id`가 그 안(지원자의 최신 발언이 그 안의 명시적 동의, B2). 성립 즉시 판정한다(합의 대기 시간 없음, R4).
 - timeout: 지지자 최다 → 동률이면 지원자 지지 안 → 먼저 제안된 안 → 없으면 단계 기준안(키워드는 `default_keyword`, 문제 상황은 잠긴 기준안). 기준안 행이 없으면 채우기 전에 만든다(proposer는 채우는 자리).
 - 같은 함수가 DebateState와 내부 `POST /slots/fill` 검사에 쓰인다. 그래서 AI는 합의 전에 칸을 채우지 못한다(409 `no_consensus`).
 
@@ -207,7 +207,7 @@ e2e·단계별 테스트가 15분을 처음부터 기다리지 않게 하는 두
 - 이름·입장: 입장·consent·resume 응답에 `session_id`, 입장 응답에 초대 이름, 시작 전 `/state`에 참여자 이름·아바타, consent의 `display_name`이 `/state.participants`·디브리핑에 쓰이고 비우면 별칭, `/assets/...` 이미지가 200.
 - 메일박스: 가짜 시계·가짜 그래프로 자극이 직렬 처리됨, 메시지 저장 시 generation +1이고 그 자극의 generation이 저장 값, `message.ack`이 의도 분류 전에 나감, `agent_runs`가 `queued`로 저장된 뒤 enqueue, 단계 전환 뒤 꺼낸 이전 단계 메시지가 그 메시지 단계의 카탈로그로 분류·저장되고 턴·발언만 skipped, 게시 직전 generation이 바뀌면 남은 화자 버림, `phase_started`는 enqueue만, 같은 run_id의 finished run은 재실행 안 됨, 낡은 message 자극도 의도 분류·안·지지 반영은 되고 그래프만 skipped, 200초 넘은 started run 재실행.
 - 단계·칸: 지원자 확정 → `slot.confirmed`·`phase.changed`·`timer` 순서와 keyword 확정 시 `materials.opened`, 마감 누적 이월, keyword 후보 밖 422, problem·solution 확정의 문자열·카탈로그 키 연결과 불일치 시 `option_id=null`(LLM 호출 0), AI fill의 합의 전 409 `no_consensus`(칸·공지 0건), AI fill 성공 시 칸 확정과 공지(seq 5, `consensus_fill`)가 같은 트랜잭션이고 WS가 `message.new` → `slot.confirmed` → `phase.changed` → `timer`, 같은 run_id 재호출은 기존 칸·공지, 409 검사 순서 `phase_not_open` → `slot_confirmed` → `no_consensus`, 동시 확정 시 하나만 성공, 마감 시 api 결정적 채우기(우선순위 자리 이름·R7 문구·LLM 0), proposal 진입 시 기획안 앞 3칸 채우기.
-- 합의 판정 단위 테스트: 3/4 즉시 성립(대기 없음), confidence low인 지원자 agree 미집계, 다른 안 support가 이전 지지를 대체, 같은 안 후속 oppose가 지지 철회, 카탈로그 안을 지원자가 먼저 말하면 같은 option_id·proposer=candidate이고 이후 AI propose도 같은 행.
+- 합의 판정 단위 테스트: 3/4 즉시 성립(대기 없음), 지원자의 최신 발언이 그 안의 명시적 동의가 아니면 합의 없음, confidence low·유보 표현이 든 지원자 agree 미집계, 다른 안 support가 이전 지지를 대체, 같은 안 후속 oppose·withhold가 지지 철회(withhold는 반대자 아님), 카탈로그 안을 지원자가 먼저 말하면 같은 option_id·proposer=candidate이고 이후 AI propose도 같은 행.
 - 메시지·WS: ack·증분·재연결 후 `/state`, `origin`(초대 뒤 첫 발언만 invited), 의도 분류 → 안·입장 반영, 분류 실패 시 other, 모든 프레임에 연속 `seq`, typing 6초 만료.
 - 시간(가짜 시계 단위 테스트 + 15분 실 스택 1~2개, R3): 단계 마감 → `phase.changed` 15초 안, 마감 임박 안내 1건, 침묵 초대 조건에서 `invite_delivered=false`인 동안 idle 재enqueue(대기 중이면 중복 없음), 카드 예정 시각에 card_due, 담당 전원 delivered 전까지 새 run_id로 재enqueue(큐·실행 중이면 중복 없음, 카드당 최대 3회·30초 간격), `ends_at` 자동 제출과 큐 발행.
 - 자료·어시스턴트: 키워드 확정 전 목록 잠김·본문 423, 확정 뒤 그 키워드 자료만(채용 건 버전 원문), 열람 기록, 어시스턴트 60회 초과 429.

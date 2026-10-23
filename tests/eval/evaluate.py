@@ -16,8 +16,8 @@ from typing import Any
 import yaml
 
 HERE = Path(__file__).resolve().parent
-INTENTS = ("propose", "agree", "oppose", "question", "other")
-STANCE_INTENTS = ("propose", "agree", "oppose")
+INTENTS = ("propose", "agree", "oppose", "withhold", "question", "other")
+STANCE_INTENTS = ("propose", "agree", "oppose", "withhold")
 INTENT_BASELINE = 0.85  # gpt-4o-mini, docs/architecture/harness.md "실측 기준선"
 BARS_PILOT_TARGET = 0.80  # ±1 일치율 파일럿 목표(잠정)
 
@@ -73,7 +73,9 @@ def intent_violations(output: Any) -> list[str]:
         "scenario_option_key",
         "new_option_label",
         "confidence",
+        "reservation",
         "addressed_to",
+        "excluded",
     }
     if not isinstance(output, dict) or set(output) != keys:
         return ["필드 집합이 계약과 다름"]
@@ -82,10 +84,13 @@ def intent_violations(output: Any) -> list[str]:
         out.append("intent 값")
     if output["confidence"] not in ("high", "low"):
         out.append("confidence 값")
-    if not isinstance(output["addressed_to"], list) or any(
-        s not in ("p1", "p2", "p3") for s in output["addressed_to"]
-    ):
-        out.append("addressed_to 값")
+    if not isinstance(output["reservation"], bool):
+        out.append("reservation 값")
+    for field in ("addressed_to", "excluded"):
+        if not isinstance(output[field], list) or any(
+            s not in ("p1", "p2", "p3") for s in output[field]
+        ):
+            out.append(f"{field} 값")
     filled = [
         k for k in ("target_option_id", "scenario_option_key", "new_option_label") if output[k]
     ]
@@ -131,13 +136,20 @@ def score_intent(cases: list[dict[str, Any]], outputs: list[dict[str, Any]]) -> 
     }
 
 
-def counts_as_support(case: dict[str, Any], output: dict[str, Any], key: str) -> bool:
-    """지지로 세는 것: propose·agree이고 high이며 그 안이 대상(rubric.md 1.2)."""
-    if output["intent"] not in ("propose", "agree") or output["confidence"] != "high":
-        return False
+def targets(case: dict[str, Any], output: dict[str, Any], key: str) -> bool:
     if key in case["existing"]:
         return output["target_option_id"] == option_id(key)
     return output["scenario_option_key"] == key
+
+
+def counts_as_support(case: dict[str, Any], output: dict[str, Any], key: str) -> bool:
+    """지지로 세는 것: propose·agree이고 high이며 유보 표현이 없고 그 안이 대상(rubric.md 1.2,
+    결정 B1)."""
+    if output["intent"] not in ("propose", "agree") or output["confidence"] != "high":
+        return False
+    if output.get("reservation"):
+        return False
+    return targets(case, output, key)
 
 
 def decided_problems(case: dict[str, Any], output: dict[str, Any]) -> list[str]:
@@ -150,6 +162,11 @@ def decided_problems(case: dict[str, Any], output: dict[str, Any]) -> list[str]:
             out.append(f"{key}를 지지로 셈")
     if check.get("support") and not counts_as_support(case, output, check["support"]):
         out.append(f"{check['support']}를 지지로 세지 않음")
+    if check.get("withhold") and not (
+        output["intent"] == "withhold" and targets(case, output, check["withhold"])
+    ):
+        hit = output["target_option_id"] or output["scenario_option_key"]
+        out.append(f"{check['withhold']} 보류가 아님({output['intent']}, 대상 {hit or '없음'})")
     if check.get("new_option"):
         similar = check["new_option"]
         if output["intent"] != "propose" or not output["new_option_label"]:
@@ -159,6 +176,8 @@ def decided_problems(case: dict[str, Any], output: dict[str, Any]) -> list[str]:
             out.append(f"비슷한 안 {similar}로 묶음")
     if "addressed_to" in check and sorted(output["addressed_to"]) != sorted(check["addressed_to"]):
         out.append("addressed_to 다름")
+    if "excluded" in check and sorted(output["excluded"]) != sorted(check["excluded"]):
+        out.append("excluded 다름")
     return out
 
 

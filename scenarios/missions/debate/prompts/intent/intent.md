@@ -18,16 +18,22 @@
 | `propose` | 새 안 또는 기존 안을 자기 의견으로 낸다 | "저는 침수 문제로 가면 좋겠어요" |
 | `agree` | 다른 사람이 낸 안에 동의한다 | "지안님 말대로 S2가 낫겠네요" |
 | `oppose` | 특정 안에 반대한다 | "가뭄은 너무 흔한 주제라 별로예요" |
+| `withhold` | 안을 보류·유보하거나, 아직 고르지 않고 판단을 미룬다(기권 포함) | "침수 쪽은 일단 보류할게요", "아직 고르지 않을게요" |
 | `question` | 질문한다(근거·의견 요청 포함) | "하람님은 어떻게 생각하세요?" |
 | `other` | 위에 해당하지 않음(인사·호응·진행 말) | "네네", "시간 얼마나 남았죠?" |
 
-한 메시지에 여러 의도가 섞이면 입장을 드러내는 쪽(`propose`·`agree`·`oppose`)을 고른다. 반대하면서 다른 안을 내면 `propose`다.
+한 메시지에 여러 의도가 섞이면 이렇게 고른다.
+
+1. 어떤 안을 자기 의견으로 내거나 지지하면 그 안을 대상으로 `propose`·`agree`다. 같은 메시지에서 다른 안을 반대·보류해도 그렇다("나무 말고 바람으로 가요", "S2는 보류하고 저는 S3로 갈래요"). 반대·보류한 안은 대상이 아니다.
+2. 지지하는 안 없이 보류·유보·판단 미룸만 있으면 `withhold`다. 장점을 인정하거나 질문을 덧붙여도 `withhold`다("장점은 알겠는데 아직 고르진 못하겠어요", "그 안은 미뤄 두고 더 얘기해 봐요"). 보류를 `propose`·`agree`로 바꾸지 않는다.
+3. 지지하는 안 없이 반대만 있으면 `oppose`다.
+4. 질문만 있으면 `question`이다. 앞선 말이 지지가 아니었다고 바로잡는 말은 그 안을 대상으로 한 `propose`·`agree`가 아니다.
 
 ## 대상 안
 
 - 대상이 `[나온 안]`에 있으면 `target_option_id`에 그 id를 넣는다.
 - 대상이 아직 행이 없는 카탈로그 안이면 `scenario_option_key`에 그 키를 넣는다(라벨이 정확히 같지 않아도 뜻이 같으면 그 키).
-- `propose`인데 나온 안·카탈로그 안 어느 것과도 다르면 `new_option_label`에 20자 이내 짧은 라벨을 넣는다.
+- 기존 안·카탈로그 안으로 묶는 것은 **핵심(무엇을 하는지·누구에게·어떤 방법으로)이 같을 때만**이다. 같은 분야의 낱말(센서, 문자, 경보, 캠페인 등)이 겹쳐도 하는 일이 다르면 다른 안이다. `propose`인데 핵심이 같은 안이 없으면 `new_option_label`에 20자 이내 짧은 라벨을 넣는다.
 - 셋 중 하나만 채우고 나머지는 null. 대상이 없으면 모두 null.
 
 ## confidence
@@ -35,24 +41,37 @@
 - `high`: 의도와 대상이 둘 다 분명하다.
 - `low`: 농담·반어, 대상이 둘 이상이거나 불분명, "그것도 괜찮고요" 같은 애매한 호응, 조건부("만약 ~면 ~도 괜찮을 듯").
 
-## addressed_to
+## reservation
 
-이름을 부르거나 직전 발언에 답한 자리 id 목록. 전체에게 묻는 질문이면 `[]`.
+대상 안에 대한 보류·유보·반대·조건("다만 ~가 걱정이에요", "~라면 괜찮아요", "일단 보류")이 메시지에 들어 있으면 `true`, 아니면 `false`다. 대상이 아닌 다른 안에 대한 반대·보류는 넣지 않는다("나무 말고 바람으로 가요"는 대상 바람에 대해 `false`). `withhold`는 늘 `true`다.
+
+## addressed_to와 excluded
+
+- `addressed_to`: 이름을 부르거나 직전 발언에 답한 자리 id 목록. 전체에게 묻는 질문이면 `[]`.
+- `excluded`: 지원자가 이번에는 답하지 말라고 뺀 자리 id 목록("지안님 말고 하람님 생각은요?"의 지안님). 없으면 `[]`. `excluded`에 넣은 자리는 `addressed_to`에 넣지 않는다.
 
 ## 출력
 
 JSON 하나만 낸다. 다른 글은 쓰지 않는다.
 
 ```json
-{"intent": "propose", "target_option_id": null, "scenario_option_key": "water_p2", "new_option_label": null, "confidence": "high", "addressed_to": []}
+{"intent": "propose", "target_option_id": null, "scenario_option_key": "water_p2", "new_option_label": null, "confidence": "high", "reservation": false, "addressed_to": [], "excluded": []}
 ```
 
 ## 예시
 
+`reservation`·`excluded`를 적지 않은 예는 `false`·`[]`다.
+
 - 단계 problem, 카탈로그에 `water_p2`(도심 폭우·침수 피해 증가), 메시지 "저는 침수 피해 쪽이 더 크다고 봐요" → `propose`, `scenario_option_key: water_p2`, high, `[]`.
 - 직전에 서지안이 S2를 밀었고 메시지 "지안님 말 듣고 보니 절수 보상도 괜찮네요" → `agree`, 대상 S2(나온 안이면 id), high, `["p3"]`.
-- 메시지 "한결님, 가뭄은 매년 있는 거라 새롭지 않은 것 같아요" → `oppose`, 대상 P1, high, `["p1"]`.
+- 메시지 "한결님, 가뭄은 매년 있는 거라 새롭지 않은 것 같아요" → `oppose`, 대상 P1, high, reservation true, `["p1"]`.
+- 메시지 "침수 안은 판단을 조금 미룰게요. 자료를 더 보고 싶어요" → `withhold`, 대상 P2, high, reservation true.
+- 메시지 "나무가 끌리긴 하는데 아직 고르진 못하겠어요" → `withhold`, 대상 나무, high, reservation true.
+- 메시지 "센서 경보 좋은데 설치비가 걱정이에요" → `agree`, 대상 S1, high, reservation true.
+- 메시지 "나무 말고 바람으로 가요" → `propose`, 대상 바람, high, reservation false.
 - 메시지 "하람님은 해결책 뭐가 좋다고 보세요?" → `question`, 대상 없음, high, `["p2"]`.
+- 메시지 "지안님 말고 하람님은 어떻게 보세요?" → `question`, 대상 없음, high, addressed_to `["p2"]`, excluded `["p3"]`.
 - 메시지 "다들 어떻게 생각하세요?" → `question`, 대상 없음, high, `[]`.
 - 메시지 "음 둘 다 괜찮은데…" → `other`, 대상 없음, low, `[]`.
 - 메시지 "차라리 학교 급식 문제로 하면 어때요?" → `propose`, `new_option_label: "학교 급식 문제"`, high, `[]`.
+- 카탈로그에 `water_s2`(주민 절수·보상 캠페인)가 있고 메시지 "학교에서 물 절약 수업을 하면 어때요?" → 대상과 방법이 달라 `propose`, `new_option_label: "학교 물 절약 수업"`, high.

@@ -32,7 +32,7 @@ from app.services import scenario as sc
 from app.services.common import t_min
 from app.services.views import gaps
 
-INTENTS = ("propose", "agree", "oppose", "question", "other")
+INTENTS = ("propose", "agree", "oppose", "withhold", "question", "other")
 AI_SEATS = ("p1", "p2", "p3")
 # 붙여넣기 의심: 지원자 메시지의 글자 5-gram 중 앞선 어시스턴트 답에도 있는 비율. 짧은 메시지는
 # 우연히 겹치므로 공백을 뺀 5-gram이 20개 이상인 메시지만 본다

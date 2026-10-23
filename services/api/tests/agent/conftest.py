@@ -45,6 +45,8 @@ class FakeServer:
         self.keyword: str | None = None
         self.options: list[dict[str, Any]] = []
         self.support: dict[str, str | None] = {p: None for p in ("candidate", *SEATS)}
+        # 지원자의 이 단계 최신 발언이 지지로 세는 발언이면 그 안(api candidate_confirmed)
+        self.confirmed: str | None = None
         self.opposers: dict[str, set[str]] = {}
         self.slots: dict[str, dict[str, Any]] = {}
         self.cards: dict[str, dict[str, Any]] = {}
@@ -104,6 +106,7 @@ class FakeServer:
             }
         )
         self.ports.generation += 1
+        self.confirmed = None  # 새 최신 발언은 분류 반영 전까지 지지로 세지 않는다
         return mid
 
     def system_says(self, content: str) -> str:
@@ -121,17 +124,24 @@ class FakeServer:
         return mid
 
     def apply_candidate(self, result: dict[str, Any]) -> None:
-        """api 메일박스의 의도 반영(docs/contracts/internal.md): 안 행은 confidence와 무관, 입장은
-        high만."""
+        """api 메일박스의 의도 반영(docs/contracts/internal.md): 안 행은 confidence와 무관, 지지는
+        high이고 유보 표현이 없을 때만, 보류는 confidence와 무관하게 그 안 지지 철회."""
         target = result.get("target_option_id")
         key = result.get("scenario_option_key")
         if result["intent"] == "propose" and key:
             found = next((o for o in self.phase_options() if o["scenario_option_key"] == key), None)
             target = found["option_id"] if found else self.add_option(key, "candidate")
+        if result["intent"] == "withhold":
+            withdrawn = target or (None if key else self.support.get("candidate"))
+            if withdrawn and self.support.get("candidate") == withdrawn:
+                self.support["candidate"] = None
+            return
         if result.get("confidence") != "high" or not target:
             return
         if result["intent"] in ("propose", "agree"):
-            self.support["candidate"] = target
+            if not result.get("reservation"):
+                self.support["candidate"] = target
+                self.confirmed = target
         elif result["intent"] == "oppose":
             self.opposers.setdefault(target, set()).add("candidate")
             if self.support.get("candidate") == target:
@@ -150,7 +160,7 @@ class FakeServer:
 
     def consensus(self) -> str | None:
         cand = self.support.get("candidate")
-        if not cand:
+        if not cand or cand != self.confirmed:
             return None
         count = sum(1 for p, o in self.support.items() if o == cand)
         return cand if count >= 3 else None
@@ -490,6 +500,8 @@ def intent_of(
     key: str | None = None,
     to: tuple[str, ...] = (),
     confidence: str = "high",
+    reservation: bool = False,
+    excluded: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     return {
         "intent": kind,
@@ -497,7 +509,9 @@ def intent_of(
         "scenario_option_key": key,
         "new_option_label": None,
         "confidence": confidence,
+        "reservation": reservation,
         "addressed_to": list(to),
+        "excluded": list(excluded),
     }
 
 

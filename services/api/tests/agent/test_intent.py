@@ -34,7 +34,9 @@ def _expected(row: dict) -> dict:
         else None,
         "new_option_label": "우주" if target == "new" else None,
         "confidence": "low" if row["conf"] == "low" else "high",
+        "reservation": row["intent"] in ("oppose", "withhold"),
         "addressed_to": row["addressed_to"],
+        "excluded": [],
     }
 
 
@@ -64,7 +66,9 @@ async def test_catalog_option_first_mentioned_is_key(catalog):
         "scenario_option_key": "water",
         "new_option_label": None,
         "confidence": "high",
+        "reservation": False,
         "addressed_to": [],
+        "excluded": [],
     }
     result, used = await _classify(
         FakeLLM([out]), "물이요", catalog.catalog_options("keyword", None)
@@ -86,7 +90,9 @@ async def test_message_phase_catalog_is_used(catalog):
         "scenario_option_key": "water_p2",
         "new_option_label": None,
         "confidence": "high",
+        "reservation": False,
         "addressed_to": [],
+        "excluded": [],
     }
     result, used = await _classify(
         FakeLLM([out]), "침수요", catalog.catalog_options("keyword", None)
@@ -110,7 +116,29 @@ async def test_message_phase_catalog_is_used(catalog):
             "scenario_option_key": None,
             "new_option_label": None,
             "confidence": "high",
+            "reservation": False,
             "addressed_to": [],
+            "excluded": [],
+        },
+        {
+            "intent": "withhold",
+            "target_option_id": None,
+            "scenario_option_key": None,
+            "new_option_label": None,
+            "confidence": "high",
+            "reservation": "yes",
+            "addressed_to": [],
+            "excluded": [],
+        },
+        {
+            "intent": "question",
+            "target_option_id": None,
+            "scenario_option_key": None,
+            "new_option_label": None,
+            "confidence": "high",
+            "reservation": False,
+            "addressed_to": [],
+            "excluded": ["p9"],
         },
     ],
 )
@@ -128,12 +156,54 @@ async def test_message_id_is_remembered(catalog):
         "scenario_option_key": None,
         "new_option_label": None,
         "confidence": "high",
+        "reservation": False,
         "addressed_to": ["p2"],
+        "excluded": [],
     }
     await _classify(
         FakeLLM([out]), "하람님?", catalog.catalog_options("keyword", None), message_id="m-1"
     )
     assert intent.recall("m-1")["addressed_to"] == ["p2"]
+
+
+async def test_withhold_and_reservation_pass_validation(catalog):
+    out = {
+        "intent": "withhold",
+        "target_option_id": "opt-wind",
+        "scenario_option_key": None,
+        "new_option_label": None,
+        "confidence": "high",
+        "reservation": True,
+        "addressed_to": [],
+        "excluded": [],
+    }
+    result, used = await _classify(
+        FakeLLM([out]), "바람은 일단 보류요", catalog.catalog_options("keyword", None)
+    )
+    assert not used and result["intent"] == "withhold" and result["reservation"] is True
+    assert result["target_option_id"] == "opt-wind"
+
+
+async def test_excluded_seat_is_removed_from_addressed(catalog):
+    """지원자가 뺀 자리는 분류가 addressed_to에 함께 넣어도 대상에서 빠진다."""
+    out = {
+        "intent": "question",
+        "target_option_id": None,
+        "scenario_option_key": None,
+        "new_option_label": None,
+        "confidence": "high",
+        "reservation": False,
+        "addressed_to": ["p3", "p2"],
+        "excluded": ["p3"],
+    }
+    result, used = await _classify(
+        FakeLLM([out]), "지안님 말고 하람님은요?", catalog.catalog_options("keyword", None)
+    )
+    assert not used and result["addressed_to"] == ["p2"] and result["excluded"] == ["p3"]
+
+
+async def test_fallback_has_no_reservation_or_exclusion():
+    assert intent.fallback()["reservation"] is False and intent.fallback()["excluded"] == []
 
 
 @pytest.mark.live
@@ -165,7 +235,9 @@ async def test_only_one_target_field_is_kept(catalog):
         "scenario_option_key": "fire",
         "new_option_label": "불 축제",
         "confidence": "high",
+        "reservation": False,
         "addressed_to": [],
+        "excluded": [],
     }
     result, used = await _classify(
         FakeLLM([both]), "불이요", catalog.catalog_options("keyword", None)

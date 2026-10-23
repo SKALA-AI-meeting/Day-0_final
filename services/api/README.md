@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 218개(live 3개 포함, `make test`는 live를 뺀다).
+총 235개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -161,12 +161,13 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_cards.py</code> (15)</summary>
+<details><summary><code>tests/agent/test_cards.py</code> (16)</summary>
 
 - `test_c5_lead_lock_joint_delivery_and_observations`
 - `test_c5_api_lock_is_used`
 - `test_c5_dropped_card_speaker_resumes_next_run`
 - `test_c5_critic_moves_after_two_counters_stubborn_holds`
+- `test_critic_does_not_move_on_opposition_alone`
 - `test_critic_does_not_move_after_one_counter`
 - `test_card_due_keyword_critic_pushes_own_keyword`
 - `test_card_due_keyword_stubborn_when_candidate_backs_wind`
@@ -180,13 +181,16 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_intent.py</code> (10)</summary>
+<details><summary><code>tests/agent/test_intent.py</code> (15)</summary>
 
 - `test_fixture_20_schema_and_confidence`
 - `test_catalog_option_first_mentioned_is_key`
 - `test_message_phase_catalog_is_used`
-- `test_failure_falls_back_to_other` ×4
+- `test_failure_falls_back_to_other` ×6
 - `test_message_id_is_remembered`
+- `test_withhold_and_reservation_pass_validation`
+- `test_excluded_seat_is_removed_from_addressed`
+- `test_fallback_has_no_reservation_or_exclusion`
 - `test_live_accuracy_baseline` (live)
 - `test_only_one_target_field_is_kept`
 
@@ -258,14 +262,15 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_turn.py</code> (24)</summary>
+<details><summary><code>tests/agent/test_turn.py</code> (28)</summary>
 
 - `test_phase_started_keyword_pushers_and_problem_react`
 - `test_second_speaker_sees_the_first_speakers_line`
 - `test_proposal_phase_started_has_no_speakers`
 - `test_named_reply_first_and_at_most_two`
 - `test_named_order_follows_the_message_not_the_classifier`
-- `test_classifier_addressed_seat_answers_first`
+- `test_excluded_seat_does_not_answer`
+- `test_excluded_seat_is_not_picked_for_open_question_or_by_turn_llm`
 - `test_named_seat_missed_by_the_classifier_still_answers`
 - `test_quiet_only_when_called_or_asked_all`
 - `test_turn_llm_only_for_message`
@@ -273,7 +278,9 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_silence_invite_once_by_critic`
 - `test_consecutive_three_blocks_turn_llm_choice`
 - `test_existing_consensus_fills_without_respond`
-- `test_ai_reply_creates_consensus_in_same_run`
+- `test_ai_move_does_not_fill_until_candidate_confirms`
+- `test_reserved_agreement_does_not_fill`
+- `test_withhold_withdraws_candidate_support`
 - `test_fill_slot_conflict_saves_nothing`
 - `test_no_fill_without_consensus`
 - `test_same_run_id_rerun_converges`
@@ -284,6 +291,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_trace_and_decision`
 - `test_unexpected_error_after_respond_stops_typing`
 - `test_llm_fault_persona_timeout_skips_one_speaker`
+- `test_counter_count_counts_only_explicit_alternatives`
 
 </details>
 
@@ -302,12 +310,16 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_c02_consensus_fill.py</code> (4)</summary>
+<details><summary><code>tests/test_c02_consensus_fill.py</code> (8)</summary>
 
 - `test_fill_in_same_run_after_candidate_agrees`
-- `test_fill_after_ai_stance_in_same_run`
+- `test_fill_accepts_ai_support_added_after_candidate_agreed`
 - `test_withdrawn_support_is_no_consensus_and_saves_nothing`
 - `test_fill_checks_phase_then_slot_then_consensus`
+- `test_fill_needs_latest_candidate_message_to_agree`
+- `test_reserved_agreement_is_not_support`
+- `test_withhold_withdraws_support_and_is_not_opposition`
+- `test_withhold_without_target_withdraws_current_support`
 
 </details>
 
@@ -361,9 +373,11 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_consensus.py</code> (4)</summary>
+<details><summary><code>tests/test_consensus.py</code> (6)</summary>
 
 - `test_three_of_four_with_candidate_is_consensus_immediately`
+- `test_consensus_needs_latest_candidate_message_to_confirm`
+- `test_withhold_withdraws_support_without_opposing`
 - `test_ai_only_majority_is_not_consensus`
 - `test_support_for_other_option_replaces_and_later_oppose_withdraws`
 - `test_timeout_selection_most_then_candidate_then_first_then_default`
@@ -417,7 +431,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_mailbox.py</code> (11)</summary>
+<details><summary><code>tests/test_mailbox.py</code> (12)</summary>
 
 - `test_messages_run_serially_and_every_message_is_classified`
 - `test_older_message_is_skipped_when_newer_saved`
@@ -430,6 +444,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_classifier_failure_is_other_and_low_confidence_adds_no_stance`
 - `test_three_persona_llm_failures_fail_the_session`
 - `test_missing_scenario_copy_fails_session_without_running`
+- `test_intent_reservation_and_excluded_are_stored`
 
 </details>
 

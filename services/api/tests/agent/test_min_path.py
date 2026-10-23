@@ -15,7 +15,9 @@ def _addressed(target: str, to: list[str], kind: str = "oppose") -> dict:
         "scenario_option_key": target,
         "new_option_label": None,
         "confidence": "high",
+        "reservation": kind == "oppose",
         "addressed_to": to,
+        "excluded": [],
     }
 
 

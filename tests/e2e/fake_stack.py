@@ -104,6 +104,8 @@ class Session:
         self.assistant_calls: list[dict[str, Any]] = []
         self.pressure: dict[str, int] = {}
         self.moved: set[str] = set()
+        # 단계별 지원자 최신 발언이 지지로 세는 발언이면 그 안 id(api candidate_confirmed)
+        self.confirmed: dict[str, str | None] = {}
         self.origin_next = "spontaneous"
         self.last_candidate_at: datetime | None = None
         self.agent_runs: list[dict[str, Any]] = []
@@ -1036,16 +1038,18 @@ class FakeStack:
                 )
             option = existing
             message["intent"]["target_option_id"] = option["id"] if option else None
+        s.confirmed[phase] = None
         if option and verdict["confidence"] == "high":
             if verdict["intent"] in ("propose", "agree"):
                 s.stances[phase]["candidate"] = option["id"]
+                s.confirmed[phase] = option["id"]
             elif s.stances[phase].get("candidate") == option["id"]:
                 s.stances[phase]["candidate"] = None
         self.persuade(s, phase, verdict, option)
         if self.try_fill(s, phase):
             return
+        # 이번 발언으로 지지가 바뀌어도 같은 run에서 다시 판정하지 않는다(B2)
         speakers = self.respond(s, phase, verdict, message)
-        self.try_fill(s, phase)
         s.agent_runs.append(
             self.run_record(
                 s,
@@ -1060,7 +1064,8 @@ class FakeStack:
     def persuade(
         self, s: Session, phase: str, verdict: dict[str, Any], option: dict[str, Any] | None
     ) -> None:
-        """서지안 설득 가능 규칙: 반대·대안 제안을 두 번 받으면 지원자 안으로 옮긴다(단계당 1회)."""
+        """서지안 설득 가능 규칙: 다른 안의 명시적 제안·동의를 두 번 받으면 지원자 안으로 옮긴다
+        (단계당 1회). 반대만 한 발언은 세지 않는다(B2)."""
         if (
             phase not in catalog.PHASES[:3]
             or phase in s.moved
@@ -1071,9 +1076,7 @@ class FakeStack:
         own = s.stances[phase].get("p3")
         if own is None:
             return
-        if (verdict["intent"] == "oppose" and option["id"] == own) or (
-            verdict["intent"] == "propose" and option["id"] != own
-        ):
+        if verdict["intent"] in ("propose", "agree") and option["id"] != own:
             s.pressure[phase] = s.pressure.get(phase, 0) + 1
         if s.pressure.get(phase, 0) >= 2 and s.stances[phase].get("candidate"):
             s.stances[phase]["p3"] = s.stances[phase]["candidate"]
@@ -1085,7 +1088,11 @@ class FakeStack:
             if o["phase"] != phase:
                 continue
             supporters = [p for p, v in stances.items() if v == o["id"]]
-            if len(supporters) >= 3 and stances.get("candidate") == o["id"]:
+            if (
+                len(supporters) >= 3
+                and stances.get("candidate") == o["id"]
+                and s.confirmed.get(phase) == o["id"]
+            ):
                 return o
         return None
 

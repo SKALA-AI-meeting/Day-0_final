@@ -115,8 +115,9 @@ async def test_c5_critic_moves_after_two_counters_stubborn_holds(harness):
     await h.run("card_due", card_id=FLEX)
     p1, p2 = option_id(h, "water_p1"), option_id(h, "water_p2")
 
-    h.candidate("침수는 이미 대책이 많아요.", intent_of("oppose", option_id=p2))
-    h.candidate("침수보다 가뭄이 더 자주 와요.", intent_of("oppose", option_id=p2))
+    # 설득 가능 규칙은 다른 안의 명시적 제안·동의만 센다(B2)
+    h.candidate("침수보다 가뭄이 더 자주 와요. 가뭄으로 가요.", intent_of("propose", option_id=p1))
+    h.candidate("저는 계속 가뭄이 맞다고 봐요.", intent_of("propose", option_id=p1))
     h.persona.script += [
         say("듣고 보니 가뭄 쪽이 맞네요.", {"option_id": p1, "stance": "support"}),
         say("그래도 침수가 핵심이에요.", support_p2),
@@ -128,6 +129,27 @@ async def test_c5_critic_moves_after_two_counters_stubborn_holds(harness):
     assert h.server.support["p3"] == p1  # 비판형은 지원자 안으로 이동
     assert h.server.support["p1"] == p2  # 고집형은 확정 전 불변
     assert all(m["meta"]["stance_check"] == "pass" for m in h.posted()[-2:])
+
+
+async def test_critic_does_not_move_on_opposition_alone(harness):
+    """기준안에 반대만 두 번 하면 비판형은 옮기지 않는다(B2: 반대 발언은 세지 않음)."""
+    support_p2 = {"option_id": "water_p2", "stance": "support"}
+    h = problem(
+        harness,
+        persona=[say("침수가 먼저예요.", support_p2), say("저도 침수 쪽이에요.", support_p2)],
+    )
+    h.candidate("가뭄 문제가 제일 커요.", intent_of("propose", key="water_p1"))
+    await h.run("card_due", card_id=FLEX)
+    p1, p2 = option_id(h, "water_p1"), option_id(h, "water_p2")
+    h.candidate("침수는 이미 대책이 많아요.", intent_of("oppose", option_id=p2))
+    h.candidate("침수보다 가뭄이 더 자주 와요.", intent_of("oppose", option_id=p2))
+    h.persona.script += [
+        say("듣고 보니 가뭄 쪽이 맞네요.", {"option_id": p1, "stance": "support"}),
+        say("듣고 보니 가뭄 쪽이 맞네요.", {"option_id": p1, "stance": "support"}),
+    ]
+    mid = h.candidate("지안님 어떻게 보세요?", intent_of("question", to=("p3",)))
+    await h.run("message", message_id=mid)
+    assert h.server.support["p3"] == p2
 
 
 async def test_critic_does_not_move_after_one_counter(harness):
@@ -230,7 +252,9 @@ async def test_moved_critic_must_record_support_for_candidate_option(harness):
     h.server.set_support("p2", s3)
     oppose_old = say("인프라는 초기 비용이 커요.", {"option_id": s2, "stance": "oppose"})
     h.persona.script += [oppose_old, oppose_old]
-    mid = h.candidate("지안님, 캠페인은 아니에요.", intent_of("oppose", option_id=s2, to=("p3",)))
+    mid = h.candidate(
+        "지안님, 캠페인보다 인프라로 가요.", intent_of("propose", option_id=s3, to=("p3",))
+    )
     await h.run("message", message_id=mid)
 
     # 계획 밖 안 oppose만 냄 → 재생성 → 그래도 지지 없음 → 이동 직후 고정 문구 + 지지 저장 → 합의
@@ -242,7 +266,11 @@ async def test_moved_critic_must_record_support_for_candidate_option(harness):
         == "듣고 보니 빗물 저금통·투수 포장 같은 생활 인프라가 더 낫겠네요. 저도 그쪽으로 옮길게요."
     )
     assert len(h.persona.calls) == 4  # 단계 시작 2 + 최초 1 + 재생성 1
-    assert h.server.support["p3"] == s3  # 이동이 기록돼 지원자+p2+p3 합의
+    assert h.server.support["p3"] == s3  # 이동이 기록돼 지원자+p2+p3 지지
+    # 이동과 같은 run에서는 채우지 않는다(B2). 지원자의 최신 발언이 그 안 동의면 다음 run에서 채운다
+    assert "solution" not in h.server.slots
+    agreed = h.candidate("네, 인프라로 정해요.", intent_of("agree", option_id=s3))
+    await h.run("message", message_id=agreed)
     assert h.server.slots["solution"]["option_id"] == s3
 
 
@@ -269,7 +297,9 @@ async def test_moved_critic_support_overrides_structured_oppose(harness, via):
     h.persona.script += [
         say("듣고 보니 인프라가 낫네요.", {"option_id": s2, "stance": "oppose"}, proposes)
     ]
-    mid = h.candidate("지안님, 캠페인은 아니에요.", intent_of("oppose", option_id=s2, to=("p3",)))
+    mid = h.candidate(
+        "지안님, 캠페인보다 인프라로 가요.", intent_of("propose", option_id=s3, to=("p3",))
+    )
     await h.run("message", message_id=mid)
 
     post = h.posted("p3")[-1]
@@ -277,7 +307,7 @@ async def test_moved_critic_support_overrides_structured_oppose(harness, via):
         post["content"] == "듣고 보니 인프라가 낫네요." and post["meta"]["stance_check"] == "pass"
     )
     assert h.server.support["p3"] == s3
-    assert h.server.slots["solution"]["option_id"] == s3
+    assert "solution" not in h.server.slots  # 이동과 같은 run에서는 채우지 않는다(B2)
 
 
 async def test_pressure_counts_from_the_card_message_up_to_three(harness):

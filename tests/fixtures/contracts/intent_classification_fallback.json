@@ -4,5 +4,7 @@
   "scenario_option_key": null,
   "new_option_label": null,
   "confidence": "low",
-  "addressed_to": []
+  "reservation": false,
+  "addressed_to": [],
+  "excluded": []
 }

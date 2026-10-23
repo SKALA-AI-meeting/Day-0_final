@@ -186,7 +186,7 @@ CONFIDENCE = Enum("high", "medium", "low")
 RESOLUTION = Enum("consensus", "timeout")
 OUTCOME = Enum("consensus", "candidate_decision", "timeout")  # 표시용 칸 결과
 STIMULUS = Enum("message", "phase_started", "idle", "card_due")
-INTENT = Enum("propose", "agree", "oppose", "question", "other")
+INTENT = Enum("propose", "agree", "oppose", "withhold", "question", "other")
 ORIGIN = Enum("spontaneous", "invited")
 FAILED_STAGE = Enum("session", "report")
 RECORD_TYPE = Enum(
@@ -232,7 +232,9 @@ INTENT_OUTPUT = {
     "scenario_option_key": Opt(str),
     "new_option_label": Opt(str),
     "confidence": Enum("high", "low"),
+    "reservation": bool,
     "addressed_to": [SEAT],
+    "excluded": [SEAT],
 }
 INTERNAL_MESSAGE = {
     **MESSAGE,

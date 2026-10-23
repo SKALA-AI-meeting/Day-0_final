@@ -6,7 +6,7 @@
 
 - 자극 `{type, phase, generation, message_id?, card_id?}`([architecture/agents.md](../architecture/agents.md) "AgentRunner 인터페이스")
 - DebateState(debate-mcp `get_debate_state`: 지지 현황·안·칸·카드 진행·남은 시간), 최근 대화(진행 매니저 LLM에는 마지막 10개)
-- 지원자 메시지의 의도 분류 결과([의도 분류](intent.md): 대상 안·`addressed_to`)
+- 지원자 메시지의 의도 분류 결과([의도 분류](intent.md): 대상 안·`addressed_to`·`excluded`(답하지 말라고 뺀 자리, 지명·턴 LLM 화자에서 뺀다)·`reservation`(설득 가능 규칙에서 세지 않음))
 - 채용 건에 고정된 카탈로그 복사본(`positions.scenario`)
 
 ## 출력
@@ -20,7 +20,7 @@
 | 파일 | 쓰는 내용 |
 |---|---|
 | `prompts/manager/turn_manager.md` (키 `turn_manager.md`) | LLM 화자 선택 지침(규칙 6) |
-| `personas.yaml` | 자리별 고정 입장(`stances`), 설득 가능 규칙(`persuadable`) |
+| `personas.yaml` | 자리별 고정 입장(`stances`), 설득 가능 규칙(`persuadable`: 세는 의도·대상·횟수·confidence) |
 | `cards.yaml` | 카드 6장의 시각·담당·고정 내용 |
 | `keywords.yaml` | 단계별 카탈로그 안(입장 계획의 대상) |
 | `mission.yaml` | 침묵 초대(`silence_invite`), 합의 채우기 화자 우선순위(`consensus_fill`) |
@@ -34,5 +34,5 @@
 
 ## 검증
 
-- 단위(LLM mock): `services/api/tests/agent/test_turn.py`(지명 우선·화자 ≤ 2·침묵 초대·합의 채우기·재실행 멱등), `test_cards.py`(카드 전달·기준안 잠금), `test_script.py`(15분 대본)
+- 단위(LLM mock): `services/api/tests/agent/test_turn.py`(지명 우선·제외 자리·화자 ≤ 2·침묵 초대·합의 채우기(같은 run 재판정 없음)·설득 가능 규칙 횟수·재실행 멱등), `test_cards.py`(카드 전달·기준안 잠금), `test_script.py`(15분 대본)
 - 평가셋: `tests/eval/persona_scripts.yaml`의 지명 무응답·질문 무시 장면(`make eval-live`, `tests/eval/persona_eval.py`)

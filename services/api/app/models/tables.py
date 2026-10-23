@@ -174,7 +174,11 @@ class MessageIntent(Base):
     scenario_option_key: Mapped[str | None] = mapped_column(Text)
     new_option_label: Mapped[str | None] = mapped_column(Text)
     confidence: Mapped[str] = mapped_column(Text, nullable=False)
+    reservation: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     addressed_to: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=EMPTY_ARRAY
+    )
+    excluded: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default=EMPTY_ARRAY
     )
     fallback: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))

@@ -99,11 +99,11 @@ session:
     persuadable:
       stages: [keyword, problem, solution]
       by: candidate
-      count: 2                            # 지원자가 그 안에 대해 반대 또는 대안 제안을 두 번
-      intents:
-        - { intent: oppose, target: own_option }
+      count: 2                            # 지원자가 다른 안을 지지로 세는 발언(명시적 제안·동의)으로 두 번
+      intents:                            # 반대만 한 발언은 세지 않는다(B2)
         - { intent: propose, target: candidate_option }
-      confidence: high
+        - { intent: agree, target: candidate_option }
+      confidence: high                    # 대상 안에 유보 표현(reservation)이 있는 발언은 세지 않는다
       moves_to: candidate_option
       per_stage_max: 1
       ignore_reason_quality: true         # 근거의 질은 따지지 않는다(실력은 평가 밖)

@@ -109,7 +109,7 @@ lead_option:
 # AI 동료가 칸을 채우는 조건(docs/product/scenario.md 1.4). [초안: 우선순위]
 consensus_fill:
   min_supporters: 3                 # 4명 중 3명 이상
-  candidate_must_support: true      # 지원자의 현재 지지(confidence=high인 propose·agree)가 그 안
+  candidate_must_support: true      # 지원자의 현재 지지가 그 안이고 그 단계 최신 발언이 그 안을 지지로 세는 발언(high인 propose·agree, 유보 표현 없음)
   wait_min: 0                       # 대기 없음, 즉시(R4)
   filler_priority: [critic, quiet, stubborn]   # 그 안의 지지자 중 첫 번째
   phrase: consensus_fill            # prompts/shared/fixed_phrases.yaml 키
@@ -131,8 +131,8 @@ timeout:
 silence_invite:
   stages: [keyword, problem, solution]
   idle_fraction: "1/20"             # 지원자 마지막 메시지(또는 단계 시작) 후 L/20 무발언 (60분 3분, 15분 45초)
-  no_opinion_after_budget_ratio: 0.5   # 또는 단계 기본 시간의 절반이 지났는데 이 단계 의견(propose·agree·oppose)이 없음
-  opinion_intents: [propose, agree, oppose]
+  no_opinion_after_budget_ratio: 0.5   # 또는 단계 기본 시간의 절반이 지났는데 이 단계 의견(propose·agree·oppose·withhold)이 없음
+  opinion_intents: [propose, agree, oppose, withhold]
   max_per_stage: 1                  # 세션 최대 3회
   inviter: critic                   # 서지안. stubborn·quiet는 묻지 않는다
   defer_while_typing: true
