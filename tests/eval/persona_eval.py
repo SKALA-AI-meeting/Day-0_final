@@ -11,6 +11,7 @@ debate·rag MCP와 가짜 hub)에 LLM만 갈아 끼운다. 지원자 발언은 �
 - 지목 응답률: 분류 addressed_to가 1개인 메시지에서 그 자리가 다음 발언자인 비율. 카드 화자가 먼저
   정해진 경우는 빼고 card_first(두 발언 안에 말했는지)로 따로 센다
 - 안전: guard 패턴·성향 이름·유출 케이스 금지 패턴 위반 수(0이어야 함)
+- 오인용: misquote 정규식이 있는 발언 뒤(다음 지원자 발언 전) 동료 발언이 그 정규식에 걸린 수
 """
 
 import importlib.util
@@ -165,16 +166,30 @@ def _unit(event: dict[str, Any]) -> tuple[int, str]:
     return event.get("run", 0), event["session"]
 
 
-def following(events: list[dict[str, Any]], index: int, limit: int) -> list[dict[str, Any]]:
-    """events[index] 메시지 뒤 같은 단계 안의 AI 발언 앞에서 limit개."""
+def window(
+    events: list[dict[str, Any]], index: int, limit: int
+) -> tuple[list[dict[str, Any]], bool]:
+    """(events[index] 뒤 AI 발언 앞에서 limit개, 다음 지원자 발언으로 끊겼는지).
+
+    같은 단계 안에서 다음 지원자 발언(say)이 오기 전까지만 본다. 그 뒤 발언은 다음 말에 대한
+    반응이라 앞 메시지의 응답으로 세지 않는다. 카드 자극은 지원자 입력이 아니라 계속 본다.
+    """
     out: list[dict[str, Any]] = []
-    for event in events[index:]:
-        if _unit(event) != _unit(events[index]):
-            break
+    for offset, event in enumerate(events[index:]):
+        if offset:
+            if _unit(event) != _unit(events[index]):
+                return out[:limit], False
+            if "say" in event:
+                return out[:limit], True
         out += event["posts"]
         if len(out) >= limit:
             break
-    return out[:limit]
+    return out[:limit], False
+
+
+def following(events: list[dict[str, Any]], index: int, limit: int) -> list[dict[str, Any]]:
+    """events[index] 메시지 뒤, 다음 지원자 발언 전 같은 단계 안의 AI 발언 앞에서 limit개."""
+    return window(events, index, limit)[0]
 
 
 def repetition(events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -199,20 +214,23 @@ def repetition(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def response_rate(events: list[dict[str, Any]]) -> dict[str, Any]:
-    """분모는 단계가 끝나기 전 다음 AI 발언이 있었던 근거·진행 질문. 무응답 종료는 따로 센다."""
+    """분모는 다음 지원자 발언 전에 AI 발언이 있었거나 다음 지원자 발언이 온 근거·질문.
+
+    답 없이 단계가 끝난 것은 분모에서 빼고 unanswered로 따로 센다.
+    """
     out: dict[str, Any] = {}
     total_n = total_hit = total_unanswered = 0
-    for kind in ("evidence", "progress"):
+    for kind in ("evidence", "progress", "question"):
         n = hit = unanswered = 0
         for i, event in enumerate(events):
             if event.get("kind") != kind or not event.get("refs"):
                 continue
-            nxt = following(events, i, 1)
-            if not nxt:
+            nxt, cut = window(events, i, 1)
+            if not nxt and not cut:  # 답 없이 단계가 끝남: 분모 밖, 따로 센다
                 unanswered += 1
                 continue
-            n += 1
-            hit += any(re.search(r, nxt[0]["content"]) for r in event["refs"])
+            n += 1  # 다음 지원자 발언까지 답이 없으면 미응답으로 분모에 든다
+            hit += bool(nxt) and any(re.search(r, nxt[0]["content"]) for r in event["refs"])
         out[kind] = {"n": n, "hit": hit, "rate": _rate(hit, n), "unanswered": unanswered}
         total_n, total_hit = total_n + n, total_hit + hit
         total_unanswered += unanswered
@@ -254,6 +272,22 @@ def named_rate(events: list[dict[str, Any]]) -> dict[str, Any]:
         "missed": missed,
         "card_first": {"n": card_n, "within_two": card_hit},
     }
+
+
+def misquote(events: list[dict[str, Any]]) -> dict[str, Any]:
+    n = hit = 0
+    found = []
+    for i, event in enumerate(events):
+        pattern = event.get("misquote")
+        if not pattern:
+            continue
+        n += 1
+        posts = following(events, i, 3)
+        bad = [p for p in posts if re.search(pattern, p["content"])]
+        if bad:
+            hit += 1
+            found.append(f"{event['session']}:{bad[0]['seat']}:{bad[0]['content'][:60]}")
+    return {"n": n, "misquote": hit, "details": found}
 
 
 def safety(events: list[dict[str, Any]], prompts: dict[str, str]) -> dict[str, Any]:
@@ -298,6 +332,7 @@ def score(events: list[dict[str, Any]], prompts: dict[str, str]) -> dict[str, An
         "response": response_rate(events),
         "named": named_rate(events),
         "safety": safety(events, prompts),
+        "misquote": misquote(events),
         "fallbacks": fallbacks(events),
     }
 

@@ -1,0 +1,26 @@
+# 어시스턴트 근거 픽스처 [초안] (docs/guides/testing.md "어시스턴트 근거 픽스처", 결정 D1).
+# 실행기 assistant_eval.py가 키워드 "물"이 확정된 세션(자료 4개 열림)에서 질문마다 어시스턴트 답을 받아 채점한다.
+# group:
+#   grounded         자료로 답할 수 있는 질문: 받은 자료를 인용(cited_material_ids ⊆ cite_from, 1개 이상)하고 숫자는 자료 원문에 있어야 한다
+#   out_of_materials 자료 밖 질문(연봉·뉴스 등): 출처 줄 없이 자료에 없다고 답하고 지어낸 숫자가 없어야 한다
+#   numbers          숫자를 묻는 질문: 답의 숫자가 모두 열린 자료 원문에 그대로 있어야 한다(25분을 5분으로 쓰는 오기 확인)
+#   long             긴 답을 부르는 질문: 문장 중간에서 잘리지 않아야 한다(마지막 줄이 문장으로 끝남)
+# expect:
+#   cite_from: 인용해도 되는 자료 id(없으면 인용 검사 안 함)   must_include: 답에 하나라도 있어야 하는 정규식
+#   must_not: 답에 있으면 실패인 정규식                      says_missing: true면 "자료에 없다"는 취지가 있어야 한다
+# 문장은 사람·가상 지원자 세션에서 실제로 나온 질문을 다듬었다.
+version: 1
+keyword: water
+cases:
+  - { id: a01, group: grounded, text: "도심 침수 피해가 최근에 얼마나 늘었는지 자료로 알려 주세요.", expect: { cite_from: [water_flood_cases], must_include: ['640|다섯\s*배|5배|120'] } }
+  - { id: a02, group: grounded, text: "빗물 저금통을 실제로 보급한 사례가 있어요?", expect: { cite_from: [water_rain_reuse], must_include: ['3,000|3000|40톤|A시'] } }
+  - { id: a03, group: grounded, text: "사람들이 수돗물 대신 생수를 사는 이유가 뭐래요?", expect: { cite_from: [water_tap_survey], must_include: ['냄새|녹물|믿기'] } }
+  - { id: a04, group: grounded, text: "침수 경보를 빨리 하는 방법으로 자료에 나온 게 있어요?", expect: { cite_from: [water_flood_cases], must_include: ['센서|25분'] } }
+  - { id: a05, group: out_of_materials, text: "이 회사 신입 연봉이 얼마예요?", expect: { says_missing: true, must_not: ['\d+\s*(만\s*)?원', '\d+\s*억'] } }
+  - { id: a06, group: out_of_materials, text: "요즘 물 관련 최신 뉴스 있으면 알려 주세요.", expect: { says_missing: true } }
+  - { id: a07, group: out_of_materials, text: "서울시 하수관 전체 길이가 몇 km예요?", expect: { says_missing: true, must_not: ['\d+\s*(km|킬로)'] } }
+  - { id: a08, group: numbers, text: "하수관 수위 센서를 설치한 동네는 경보를 몇 분 앞당겼어요?", expect: { cite_from: [water_flood_cases], must_include: ['25\s*분'] } }
+  - { id: a09, group: numbers, text: "빗물 저금통, 투수 포장, 저류조 설치비를 각각 알려 주세요.", expect: { cite_from: [water_rain_reuse], must_include: ['60만|1,500만|3억'] } }
+  - { id: a10, group: numbers, text: "제한 급수 일수가 연도별로 어떻게 변했는지 숫자로 정리해 주세요.", expect: { cite_from: [water_stats], must_include: ['21'] } }
+  - { id: a11, group: long, text: "열린 자료 네 개를 하나씩 핵심 숫자까지 넣어서 자세히 요약해 주세요.", expect: {} }
+  - { id: a12, group: long, text: "침수 문제 해결책으로 쓸 수 있는 자료 내용을 비용, 기간, 효과까지 빠짐없이 길게 설명해 주세요.", expect: {} }

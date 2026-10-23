@@ -111,6 +111,54 @@ def score_intent(cases: list[dict[str, Any]], outputs: list[dict[str, Any]]) -> 
     }
 
 
+def counts_as_support(case: dict[str, Any], output: dict[str, Any], key: str) -> bool:
+    """지지로 세는 것: propose·agree이고 high이며 그 안이 대상(rubric.md 1.2)."""
+    if output["intent"] not in ("propose", "agree") or output["confidence"] != "high":
+        return False
+    if key in case["existing"]:
+        return output["target_option_id"] == option_id(key)
+    return output["scenario_option_key"] == key
+
+
+def decided_problems(case: dict[str, Any], output: dict[str, Any]) -> list[str]:
+    """결정 B1 사례 하나의 실패 이유(빈 목록이면 통과). intent_cases.yaml decided_cases 머리말."""
+    if intent_violations(output):
+        return ["스키마 위반"]
+    check, out = case["check"], []
+    for key in check.get("not_support", []):
+        if counts_as_support(case, output, key):
+            out.append(f"{key}를 지지로 셈")
+    if check.get("support") and not counts_as_support(case, output, check["support"]):
+        out.append(f"{check['support']}를 지지로 세지 않음")
+    if check.get("new_option"):
+        similar = check["new_option"]
+        if output["intent"] != "propose" or not output["new_option_label"]:
+            hit = output["target_option_id"] or output["scenario_option_key"]
+            out.append(f"새 안이 아님({output['intent']}, 대상 {hit or '없음'})")
+        if counts_as_support(case, output, similar):
+            out.append(f"비슷한 안 {similar}로 묶음")
+    if "addressed_to" in check and sorted(output["addressed_to"]) != sorted(check["addressed_to"]):
+        out.append("addressed_to 다름")
+    return out
+
+
+def score_decided(cases: list[dict[str, Any]], outputs: list[dict[str, Any]]) -> dict[str, Any]:
+    groups: dict[str, list[bool]] = {}
+    failed = {}
+    for case, out in zip(cases, outputs, strict=True):
+        problems = decided_problems(case, out)
+        groups.setdefault(case["group"], []).append(not problems)
+        if problems:
+            failed[case["id"]] = problems
+    passed = sum(sum(v) for v in groups.values())
+    return {
+        "n": len(cases),
+        "pass": passed / len(cases) if cases else None,
+        "groups": {g: f"{sum(v)}/{len(v)}" for g, v in groups.items()},
+        "failed": failed,
+    }
+
+
 # ---- BARS -------------------------------------------------------------------------------------
 
 
@@ -147,23 +195,118 @@ def expected_problems(session: dict[str, Any]) -> list[str]:
 def score_bars(
     sessions: list[dict[str, Any]], outputs: dict[str, dict[str, int | None]]
 ) -> dict[str, Any]:
-    """outputs[session_id][dimension_id] = 수준 또는 None(기록 없음)."""
+    """outputs[session_id][dimension_id] = 수준 또는 None(기록 없음).
+
+    사람 라벨이 수준인 차원이 분모다. 모델이 기록 없음을 내면 불일치로 센다(model_no_record,
+    완전 일치·±1 모두 아님). 사람 라벨이 기록 없음인 차원은 따로 센다(human_no_record:
+    모델도 기록 없음이면 agree).
+    """
     diffs: list[int] = []
-    skipped = 0
+    n = missing = human_n = human_agree = 0
     for session in sessions:
         got = outputs.get(session["id"], {})
         for dim, want in session["expected"].items():
-            if want.get("level") is None or got.get(dim) is None:
-                skipped += 1
+            if want.get("level") is None:
+                human_n += 1
+                human_agree += got.get(dim) is None
+                continue
+            n += 1
+            if got.get(dim) is None:
+                missing += 1
                 continue
             diffs.append(got[dim] - want["level"])
-    n = len(diffs)
     return {
         "n": n,
-        "skipped": skipped,
+        "model_no_record": missing,
         "exact": sum(d == 0 for d in diffs) / n if n else None,
         "within1": sum(abs(d) <= 1 for d in diffs) / n if n else None,
         "diff_distribution": dict(sorted(Counter(diffs).items())),
+        "human_no_record": {"n": human_n, "agree": human_agree},
+    }
+
+
+AFTER_DECISION = ("flex_acceptance", "flex_forward")  # 결정 후 행동을 보는 차원(rubric.md 3.4)
+FAILED_CODE = re.compile(r"\(사유: ([^)]+)\)")
+
+
+def core_cards() -> dict[str, list[str]]:
+    """차원별 핵심 카드(rubric.yaml core_cards). 비어 있으면 세션 전체가 핵심 장면."""
+    rubric = yaml.safe_load((HERE.parents[1] / "scenarios/missions/debate/rubric.yaml").read_text())
+    return {
+        d["dimension_id"]: list(d.get("core_cards") or [])
+        for e in rubric["elements"]
+        for d in e["dimensions"]
+    }
+
+
+def candidate_in_window(record: dict[str, Any], cards: list[str]) -> bool:
+    """차원의 창 안에 지원자 메시지가 있는지(rubric.md 2.3 no_activity 기준).
+
+    핵심 카드가 있으면 발동한 카드의 관찰 창(observations.window)만, 없으면 세션 전체.
+    핵심 카드가 하나도 발동하지 않았으면 창이 없으므로 False.
+    """
+    said = [m["t_min"] for m in record["messages"] if m["sender"] == "candidate"]
+    if not cards:
+        return bool(said)
+    windows = [
+        o["window"]
+        for o in record.get("observations", [])
+        if o["card_id"] in cards and o.get("window")
+    ]
+    return any(w["start_min"] <= t <= w["end_min"] for w in windows for t in said)
+
+
+def bars_diagnostics(
+    sessions: list[dict[str, Any]], rows: dict[str, list[dict[str, Any]]]
+) -> dict[str, Any]:
+    """기록된 사실과 모순되는 평가 출력을 센다(결정 A1이 거부할 대상).
+
+    rows[session_id]는 차원 행 목록이다.
+
+    - missed_levels: 사람 라벨은 수준인데 기록 없음(사유별)
+    - activity_missed: 그 차원의 창(핵심 카드 관찰 창, 핵심 카드가 없으면 세션 전체) 안에 지원자
+      메시지가 있는데 no_activity
+    - peer_evidence: 수준을 낸 차원의 근거에 지원자가 아닌 메시지가 섞임
+    - decision_timing: 결정 후 차원(flex_acceptance·flex_forward)의 근거가 칸 확정 전 메시지
+    - evaluate_failed: 실패 사유 코드별
+    """
+    cores = core_cards()
+    missed: Counter = Counter()
+    activity = peer = timing = 0
+    failed: Counter = Counter()
+    details: list[str] = []
+    for session in sessions:
+        record = session["record"]
+        senders = {m["id"]: m for m in record["messages"]}
+        decided = next((s["t_min"] for s in record["slots"] if s["phase"] == "problem"), None)
+        for row in rows.get(session["id"], []):
+            dim, reason = row["dimension_id"], row.get("no_record_reason")
+            want = session["expected"].get(dim)
+            if want and want.get("level") is not None and row["level"] is None:
+                missed[reason] += 1
+                details.append(f"{session['id']}:{dim}:{reason}")
+            if reason == "no_activity" and candidate_in_window(record, cores.get(dim, [])):
+                activity += 1
+            if reason == "evaluate_failed":
+                found = FAILED_CODE.search(row.get("rationale") or "")
+                failed[found.group(1) if found else "unknown"] += 1
+            if row["level"] is None:
+                continue
+            msgs = [senders.get(r.removeprefix("msg:")) for r in row.get("evidence_refs") or []]
+            msgs = [m for m in msgs if m]
+            if any(m["sender"] != "candidate" for m in msgs):
+                peer += 1
+            if dim in AFTER_DECISION and decided is not None:
+                if any(m["sender"] == "candidate" and m["t_min"] < decided for m in msgs):
+                    timing += 1
+                    details.append(f"{session['id']}:{dim}:before_decision")
+    return {
+        "missed_levels": dict(missed),
+        "activity_missed": activity,
+        "peer_evidence": peer,
+        "decision_timing": timing,
+        "evaluate_failed_by_code": dict(failed),
+        "details": details,
     }
 
 

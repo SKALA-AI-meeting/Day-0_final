@@ -62,8 +62,11 @@ E2E_PYTEST = PYTHONPATH=services/api:. uv run --project services/api pytest -q -
 test-e2e:        ## e2e 러너·단언·장애 주입·인증 경계(가짜 api)와 eval 픽스처 형태 검사. 스택·DB·LLM 불필요
 	$(E2E_PYTEST) -m "not live" tests/e2e tests/eval
 
-eval-live:       ## eval 픽스처(의도 분류·BARS·유출 질문)를 실제 모델로 1회(결과는 tests/e2e/records/eval-live-<일시>.md)
+eval-live:       ## eval 픽스처(의도 분류·BARS·유출 질문·페르소나·어시스턴트)를 실제 모델로 1회(결과는 tests/e2e/records/eval-live-<일시>.md)
 	$(E2E_PYTEST) -m live tests/eval
+
+virtual-candidate: ## 가상 지원자 15분 세션 1회(실 스택·실 모델): make virtual-candidate MODE=scripted|autonomous. 기록은 tests/e2e/records/virtual/
+	uv run --project services/api python tests/eval/virtual_candidate/drive.py --mode $(or $(MODE),scripted)
 
 e2e-auth:        ## 단언 8(인증 경계). 스택이 떠 있어야 한다
 	uv run --project services/api python tests/e2e/run.py --auth
@@ -102,4 +105,4 @@ docs-check:      ## 생성 블록이 코드와 같은지, docs/features.md의 �
 help:            ## 타깃 목록
 	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "%-16s %s\n", $$1, $$2 }'
 
-.PHONY: help docs-gen docs-check infra-up infra-down up down seed seed-compose test test-live lint e2e test-e2e eval-live e2e-auth e2e-faults stage stage-advance e2e-stack-up e2e-stack-seed e2e-stack-down e2e-stages
+.PHONY: help docs-gen docs-check infra-up infra-down up down seed seed-compose test test-live lint e2e test-e2e eval-live virtual-candidate e2e-auth e2e-faults stage stage-advance e2e-stack-up e2e-stack-seed e2e-stack-down e2e-stages

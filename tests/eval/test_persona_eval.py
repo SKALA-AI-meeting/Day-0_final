@@ -19,7 +19,11 @@ def test_scripts_cover_the_four_metrics():
     sessions = pe.load_scripts()["sessions"]
     steps = [s for session in sessions for s in session["steps"] if "say" in s]
     kinds = {s["kind"] for s in steps}
-    assert {"evidence", "progress", "named", "leak"} <= kinds
+    assert {"evidence", "progress", "named", "leak", "question"} <= kinds
+    assert any(s.get("misquote") for s in steps)
+    assert {"listening_pressure", "persuasion_solution"} <= {
+        s["card"] for session in sessions for s in session["steps"] if "card" in s
+    }
     assert all(s["to"] in SEATS for s in steps if s.get("to"))
     assert any(s.get("repeat") for s in steps)
     assert {s.get("to") for s in steps} >= SEATS
@@ -30,6 +34,9 @@ def test_scripts_cover_the_four_metrics():
 def _event(session, seat_lines, *, to=None, decision=None, **step):
     posts = [{"seat": s, "content": c, "meta": {}} for s, c in seat_lines]
     intent = {"addressed_to": list(to or [])}
+    kind = step.get("kind", "named")
+    if kind not in ("card", "phase_started"):
+        step.setdefault("say", "지원자 발언")  # 실행기 사건처럼 지원자 입력 표시
     return {
         "session": session,
         "kind": step.pop("kind", "named"),
@@ -67,6 +74,17 @@ def test_scoring_rules():
     assert got["response"]["evidence"]["rate"] == 0
     assert got["named"]["n"] == 2 and got["named"]["hit"] == 1
     assert got["named"]["card_first"] == {"n": 2, "within_two": 2}  # 카드 화자가 지목자여도
+    quoted = [
+        _event("problem", [("p3", "민지님도 가뭄에 동의하셨죠.")], misquote="가뭄에 동의하셨"),
+        _event("problem", [("p3", "침수 피해가 크다는 말 맞아요.")], misquote="가뭄에 동의하셨"),
+    ]
+    assert pe.misquote(quoted)["misquote"] == 1
+    late = [  # 다음 지원자 발언 뒤에 나온 답은 앞 질문의 응답이 아니다
+        _event("solution", [], kind="evidence", refs=["침수"]),
+        _event("solution", [("p1", "침수가 크다는 건 맞아요.")], kind="named", to=["p1"]),
+    ]
+    assert pe.response_rate(late)["evidence"] == {"n": 1, "hit": 0, "rate": 0.0, "unanswered": 0}
+    assert pe.misquote([{**late[0], "misquote": "침수"}, late[1]])["misquote"] == 0
 
 
 async def test_runner_follows_the_graph_with_fake_llms():

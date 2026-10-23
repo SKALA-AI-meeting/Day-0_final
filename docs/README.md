@@ -8,7 +8,7 @@ Day Zero는 지원자가 AI 동료 3명과 채팅으로 토론해 키워드 → 
 |---|---|
 | 제품을 한 페이지로 훑기(화면·규칙·동작·확장 출발점) | [share/product-guide/index.html](share/product-guide/index.html) |
 | 처음 받아서 실행해 보기 | [guides/quickstart.md](guides/quickstart.md) → [guides/configuration.md](guides/configuration.md) |
-| 테스트를 돌리고 범위를 알기 | [guides/testing.md](guides/testing.md) |
+| 테스트를 돌리고 범위를 알기 | [guides/testing.md](guides/testing.md), 가상 지원자로 AI 동작 재기 [guides/virtual-candidate.md](guides/virtual-candidate.md) |
 | 기여 규칙(브랜치·PR·필수 검사·계약·DB 변경) | [guides/contributing.md](guides/contributing.md) |
 | 제품 규칙(단계·시간·페르소나·카드·합의) | [product/scenario.md](product/scenario.md) |
 | 평가 척도(BARS)·기록 없음 사유·사실 지표 | [product/rubric.md](product/rubric.md) |
@@ -54,6 +54,6 @@ docs/
 ├── architecture/    overview · session-lifecycle · security · harness · agents · data-model · design-system · deployment
 ├── contracts/       README(공통·인증) · api · ws · internal · mcp · queue
 ├── services/        api · web · report-worker · mcp
-├── guides/          quickstart · configuration · testing · database · scenario-changes · contributing
+├── guides/          quickstart · configuration · testing · virtual-candidate · database · scenario-changes · contributing
 └── share/           공유용 산출물(아키텍처 페이지·보고서·시각 보고서·제품 가이드). 정본이 아니다
 ```
