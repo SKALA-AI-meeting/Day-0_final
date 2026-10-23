@@ -191,13 +191,22 @@ async def playback(session_id: uuid.UUID, body: PlaybackIn, ctx: Ctx, _: Candida
     async with ctx.ordered(session_id):
         async with ctx.session_factory() as db:
             session, position, _ = await load_context(db, session_id, lock=True)
-            snap, _pending = await controller.sync(db, session, position, ctx.clock.now())
-            controller.validate(session, snap, body.turn_id, body.epoch, ctx.clock.now())
             job = await db.get(SpeechJob, body.job_id)
             if job is None or job.session_id != session_id or job.kind != "tts":
                 raise ServiceError(404, "not_found")
             if job.data["status"] == "heard" and body.outcome == "ended":
                 return {"ok": True}
+            if (
+                body.outcome == "ended"
+                and job.data["status"] == "ready"
+                and job.data.get("playback_started_at")
+            ):
+                # 재생을 시작한 발언이 끝까지 재생되면 그사이 단계가 바뀌었어도 들은 것으로 남긴다
+                job.data = {**job.data, "status": "heard", "heard_at": iso(ctx.clock.now())}
+                await db.commit()
+                return {"ok": True}
+            snap, _pending = await controller.sync(db, session, position, ctx.clock.now())
+            controller.validate(session, snap, body.turn_id, body.epoch, ctx.clock.now())
             if not snap["items"] or snap["items"][0]["id"] != str(job.id):
                 raise conflict("voice_turn_conflict")
             data = dict(job.data)
@@ -206,9 +215,7 @@ async def playback(session_id: uuid.UUID, body: PlaybackIn, ctx: Ctx, _: Candida
                     raise conflict("voice_turn_conflict")
                 data["playback_started_at"] = controller.iso(ctx.clock.now())
             elif body.outcome == "ended":
-                if not data.get("playback_started_at") or data["status"] != "ready":
-                    raise conflict("voice_turn_conflict")
-                data.update(status="heard", heard_at=controller.iso(ctx.clock.now()))
+                raise conflict("voice_turn_conflict")  # 재생을 시작하지 않은 발언
             elif body.outcome == "error":
                 data.update(status="error", error="voice_playback_failed")
             else:

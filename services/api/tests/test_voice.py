@@ -486,6 +486,27 @@ async def ready_two(api, ctx, sess, card_second: bool = False):
     return first, second, snap
 
 
+async def test_voice_playback_end_after_phase_change_counts_as_heard(api, voice_ctx):
+    """재생 중에 단계가 바뀌어도, 끝까지 재생된 발언은 들은 것으로 기록하고 거절하지 않는다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    first, _second, snap = await ready_two(api, ctx, sess)
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    playing = snap["items"][0]["id"]
+    body = {**turn, "job_id": playing, "outcome": "start"}
+    assert (await post(api, sess, "playback", body)).status_code == 200
+    async with ctx.session_factory() as db:  # 재생 중 시간 초과로 다음 단계가 시작됨
+        s = await db.get(Session, sess.id)
+        s.phase, s.generation = "problem", s.generation + 1
+        await db.commit()
+    body = {**turn, "job_id": playing, "outcome": "ended"}
+    assert (await post(api, sess, "playback", body)).status_code == 200
+    async with ctx.session_factory() as db:
+        assert (await db.get(SpeechJob, uuid.UUID(playing))).data["status"] == "heard"
+    snap = await snapshot(api, ctx, sess)
+    assert first["id"] in snap["heard_message_ids"]
+
+
 async def test_voice_hand_raise_takes_turn_after_current(api, voice_ctx):
     """손들면 지금 발언은 끝까지 듣고, 줄 선 발언은 취소된 뒤 내 차례(생각 시간 뒤 자동 녹음)."""
     ctx = voice_ctx

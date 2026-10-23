@@ -74,6 +74,10 @@ const NOTICE_MS = 6000;
 function expired(e: unknown): boolean {
   return e instanceof ApiError && e.code === "voice_turn_expired";
 }
+/** 서버가 이미 다음 차례(단계 전환 등)로 넘어가 이 요청을 받지 않는 경우(409). 다음 조회에서 새 차례를 받는다 */
+function turnMoved(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409;
+}
 const CANDIDATE_STATES = new Set(["USER_READY", "USER_SPEAKING", "TRANSCRIBING", "PROCESSING"]);
 // 음성 상태 확인 주기(ms). 평소 750(계약 docs/contracts/voice.md), 기다리는 상태에서는 250.
 // 작게 하면 준비된 발언을 더 빨리 알지만 서버 요청이 늘어난다(세션당 초당 4회).
@@ -382,8 +386,9 @@ export function useVoiceTurn(props: Props) {
           });
         });
         if (op === operation.current) await result("ended");
-      } catch {
-        if (op === operation.current) {
+      } catch (e) {
+        // 재생 중 단계가 바뀌어 서버가 이 차례를 닫았으면 오류가 아니다. 멈추지 않고 새 차례로 넘어간다
+        if (op === operation.current && !turnMoved(e)) {
           await result("error").catch(() => {});
           setError("음성을 재생하지 못했어요. 다시 재생을 눌러 주세요.");
         }
