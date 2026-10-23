@@ -21,7 +21,6 @@ import { Button, Tabs, Wordmark, cn } from "@/components/ui";
 import { SplitLayout, useSplitLayout } from "@/components/ui/split-layout";
 import { resolutionLabel } from "@/lib/resolution";
 
-import { ChatRoom } from "./chat";
 import { DecisionPanel } from "./decision-panel";
 import { SessionGuide } from "./link-screens";
 import { PhaseSummary, ProfileStage } from "./profile-stage";
@@ -39,6 +38,7 @@ import {
 import { PHASE_LABEL, clock, warnSeconds } from "./state";
 import { PHASES, type EndReason, type Seat, type StateSnapshot } from "./types";
 import { useDebateSession, type SessionAuth } from "./use-session";
+import { MemoPad } from "./voice/memo-pad";
 import { useVoiceTurn } from "./voice/voice-room";
 
 export function PhaseBar({ snap }: { snap: StateSnapshot }) {
@@ -273,17 +273,6 @@ function PaneToggles({
   );
 }
 
-/** 프로필에서 고른 메시지로 토론방을 옮기고 그 말풍선을 잠깐 강조한다 */
-function jumpToMessage(id: string) {
-  const el = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`);
-  if (!el) return;
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
-  el.classList.remove("message-flash");
-  void el.offsetWidth; // 같은 말풍선을 다시 골라도 강조가 처음부터 다시 돌게 한다
-  el.classList.add("message-flash");
-}
-
 /** 인사 차례를 기다리는 최대 시간. 지나면 토론방을 연다 */
 const INTRO_MAX_MS = 15_000;
 
@@ -406,7 +395,6 @@ export function DebateView({
               speaking={speaking}
               intro={flags.intro}
               onSkipIntro={() => setIntroDone(true)}
-              onJump={flags.intro ? undefined : jumpToMessage}
             />
           ),
           voice: (
@@ -421,16 +409,8 @@ export function DebateView({
           summary: <PhaseSummary snap={snap} />,
           chat: (
             <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line">
-              {/* 음성 토론이라 입력창 없이 대화 기록만. 동료 발언은 들은 만큼만 보인다(V5) */}
-              <ChatRoom
-                snap={voice.chatSnap}
-                pending={[]}
-                typing={[]}
-                locked={locked}
-                readOnly
-                onSend={session.sendMessage}
-                onTyping={session.sendTyping}
-              />
+              {/* 음성 토론에는 채팅 기록을 두지 않고 지원자 메모장만 둔다(개정 V14) */}
+              <MemoPad sessionId={auth.sessionId} locked={locked} />
             </div>
           ),
           decisions: (
