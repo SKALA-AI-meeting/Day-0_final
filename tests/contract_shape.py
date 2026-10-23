@@ -1219,6 +1219,9 @@ SHAPES["voice_state"] = {
     "heard_message_ids?": [str],
     "think_deadline_at?": str,
     "rerecorded?": bool,
+    "priority?": Enum("hand", "forced"),
+    "hand?": Opt(ANY),
+    "hand_turn?": Opt(ANY),
     "utterance?": {
         "id": str,
         "status": str,

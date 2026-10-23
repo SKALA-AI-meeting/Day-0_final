@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import timedelta
 
 import pytest
-from app.models import Message, Session
+from app.models import Message, Session, SpeechJob
 from app.routers.ws import handle_send
 from app.services.common import ServiceError
 from app.voice import controller, quota
@@ -471,3 +471,84 @@ async def test_voice_stream_chunks_used_for_transcript(api, voice_ctx):
     snap = await snapshot(api, ctx, sess)
     assert snap["utterance"]["transcript"] == "소리"
     assert speech.stt_calls == [3.0]
+
+
+async def ready_two(api, ctx, sess, card_second: bool = False):
+    """동료 발언 두 개(p1, p3)를 합성까지 끝낸 재생 대기 상태."""
+    first = await api.post_ai(sess, "p1", "물 부족을 생각해 봐요")
+    extra = {"card_ids": ["listening_pressure"]} if card_second else {}
+    second = await api.post_ai(sess, "p3", "다른 의견도 있어요", seq=2, **extra)
+    await snapshot(api, ctx, sess)
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "AI_SPEAKING"
+    return first, second, snap
+
+
+async def test_voice_hand_raise_takes_turn_after_current(api, voice_ctx):
+    """손들면 지금 동료 발언은 끝까지 듣고, 줄 서 있던 발언은 취소된 뒤 바로 내 차례가 된다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    first, _second, snap = await ready_two(api, ctx, sess)
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    playing = snap["items"][0]["id"]
+    body = {**turn, "job_id": playing, "outcome": "start"}
+    assert (await post(api, sess, "playback", body)).status_code == 200
+    hand = {**turn, "during_message_id": first["id"], "offset_ms": 1200}
+    assert (await post(api, sess, "hand", hand)).status_code == 200
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "AI_SPEAKING"  # 지금 발언은 끊지 않는다
+    body = {**turn, "job_id": playing, "outcome": "ended"}
+    assert (await post(api, sess, "playback", body)).status_code == 200
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "USER_READY"
+    assert snap["priority"] == "hand"
+    assert snap["items"] == []
+    assert snap["heard_message_ids"] == [first["id"]]
+    start, _ = await record_once(api, ctx, sess, snap)
+    async with ctx.session_factory() as db:
+        job = await db.get(SpeechJob, uuid.UUID(start["utterance_id"]))
+        assert job.data["turn_kind"] == "hand"
+        assert job.data["hand"]["during_message_id"] == first["id"]
+        assert job.data["hand"]["offset_ms"] == 1200
+
+
+async def test_voice_hand_raise_keeps_card_utterance(api, voice_ctx):
+    """손들어도 카드 발언(평가 장면)은 건너뛰지 않고 들은 뒤에 내 차례가 된다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    _first, second, snap = await ready_two(api, ctx, sess, card_second=True)
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    assert (await post(api, sess, "hand", turn)).status_code == 200
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "AI_SPEAKING"
+    assert [i["message_id"] for i in snap["items"]] == [second["id"]]
+
+
+async def test_voice_hand_turn_not_stolen_and_stale_not_replayed(api, voice_ctx):
+    """손들기 차례는 새 동료 발언이 빼앗지 못하고, 내 말 뒤에 그 전 발언을 재생하지 않는다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    _first, _second, snap = await ready_two(api, ctx, sess)
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    assert (await post(api, sess, "hand", turn)).status_code == 200
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "USER_READY"
+    late = await api.post_ai(sess, "p2", "저도 하나 있긴 한데요", seq=3)
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "USER_READY"  # 새 발언이 차례를 빼앗지 않는다
+    start, snap = await record_once(api, ctx, sess, snap)
+    payload = {
+        "client_msg_id": start["utterance_id"],
+        "content": snap["utterance"]["transcript"],
+        "voice_turn_id": snap["turn_id"],
+        "epoch": snap["epoch"],
+    }
+    await handle_send(ctx, sess.id, payload)
+    await ctx.mailboxes.drain()
+    await snapshot(api, ctx, sess)
+    snap = await snapshot(api, ctx, sess)
+    assert late["id"] not in [i["message_id"] for i in snap["items"]]
+    async with ctx.session_factory() as db:
+        job = await db.get(SpeechJob, uuid.uuid5(uuid.UUID(late["id"]), "tts"))
+        assert job.data["status"] == "canceled"
+        assert job.data["error"] == "superseded"

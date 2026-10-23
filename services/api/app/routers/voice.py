@@ -36,6 +36,12 @@ class RetryIn(TurnIn):
     job_id: uuid.UUID
 
 
+class HandIn(TurnIn):
+    raised: bool = True
+    during_message_id: str | None = None
+    offset_ms: int | None = Field(default=None, ge=0)
+
+
 class StreamIn(TurnIn):
     utterance_id: str
     seq: int = Field(ge=0, le=1000)
@@ -206,6 +212,17 @@ async def playback(session_id: uuid.UUID, body: PlaybackIn, ctx: Ctx, _: Candida
             if data["status"] == "queued":
                 ctx.spawn(controller.run_job(ctx, job.id))
             return {"ok": True}
+
+
+@router.post("/sessions/{session_id}/voice/hand")
+async def hand(session_id: uuid.UUID, body: HandIn, ctx: Ctx, _: Candidate):
+    """손들기/손 내리기. 지금 동료 발언이 끝나면 보호 발언만 듣고 내 차례가 된다."""
+    async with ctx.ordered(session_id):
+        async with ctx.session_factory() as db:
+            session, _, _ = await load_context(db, session_id, lock=True)
+            data = await controller.raise_hand(db, session, body, ctx.clock.now())
+            await db.commit()
+            return data
 
 
 @router.post("/sessions/{session_id}/voice/stream")

@@ -5,7 +5,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.masking import mask
@@ -47,9 +47,22 @@ def name_phrases(position) -> list[str]:
     return phrases
 
 
-def ready_hold(position) -> timedelta:
-    """내 차례(USER_READY)를 동료 발언·카드에 반납하지 않고 지켜 주는 시간."""
+def ready_hold(position, data: dict | None = None) -> timedelta:
+    """내 차례(USER_READY)를 동료 발언·카드에 반납하지 않고 지켜 주는 시간.
+
+    손들기 차례는 지원자가 이미 말하겠다고 했으므로 생각 시간 없이 여유 시간만 지킨다.
+    """
+    if data and data.get("priority") == "hand":
+        return timedelta(seconds=READY_GRACE_SECONDS)
     return timedelta(seconds=think_seconds(position) + READY_GRACE_SECONDS)
+
+
+NOTICE_KINDS = ("consensus_fill", "timeout_fill")
+
+
+def protected(job) -> bool:
+    """손들기·지원자 발언으로도 건너뛰지 않는 발언: 카드 발언(평가 장면)과 합의·시간 초과 공지."""
+    return bool(job.data.get("card_ids")) or bool(job.data.get("notice"))
 
 
 async def row(db, session_id):
@@ -100,7 +113,7 @@ async def sync(db, session, position, now):
     if (
         data["state"] == "USER_READY"
         and not data.get("release_ready")
-        and now < at(data["ready_at"]) + ready_hold(position)
+        and now < at(data["ready_at"]) + ready_hold(position, data)
     ):
         state.data = data
         return {**data, "items": [], "server_now": iso(now)}, []
@@ -130,6 +143,13 @@ async def sync(db, session, position, now):
             .order_by(Message.created_at, Message.seq)
         )
     ).all()
+    last_candidate = await db.scalar(
+        select(func.max(Message.created_at)).where(
+            Message.session_id == session.id,
+            Message.channel == "room",
+            Message.sender == "candidate",
+        )
+    )
     jobs, pending = [], []
     for message in messages:
         jid = uuid.uuid5(message.id, "tts")
@@ -155,10 +175,20 @@ async def sync(db, session, position, now):
                     "voice": position.scenario["voice_policy"]["voices"][message.sender],
                     "seat": message.sender,
                     "card_ids": message.card_ids,
+                    "notice": message.meta.get("kind") in NOTICE_KINDS,
                 },
             )
             db.add(job)
         if job.data["status"] in ("heard", "canceled"):
+            continue
+        if (
+            last_candidate
+            and message.created_at < last_candidate
+            and not job.data.get("playback_started_at")
+            and not protected(job)
+        ):
+            # 지원자가 이미 말했으니 그 전에 나온 안 들은 동료 발언은 흐름에 안 맞는다(손들기 등)
+            job.data = {**job.data, "status": "canceled", "error": "superseded"}
             continue
         if job.data["status"] == "processing" and now > at(job.data["started_at"]) + timedelta(
             seconds=120
@@ -167,6 +197,32 @@ async def sync(db, session, position, now):
         if job.data["status"] == "queued":
             pending.append(job.id)
         jobs.append(job)
+    hand = data.get("hand")
+    if hand and data["state"] in ("AI_GENERATING", "AI_SPEAKING"):
+        playing = (
+            jobs and jobs[0].data["status"] == "ready" and jobs[0].data.get("playback_started_at")
+        )
+        if not playing:
+            # 지금 말하는 동료가 없으면 보호 발언만 남기고 줄 서 있던 동료 발언을 취소한다
+            for job in jobs:
+                if not protected(job):
+                    job.data = {**job.data, "status": "canceled", "error": "hand_raised"}
+            jobs = [j for j in jobs if protected(j)]
+            pending = [jid for jid in pending if any(j.id == jid for j in jobs)]
+            if not jobs:
+                data.pop("hand")
+                data.update(
+                    state="USER_READY",
+                    ready_at=iso(now),
+                    priority="hand",
+                    hand_turn=hand,
+                    release_ready=False,
+                    blocked_reason=None,
+                )
+                # 손들기 차례는 실행 중인 에이전트가 있어도 바로 준다. 이후에는 위쪽의
+                # "유지 시간 동안 내 차례 지키기"가 새 동료 발언이 빼앗지 못하게 막는다.
+                state.data = data
+                return {**data, "items": [], "server_now": iso(now)}, []
     items = [
         {
             "id": str(j.id),
@@ -199,7 +255,7 @@ async def sync(db, session, position, now):
         if data["state"] != "USER_READY":
             data["ready_at"] = iso(now)
         data["state"] = "USER_READY"
-    if data["state"] == "USER_READY" and now > at(data["ready_at"]) + ready_hold(position):
+    if data["state"] == "USER_READY" and now > at(data["ready_at"]) + ready_hold(position, data):
         # 시작하지 않은 예약은 카드/침묵 실행을 위해 반납한다.
         data["release_ready"] = True
     state.data = data
@@ -280,6 +336,9 @@ async def capture(db, session, position, body, now):
         deadline = min(deadline, at(data["speech_deadline_at"]))
     if deadline <= now:
         raise conflict("voice_turn_expired")
+    # 평가 담당이 "손들고 말함 / 내 차례에 말함 / 강제로 말함"을 구분할 수 있게 발언 기록에 남긴다
+    turn_kind = data.pop("priority", None) or "turn"
+    hand_turn = data.pop("hand_turn", None)
     data.update(
         state="USER_SPEAKING",
         utterance_id=str(jid),
@@ -303,6 +362,8 @@ async def capture(db, session, position, body, now):
                 "generation": session.generation,
                 "turn_id": body.turn_id,
                 "deadline": iso(deadline),
+                "turn_kind": turn_kind,
+                "hand": hand_turn,
                 "phrases": name_phrases(position),
             },
         )
@@ -342,6 +403,26 @@ async def accept_audio(db, session, body, audio, now):
     }
     state.data = {**state.data, "state": "TRANSCRIBING"}
     return job
+
+
+async def raise_hand(db, session, body, now):
+    """동료가 말하거나 대답을 준비하는 동안 손들기/손 내리기. 지금 발언이 끝나면 내 차례가 된다."""
+    state = await row(db, session.id)
+    data = dict(state.data)
+    validate(session, data, body.turn_id, body.epoch, now)
+    if data.get("state") not in ("AI_GENERATING", "AI_SPEAKING"):
+        raise conflict("voice_turn_conflict")
+    if body.raised:
+        # 누구 발언 중 몇 초에 들었는지(재생 중이 아니면 비움)는 화면이 알려 준다
+        data["hand"] = {
+            "raised_at": iso(now),
+            "during_message_id": body.during_message_id,
+            "offset_ms": body.offset_ms,
+        }
+    else:
+        data.pop("hand", None)
+    state.data = data
+    return data
 
 
 async def transcribe_stt(speech, job_id, audio: bytes, data: dict) -> str:
