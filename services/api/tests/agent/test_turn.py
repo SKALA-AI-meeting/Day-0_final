@@ -37,11 +37,14 @@ async def test_phase_started_keyword_pushers_and_problem_react(harness):
         ],
     )
     run = await h.run("phase_started")
-    assert [(s["seat"], s["purpose"]) for s in run.decision["speakers"]] == [
-        ("p1", "push_option"),
-        ("p3", "push_option"),
+    posts = h.posted()
+    # 첫 화자는 답할 메시지 없이 말을 꺼내고, 둘째 화자는 같은 실행에서 첫 화자 발언에 답한다
+    assert [(s["seat"], s["reply_to"]) for s in run.decision["speakers"]] == [
+        ("p1", None),
+        ("p3", posts[0]["id"]),
     ]
-    assert [m["seq"] for m in h.posted()] == [1, 2]
+    assert [m["seq"] for m in posts] == [1, 2]
+    assert [m["meta"]["reply_to"] for m in posts] == [None, posts[0]["id"]]
     assert len(h.slept) == 1  # 둘째 화자 간격
 
     p = harness(
@@ -49,7 +52,7 @@ async def test_phase_started_keyword_pushers_and_problem_react(harness):
     )
     p.server.confirm_keyword("water")
     run = await p.run("phase_started")
-    assert [(s["seat"], s["purpose"]) for s in run.decision["speakers"]] == [("p1", "react")]
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p1"]
     # 카드 전에는 고집형도 입장을 밝히지 않는다(계획 밖 → 고정 문구, 입장 없음)
     assert p.server.support["p1"] is None and not p.server.options
 
@@ -174,11 +177,15 @@ async def test_turn_llm_only_for_message(harness):
     assert not h.turn.calls
 
 
-async def test_turn_llm_failure_means_no_speakers(harness):
+async def test_turn_llm_failure_falls_back_to_a_default_responder(harness):
+    """턴 LLM이 실패하거나 0명을 골라도 지원자 메시지에는 한 명이 답한다(C1)."""
     h = harness("keyword", turn=[RuntimeError("down")] * 3)
     mid = h.candidate("음.", intent_of("other", confidence="low"))
     run = await h.run("message", message_id=mid)
-    assert run.ok and run.decision["speakers"] == [] and not h.posted()
+    assert run.ok and [(s["seat"], s["reply_to"]) for s in run.decision["speakers"]] == [
+        ("p3", mid)
+    ]
+    assert [m["sender"] for m in h.posted()] == ["p3"]
 
 
 async def test_silence_invite_once_by_critic(harness):
@@ -207,7 +214,8 @@ async def test_consecutive_three_blocks_turn_llm_choice(harness):
             }
         )
     run = await h.run("message", message_id=mid)
-    assert run.decision["speakers"] == []
+    # 턴 LLM이 고른 연속 3회 자리는 버리고, 기본 응답 자리도 그 자리를 건너뛴다
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p1"]
 
 
 # ---- 합의 채우기 -----------------------------------------------------------------------------

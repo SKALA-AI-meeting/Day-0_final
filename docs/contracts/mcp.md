@@ -18,7 +18,7 @@
 | 도구 | 입력 | 출력 data | 내부 API | 구분 |
 |---|---|---|---|---|
 | get_debate_state | {session_id} | DebateState + {seats: [{seat: "candidate", display_name}, {seat, display_name, avatar_url}]} (페르소나 유형 없음). 결정적 노드(load) 전용이고 페르소나에는 바인딩하지 않는다(페르소나는 load가 걸러 주입한 DebateState만 본다) | GET /debate_state, GET /sessions/{id} | 조회 |
-| get_transcript | {session_id, since_t_min?, phase?, limit?=30} | [{id, sender, content, phase, is_invite, t_min}] (meta·intent·origin 없음) | GET /messages | 조회 |
+| get_transcript | {session_id, since_t_min?, phase?, limit?=30} | [{id, sender, content, phase, is_invite, t_min, reply_to}] (`reply_to`는 AI 발언이 답한 메시지 id, `meta.reply_to`에서 꺼냄, 없으면 null. 그 밖의 meta·intent·origin 없음) | GET /messages | 조회 |
 | get_draft | {session_id} | {sections, revision, updated_at} | GET /proposal | 조회 |
 | post_message | {session_id, sender: p1∣p2∣p3∣system, content, run_id, seq, expected_generation?, is_invite?, card_ids?, cited_material_ids?, meta?} | Message. 409 `stale_generation`이면 게시 안 됨 | POST /messages | 변경 |
 | propose_option | {session_id, phase, label, proposer: p1∣p2∣p3, scenario_option_key?, source_message_id, run_id} | Option(`existing` 포함) | POST /options | 변경 |

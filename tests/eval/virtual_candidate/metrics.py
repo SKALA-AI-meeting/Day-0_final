@@ -390,9 +390,19 @@ def reply_metrics(s: Session) -> dict[str, Any]:
     """지원자가 동료를 부르거나 물은 메시지(addressed_to 있음 또는 question) 뒤, 다음 지원자 메시지
     전까지
     동료 발언이 있었는지, 부른 동료가 말했는지(규칙). 그 발언이 실제로 답했는지는 --judge.
+
+    `reply_to`는 진행 매니저가 정해 동료 발언 `meta.reply_to`에 남긴 답한 메시지로 센 값이다(다음
+    지원자 메시지 뒤에 답한 것 포함). 그 기록이 없는 세션(이전 버전)이면 None.
     """
     rows = []
     cands = s.candidate_room()
+    linked: dict[str, list[str]] = {}
+    recorded = False
+    for p in s.persona_room():
+        meta = p.get("meta") or {}
+        recorded = recorded or "reply_to" in meta
+        if meta.get("reply_to"):
+            linked.setdefault(meta["reply_to"], []).append(p["sender"])
     for i, m in enumerate(cands):
         if m["phase"] not in DEBATE_PHASES:
             continue
@@ -416,15 +426,28 @@ def reply_metrics(s: Session) -> dict[str, Any]:
                 "any_reply": bool(after),
                 "addressed_spoke": bool(addressed) and any(p["sender"] in addressed for p in after),
                 "replies": [p["id"] for p in after[:3]],
+                "reply_to_seats": linked.get(m["id"], []),
                 "answered": None,  # --judge
             }
         )
     named = [r for r in rows if r["addressed"]]
+    debate = [m for m in cands if m["phase"] in DEBATE_PHASES]
+    by_reply = None
+    if recorded:
+        by_reply = {
+            "all_n": len(debate),
+            "all_unanswered": sum(not linked.get(m["id"]) for m in debate),
+            "named_seats": sum(len(r["addressed"]) for r in named),
+            "named_seats_unanswered": sum(
+                seat not in r["reply_to_seats"] for r in named for seat in r["addressed"]
+            ),
+        }
     return {
         "n": len(rows),
         "no_reply": sum(not r["any_reply"] for r in rows),
         "named_n": len(named),
         "named_unanswered": sum(not r["addressed_spoke"] for r in named),
+        "reply_to": by_reply,
         "rows": rows,
     }
 

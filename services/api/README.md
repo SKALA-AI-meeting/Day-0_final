@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 248개(live 3개 포함, `make test`는 live를 뺀다).
+총 263개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -218,6 +218,25 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
+<details><summary><code>tests/agent/test_manager_context.py</code> (14)</summary>
+
+- `test_addressed_message_is_answered_with_reply_to`
+- `test_named_seat_overflow_is_answered_next_run_after_restart`
+- `test_overflow_and_new_message_each_get_their_own_reply_to`
+- `test_card_speakers_leave_named_seat_for_the_next_run`
+- `test_procedural_message_gets_at_least_one_responder`
+- `test_proposal_phase_message_is_answered`
+- `test_situation_block_is_facts_only`
+- `test_situation_without_a_message_and_on_card_turn`
+- `test_silence_invite_is_a_situation_fact`
+- `test_reactions_count_replies_and_name_calls_only`
+- `test_repeatedly_named_seats_do_not_starve`
+- `test_mention_pushed_out_of_the_transcript_window_is_still_answered`
+- `test_fixed_card_line_does_not_answer_a_mention`
+- `test_open_mentions_age_by_earliest_and_close_on_later_reply`
+
+</details>
+
 <details><summary><code>tests/agent/test_min_path.py</code> (3)</summary>
 
 - `test_named_seat_responds_with_typing_and_stance`
@@ -277,7 +296,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_named_seat_missed_by_the_classifier_still_answers`
 - `test_quiet_only_when_called_or_asked_all`
 - `test_turn_llm_only_for_message`
-- `test_turn_llm_failure_means_no_speakers`
+- `test_turn_llm_failure_falls_back_to_a_default_responder`
 - `test_silence_invite_once_by_critic`
 - `test_consecutive_three_blocks_turn_llm_choice`
 - `test_existing_consensus_fills_without_respond`
@@ -458,6 +477,12 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_three_persona_llm_failures_fail_the_session`
 - `test_missing_scenario_copy_fails_session_without_running`
 - `test_intent_reservation_and_excluded_are_stored`
+
+</details>
+
+<details><summary><code>tests/test_open_mentions.py</code> (1)</summary>
+
+- `test_open_mention_survives_beyond_the_transcript_window`
 
 </details>
 

@@ -91,7 +91,15 @@ async def test_get_transcript_passes_filters_and_strips_internal_fields(mcp_clie
     params = api.requests[-1].url.params
     assert (params["phase"], params["since_t_min"], params["tail"]) == ("problem", "9.0", "30")
     assert "limit" not in params
-    assert set(out["data"][0]) == {"id", "sender", "content", "phase", "is_invite", "t_min"}
+    assert set(out["data"][0]) == {
+        "id",
+        "sender",
+        "content",
+        "phase",
+        "is_invite",
+        "t_min",
+        "reply_to",
+    }
 
 
 async def test_conflict_codes_passed_through_in_message(mcp_client, api):

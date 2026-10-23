@@ -91,12 +91,15 @@
       "scenario_option_key": null,
       "new_option_label": null,
       "confidence": "high",
-      "reservation": false
+      "reservation": false,
+      "addressed_to": [],
+      "excluded": []
     }
   ],
   "first_spoke_at": {
     "p1": "2026-10-21T01:10:10Z",
     "p2": null,
     "p3": "2026-10-21T01:10:40Z"
-  }
+  },
+  "open_mentions": []
 }

@@ -115,6 +115,30 @@ def _current(state: DebateState) -> dict[str, Any]:
     return _speakers(state)[state.get("idx", 0)]
 
 
+def _reply_to(state: DebateState) -> str | None:
+    """지금 화자가 답할 메시지 id. 결정에 없고(지원자 메시지 자극이 아님) 침묵 초대가 아닌 둘째
+    화자는 같은 실행에서 앞 화자가 방금 게시한 발언에 답한다."""
+    spk = _current(state)
+    if spk.get("reply_to") or spk.get("invite") or state.get("idx", 0) == 0:
+        return spk.get("reply_to")
+    posted = state.get("posted") or []
+    return str(posted[-1]["message_id"]) if posted and posted[-1].get("message_id") else None
+
+
+def _situation(state: DebateState, deps: DebateDeps) -> dict[str, Any]:
+    spk = _current(state)
+    intents = rules.intent_map(state["ds"], state["stimulus"], state.get("intent"))
+    return rules.situation(
+        spk["seat"],
+        spk,
+        _reply_to(state),
+        state["transcript"],
+        intents,
+        deps.catalog,
+        state["ds"].get("open_mentions"),
+    )
+
+
 def _plan_context(state: DebateState, deps: DebateDeps) -> PlanContext:
     ds = state["ds"]
     progress = rules.card_progress(ds)
@@ -351,43 +375,39 @@ async def cards(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, A
 
 
 async def turn(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, Any]:
+    """누가 어떤 메시지에 답할지(C1). 지원자 메시지에는 답하는 화자가 최소 1명이다."""
     deps = runtime.context
     brief = [rules.CardSpeaker(i["seat"], i["card_ids"]) for i in state.get("brief") or []]
+    stimulus = state["stimulus"]
     decision = rules.rule_decision(
-        state["stimulus"],
+        stimulus,
         state["ds"],
         deps.catalog,
         brief,
         state.get("intent"),
         state["transcript"],
     )
-    if (
-        not decision["speakers"]
-        and decision["fill"] is None
-        and state["stimulus"]["type"] == "message"
-        and _cost_left(state) > 0
-        and (
-            state["phase"] != "proposal" or (state.get("intent") or {}).get("intent") == "question"
-        )
-    ):
-        decision["llm_used"] = True
-        # 지원자가 답하지 말라고 뺀 자리(의도 분류 excluded)는 턴 LLM이 골라도 넣지 않는다
-        excluded = set(
+    if rules.needs_responder(decision, stimulus):
+        current = str(stimulus["message_id"])
+        # 지원자가 답하지 말라고 뺀 자리(의도 분류 excluded)와 이미 고른 자리는 넣지 않는다
+        skip = set(
             rules.excluded_seats(
-                rules.message_text(state["stimulus"], state["transcript"]),
+                rules.message_text(stimulus, state["transcript"]),
                 (state.get("intent") or {}).get("excluded"),
                 deps.catalog,
             )
-        )
-        decision["speakers"] = [
-            s for s in await _turn_llm(state, deps, brief) if s["seat"] not in excluded
-        ]
-        decision["reason"] = decision.get("reason") or "턴 LLM 화자 선택"
-    critic = deps.catalog.seat_of("critic")
-    if state.get("notice") and not decision["speakers"] and decision["fill"] is None and critic:
-        # 정하는 방법 질문은 답이 없으면 안 되므로 턴 LLM이 0명을 골라도 비판형이 안내한다
-        decision["speakers"] = [rules.speaker(critic, "respond")]
-        decision["reason"] = "정하는 방법 질문"
+        ) | {s["seat"] for s in decision["speakers"]}
+        chosen: list[str] = []
+        if _cost_left(state) > 0:
+            decision["llm_used"] = True
+            chosen = [s for s in await _turn_llm(state, deps, brief) if s not in skip]
+            decision["reason"] = decision.get("reason") or "턴 LLM 화자 선택"
+        if not chosen:
+            seat = rules.default_responder(state["transcript"], current, deps.catalog, skip)
+            chosen = [seat] if seat else []
+            decision["reason"] = "지원자 메시지 기본 응답"
+        room = rules.MAX_SPEAKERS - len(decision["speakers"])
+        decision["speakers"] += [rules.speaker(s, reply_to=current) for s in chosen[:room]]
     return {"decision": decision, "idx": 0}
 
 
@@ -398,8 +418,9 @@ def _cost_left(state: DebateState) -> float:
 
 async def _turn_llm(
     state: DebateState, deps: DebateDeps, brief: list[rules.CardSpeaker]
-) -> list[dict[str, Any]]:
-    """규칙 6: 규칙 결과 0명 + message 자극일 때만. 실패하면 0명."""
+) -> list[str]:
+    """규칙 7: 지원자 메시지에 답할 화자가 규칙으로 정해지지 않았을 때 답할 자리를 고른다. 실패하면
+    빈 목록(호출자가 기본 응답 자리를 쓴다)."""
     ds, names = state["ds"], state["names"]
     summary = persona.visible_state(ds)
     tones = [
@@ -510,7 +531,7 @@ async def _generate(
     messages = persona.build_messages(
         catalog=deps.catalog,
         seat=seat,
-        purpose=spk["purpose"],
+        situation=_situation(state, deps),
         plan=plan,
         ds=state["ds"],
         names=state["names"],
@@ -742,10 +763,14 @@ async def apply(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, A
     draft, plan = _restore(state)
     code = deps.tools.code
     card_ids = list(spk.get("card_ids") or [])
+    # 고정 문장(카드 고정 한 줄·입장 폴백·안전 문구)은 그 메시지에 답한 것이 아니므로 답한 메시지를
+    # 남기지 않는다. 그 자리의 지명은 열린 채로 다음 실행이 다시 답한다
+    reply_to = None if draft.fixed else _reply_to(state)
     meta = {
         **draft.meta,
         "model": getattr(deps.llms.persona, "model", None),
-        "purpose": spk["purpose"],
+        "reply_to": reply_to,
+        "named": bool(reply_to) and _situation(state, deps)["named"],
     }
     meta.pop("tool_calls", None)
     content = draft.content
@@ -760,7 +785,7 @@ async def apply(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, A
             "run_id": state["run_id"],
             "seq": idx + 1,
             "expected_generation": state["generation"],
-            "is_invite": spk["purpose"] == "invite",
+            "is_invite": bool(spk.get("invite")),
             "card_ids": card_ids,
             "meta": meta,
         },
@@ -803,11 +828,24 @@ async def apply(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, A
         "sender": seat,
         "content": message.get("content", content),
         "phase": message.get("phase", state["phase"]),
-        "is_invite": message.get("is_invite", spk["purpose"] == "invite"),
+        "is_invite": message.get("is_invite", bool(spk.get("invite"))),
         "t_min": message.get("t_min"),
+        "reply_to": reply_to,
     }
     transcript = [*(state.get("transcript") or []), seen][-TRANSCRIPT_LIMIT:]
-    update.update({"posted": posted_list, "observed": observed, "transcript": transcript})
+    # 저장된 결정에 실제로 답한 메시지를 남긴다(앞 화자 발언에 답한 둘째 화자 포함)
+    decision = dict(state["decision"])
+    decision["speakers"] = [
+        {**s, "reply_to": reply_to} if i == idx else s for i, s in enumerate(_speakers(state))
+    ]
+    update.update(
+        {
+            "posted": posted_list,
+            "observed": observed,
+            "transcript": transcript,
+            "decision": decision,
+        }
+    )
     if idx + 1 < len(_speakers(state)):
         low, high = deps.speaker_gap
         await deps.sleep(random.uniform(low, high))

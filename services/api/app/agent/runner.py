@@ -104,15 +104,20 @@ class FakeAgentRunner:
             "fill": None,
             "invite": stimulus.type == "idle",
             "llm_used": False,
+            "queued": [],
             "dropped_seats": [],
             "reason": "fake",
         }
         if line is None:
             return RunResult(decision=decision, usage={"llm_calls": 0})
         seat, content = line
-        purpose = "invite" if stimulus.type == "idle" else "respond"
         decision["speakers"] = [
-            {"seat": seat, "purpose": purpose, "option_id": None, "card_ids": []}
+            {
+                "seat": seat,
+                "reply_to": str(stimulus.message_id) if stimulus.message_id else None,
+                "card_ids": [],
+                "invite": stimulus.type == "idle",
+            }
         ]
         ports = self._ports_for(session_id) if self._ports_for else None
         if ports is not None:
@@ -126,7 +131,10 @@ class FakeAgentRunner:
                 seq=SPEAKER_SEQ,
                 expected_generation=stimulus.generation,
                 is_invite=stimulus.type == "idle",
-                meta={"model": "fake"},
+                meta={
+                    "model": "fake",
+                    "reply_to": str(stimulus.message_id) if stimulus.message_id else None,
+                },
             )
         finally:
             if ports is not None:

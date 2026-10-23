@@ -12,6 +12,8 @@ debate·rag MCP와 가짜 hub)에 LLM만 갈아 끼운다. 지원자 발언은 �
   정해진 경우는 빼고 card_first(두 발언 안에 말했는지)로 따로 센다
 - 안전: guard 패턴·성향 이름·유출 케이스 금지 패턴 위반 수(0이어야 함)
 - 오인용: misquote 정규식이 있는 발언 뒤(다음 지원자 발언 전) 동료 발언이 그 정규식에 걸린 수
+- 답한 메시지(reply_to): 지원자 발언마다 같은 단계 안에서 그 메시지에 답한(`meta.reply_to`) 동료
+  발언이 있는지(없으면 무시), 분류 addressed_to 자리마다 그 자리가 그 메시지에 답했는지(지명 무응답)
 """
 
 import importlib.util
@@ -139,9 +141,16 @@ async def run_session(h, session: dict[str, Any], run: int = 0) -> tuple[list[di
             found = await classify(h, mid)
             calls += 1
             intent_mod.remember(mid, found)
+            h.server.intents[mid] = dict(found)  # 메일박스가 저장하는 분류(message_intents)
             h.server.apply_candidate(found)
             result = await h.run("message", message_id=mid)
-            event = {"session": session["id"], "run": run, **step, "intent": found}
+            event = {
+                "session": session["id"],
+                "run": run,
+                **step,
+                "intent": found,
+                "message_id": mid,
+            }
         calls += result.usage.get("llm_calls", 0)
         event["decision"] = (result.decision or {}).get("speakers")
         event["error"] = result.error
@@ -256,7 +265,8 @@ def named_rate(events: list[dict[str, Any]]) -> dict[str, Any]:
         seat = addressed[0]
         nxt = following(events, i, 2)
         speakers = event.get("decision") or []
-        if speakers and speakers[0].get("purpose") == "card":  # 지목 자리와 같아도 따로 센다
+        first = speakers[0] if speakers else {}
+        if first.get("card_ids") or first.get("purpose") == "card":  # 지목 자리와 같아도 따로 센다
             card_n += 1
             card_hit += any(p["seat"] == seat for p in nxt)
             continue
@@ -271,6 +281,51 @@ def named_rate(events: list[dict[str, Any]]) -> dict[str, Any]:
         "rate": _rate(hit, n),
         "missed": missed,
         "card_first": {"n": card_n, "within_two": card_hit},
+    }
+
+
+def replies(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """지원자 메시지마다 그 메시지에 답한(`meta.reply_to`) 동료 발언이 같은 단계 안에 있는지.
+
+    다음 실행(지원자의 다음 발언·카드 뒤)에 답한 것도 센다(넘친 지명은 다음 실행이 답한다).
+    named는 분류 addressed_to 자리마다 그 자리가 그 메시지에 답했는지(지명 무응답).
+    """
+    n = answered = named_n = named_hit = 0
+    ignored: list[str] = []
+    unanswered: list[str] = []
+    for i, event in enumerate(events):
+        mid = event.get("message_id")
+        if not mid:
+            continue
+        later = [
+            p
+            for e in events[i:]
+            if _unit(e) == _unit(event)
+            for p in e["posts"]
+            if p["meta"].get("reply_to") == mid
+        ]
+        n += 1
+        if later:
+            answered += 1
+        else:
+            ignored.append(f"{event['session']}:{event.get('say', '')[:30]}")
+        for seat in (event.get("intent") or {}).get("addressed_to") or []:
+            named_n += 1
+            if any(p["seat"] == seat for p in later):
+                named_hit += 1
+            else:
+                unanswered.append(f"{event['session']}:{seat}:{event.get('say', '')[:30]}")
+    return {
+        "n": n,
+        "answered": answered,
+        "ignored_rate": _rate(n - answered, n),
+        "ignored": ignored,
+        "named": {
+            "n": named_n,
+            "answered": named_hit,
+            "unanswered": named_n - named_hit,
+            "details": unanswered,
+        },
     }
 
 
@@ -332,6 +387,7 @@ def score(events: list[dict[str, Any]], prompts: dict[str, str]) -> dict[str, An
         "repetition": repetition(events),
         "response": response_rate(events),
         "named": named_rate(events),
+        "replies": replies(events),
         "safety": safety(events, prompts),
         "misquote": misquote(events),
         "fallbacks": fallbacks(events),

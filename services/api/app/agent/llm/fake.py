@@ -97,7 +97,7 @@ class FakeLLM(BaseLLM):
 # 값만 읽어
 # 같은 입력에 같은 고정 응답을 낸다. 네트워크 호출·사용량(토큰·비용)은 0이다.
 _PLAN = re.compile(r"\[내 입장 계획\]\n이번 단계에서 미는 안: (.+) \((\S+)\)\.")
-_PURPOSE = re.compile(r"\[이번 목적\]\n(\w+):")
+_INVITE = re.compile(r"- 침묵 초대 차례: 예")
 _CANDIDATE = re.compile(r"- 지원자: (.+)님")
 _OPPOSE = ("아니", "반대", "글쎄")
 _AGREE = ("좋아요", "동의", "찬성")
@@ -194,11 +194,10 @@ def _intent(messages: list[BaseMessage], _tools: Any) -> str:
 def _persona(messages: list[BaseMessage], _tools: Any) -> str:
     """계획 안을 지지하는 고정 문장. 입장을 밝히지 않는 단계면 중립 문장, 초대면 초대 골격."""
     text = _last_human(messages)
-    purpose = _PURPOSE.search(text)
     candidate = _CANDIDATE.search(text)
     plan = _PLAN.search(text)
     stance = None
-    if purpose and purpose.group(1) == "invite":
+    if _INVITE.search(text):
         content = f"{candidate.group(1) if candidate else '지원자'}님은 어떻게 생각하세요?"
     elif plan:
         content = f"저는 {attach(plan.group(1), '이')} 좋다고 봐요."
@@ -209,7 +208,7 @@ def _persona(messages: list[BaseMessage], _tools: Any) -> str:
 
 
 def _turn(_messages: list[BaseMessage], _tools: Any) -> str:
-    speakers = [{"seat": TURN_SEAT, "purpose": "respond", "option_id": None}]
+    speakers = [{"seat": TURN_SEAT}]
     return json.dumps({"speakers": speakers, "reason": "fake"}, ensure_ascii=False)
 
 

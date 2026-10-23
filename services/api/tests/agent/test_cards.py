@@ -60,7 +60,7 @@ async def test_c5_lead_lock_joint_delivery_and_observations(harness):
     }
     assert [n for n, _ in h.assessment.calls] == ["record_observation"] * 2
     assert h.server.support["p1"] == h.server.support["p3"] == p2
-    assert run.decision["speakers"][0]["purpose"] == "card"
+    assert run.decision["speakers"][0]["card_ids"] == [FLEX, PRESSURE]
 
 
 async def test_c5_api_lock_is_used(harness):
@@ -188,7 +188,7 @@ async def test_card_due_keyword_critic_pushes_own_keyword(harness):
     h.candidate("물이 좋겠어요.", intent_of("propose", key="water"))
     run = await h.run("card_due", card_id="persuasion_keyword")
     assert run.decision["speakers"] == [
-        {"seat": "p3", "purpose": "card", "option_id": None, "card_ids": ["persuasion_keyword"]}
+        {"seat": "p3", "reply_to": None, "card_ids": ["persuasion_keyword"], "invite": False}
     ]
     assert list(h.server.observations) == ["persuasion_keyword"]
 

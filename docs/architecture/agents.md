@@ -63,20 +63,39 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 
 규칙 코드는 `app/agent/manager/rules.py`, LLM 지침은 `prompts/manager/turn_manager.md`.
 
-규칙을 위에서부터 적용한다. 결정·합의·채우기는 규칙이 하고 LLM은 "누가 자연스럽게 말할지"만 고른다(원칙 "결정은 결정적 코드가, 말투는 LLM이"). 시간 초과 채우기는 api가 결정적으로 하므로 그래프 규칙에 없다(R5-2).
+진행 매니저는 **누가 어떤 메시지(맥락)에 답할지**(`speakers[].seat`·`reply_to`)와 그 자리의 차례(카드·침묵 초대)만 정한다. 무엇을 어떻게 말할지(질문할지, 자기 안을 밀지 등)는 정하지 않고 토론 동료가 상황 정보를 보고 성향대로 정한다(결정 C1). 결정·합의·채우기는 규칙이 하고 LLM은 "누가 자연스럽게 답할지"만 고른다(원칙 "결정은 결정적 코드가, 말투는 LLM이"). 시간 초과 채우기는 api가 결정적으로 하므로 그래프 규칙에 없다(R5-2).
 
-1. `consensus_option_id`가 있고 칸이 `empty`: 화자 0명, `fill = {option_id, seat}`(합의 채우기 전용)만 정한다. 공지 화자는 화자 목록에 들어가지 않고 respond → guard → stance_check → apply 루프 없이 fill 노드 전용 분기가 처리한다. `seat` = 그 안 지지자 중 우선순위([product/scenario.md](../product/scenario.md), 고정 자리에서는 서지안 > 윤하람 > 강한결) 첫 자리. 합의는 지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언(high인 `propose`·`agree`, 유보 표현 없음)일 때이며 대기 시간이 없다(R4·B2). 이번 실행의 AI 발언으로 지지가 바뀐 경우는 같은 실행에서 다시 판정하지 않는다.
-2. `card_brief`가 있으면 카드가 정한 화자·목적(`card`)을 넣는다. 미전달 화자가 남아 있으면 자극 종류와 상관없이 먼저 넣는다. `stimulus=card_due`는 이 규칙으로만 화자를 정한다.
-3. `stimulus=message`이고 지원자가 부른 자리가 있으면 그 자리 `respond`(최대 2명). 부른 자리는 의도 분류 `addressed_to`와 메시지에서 "이름님"으로 부른 자리를 합친 것에서 의도 분류 `excluded`(지원자가 답하지 말라고 뺀 자리) 중 메시지에 이름(성을 붙인 이름 또는 뗀 이름, "님" 유무 무관)이 실제로 나온 자리를 뺀 것이다(이름이 나오지 않은 자리를 뺐다는 분류는 기록과 맞지 않아 버린다)(뺀 자리가 아니면 부른 자리는 빠지지 않는다). 순서는 `addressed_to` 자리 먼저(메시지에 나온 순서), 그다음 나머지 부른 자리다. 그래서 "지안님 말고 하람님"이 `addressed_to=[p2]`·`excluded=[p3]`로 분류되면 하람만 답한다(`called_seats`). 뺀 자리는 전체 질문의 기본 화자와 턴 LLM 선택에서도 빠진다. `quiet`는 이름이 불렸거나 전체 질문(intent=question, addressed_to=[])일 때만 대상이 된다. 정하는 방법을 묻는 진행 질문인데 턴 LLM이 화자 0명을 고르면 비판형 한 명이 답한다.
-4. `stimulus=idle`이고 그 단계 `invite_delivered=false`: 화자 1명 `invite`. 묻는 자리 = 우선순위 `agreeable > divergent > critic` 중 세션에 있는 첫 자리(`stubborn`·`quiet` 제외, 고정 자리에서는 서지안). 게시 때 `is_invite=true`. 지원자가 입력 중이라 게시하지 못하면 플래그가 그대로라 스케줄러가 다시 넣는다.
-5. `stimulus=phase_started`: 단계 첫 발언자 1~2명 `push_option`(시나리오 고정 입장을 가진 자리 중 `quiet` 제외). 문제 상황 단계에서는 카드 전이므로 `stubborn`도 입장을 밝히지 않고 일반 발언(`react`)만 한다(R5-4). proposal 단계는 화자 0명.
-6. **턴 LLM은 1~5의 결과가 0명이고 자극이 `message`일 때만** 부른다(R5-12). LLM은 `respond`·`push_option`·`react` 중에서 최대 2명을 고른다. 입력은 DebateState 요약·최근 대화 10개·자리별 성향 한 줄·카드 선점 금지 목록. LLM 실패면 0명.
+**부른 자리**: 지원자 메시지의 의도 분류 `addressed_to`와 메시지에서 "이름님"으로 부른 자리를 합친 것에서 의도 분류 `excluded`(지원자가 답하지 말라고 뺀 자리) 중 메시지에 이름(성을 붙인 이름 또는 뗀 이름, "님" 유무 무관)이 실제로 나온 자리를 뺀 것이다(이름이 나오지 않은 자리를 뺐다는 분류는 기록과 맞지 않아 버린다)(뺀 자리가 아니면 부른 자리는 빠지지 않는다). 순서는 `addressed_to` 자리 먼저(메시지에 나온 순서), 그다음 나머지 부른 자리다. 그래서 "지안님 말고 하람님"이 `addressed_to=[p2]`·`excluded=[p3]`로 분류되면 하람만 답한다(`called_seats`). 지난 메시지의 분류는 DebateState `candidate_intents`(저장된 `message_intents`)에서 읽는다.
 
-공통 제약: 한 실행 화자 최대 2명, 같은 자리 연속 3회 발언 금지(카드·지명 응답 제외), 카드 선점 금지([product/scenario.md](../product/scenario.md) 4.2 표)에 걸리는 목적은 제외. proposal 단계에서는 지원자가 묻거나 부른 경우만 `respond`.
+**아직 답하지 않은 지명**(`open_mentions`): 지원자 메시지가 자리를 부를 때마다 그 자리의 열린 지명이 쌓이고, 그 자리가 어떤 지원자 메시지에 답하면(`meta.reply_to`) 그 메시지와 그 앞의 지명이 모두 닫힌다. 자리마다 답할 메시지는 가장 최근 열린 지명, 순서는 가장 오래된 열린 지명(`since`)이 이른 자리 먼저(같은 메시지 안에서는 부른 순서)라 계속 불려도 밀린 자리가 굶지 않는다. api가 그 단계 토론방 **전체 기록**에서 DebateState `open_mentions`로 계산하므로(대화 창 30개와 무관) 지명이 창 밖으로 밀려도 남고, 프로세스 메모리 없이 재시작해도 같다. 이번 지원자 메시지의 분류가 아직 저장되지 않았으면 그 메시지가 부른 자리는 그래프가 이번 분류로 더한다. 고정 문장 발언(카드 고정 한 줄·입장 폴백·안전 문구)은 `reply_to`를 남기지 않아 지명을 닫지 않는다.
+
+규칙을 위에서부터 적용한다. 화자는 한 run에 최대 2명이다.
+
+1. `consensus_option_id`가 있고 칸이 `empty`: 화자 0명, `fill = {option_id, seat}`(합의 채우기 전용)만 정한다. 공지 화자는 화자 목록에 들어가지 않고 respond → guard → stance_check → apply 루프 없이 fill 노드 전용 분기가 처리한다. `seat` = 그 안 지지자 중 우선순위([product/scenario.md](../product/scenario.md), 고정 자리에서는 서지안 > 윤하람 > 강한결) 첫 자리. 합의는 지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언(high인 `propose`·`agree`, 유보 표현 없음)일 때이며 대기 시간이 없다(R4·B2). 이번 실행의 AI 발언으로 지지가 바뀐 경우는 같은 실행에서 다시 판정하지 않는다. 합의 채우기 공지가 지원자 동의 발언에 대한 응답이다.
+2. `card_brief`가 있으면 카드 화자(`card_ids`)를 넣는다. 미전달 화자가 남아 있으면 자극 종류와 상관없이 먼저 넣는다. 카드 화자에게 아직 답하지 않은 지명이 있으면 그 메시지가 `reply_to`다. 고정 문장 카드(머뭇거림 한 줄) 화자는 어떤 메시지에도 답하지 않고, 그 자리의 지명은 `queued`로 남아 다음 run이 답한다.
+3. **지명 응답**: 아직 답하지 않은 지명이 있는 자리(이번 지원자 메시지 포함)가 오래 기다린 순서로 그 자리의 가장 최근 지명 메시지에 답한다. 자극 종류와 상관없이 적용한다. 화자 상한을 넘은 지명은 `queued`에 남기고 다음 run(다음 지원자 메시지·카드 시각·침묵 확인 중 먼저 오는 것)이 기록에서 다시 찾아 먼저 답한다. `stimulus=card_due`는 2·3으로만 화자를 정한다.
+4. `stimulus=message`: 전체 질문(intent=question, 이 메시지에 답하는 화자 없음)이면 소극형·비판형(뺀 자리 제외)이 답한다. `quiet`는 이름이 불렸거나 전체 질문일 때만 대상이 된다. 답할 메시지가 정해지지 않은 화자(카드 화자)는 이번 지원자 메시지에 답한다.
+5. `stimulus=idle`이고 그 단계 `invite_delivered=false`: 침묵 초대 화자 1명(`invite=true`). 묻는 자리 = 우선순위 `agreeable > divergent > critic` 중 세션에 있는 첫 자리(`stubborn`·`quiet` 제외, 고정 자리에서는 서지안). 게시 때 `is_invite=true`. 지원자가 입력 중이라 게시하지 못하면 플래그가 그대로라 스케줄러가 다시 넣는다.
+6. `stimulus=phase_started`: 단계 첫 발언자 1~2명(시나리오 고정 입장을 가진 자리 중 `quiet` 제외, 첫 화자는 `reply_to` 없음). 문제 상황 단계는 고집형 한 명이고 카드 전이므로 입장을 밝히지 않는다(입장 계획, R5-4). proposal 단계는 화자 0명.
+7. **지원자 메시지에는 최소 1명**: 자극이 `message`이고 1~4로 그 메시지에 답하는 화자가 없으며 자리가 남았으면 턴 LLM(`MODEL_TURN`)이 답할 자리를 1~2명 고른다(R5-12의 "규칙 결과 0명일 때만"을 넓힘, 모든 단계). 입력은 DebateState 요약·최근 대화 10개·자리별 성향 한 줄·카드 선점 금지 목록·의도 분류. 턴 LLM이 실패하거나 0명을 고르거나 비용 상한을 넘었으면 기본 응답 자리(`default_responder`: 그 메시지 직전에 말한 AI 자리, 없으면 비판형 > 고집형)가 답한다. 둘 다 소극형·연속 3회 자리·뺀 자리는 고르지 않는다.
+
+**둘째 화자의 답할 메시지**: 지원자 메시지 자극의 화자는 결정 때 정한 지원자 메시지에 답한다. 지원자 메시지가 아닌 자극(단계 시작·카드 시각)의 둘째 화자는 침묵 초대가 아니면 같은 run에서 첫 화자가 방금 게시한 발언에 답하고, 그 id를 게시 뒤 결정과 `meta.reply_to`에 채운다.
+
+공통 제약: 한 실행 화자 최대 2명, 같은 자리 연속 3회 발언 금지(카드·지명 응답 제외), 카드 선점 금지([product/scenario.md](../product/scenario.md) 4.2 표)는 동료에게 `[지킬 것]`으로 주고 턴 LLM 입력에도 넣는다.
+
+**상황 정보**(`rules.situation`, 사실만, 지시 없음): 화자마다 코드가 계산해 동료 입력의 `[상황]` 블록으로 준다.
+
+| 항목 | 계산 |
+|---|---|
+| 답할 메시지 | `reply_to` 메시지의 보낸 사람과 본문(없으면 "없음"). 대화 창 30개 밖의 지명이면 `open_mentions`에 api가 담은 보낸 사람·본문 |
+| 지원자가 나를 이름으로 불렀는지 | 답할 메시지가 지원자 메시지일 때, 그 메시지의 부른 자리에 이 자리가 있는지(`messages.meta.named`에도 기록) |
+| 카드 차례 | 이번 발언에 `card_brief`가 정한 카드가 있는지 |
+| 침묵 초대 차례 | 침묵 초대 화자일 때만 |
+| 내 지난 발언에 답한 동료·나를 부른 지원자 메시지 | 이 자리의 그 단계 마지막 발언 뒤, 그 발언에 답한 다른 동료 발언(`reply_to`) 또는 이 자리를 부른 지원자 메시지를 보낸 참여자(나온 순서). 없으면 "아직 없음", 그 단계에 아직 말하지 않았으면 그렇게 적는다 |
 
 ### 페르소나 에이전트 (respond)
 
-- 입력(Context, [architecture/harness.md](harness.md)): 자기 자리의 성향 프롬프트(`prompts/persona/persona_<type>.md`의 말투·행동 규칙), 공통 규칙, 이번 목적과 대상 안, 자기 고정 입장(`stance_plan`), 카드 brief(해당 자리만), 자리 기억(자기 최근 발언 3개), **미리 넣은 DebateState**(지지 현황·확정된 칸·단계 남은 시간), 최근 대화 30개, 지원자 표시 이름(대화에서 "OO님"), 다른 자리 이름. 시간은 단계 남은 시간으로만 말한다.
+- 입력(Context, [architecture/harness.md](harness.md)): 자기 자리의 성향 프롬프트(`prompts/persona/persona_<type>.md`의 말투·행동 규칙), 공통 규칙, 진행 매니저가 정한 상황 정보(`[상황]`: 답할 메시지·지명 여부·카드 차례·침묵 초대 차례·내 지난 발언에 대한 반응, 위 표), 자기 고정 입장(`stance_plan`), 카드 brief(해당 자리만), 자리 기억(자기 최근 발언 3개), **미리 넣은 DebateState**(지지 현황·확정된 칸·단계 남은 시간), 최근 대화 30개, 지원자 표시 이름(대화에서 "OO님"), 다른 자리 이름. 시간은 단계 남은 시간으로만 말한다.
 - 도구(허용 목록, 응답당 3회): `get_transcript`(30개보다 앞 대화가 필요할 때), `search_materials`, `get_material`, `get_draft`(proposal 단계에서만 바인딩). `get_debate_state`는 컨텍스트에 이미 있으므로 바인딩하지 않는다. 자료는 확정 키워드 것만 열려 있고 키워드 단계에서는 상식 수준으로만 말한다.
 - 출력(구조화): `{content, proposes?: {scenario_option_key∣label}, stance?: {option_id, stance: support∣oppose}}`. `content`는 1~3문장, 200자 이내 권장(guard 상한 400자).
 - `stance_plan`은 결정적으로 계산한다: 단계별 고정 입장 표, 수용 카드 담당(고집형 1명 확정 전 불변 + 다른 1명 설득 가능, R1), 설득 가능 규칙(지원자가 그 자리 안이 아닌 안을 지지로 세는 발언(high인 `propose`·`agree`, 유보 표현 없음)으로 두 번 내면 지원자 안으로 단계당 1회 이동, 반대만 한 발언은 세지 않음, 횟수는 DebateState `candidate_intents`(저장된 의도)에서 그 자리의 단계 첫 발언(`first_spoke_at`) 뒤 메시지만 센다, `stubborn`은 확정 전 불변).
@@ -166,7 +185,7 @@ agent(LLM, 도구 바인딩) ⇄ tools(search_materials·get_material) … 최�
 
 | 파일 | 내용 |
 |---|---|
-| `manager/turn_manager.md` | 진행 매니저 LLM 화자 선택 지침(규칙 6) |
+| `manager/turn_manager.md` | 진행 매니저 LLM 응답자 선택 지침(규칙 7) |
 | `persona/common_rules.md` | 모든 자리 공통: 동등한 팀원, 짧게 말하기, 시간은 남은 시간으로 말하기, 금지 목록, 기능 설명만 하고 평가 대상 행동을 유도하지 않음, 평가 질문 안내문 |
 | `persona/persona_<type>.md` | 성향·말투·행동 규칙·must_not([product/scenario.md](../product/scenario.md) 2.1). MVP에서 쓰는 것은 `stubborn`·`quiet`·`critic` 3개 |
 | `persona/safe_<type>.md`, `persona/stance_fallback.yaml` | 자리별 안전 문구, 계획 밖 입장 교체 문구(자리·단계별 계획 일치 고정 문구) |
@@ -226,7 +245,7 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 | 역할 | env | 쓰는 곳 |
 |---|---|---|
 | 토론 동료 | `MODEL_PERSONA` | respond |
-| 진행 매니저 | `MODEL_TURN` | turn 규칙 6(규칙 결과 0명 + message 자극일 때만) |
+| 진행 매니저 | `MODEL_TURN` | turn 규칙 7(message 자극에서 그 메시지에 답할 화자가 규칙으로 정해지지 않았을 때만) |
 | 의도 분류 | `MODEL_INTENT` | intent, stance_check 문장 판정 |
 | 어시스턴트 | `MODEL_ASSISTANT` | assistant tool-calling 루프 |
 | 평가자 | `MODEL_EVALUATOR` | report-worker 평가 에이전트(요소별 차원 수준·근거·요약). 카드 장면 `cards[].scene`은 고정 문장이라 LLM을 쓰지 않는다 |
@@ -240,7 +259,7 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 | 역할 | 고정 응답 |
 |---|---|
 | 페르소나 | 그 자리·그 단계의 시나리오 고정 입장 문장(`personas.yaml` 단계별 입장 + 안 라벨 치환). 카드 발언은 카드 `content`. guard·stance_check를 통과하는 문장만 쓴다 |
-| 턴 LLM | 규칙 결과 0명일 때 우선순위 첫 자리 |
+| 턴 LLM | 답할 자리로 비판형 한 자리(`{"speakers": [{"seat": "p3"}]}`) |
 | 의도 분류 | 키워드 규칙: 카탈로그 안 라벨·키워드 라벨이 문장에 있으면 그 안, "좋아요·동의·찬성"이면 agree, "아니·반대·글쎄"면 oppose, 물음표면 question, 그 밖 other. confidence는 규칙이 맞으면 high, 아니면 low |
 | 어시스턴트 | 도구 1회(`search_materials` 질문 그대로) 뒤 첫 결과 제목을 인용한 고정 문장 |
 | 평가 에이전트 | 요소마다 형식 검증을 통과하는 고정 출력(차원마다 지원자 메시지 근거가 있으면 수준 3·confidence medium, 없으면 `no_activity`) |
@@ -256,7 +275,7 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 
 [architecture/harness.md](harness.md) Recovery 행. 그래프는 `last_error`에 기록하고 `fallback_used=True`를 돌려준다. 카운터와 세션 failed 전이는 api `SessionService`.
 - 페르소나 발언 실패(LLM 재시도 2회 후): 그 발언 생략, `llm_failures+1`(연속 3회면 세션 failed, 성공 시 0). 카드 발언이면 `delivered`가 아니므로 다음 run이 이어서 말한다.
-- turn LLM 실패: 0명.
+- turn LLM 실패: 기본 응답 자리(지원자 메시지에는 최소 1명).
 - 의도 분류 실패: other.
 - 시간 초과: 그래프와 무관하게 api가 결정적으로 채운다.
 - MCP upstream_unavailable: 1회 재시도, 그래도 실패면 그 변경을 건너뛰고 실행 failed(스케줄러 재실행).
@@ -268,7 +287,7 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 - 최소 흐름: 지원자 메시지 1개 → 의도 분류 → 토론 그래프(turn이 지명된 자리 선택) → respond → guard → stance_check → apply(post_message·set_stance) → 가짜 hub에 `typing` start/stop(FakeAgentRunner 교체).
 - 15분 세션 대본(가짜 시계): 단계 시작마다 고정 입장 화자가 말함(문제 상황은 카드 전 입장 표명 없음), 합의 3/4 즉시 지지자 자리의 `fill_slot` 한 번으로 칸과 공지(seq 5)가 함께 저장, 이미 합의가 있는 자극에서 respond·apply 호출 0회·공지용 `post_message` 0건, 이번 AI 발언으로 3/4가 돼도 같은 run에서는 채우지 않고 지원자의 다음 명시적 동의에서 채움, `fill_slot` 409면 칸·공지 0건, 같은 run_id 재실행은 기존 결과, 합의 전에는 칸을 채우지 않음(409 `no_consensus` 흐름 포함), 그래프가 timeout 채우기를 하지 않음, 카드 6장이 `card_due`로 발동하고 `record_observation`이 첫 카드 발언 게시 뒤 1회씩.
 - 카드 전달: 카드 화자 중 일부가 generation 변경으로 버려지면 다음 run(새 run_id의 card_due 포함)에서 그 화자가 이어서 말하고 observation은 중복되지 않음, 강한결의 공동 발언이 `card_ids` 두 개로 두 카드를 함께 전달하고 관찰 2건, 기준안이 card_due 시점의 지원자 지지 안과 다르게 잠기고 이후 바뀌지 않음.
-- 턴 규칙: 한 실행 화자 ≤ 2, 지명 응답 우선, `quiet`가 불리기 전 발언하지 않음(머뭇거림 카드 제외), 침묵 초대가 단계당 1회·서지안·`is_invite=true`, 턴 LLM이 규칙 0명 + message일 때만 호출됨.
+- 턴 규칙: 한 실행 화자 ≤ 2, 지명 응답 우선, 상한을 넘은 지명은 다음 run(새 실행기·빈 의도 캐시에서도)이 그 메시지에 답함, 앞 메시지의 남은 지명과 새 메시지 응답자가 각자 다른 `reply_to`, 지원자 메시지(진행 발언 포함)에 최소 1명, 단계 시작 둘째 화자의 `reply_to`가 첫 화자 발언, `[상황]` 블록이 사실만 담음, `quiet`가 불리기 전 발언하지 않음(머뭇거림 카드 제외), 침묵 초대가 단계당 1회·서지안·`is_invite=true`, 턴 LLM이 message 자극에서 답할 화자가 없을 때만 호출됨.
 - typing·generation: 지원자 입력 중이면 10초 뒤에도 게시 0건이고 자극이 다시 enqueue됨, 게시 직전 generation 변경 시 남은 화자 버림.
 - 입장: 설득 가능 규칙(다른 안 명시적 제안·동의 두 번에 단계당 1회 이동, 반대만으로는 이동 없음), `stubborn` 확정 전 불변, 지원자가 S2를 지지하면 `persuasion_solution`을 강한결이 S1로 맡고 서지안 입장은 S2 그대로, 계획 밖 입장 픽스처(자기 계획 안 `oppose` 포함)가 재생성 → 고정 문구로 바뀌고 게시 문장·저장 입장이 계획과 일치.
 - 경계: 페르소나 노드의 MCP 클라이언트에 assessment 도구가 없고 호출 시 거부, 키워드 확정 전 자료 질문에 `not_released` 처리, 페르소나 입력에 `cards_fired`·카드 진행·관찰·평가표·성향 이름·어시스턴트 대화가 없음(컨텍스트 스냅샷 검사), 지원자를 표시 이름으로 부름.
