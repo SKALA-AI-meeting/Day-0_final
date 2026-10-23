@@ -34,7 +34,7 @@
 |---|---|---|---|
 | search_materials | {session_id, query, top_k?=3} | [{material_id, title, chunk, score}]. 내부 GET /materials로 잠금·키워드·catalog_version 확인 후 열린 자료의 같은 버전 청크만. 잠겨 있으면 `not_released` | 조회 |
 | get_material | {session_id, material_id} | {material_id, title, content}. 내부 GET /materials/{material_id}(같은 catalog_version 본문). 열린 자료가 아니면 `not_released` | 조회 |
-| reindex_materials | {mission_id?} | {indexed, model, dim, catalog_version, index_version}. 현재 카탈로그 자료를 줄·문장 경계 청크(상한 400자, 앞 청크 끝 단위 겹침)로 `material_chunks`에 색인(관리용, 이전 키 행은 지우지 않음). 저장 키 `index_version` = catalog_version + 청크 규칙 버전(`-c<n>`)이고 search_materials도 같은 키로 찾는다. 청크 규칙이 바뀌면 재색인 전까지 검색이 `upstream_unavailable`(reindex). 원문 `materials` 행은 `scripts/seed.py`가 같은 버전으로 시드. 에이전트에 노출하지 않음 | 변경 |
+| reindex_materials | {mission_id?} | {indexed, model, dim, catalog_version, index_version}. 현재 카탈로그 자료를 줄·문장 경계 청크(상한 400자, 앞 청크 끝 단위 겹침)로 `material_chunks`에 색인(관리용, 이전 키 행은 지우지 않음). 저장 키 `index_version` = catalog_version + 청크 규칙 버전(`-c<n>`). search_materials는 세션 catalog_version의 현재 키를 먼저 찾고, 없으면 같은 catalog_version의 옛 키(접미사 없는 행, 규칙 버전 전 색인)를 쓴다(먼저 만든 채용 건은 자기 색인을 그대로 봄). 둘 다 없으면 `upstream_unavailable`(reindex). 원문 `materials` 행은 `scripts/seed.py`가 같은 버전으로 시드. 에이전트에 노출하지 않음 | 변경 |
 
 ### assessment-mcp (`http://assessment-mcp:9103/mcp`, X-Assessment-Token 필수)
 

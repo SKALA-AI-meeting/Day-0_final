@@ -7,7 +7,7 @@ import json
 import shutil
 
 import httpx
-from rag_mcp import materials, tools
+from rag_mcp import client, materials, store, tools
 
 from tests.conftest import REPO_ROOT, SCENARIOS, call, make_settings
 
@@ -160,12 +160,32 @@ async def test_connection_failure_retried_once_then_upstream_unavailable(mcp_cli
     assert len(api.requests) == 2
 
 
-async def test_stale_index_from_older_chunker_is_not_searched(mcp_client, api, db, monkeypatch):
-    """청크 규칙 버전이 바뀌면 색인 키가 달라져 옛 색인은 검색되지 않고 재색인을 요구한다."""
-    indexed = await call(mcp_client, "reindex_materials", {})
-    assert indexed["ok"] is True
+async def test_old_position_falls_back_to_legacy_index_of_its_catalog(mcp_client, api, db):
+    """청크 규칙 버전 전에 만든 채용 건: 현재 키 색인이 없으면 같은 카탈로그의 옛 키(접미사 없음)
+    색인을 쓰고, 현재 키 색인이 생기면 그것을 쓴다. 다른 카탈로그의 색인만 있으면 재색인 요구."""
+    import numpy as np
+
+    legacy = [
+        store.Chunk(
+            "water_flood_cases", "water", 0, "옛 규칙 청크", np.ones(1024, dtype=np.float32)
+        )
+    ]
+    await store.replace_version(await _url(db), VERSION, "fake-1024", legacy)
     api.handler = session_materials("water")
-    monkeypatch.setattr(materials, "CHUNKER_VERSION", materials.CHUNKER_VERSION + 1)
+    out = await call(mcp_client, "search_materials", {"query": "침수", "session_id": "s1"})
+    assert out["ok"] is True and [r["chunk"] for r in out["data"]] == ["옛 규칙 청크"]
+
+    indexed = await call(mcp_client, "reindex_materials", {})
+    assert indexed["data"]["index_version"] == materials.index_version(VERSION)
+    out = await call(mcp_client, "search_materials", {"query": "침수", "session_id": "s1"})
+    assert out["ok"] is True and "옛 규칙 청크" not in [r["chunk"] for r in out["data"]]
+
+    api.handler = session_materials("water", version="other-catalog")
     out = await call(mcp_client, "search_materials", {"query": "침수", "session_id": "s1"})
     assert out["ok"] is False and out["error"]["code"] == "upstream_unavailable"
     assert "reindex" in out["error"]["message"]
+
+
+async def _url(db) -> str:
+    """db 픽스처가 연결한 임시 DB의 주소(도구 설정과 같은 값)."""
+    return client.current_settings().database_url

@@ -20,7 +20,7 @@
 |---|---|---|
 | 확정 키워드 자료만 검색(코사인 유사도 상위 top_k), 확정 전 `not_released` | `rag_mcp/tools.py`, `store.py` | [F-15, F-16](../../PRD.md) |
 | 열린 자료 전문 조회(api의 catalog_version 원문) | `rag_mcp/tools.py` | [F-15](../../PRD.md) |
-| 카탈로그 해시 + 청크 규칙 버전(`index_version`)별 청크 색인(줄·문장 경계, 상한 400자, 앞 청크 끝 단위 겹침), 같은 키는 덮어쓰고 다른 키는 유지. 규칙 버전이 바뀌면 재색인 전까지 검색 불가 | `rag_mcp/materials.py`, `store.py` | [F-06](../../PRD.md) 일부 |
+| 카탈로그 해시 + 청크 규칙 버전(`index_version`)별 청크 색인(줄·문장 경계, 상한 400자, 앞 청크 끝 단위 겹침), 같은 키는 덮어쓰고 다른 키는 유지. 현재 키가 없으면 같은 카탈로그의 옛 키 색인으로 검색(먼저 만든 채용 건) | `rag_mcp/materials.py`, `store.py` | [F-06](../../PRD.md) 일부 |
 | BGE-M3 임베딩(시작 때 1회 로드) | `rag_mcp/embedder.py` | - |
 
 자료 원문(`materials` 행)은 `scripts/seed.py`가 같은 catalog_version으로 넣고, rag-mcp는 `material_chunks`만 쓴다. api 오류 매핑·재시도는 `rag_mcp/client.py`. 기능별 검증 테스트는 [`docs/features.md`](../../docs/features.md)에 있다.
@@ -114,7 +114,7 @@ make test                                                   # 전체
 - `test_error_codes_mapped_and_4xx_not_retried`
 - `test_invalid_input_returned_as_error_result`
 - `test_connection_failure_retried_once_then_upstream_unavailable`
-- `test_stale_index_from_older_chunker_is_not_searched`
+- `test_old_position_falls_back_to_legacy_index_of_its_catalog`
 
 </details>
 <!-- /gen:tests -->

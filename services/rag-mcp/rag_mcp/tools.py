@@ -31,9 +31,9 @@ async def search_materials(
 ) -> dict[str, Any]:
     """확정된 키워드의 참고 자료에서 질문과 가까운 문단을 찾는다.
 
-    세션의 카탈로그 버전으로 색인된 청크 중 열린 자료만 코사인 유사도 순으로 돌려준다. 결과는
-    [{material_id, title, chunk, score}]. 키워드 확정 전이면 not_released, 해당 버전 색인이 없으면
-    upstream_unavailable.
+    세션의 카탈로그 버전(+현재 청크 규칙 버전, 없으면 그 카탈로그의 옛 규칙 색인)으로 색인된 청크
+    중 열린 자료만 코사인 유사도 순으로 돌려준다. 결과는 [{material_id, title, chunk, score}].
+    키워드 확정 전이면 not_released, 그 카탈로그의 색인이 하나도 없으면 upstream_unavailable.
     """
     listed = await client.call("GET", f"/internal/sessions/{session_id}/materials")
     if not listed["ok"]:
@@ -42,11 +42,16 @@ async def search_materials(
     if data["locked"] or not data.get("keyword_key"):
         return fail("not_released", "materials open after the keyword is confirmed")
     titles = {m["material_id"]: m["title"] for m in data["materials"]}
-    version = materials.index_version(data["catalog_version"])
+    catalog = data["catalog_version"]
+    version = materials.index_version(catalog)
     conf = client.current_settings()
     try:
         if not await store.has_version(conf.database_url, version):
-            return fail("upstream_unavailable", f"no index {version}; reindex", True)
+            # 청크 규칙 버전이 오르기 전에 만든 채용 건: 그 카탈로그의 옛 키(접미사 없음) 색인을
+            # 그대로 쓴다(같은 채용 건은 같은 검색 결과). 그것도 없으면 재색인이 필요하다.
+            if not await store.has_version(conf.database_url, catalog):
+                return fail("upstream_unavailable", f"no index {version}; reindex", True)
+            version = catalog
         if not titles:
             return ok([])
         vector = (await embed(get_embedder(conf.embedding_model), [query]))[0]
