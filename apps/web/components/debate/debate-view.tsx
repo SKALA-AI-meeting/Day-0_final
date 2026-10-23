@@ -39,7 +39,7 @@ import { PHASE_LABEL, clock, warnSeconds } from "./state";
 import { PHASES, type EndReason, type Seat, type StateSnapshot } from "./types";
 import { useDebateSession, type SessionAuth } from "./use-session";
 import { MemoPad } from "./voice/memo-pad";
-import { useVoiceTurn } from "./voice/voice-room";
+import { VoiceStage, useVoiceTurn } from "./voice/voice-room";
 
 export function PhaseBar({ snap }: { snap: StateSnapshot }) {
   const current = snap.session.phase;
@@ -397,20 +397,23 @@ export function DebateView({
               onSkipIntro={() => setIntroDone(true)}
             />
           ),
+          // 왼쪽 칸: 지원자 메모장(개정 V14)
           voice: (
-            <section
-              aria-label="음성"
-              className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto rounded-xl border border-line bg-surface p-4"
-            >
-              <h2 className="text-callout font-semibold">음성</h2>
-              {voice.controls}
-            </section>
+            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line">
+              <MemoPad sessionId={auth.sessionId} locked={locked} />
+            </div>
           ),
           summary: <PhaseSummary snap={snap} />,
+          // 가운데 칸: 말하기(지금 말하는 사람 + 차례·녹음·손들기 조작)
           chat: (
             <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line">
-              {/* 음성 토론에는 채팅 기록을 두지 않고 지원자 메모장만 둔다(개정 V14) */}
-              <MemoPad sessionId={auth.sessionId} locked={locked} />
+              <VoiceStage
+                participants={snap.participants}
+                speakingSeat={voice.speakingSeat}
+                recording={voice.recording}
+              >
+                {voice.controls}
+              </VoiceStage>
             </div>
           ),
           decisions: (

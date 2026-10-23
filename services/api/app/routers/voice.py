@@ -67,8 +67,12 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
             snap, pending = await controller.sync(db, session, position, ctx.clock.now())
             snap["heard_message_ids"] = await controller.heard_message_ids(db, session_id)
             if snap.get("state") == "USER_READY" and snap.get("ready_at"):
-                think = timedelta(seconds=controller.think_seconds(position))
-                snap["think_deadline_at"] = iso(controller.at(snap["ready_at"]) + think)
+                # 자동 녹음 시각(손들기 즉시, 강제는 생각 시간 뒤). 일반 차례는 직접 눌러 없음
+                auto = controller.auto_start_at(position, snap)
+                if auto:
+                    snap["think_deadline_at"] = auto
+                hold = controller.ready_hold(position, snap)
+                snap["turn_until_at"] = iso(controller.at(snap["ready_at"]) + hold)
             if snap.get("utterance_id"):
                 job = await db.get(SpeechJob, uuid.UUID(snap["utterance_id"]))
                 if job:

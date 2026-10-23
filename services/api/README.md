@@ -468,7 +468,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_voice_playback_barrier_and_single_message`
 - `test_voice_heard_ids_follow_playback_end`
 - `test_voice_plays_first_ready_while_next_is_made`
-- `test_voice_think_time_holds_turn`
+- `test_voice_normal_turn_waits_for_press`
 - `test_voice_rerecord_once_with_fresh_time`
 - `test_voice_zero_speakers_stale_and_audio_validation`
 - `test_voice_quota_refuses_before_provider_and_other_session`

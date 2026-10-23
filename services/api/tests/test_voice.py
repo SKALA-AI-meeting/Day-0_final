@@ -142,17 +142,18 @@ async def test_voice_plays_first_ready_while_next_is_made(api, voice_ctx):
     assert len(snap["items"]) == 1
 
 
-async def test_voice_think_time_holds_turn(api, voice_ctx, clock):
-    """내 차례에는 생각 시간(기본 5초) + 여유 10초 동안 차례를 반납하지 않는다."""
+async def test_voice_normal_turn_waits_for_press(api, voice_ctx, clock):
+    """일반 내 차례는 자동 녹음 없이 지원자가 누를 때까지 유지 시간(기본 20초) 동안 지킨다."""
     sess = await setup(api, voice_ctx)
     snap = await snapshot(api, voice_ctx, sess)
     assert snap["state"] == "USER_READY"
-    think = controller.at(snap["think_deadline_at"]) - controller.at(snap["ready_at"])
-    assert think.total_seconds() == 5
-    clock.advance(seconds=13)
+    assert "think_deadline_at" not in snap  # 자동 시작 없음
+    hold = controller.at(snap["turn_until_at"]) - controller.at(snap["ready_at"])
+    assert hold.total_seconds() == 20
+    clock.advance(seconds=19)
     snap = await snapshot(api, voice_ctx, sess)
     assert not snap.get("release_ready")
-    clock.advance(seconds=3)
+    clock.advance(seconds=2)
     snap = await snapshot(api, voice_ctx, sess)
     assert snap["release_ready"] is True
 

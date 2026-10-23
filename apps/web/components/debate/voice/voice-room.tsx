@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { API_URL, api } from "@/lib/api";
-import { Button } from "@/components/ui";
-import type { Seat, StateSnapshot } from "../types";
+import { Avatar, Button } from "@/components/ui";
+import type { Participant, Seat, StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
 import { sentences, spokenCount } from "./caption";
 import { finishOnce, normalize } from "./recorder";
@@ -40,8 +40,14 @@ export type VoiceSnapshot = {
   rerecorded?: boolean;
   /** 재생이 끝난 동료 발언 id. 상태 조회(GET)에만 있다 */
   heard_message_ids?: string[];
-  /** 내 차례(USER_READY)일 때 생각 시간이 끝나는 시각. 예전 채용 건이면 ready_at과 같다 */
+  /** 녹음을 자동으로 시작할 시각(손들기 즉시, 강제 차례는 잠시 뒤). 일반 차례는 없음(직접 누름) */
   think_deadline_at?: string;
+  /** 내 차례를 지켜 주는 끝 시각. 지나면 동료가 이어 말한다 */
+  turn_until_at?: string;
+  /** 손들기·강제 차례 */
+  priority?: "hand" | "forced";
+  /** 동료 차례 중 든 손(내리면 없음) */
+  hand?: unknown;
 };
 /** 받아 적은 글 확인 시간이 남은 초(서버 시각 기준). 확인 시간이 없으면 0 */
 function confirmLeft(snap: VoiceSnapshot): number {
@@ -49,7 +55,12 @@ function confirmLeft(snap: VoiceSnapshot): number {
   if (!deadline) return 0;
   return Math.max(0, (Date.parse(deadline) - Date.parse(snap.server_now)) / 1000);
 }
-/** 생각 시간이 남은 초(서버 시각 기준). 생각 시간이 없으면 0 */
+/** 지금부터 서버 시각 기준으로 남은 초 */
+function secondsUntil(snap: VoiceSnapshot, at?: string): number {
+  if (!at) return 0;
+  return Math.max(0, (Date.parse(at) - Date.parse(snap.server_now)) / 1000);
+}
+/** 자동 녹음까지 남은 초. 일반 차례(직접 누름)면 0 */
 function thinkLeft(snap: VoiceSnapshot): number {
   if (!snap.think_deadline_at) return 0;
   return Math.max(0, (Date.parse(snap.think_deadline_at) - Date.parse(snap.server_now)) / 1000);
@@ -411,7 +422,13 @@ export function useVoiceTurn(props: Props) {
         if (enabled && !error && !busy.current && next.epoch) {
           if (next.state === "AI_SPEAKING") void play(next);
           // 생각 시간 동안은 마이크를 켜지 않는다. "지금 발언하기"를 누르면 바로 녹음한다.
-          if (next.state === "USER_READY" && !next.blocked_reason && thinkLeft(next) <= 0)
+          // 자동 녹음은 서버가 시각을 줄 때만(손들기·강제 차례). 일반 차례는 [발언하기]를 눌러야 시작한다.
+          if (
+            next.state === "USER_READY" &&
+            !next.blocked_reason &&
+            next.think_deadline_at &&
+            thinkLeft(next) <= 0
+          )
             void record(next);
         }
       } catch {
@@ -482,6 +499,25 @@ export function useVoiceTurn(props: Props) {
     } else if (voice?.state === "USER_READY") void record(voice);
   };
 
+  const raiseHand = async (snap: VoiceSnapshot, raised: boolean) => {
+    try {
+      const next = await api<VoiceSnapshot>(`${path}/hand`, {
+        method: "POST",
+        token: token(),
+        body: {
+          turn_id: snap.turn_id,
+          epoch: snap.epoch,
+          raised,
+          during_message_id: speaking?.id ?? null,
+          offset_ms: player.current ? Math.round(player.current.currentTime * 1000) : null,
+        },
+      });
+      setVoice({ ...snap, ...next });
+    } catch {
+      setError("손들기를 전하지 못했어요. 다시 눌러 주세요.");
+    }
+  };
+
   const submitNow = (id: string) => {
     confirmed.current = id;
     setConfirmedId(id);
@@ -536,17 +572,41 @@ export function useVoiceTurn(props: Props) {
             ? "받아 적은 내용을 확인해 주세요"
             : LABEL[voice?.state ?? "AI_GENERATING"]}
       </p>
+      {!props.locked && !error && voice?.state === "USER_READY" && !voice.blocked_reason && (
+        <div className="flex flex-col items-center gap-2">
+          {voice.priority === "forced" && (
+            <p className="font-semibold text-accent">
+              이번 단계에서 아직 의견을 말하지 않았어요. 지금 말해 주세요
+            </p>
+          )}
+          <Button disabled={!props.connected} onClick={() => void record(voice)}>
+            {voice.think_deadline_at ? "지금 발언하기" : "발언하기"}
+          </Button>
+          <p className="text-footnote text-muted tabular-nums">
+            {voice.think_deadline_at
+              ? `${Math.ceil(thinkLeft(voice))}초 뒤 녹음이 자동으로 시작돼요`
+              : `${Math.ceil(secondsUntil(voice, voice.turn_until_at))}초 안에 시작하지 않으면 동료가 이어서 말해요`}
+          </p>
+        </div>
+      )}
       {!props.locked &&
         !error &&
-        voice?.state === "USER_READY" &&
-        !voice.blocked_reason &&
-        thinkLeft(voice) > 0 && (
-          <div className="flex flex-col gap-2">
-            <p className="tabular-nums">생각할 시간 {Math.ceil(thinkLeft(voice))}초</p>
-            <Button disabled={!props.connected} onClick={() => void record(voice)}>
-              지금 발언하기
-            </Button>
-            <p className="text-footnote text-muted">시간이 끝나면 녹음이 자동으로 시작돼요</p>
+        (voice?.state === "AI_GENERATING" || voice?.state === "AI_SPEAKING") && (
+          <div className="flex flex-col items-center gap-2">
+            {voice.hand ? (
+              <>
+                <p className="text-footnote text-muted">
+                  손 듦 · 지금 발언이 끝나면 말할 수 있어요
+                </p>
+                <Button variant="secondary" onClick={() => void raiseHand(voice, false)}>
+                  손 내리기
+                </Button>
+              </>
+            ) : (
+              <Button variant="secondary" onClick={() => void raiseHand(voice, true)}>
+                ✋ 손들기
+              </Button>
+            )}
           </div>
         )}
       {review && voice && (
@@ -597,4 +657,46 @@ export function useVoiceTurn(props: Props) {
     candidateTurn: !!voice && CANDIDATE_STATES.has(voice.state),
     recording: voice?.state === "USER_SPEAKING",
   };
+}
+
+/** 가운데 말하기 칸: 지금 말하는 사람(동료 또는 나)을 크게 보이고 그 아래에 조작부를 둔다. */
+export function VoiceStage({
+  participants,
+  speakingSeat,
+  recording,
+  children,
+}: {
+  participants: Participant[];
+  speakingSeat: Seat | null;
+  recording: boolean;
+  children: ReactNode;
+}) {
+  const id = recording ? "candidate" : speakingSeat;
+  const person = participants.find((p) => p.id === id);
+  return (
+    <section
+      aria-label="말하기"
+      className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto bg-surface p-6"
+    >
+      <div className="flex min-h-40 flex-col items-center gap-3" aria-live="off">
+        {person ? (
+          <>
+            <Avatar
+              name={person.display_name}
+              src={person.avatar_url}
+              seat={person.id}
+              size={36}
+              className="!h-28 !w-28 text-title1"
+            />
+            <p className="text-title3 font-semibold">
+              {person.display_name}
+              {person.id === "candidate" ? " (나)" : ""}
+            </p>
+            <p className="text-footnote text-muted">{recording ? "마이크 켜짐" : "발언 중"}</p>
+          </>
+        ) : null}
+      </div>
+      <div className="w-full max-w-md">{children}</div>
+    </section>
+  );
 }

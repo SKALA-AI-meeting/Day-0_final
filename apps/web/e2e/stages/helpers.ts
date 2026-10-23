@@ -96,7 +96,12 @@ export async function say(page: Page, text: string): Promise<void> {
   const sessionId = (await entry.json()).session_id;
   const enable = page.getByRole("button", { name: "음성 참여 시작" });
   if (await enable.isVisible()) await enable.click();
-  await expect(page.getByRole("button", { name: "발언 완료" })).toBeVisible({ timeout: 45000 });
+  // 일반 차례는 지원자가 [발언하기]를 눌러야 녹음이 시작된다(손들기·강제 차례는 자동)
+  const start = page.getByRole("button", { name: /발언하기/ });
+  const done = page.getByRole("button", { name: "발언 완료" });
+  await expect(start.or(done)).toBeVisible({ timeout: 45000 });
+  if (await start.isVisible()) await start.click();
+  await expect(done).toBeVisible({ timeout: 45000 });
   await page.waitForTimeout(350);
   await page.getByRole("button", { name: "발언 완료" }).click();
   await expect

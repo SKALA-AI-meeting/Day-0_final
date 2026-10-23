@@ -47,14 +47,34 @@ def name_phrases(position) -> list[str]:
     return phrases
 
 
+def manual_start(position) -> bool:
+    """일반 차례에서 지원자가 직접 [발언하기]로 녹음을 시작하는지(개정 V17). 예전 채용 건은 자동."""
+    return "turn_hold_seconds" in position.scenario["voice_policy"]
+
+
 def ready_hold(position, data: dict | None = None) -> timedelta:
     """내 차례(USER_READY)를 동료 발언·카드에 반납하지 않고 지켜 주는 시간.
 
-    손들기 차례는 지원자가 이미 말하겠다고 했으므로 생각 시간 없이 여유 시간만 지킨다.
+    손들기 차례는 바로 녹음하므로 여유만, 강제 차례는 자동 시작 대기(생각 시간) + 여유,
+    일반 차례는 지원자가 직접 누를 때까지 기다리는 유지 시간(turn_hold_seconds)이다.
     """
-    if data and data.get("priority") == "hand":
+    priority = (data or {}).get("priority")
+    if priority == "hand":
         return timedelta(seconds=READY_GRACE_SECONDS)
+    if priority != "forced" and manual_start(position):
+        return timedelta(seconds=position.scenario["voice_policy"]["turn_hold_seconds"])
     return timedelta(seconds=think_seconds(position) + READY_GRACE_SECONDS)
+
+
+def auto_start_at(position, data: dict) -> str | None:
+    """화면이 녹음을 자동으로 시작할 시각. 일반 차례(직접 누름)면 없음."""
+    ready = at(data["ready_at"])
+    priority = data.get("priority")
+    if priority == "hand":
+        return iso(ready)
+    if priority == "forced" or not manual_start(position):
+        return iso(ready + timedelta(seconds=think_seconds(position)))
+    return None
 
 
 NOTICE_KINDS = ("consensus_fill", "timeout_fill")
