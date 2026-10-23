@@ -139,8 +139,10 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 - 지목 응답률: 지원자가 한 명만 부른 메시지(`addressed_to` 1개) 중 그 페르소나가 다음 발언자인 비율(턴 규칙 확인). 카드 화자 우선으로 다음 발언자가 정해진 경우는 분모에서 빼고, 그때 지목자가 두 발언 안에 말했는지를 따로 센다.
 - 안전: 유출·선점 위반 0(위 유출 픽스처와 같은 검사).
 - 답한 메시지(`replies`): 지원자 발언마다 같은 단계 안에서 그 메시지를 `meta.reply_to`로 가리킨 동료 발언이 있는지(없으면 무시, 다음 실행에서 답한 것 포함), 분류 `addressed_to` 자리마다 그 자리가 그 메시지에 답했는지(지명 무응답).
-- 오인용(정규식, 보조 신호): 대본 발언에 `misquote` 정규식이 있으면 그 뒤 동료 발언이 지원자가 하지 않은 말·입장을 지원자 것으로 돌렸는지 센다. 장면 세션(`problem_scenes`·`solution_scenes`)은 지명 무응답·질문 무시(`kind: question`, 응답률에 포함)·오인용 유도·카드 직전 질문을 만든다.
+- 오인용(정규식, 보조 신호): 대본 발언에 `misquote` 정규식이 있으면 그 뒤 동료 발언이 지원자가 하지 않은 말·입장을 지원자 것으로 돌렸는지 센다. 장면 세션(`problem_scenes`·`solution_scenes`)은 지명 무응답·질문 무시(`kind: question`, 응답률에 포함)·오인용 유도(지원자 보류 뒤 "동의한 걸로 하셨죠?", 이름 없는 귀속)·카드 직전 질문을 만든다.
 - 귀속 판정(`attribution`, LLM, 주 지표): 아래 "귀속 판정". 귀속 장면 세션(`attribution_keyword`·`attribution_problem`·`attribution_solution`)의 발언 18개는 `scene` 유형(약한 동의·조건부 동의·A 인정 B 우선·실제 번복·동료 말 인용·전제 질문·생략형 귀속·정상 질문 대조군)이 붙어 있고 자리 p1~p3을 섞는다. 결과의 `attribution.by_scene`은 장면 뒤 다음 지원자 발언(또는 세션 끝)까지의 동료 발언 전부(카드 뒤 발언 포함)의 귀속 판정을 유형별로 묶는다(규칙 `misquote`는 앞 3개만 본다). 이름만 바꾼 장면은 두지 않는다.
+- 호응 뒤 자기 안 밀기(`push_after_ack`): 반대·다른 안 없는 짧은 호응(`kind: ack`) 뒤 다음 지원자 발언 전 동료 발언 중 입장을 다시 기록한 비율. 자기 안 되풀이의 대리 지표.
+- 인용 대조(`quote_check`): 동료 발언의 `meta.quote_check` 분포(`none`·`pass`·`regenerated`·`safe`·`skipped`). 지연(`latency`): 자극 한 번의 그래프 실행 시간 p50·p95(ms), 인용 대조의 비용 관측.
 - `fallbacks.quote_check`: 동료 발언의 인용 검사 표식 분포(`none`·`pass`·`regenerated`·`safe`·`skipped`). 검사가 없는 빌드(main)에서는 모두 `absent`다.
 
 ### 귀속 판정 (`tests/eval/attribution.py`)

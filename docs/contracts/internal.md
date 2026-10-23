@@ -185,6 +185,7 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 ```
 
 - `reply_to`: 그 화자가 답하는 메시지 id 또는 null(답할 메시지 없이 말을 꺼냄: 단계 시작 첫 화자·카드 시각·침묵 초대). 지원자 메시지 자극이면 그 자리를 부른 지원자 메시지(아직 답하지 않은 앞 메시지일 수 있음), 아니면 이번 지원자 메시지다. 지원자 메시지가 아닌 자극의 둘째 화자(침묵 초대 제외)는 같은 run에서 첫 화자가 게시한 발언에 답하며, 그 id는 게시 뒤 채워 저장한다. 게시한 발언의 `messages.meta.reply_to`에도 같은 값을, `meta.named`에 답한 메시지가 이 자리를 부른 지원자 메시지였는지를 남긴다.
+- 게시한 발언의 `messages.meta`에는 `guard`·`stance_check`(검사 결과)와 함께 `quote_check`(`none`·`pass`·`regenerated`·`safe`·`skipped`, 인용 대조 결과. `skipped`는 판단 모델 실패로 검사 없이 게시)를 남긴다.
 - `card_ids`: 그 발언이 전달하는 카드 id 배열(카드 발언이 아니면 [], 이전 run에서 전달되지 않은 카드 화자 포함). `invite`: 침묵 초대 발언이면 true(`post_message.is_invite`).
 - `queued`: 화자 상한(2명)을 넘어 이번 run에서 답하지 못한 지명 `{seat, message_id}`. 저장된 값은 관측용이고, 다음 run은 이 값이 아니라 DebateState `open_mentions`(전체 기록에서 다시 계산)로 먼저 답한다. 고정 문장 발언(카드 고정 한 줄·입장 폴백·안전 문구)은 `meta.reply_to`를 남기지 않는다(지명을 닫지 않음).
 - `speakers`는 0~2명이고 일반 발언 루프(respond → apply)를 탄다. 합의 채우기 공지 화자는 `speakers`에 넣지 않는다. 지원자 메시지 자극에는 합의 채우기 run이 아니면 그 메시지에 답하는 화자가 최소 1명이다(화자 상한이 앞 메시지의 지명으로 찬 경우 제외).
