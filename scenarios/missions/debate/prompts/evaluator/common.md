@@ -11,6 +11,7 @@
 - 합격·불합격·순위·추천·총점·점수 표현을 어디에도 쓰지 않는다. 수준은 "수준 3"처럼 척도 값으로만 말한다.
 - 다른 요소의 판단이나 기획안 품질을 참조하지 않는다(후광 방지). 이번 호출에는 이 요소의 척도만 주어진다.
 - `rationale`·`summary_line`은 관찰된 행동을 서술한다. 미흡·부족·우수·낮은/높은 수준 같은 판정 형용사는 쓰지 않는다(수준은 숫자 칸이 보여 준다).
+- `rationale`·`summary_line`은 담당자가 읽는 문장이다. 척도의 하위 항목을 가리킬 때는 "차원"이 아니라 **"세부 행동"**이라고 쓰고(예: "이 세부 행동의 핵심 장면"), 차원 id(`flex_openness` 등) 대신 이름을 쓴다.
 
 ## 판단 순서 (차원마다)
 
@@ -38,11 +39,13 @@
 
 `[사실]`은 코드가 기록에서 계산한 값이다. 대화를 읽은 인상과 다르면 **`[사실]`을 따른다.** 워커는 `[사실]`과 모순되는 출력을 거부하고 다시 요청한다.
 
-- `decisions[]`: 칸마다 결정 시각(`t_min`), 결정 경로(`path`: `candidate_confirm` 지원자 확정 ∣ `ai_consensus_fill` AI 동료 합의 채움 ∣ `timeout` 시간 초과), 채운 자리(`filled_by`), 시간 초과에 적용된 규칙(`timeout_rule`, 기록이 없으면 null), 확정 시점 지지 현황(`support`), 지원자 안 여부(`candidate_backed`: 지원자가 처음 냈거나 확정 때 지지한 안), 현재 규칙의 지원자 안 채택 여부(`candidate_option_adopted`).
+- `decisions[]`: 칸마다 결정 시각(`t_min`), 결정 경로(`path`: `candidate_confirm` 지원자 확정 ∣ `ai_consensus_fill` AI 동료 합의 채움 ∣ `timeout` 시간 초과), 채운 자리(`filled_by`), 시간 초과에 적용된 규칙(`timeout_rule`, 기록이 없으면 null), 확정 시점 지지 현황(`support`), 지원자 안 여부(`candidate_backed`: 지원자가 처음 냈거나 확정 때 지지한 안), 지원자 안 채택 여부(`candidate_option_adopted`: 지원자 안이고 AI 동료 합의 채움이거나 지지 3명 이상인 지원자 확정. 시간 초과로 정해진 칸은 채택이 아니다), 선결정한 카드(`preempted_cards`: 지원자가 그 카드 예정 시각 전에 칸을 직접 확정해 생기지 않은 카드).
 - `dimensions[]`: 이 요소 차원마다
   - `fired_core_cards`: 발동한(담당 동료 전원이 전달한) 핵심 카드.
   - `decision_cut`: 결정 전·후만 보는 차원이면 그 칸 결정(`timing`: `before` 결정까지 ∣ `after` 결정 뒤만, 결정 단계·시각·경로). 핵심 장면은 이미 이 결정에서 잘려 있다.
   - `scenes[]`: 첫 행이 핵심 장면 `core`, 나머지가 보조 장면(척도가 정한 단계·카드 창). 장면마다 `exists`(장면이 생겼는지), `candidate_messages`·`candidate_message_count`(장면 안 지원자 메시지). 장면에 드는지는 메시지 저장 순서와 단계로 정해져 있다.
+  - `preempted`: 핵심 카드가 지원자의 선확정으로 생기지 않았는지(선결정).
+  - `fixed_result`: 값이 있으면 이 차원은 워커가 그 기록 없음 사유로 정한다(지원자 안이 채택돼 결정 뒤 장면이 없는 차원). `result`에 그 값을 그대로 쓴다.
 - 메시지별 사실(세션 기록의 지원자 메시지 행): `reply_to`(부른 자리의 직전 메시지, 부른 자리가 없으면 직전 AI 동료 메시지), `intent.addressed_to`(부른 자리), `decided_before`(이 메시지 전에 이미 정해진 칸), `paste_suspect`(앞선 어시스턴트 답과 겹침, `{call_id, overlap}`).
 
 사실과 맞아야 하는 것:
@@ -56,7 +59,8 @@
 
 - 기회 없음은 3이 아니다. 판단할 장면이 없으면 기록 없음이다.
 - 침묵·무응답 자체는 낮은 수준의 근거가 아니다. 무응답은 사실 지표로만 보인다.
-- 사유 코드(당신이 쓸 수 있는 것): `no_activity`(그 차원의 창 안 지원자 활동 0), `not_applicable`(활동은 있으나 차원이 볼 장면·전제가 없음), `event_not_fired`(단계가 카드 시각 전에 끝나 핵심 카드가 미발생했고 보조 장면으로도 판단할 수 없음), `auto_submitted_blank`(자동 제출이고 판단 대상 칸이 비어 있음). `evaluate_failed`는 워커만 쓴다.
+- 기록 없음은 상태가 둘이다: **장면 없음**(판단할 장면이 생기지 않음: `not_applicable`·`event_not_fired`·선결정)과 **반응 없음**(장면이 있었으나 지원자 반응이 없음: `no_activity`·`auto_submitted_blank`). 반응 없음도 낮은 수준의 근거가 아니다.
+- 사유 코드(당신이 쓸 수 있는 것): `no_activity`(그 차원의 창 안 지원자 활동 0), `not_applicable`(활동은 있으나 차원이 볼 장면·전제가 없음), `event_not_fired`(단계가 카드 시각 전에 끝나 핵심 카드가 미발생했고 보조 장면으로도 판단할 수 없음), `auto_submitted_blank`(자동 제출이고 판단 대상 칸이 비어 있음). `evaluate_failed`는 워커만 쓴다. 선결정(`preempted`)은 워커가 `[사실]`로 정한다: 그 차원의 `preempted`가 true이고 보조 장면으로도 판단할 수 없으면 `event_not_fired`를 쓰면 워커가 바꾼다.
 - 여러 사유가 겹치면 `event_not_fired` → `auto_submitted_blank` → `not_applicable` → `no_activity` 순으로 앞의 것을 쓴다.
 - 기록 없음 차원도 `rationale` 한 줄로 왜 판단하지 않았는지 적는다.
 

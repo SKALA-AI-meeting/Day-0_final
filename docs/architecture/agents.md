@@ -105,7 +105,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 
 - **전달 보장(R5-4)**: 카드는 담당 화자가 실제로 게시했을 때만 그 화자를 `delivered`로 기록한다. 새 지원자 메시지(generation 변경)·입력 중 대기·합의 채우기 우선순위로 게시하지 못한 화자는 다음 run의 cards 노드가 이어서 넣는다. observation은 카드마다 첫 카드 발언 게시 뒤 한 번만 기록한다.
 - **기준안 잠금(R5-4)**: 문제 상황 기준안은 `flexibility_majority` 카드 시점(`card_due`)에 "지원자가 그 순간 지지하는 안이 아닌 첫 시나리오 안"(`lead_option` → `alt_lead_option` → 다음 안 순)으로 계산해 잠근다. 잠근 뒤에는 바꾸지 않으며 고집형의 확정 전 불변과 충돌하지 않는다. 카드 전에는 고집형도 입장을 밝히지 않는다. 잠긴 기준안은 시간 초과 선택의 기준안으로도 쓰인다.
-- 단계가 카드 시각 전에 끝나면 미발생(`event_not_fired`)이다.
+- 단계가 카드 시각 전에 끝나면 미발생(`event_not_fired`)이다. 지원자가 카드 시각 전에 그 단계 칸을 직접 확정해 끝났으면 선결정(`preempted`)이다(사실 지표 `decisions[].preempted_cards`, 결정 A3).
 
 ### 고정 문장과 seq
 
@@ -192,9 +192,9 @@ D18·D19 개정과 R5-14. 세션 종료 후 report-worker의 `evaluate` 노드�
 |---|---|---|
 | 역할·원칙 | 지원자 행동만 판단, 실력(안의 질·자료 정확성·기획안 품질) 제외, 합격·순위·점수 표현 금지, 근거 없는 수준 금지 | `prompts/evaluator/common.md` |
 | 판단 순서 | [product/rubric.md](../product/rubric.md) 2.1 순서(전체 읽기 → 장면 위치 → 기록 없음 검사 → 앵커 대조 → 보조 장면 ±1 → 근거 수 → 확신도) 그대로 | `prompts/evaluator/common.md` |
-| 공통 규칙 | 근거 단위·최소 개수(1~3은 1개, 4·5는 서로 다른 2개), 기록 없음 사유 5종과 우선순위, 확신도 기준·상한, 편향 방지 표, 경계표 중 이 요소 관련 행(확정 행위는 `flex_decision_respect`, `flex_acceptance`는 결정 후 행동만 — 결정 후 발언이 없으면 `no_activity`, R5-17) | `get_rubric` |
-| 척도 주입 | 이 요소의 차원마다 id·정의·핵심 장면(카드 창)·**수준 1~5 앵커와 예시 발언**·요소별 특수 지침(수용 차원은 "근거 있는 이의 제기도 높은 수준", 지원자 안이 채택되면 수용 차원은 `not_applicable`, R1) | `get_rubric`(세션에 복사된 척도, `rubric_version`) |
-| 평가 사실 `[사실]` | 칸별 결정 기록(`facts.decisions`), 이 요소 차원별 핵심 장면(핵심 카드 창, 결정 전후 자르기)·보조 장면(`aux_scenes`)과 장면마다의 지원자 메시지. 대화 인상과 다르면 사실을 따른다(결정 A1) | api `facts.evaluator_facts`, 워커 `scenes.py` |
+| 공통 규칙 | 근거 단위·최소 개수(1~3은 1개, 4·5는 서로 다른 2개), 기록 없음 사유와 우선순위·상태(장면 없음·반응 없음·판단 보류, 결정 A3), 확신도 기준·상한, 편향 방지 표, 경계표 중 이 요소 관련 행(확정 행위는 `flex_decision_respect`, `flex_acceptance`는 결정 후 행동만 — 결정 후 발언이 없으면 `no_activity`, R5-17) | `get_rubric` |
+| 척도 주입 | 이 요소의 차원마다 id·정의·핵심 장면(카드 창)·**수준 1~5 앵커와 예시 발언**·요소별 특수 지침(수용 차원은 "근거 있는 이의 제기도 높은 수준", 지원자 안이 채택되면 결정 뒤 수용 차원은 워커가 `not_applicable`로 정하고 결정 전 차원은 카드 장면으로 판단, 시간 초과는 채택이 아님, 결정 A5) | `get_rubric`(세션에 복사된 척도, `rubric_version`) |
+| 평가 사실 `[사실]` | 칸별 결정 기록(`facts.decisions`, 지원자 안 채택 여부·선결정한 카드 포함), 이 요소 차원별 핵심 장면(핵심 카드 창, 결정 전후 자르기)·보조 장면(`aux_scenes`)과 장면마다의 지원자 메시지, 선결정 여부(`preempted`)와 워커가 정하는 결과(`fixed_result`). 대화 인상과 다르면 사실을 따른다(결정 A1) | api `facts.evaluator_facts`, 워커 `scenes.py` |
 | 세션 입력 | **대화 전체**(메시지 id·자리·오피스 시각·단계·origin·의도), 지원자 메시지별 사실(`reply_to`·`decided_before`·`paste_suspect`), 칸 기록(지지 현황 스냅샷), 기획안 제출본, 카드 발생 기록과 창 시각, 사실 지표, Contributions, 자리 → 유형 대응. 카드 창으로 자르지 않는다 | `get_session_record` |
 | 출력 지시 | 아래 스키마, 차원마다 정확히 한 행, 근거 참조는 `msg:<id>`·`slot:<phase>`·`proposal:<field>`·`contribution:<option_id>` 문자열만 | `prompts/evaluator/common.md` |
 
@@ -209,9 +209,9 @@ D18·D19 개정과 R5-14. 세션 종료 후 report-worker의 `evaluate` 노드�
  ]}
 ```
 
-- `result`는 수준 1~5 정수 또는 기록 없음 사유 코드(`no_activity`·`not_applicable`·`event_not_fired`·`auto_submitted_blank`; `evaluate_failed`는 워커만 쓴다) 한 칸이고, 워커가 저장 형식 `level`·`no_record_reason`으로 나눈다. 기록 없음이면 `confidence: null`. `context_refs`는 장면을 만든 AI 동료 메시지 표시로 근거가 아니며 저장하지 않는다. 세션 기록에서 `ref`는 지원자 메시지에만 붙는다.
-- 요소 `level`은 모델이 내지 않는다. 워커가 차원 평균 반올림(.5 올림)으로 계산한다. 판단 호출은 요소 `summary`를 내지 않는다. 차원마다 근거를 `evidence: [{ref, scene}]`(장면 id)로, 대표 행동 한 구절을 `summary_line`으로 내고, 워커가 그 구절과 기록 없음 사유로 요소 요약을 조립한다.
-- 검증 경계(R5-14, 정본 [product/rubric.md](../product/rubric.md) 7.3): 형식 오류(스키마 위반·차원 누락·중복·금지어)나 근거 부재(수준이 있는데 지원자 근거 단위 0개), 사실 모순(장면 구간에 지원자 메시지가 있는데 `no_activity`, 장면이 있는데 `event_not_fired`, AI 메시지 근거, 근거에 단 장면 id에 그 메시지가 들지 않음, 결정 후 차원의 핵심 장면에 결정 전 근거)이면 **그 요소 호출 전체를 1회 재요청**한다(차원별 실패 사유와 어긴 사실을 붙여서). 재요청 사유에는 그 차원의 직전 행을 붙여 그 문제만 고치게 하고, 재요청에서 새로 깨진 차원은 첫 출력의 통과 행을 쓰고, 그래도 남은 실패 차원은 워커가 `evaluate_failed`로 둔다. 수준 4·5에 지원자 근거 단위가 1개뿐이면 거부하지 않고 수준 3·확신도 최대 medium으로 깎고, 확신도 상한 위반도 워커가 상한으로 깎는다(clamp). LLM 전송 오류·타임아웃은 저장하지 않고 큐 재시도로 넘긴다.
+- `result`는 수준 1~5 정수 또는 기록 없음 사유 코드(`no_activity`·`not_applicable`·`event_not_fired`·`auto_submitted_blank`; `evaluate_failed`는 워커만 쓰고, `preempted`는 워커가 사실로 정하며 모델이 낸 값은 사실과 맞을 때만 받는다) 한 칸이고, 워커가 저장 형식 `level`·`no_record_reason`으로 나눈다. 기록 없음이면 `confidence: null`. `context_refs`는 장면을 만든 AI 동료 메시지 표시로 근거가 아니며 저장하지 않는다. 세션 기록에서 `ref`는 지원자 메시지에만 붙는다.
+- 요소 `level`은 모델이 내지 않는다. 워커가 차원 평균 반올림(.5 올림)으로 계산한다. 판단 호출은 요소 `summary`를 내지 않는다. 차원마다 근거를 `evidence: [{ref, scene}]`(장면 id)로, 대표 행동 한 구절을 `summary_line`으로 내고, 워커가 그 구절과 기록 없음 상태·사유로 요소 요약을 조립한다. `rationale`·`summary_line`에서는 "차원" 대신 "세부 행동"이라고 쓴다(결정 A4).
+- 검증 경계(R5-14, 정본 [product/rubric.md](../product/rubric.md) 7.3): 형식 오류(스키마 위반·차원 누락·중복·금지어)나 근거 부재(수준이 있는데 지원자 근거 단위 0개), 사실 모순(장면 구간에 지원자 메시지가 있는데 `no_activity`, 장면이 있는데 `event_not_fired`, AI 메시지 근거, 근거에 단 장면 id에 그 메시지가 들지 않음, 결정 후 차원의 핵심 장면에 결정 전 근거)이면 **그 요소 호출 전체를 1회 재요청**한다(차원별 실패 사유와 어긴 사실을 붙여서). 재요청 사유에는 그 차원의 직전 행을 붙여 그 문제만 고치게 하고, 재요청에서 새로 깨진 차원은 첫 출력의 통과 행을 쓰고, 그래도 남은 실패 차원은 워커가 `evaluate_failed`로 둔다. 수준 4·5에 지원자 근거 단위가 1개뿐이면 거부하지 않고 수준 3·확신도 최대 medium으로 깎고, 확신도 상한 위반도 워커가 상한으로 깎는다(clamp). 선결정 차원의 `event_not_fired`·`no_activity`는 `preempted`로 바꾸고, 지원자 안 채택으로 결정 뒤 장면이 없는 차원은 출력과 상관없이 `not_applicable`로 둔다(재요청하지 않음). LLM 전송 오류·타임아웃은 저장하지 않고 큐 재시도로 넘긴다.
 
 **버전**: 평가 프롬프트 파일(`prompts/evaluator/common.md`와 `prompts/evaluator/<element>.md` 5개)마다 개별 해시를 `prompt_versions` 맵(형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave)으로, 세션 척도 버전을 `rubric_version`으로, 실제 모델 id를 `model`로 `save_evaluation`에 함께 저장한다(api가 `evaluation_runs`에 보관). 단일 `prompt_version` 필드는 쓰지 않는다.
 

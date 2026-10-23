@@ -398,12 +398,20 @@ def test_rubric_matches_doc_verbatim(rubric):
                     yd["dimension_id"],
                     lv["level"],
                 )
-    assert [(r["code"], r["label"]) for r in rubric["no_record_reasons"]] == [
-        (r["code"], r["label"]) for r in doc["no_record_reasons"]
+    states = {s["state"]: s["label"] for s in rubric["record_states"]}
+    assert states == {"no_scene": "장면 없음", "no_response": "반응 없음", "failed": "판단 보류"}
+    assert [(r["code"], states[r["state"]], r["label"]) for r in rubric["no_record_reasons"]] == [
+        (r["code"], r["state"], r["label"]) for r in doc["no_record_reasons"]
     ]
+    # 선결정·판단 보류는 워커만 쓴다(rubric.md 5장)
+    assert {r["code"] for r in rubric["no_record_reasons"] if r["worker_only"]} == {
+        "evaluate_failed",
+        "preempted",
+    }
     prio = sorted(rubric["no_record_reasons"], key=lambda r: r["priority"])
     assert [r["code"] for r in prio] == [
         "evaluate_failed",
+        "preempted",
         "event_not_fired",
         "auto_submitted_blank",
         "not_applicable",

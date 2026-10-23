@@ -578,7 +578,7 @@ AI 기반 채용 평가는 이미 검증된 시장이고, 해외에서는 AI 동
 {
   "dimension_id": "하위 차원 ID",
   "level": "1~5 정수 | null",
-  "no_record_reason": "level이 null일 때만: no_activity · not_applicable · event_not_fired · auto_submitted_blank",
+  "no_record_reason": "level이 null일 때만: no_activity · not_applicable · event_not_fired · auto_submitted_blank (워커만: preempted · evaluate_failed)",
   "evidence_refs": ["지원자 메시지·칸 확정·기획안 필드 참조"],
   "rationale": "판단 이유",
   "confidence": "high · medium · low (기록 없음이면 null)"

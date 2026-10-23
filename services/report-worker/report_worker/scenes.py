@@ -11,6 +11,11 @@
   `after`는 그 칸이 정해진 뒤(다음 단계부터)만. 칸이 정해지지 않았으면 `after` 핵심 장면은 없다.
   척도 복사본에 이 값이 없으면(이전 채용 건) 자르지 않는다.
 - 보조 장면: 척도 `aux_scenes`(관찰 장면 표의 보조 행을 단계·카드 창으로 옮긴 데이터).
+- 선결정(결정 A3): 발동하지 않은 핵심 카드가 평가 사실 `decisions[].preempted_cards`에 있으면
+  (지원자가 카드 예정 시각 전에 그 단계 칸을 직접 확정) 그 차원은 `preempted`다.
+- 지원자 안 채택(결정 A5): 핵심 카드 단계의 결정이 `candidate_option_adopted`이면 결정 뒤를 보는
+  차원(`after`)은 "채택되지 않은 뒤"가 없어 핵심 장면이 없고 워커가 기록 없음으로 정한다
+  (`fixed_reason`). 결정 전 차원은 그대로 카드 장면으로 판단한다.
 
 평가 프롬프트의 `[사실]` 블록과 워커 검증(`evaluate.check_facts`)이 같은 값을 쓴다.
 """
@@ -67,6 +72,17 @@ class DimensionScenes:
     decision: Decision | None  # timing이 있을 때 핵심 카드 단계의 결정
     core: Scene
     aux: tuple[Scene, ...]
+    preempted: bool = False  # 핵심 카드가 지원자 선확정으로 생기지 않음
+    adopted: bool = False  # 핵심 카드 단계에서 지원자 안이 채택됨(사실 decisions)
+
+    @property
+    def fixed_reason(self) -> str | None:
+        """평가 에이전트 출력과 상관없이 워커가 정하는 기록 없음 사유. 결정 뒤를 보는 차원인데
+        지원자 안이 채택돼 결정 뒤 장면이 없으면 not_applicable(핵심 카드가 선결정이면
+        preempted)."""
+        if self.timing == "after" and self.adopted:
+            return "preempted" if self.preempted else "not_applicable"
+        return None
 
     def get(self, scene_id: str) -> Scene | None:
         if scene_id == CORE:
@@ -151,6 +167,8 @@ def build_scenes(record: dict[str, Any], rubric: dict[str, Any]) -> dict[str, Di
         if o.get("delivered")
     }
     decided = decisions(record)
+    recorded = {d["phase"]: d for d in (record.get("facts") or {}).get("decisions") or []}
+    preempted_cards = {c for d in recorded.values() for c in d.get("preempted_cards") or []}
     everything = {m["id"] for m in messages}
     out = {}
     for element in rubric.get("elements", []):
@@ -161,6 +179,8 @@ def build_scenes(record: dict[str, Any], rubric: dict[str, Any]) -> dict[str, Di
             stage = (rules.get(core_cards[0]) or {}).get("stage_id") if core_cards else None
             decision = decided.get(stage or "") if timing else None
             cards = tuple(c for c in core_cards if c in fired)
+            preempted = bool(core_cards) and not cards and bool(set(core_cards) & preempted_cards)
+            adopted = bool((recorded.get(stage or "") or {}).get("candidate_option_adopted"))
             if not core_cards:
                 members, exists, label = everything, True, "세션 전체"
             else:
@@ -178,6 +198,11 @@ def build_scenes(record: dict[str, Any], rubric: dict[str, Any]) -> dict[str, Di
                     if decision is None:
                         members = set()
                         label += ", 그 칸이 정해지지 않아 결정 뒤가 없음"
+                    elif adopted:
+                        members = set()
+                        label += (
+                            f", {decision.describe()}에서 지원자 안이 채택돼 결정 뒤 장면이 없음"
+                        )
                     else:
                         members = {
                             i for i in members if ORDER[_phase(messages, i)] > ORDER[decision.phase]
@@ -185,7 +210,9 @@ def build_scenes(record: dict[str, Any], rubric: dict[str, Any]) -> dict[str, Di
                         label += f", {decision.describe()} 뒤"
                 # 장면은 카드가 발동했으면 있다(그 안에 메시지가 없어도). 결정 뒤를 보는데 칸이
                 # 정해지지 않았으면 없다
-                exists = bool(cards) and not (timing == "after" and decision is None)
+                exists = bool(cards) and not (timing == "after" and (decision is None or adopted))
+                if preempted:
+                    label += ", 지원자가 카드 예정 시각 전에 칸을 확정해 카드가 생기지 않음(선결정)"
             aux = []
             for spec in dimension.get("aux_scenes") or []:
                 phases = set(spec.get("phases") or [])
@@ -203,6 +230,8 @@ def build_scenes(record: dict[str, Any], rubric: dict[str, Any]) -> dict[str, Di
                 decision=decision,
                 core=_scene(CORE, label, exists, members, messages),
                 aux=tuple(aux),
+                preempted=preempted,
+                adopted=adopted,
             )
     return out
 
@@ -243,6 +272,8 @@ def facts_block(
                     "path": dim.decision.path,
                 },
                 "scenes": [_scene_row(dim.core), *(_scene_row(s) for s in dim.aux)],
+                "preempted": dim.preempted,
+                "fixed_result": dim.fixed_reason,
             }
         )
     recorded = facts.get("decisions")
