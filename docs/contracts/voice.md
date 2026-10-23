@@ -4,7 +4,7 @@
 
 | 메서드·접미 경로 | 요청 | 응답 |
 |---|---|---|
-| GET (접미 없음) | 없음 | 아래 VoiceState. 750ms polling. 재연결 시 먼저 일반 `/state`와 이 상태를 다시 조회 |
+| GET (접미 없음) | 없음 | 아래 VoiceState. 750ms polling(AI_GENERATING·TRANSCRIBING·PROCESSING 동안은 250ms). 재연결 시 먼저 일반 `/state`와 이 상태를 다시 조회 |
 | POST `/capture` | `{turn_id, epoch, restart?:bool}` | 발언권 상태: utterance_id, speech_started_at, speech_deadline_at 포함. 동일 활성 발언의 중복 시작은 같은 ID |
 | POST `/playback` | `{turn_id, epoch, job_id, outcome: start∣ended∣error∣retry}` | `{ok:true}`. 첫 미완료 항목만 처리. start 뒤 실제 ended 확인. heard 항목 ended 중복은 성공 |
 | POST `/audio` | `{turn_id, epoch, utterance_id, audio_base64, stop_reason: button∣timeout∣disconnect}` | `{utterance_id,status}`. PCM16 mono 16kHz WAV, 최대 60초·base64 2,600,000자. 동일 파일 해시로 멱등 |

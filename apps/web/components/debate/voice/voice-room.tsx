@@ -55,6 +55,11 @@ function thinkLeft(snap: VoiceSnapshot): number {
   return Math.max(0, (Date.parse(snap.think_deadline_at) - Date.parse(snap.server_now)) / 1000);
 }
 const SEATS = new Set(["p1", "p2", "p3"]);
+// 음성 상태 확인 주기(ms). 평소 750(계약 docs/contracts/voice.md), 기다리는 상태에서는 250.
+// 작게 하면 준비된 발언을 더 빨리 알지만 서버 요청이 늘어난다(세션당 초당 4회).
+const POLL_MS = 750;
+const WAITING_POLL_MS = 250;
+const WAITING_STATES = new Set(["AI_GENERATING", "TRANSCRIBING", "PROCESSING"]);
 const noop = () => {};
 type Props = {
   auth: SessionAuth;
@@ -342,12 +347,16 @@ export function VoiceRoom(props: Props) {
     if (!props.connected || props.locked) return;
     let disposed = false;
     let polling = false;
+    let lastPoll = 0;
+    let lastState = "";
     const poll = async () => {
       if (polling) return;
       polling = true;
+      lastPoll = Date.now();
       try {
         const next = await api<VoiceSnapshot>(path, { token: token() });
         if (disposed) return;
+        lastState = next.state;
         const nextFence = `${next.generation}:${next.epoch}`;
         if (fence.current && nextFence !== fence.current) stopMedia();
         fence.current = nextFence;
@@ -387,7 +396,11 @@ export function VoiceRoom(props: Props) {
       }
     };
     void poll();
-    const timer = setInterval(() => void poll(), 750);
+    // 동료 답·받아 적기를 기다리는 동안은 자주 확인해 준비되자마자 재생·제출한다(평소 주기는 그대로)
+    const timer = setInterval(() => {
+      const waiting = WAITING_STATES.has(lastState);
+      if (waiting || Date.now() - lastPoll >= POLL_MS) void poll();
+    }, WAITING_POLL_MS);
     return () => {
       disposed = true;
       clearInterval(timer);
