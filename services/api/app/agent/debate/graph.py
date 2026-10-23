@@ -683,7 +683,7 @@ async def _violation(
     if found:
         return found, None
     judged = await _judge_sentence(state, deps, draft.content)
-    found = persona.sentence_violation(judged, plan, draft) or persona.move_unstated(
+    found = persona.sentence_violation(judged, plan) or persona.move_unstated(
         draft, plan, state["ds"], judged
     )
     return found, judged
@@ -741,7 +741,8 @@ async def _quote_violation(
 ) -> tuple[str | None, str]:
     """(거부 사유, 결과 표식). 코드가 출처를 모으고 LLM이 판단한다(C2 인용 대조).
 
-    표식 `none`은 대상 없음(호출 0), `skipped`는 모델 없음·타임아웃·JSON 오류(게시, 관측만).
+    표식 `none`은 대상 없음(호출 0), `skipped`는 모델 없음·출처 불완전·타임아웃·JSON 오류(게시,
+    관측만).
     """
     seat = _current(state)["seat"]
     targets = persona.quote_targets(draft.content, seat, state["names"], _situation(state, deps))
@@ -750,7 +751,12 @@ async def _quote_violation(
     rows = await deps.tools.code.call(
         "get_transcript", {"phase": state["phase"], "limit": QUOTE_TRANSCRIPT_LIMIT}
     )
-    messages = _data(rows) if isinstance(_data(rows), list) else state["transcript"]
+    messages = _data(rows)
+    # 출처가 불완전하면(조회 실패, 상한에 닿아 앞부분이 잘림) 판단하지 않고 게시한다. 불완전한
+    # 출처로는 실제 발언이 not_found가 되거나 조회 실패가 pass로 둔갑한다
+    if not isinstance(messages, list) or len(messages) >= QUOTE_TRANSCRIPT_LIMIT:
+        log.warning("quote_check %s skipped: sources incomplete", seat)
+        return None, "skipped"
     user = f"[초안]\n{draft.content}\n\n[출처]\n" + persona.quote_sources(
         targets, phase_messages=messages, ds=state["ds"], names=state["names"]
     )

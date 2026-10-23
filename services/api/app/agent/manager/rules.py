@@ -604,10 +604,12 @@ def intents_toward(
 
     `toward_mine`: 대상이 내 지지 안인 `oppose`·`withhold`·`question` 수와 마지막 메시지 본문(대화
     창에 있을 때만). `counters`: 내 안이 아닌 안을 지지로 세는 발언(`counter_count`와 같은 규칙,
-    high·유보 없음)의 수와 그 안 라벨. 뜻은 저장된 분류가, 횟수는 코드가 정한다. 낱말 검사 없음.
+    high·유보 없음)의 메시지 수(`n`)와 그 안 라벨 목록(중복 없음, 따로 센다).
+    뜻은 저장된 분류가, 횟수는 코드가 정한다. 낱말 검사 없음.
     """
     toward = {"oppose": 0, "withhold": 0, "question": 0, "last": None}
     labels: list[str] = []
+    counters = 0
     text_of = {str(m.get("id")): str(m.get("content") or "") for m in transcript}
     for row in rows if since is not None else []:
         # 저장 시각이 없는 행은 이번 자극 메시지(가장 최신)라 센다
@@ -632,9 +634,10 @@ def intents_toward(
                 or catalog.label_of(str(target or ""))
                 or row.get("new_option_label")
             )
+            counters += 1
             if label and label not in labels:
                 labels.append(str(label))
-    return {"toward_mine": toward, "counters": {"n": len(labels), "labels": labels}}
+    return {"toward_mine": toward, "counters": {"n": counters, "labels": labels}}
 
 
 def _after(value: Any, since: Any) -> bool | None:
@@ -852,15 +855,18 @@ def answered_open_question_last(
     intents: dict[str, dict[str, Any]],
     catalog: Names,
 ) -> bool:
-    """이 자리의 마지막 발언이 부르지 않은 지원자 질문(전체 질문)에 답한 것이고 그 뒤 이 자리가 말한
-    적이 없는지(상태 조건). 참이면 새 맥락 없이 같은 자리가 또 전체 질문을 받는 상태라 소극형을 전체
-    질문 화자에서 뺀다(지명·카드 차례는 제한하지 않는다, C2 구현 세부).
+    """이 자리의 마지막 발언이 부르지 않은 지원자 질문(저장 의도 `question`인 전체 질문)에 답한
+    것이고 그 뒤 이 자리가 말한 적이 없는지(상태 조건). 참이면 새 맥락 없이 같은 자리가 또 전체
+    질문을 받는 상태라 소극형을 전체 질문 화자에서 뺀다(지명·카드 차례는 제한하지 않는다, C2 구현
+    세부).
     """
     last = next((m for m in reversed(transcript) if m.get("sender") == seat), None)
     if last is None or not last.get("reply_to"):
         return False
     answered = next((m for m in transcript if str(m.get("id")) == str(last["reply_to"])), None)
     if answered is None or answered.get("sender") != "candidate":
+        return False
+    if (intents.get(str(answered.get("id"))) or {}).get("intent") != "question":
         return False
     return seat not in addressed(answered, intents, catalog)
 

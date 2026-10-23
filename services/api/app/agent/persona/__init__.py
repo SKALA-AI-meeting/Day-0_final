@@ -260,7 +260,10 @@ def situation_text(situation: dict[str, Any], names: dict[str, str]) -> str:
     counters = situation.get("counters")
     if counters is not None:
         labels = ", ".join(counters.get("labels") or []) or "없음"
-        lines.append(f"- 내가 입장을 밝힌 뒤 지원자가 지지한 다른 안: {counters['n']}개 ({labels})")
+        lines.append(
+            f"- 내가 입장을 밝힌 뒤 지원자가 다른 안을 지지한 메시지: {counters['n']}개 "
+            f"(안: {labels})"
+        )
     move = situation.get("move")
     if move:
         lines.append(
@@ -389,30 +392,23 @@ def plan_violation(draft: Draft, plan: StancePlan, ds: dict[str, Any]) -> str | 
     return None
 
 
-def sentence_violation(
-    judged: dict[str, Any] | None, plan: StancePlan, draft: Draft | None = None
-) -> str | None:
+def sentence_violation(judged: dict[str, Any] | None, plan: StancePlan) -> str | None:
     """문장 판정(의도 분류 형식)이 기록될 입장과 다른 **명시적 지지 이동**을 말하는지(C2).
 
-    거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(propose·agree), 구조화 stance가 없을 때의
-    자기 안 철회(oppose·withhold), 입장이 없어야 할 때의 안 지지뿐이다. 유보가 든 동의("그 말도
-    맞지만…")·low·질문·되짚기는 통과한다. 게시 문장과 저장 입장이 갈라지지 않게 구조화 stance가
-    자기 안 support여도 문장이 다른 안을 지지하면 거부한다. 구조화 stance가 자기 안 support인데
-    문장 판정만 철회로 읽은 경우("A도 심각하지만 B가 핵심")는 판정 쪽을 믿지 않는다.
+    거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(propose·agree)와 자기 안 철회(oppose·
+    withhold)뿐이다. 유보가 든 동의("그 말도 맞지만…")·low·질문·되짚기는 통과한다. 게시 문장과
+    저장 입장이 갈라지지 않게 구조화 stance가 자기 안 support여도 문장이 다른 안을 지지하거나 자기
+    안을 철회하면 거부한다(충돌이면 재생성). 입장이 없는 상태(카드 전·기획안 단계)는 구조화 출력만
+    본다(`plan_violation`): 안을 나열하는 중립 문장을 판정이 propose로 읽는 경우가 많다.
     """
-    if not judged or judged.get("confidence") != "high":
+    if not judged or judged.get("confidence") != "high" or not plan.declared:
         return None
     intent = judged.get("intent")
     target = {v for v in (judged.get("target_option_id"), judged.get("scenario_option_key")) if v}
     moves = intent in ("propose", "agree") and not judged.get("reservation")
-    if not plan.declared:
-        if moves and (target or judged.get("new_option_label")):
-            return "문장이 입장을 밝힘"
-        return None
     if moves and (judged.get("new_option_label") or (target and not target & plan.targets)):
         return "문장이 계획과 다른 안을 지지함"
-    structured = (draft.stance or {}).get("stance") if draft is not None else None
-    if intent in ("oppose", "withhold") and target & plan.targets and structured != "support":
+    if intent in ("oppose", "withhold") and target & plan.targets:
         return "문장이 자기 계획 안을 철회함"
     return None
 
@@ -502,18 +498,25 @@ def safe_draft(catalog: Catalog, seat: str, mine: list[str] | None = None) -> Dr
 
 
 # ---- quote_check -----------------------------------------------------------------------------
+# 남의 말을 전하는 꼴(인용·전달 어미). 뜻이 아니라 문장 형태로 거르는 게이트다
+QUOTE_MARKERS = ("말씀", "하셨", "하신", "했다고", "했잖아", "셨죠", "셨잖아")
+
+
 def quote_targets(
     content: str, seat: str, names: dict[str, str], situation: dict[str, Any]
 ) -> list[str]:
-    """인용 대조 대상(결정적 게이트): 초안에 이름(성 포함·제외, "님" 유무)이 나온 다른 참여자와,
-    지원자 메시지에 답할 때의 지원자(이름 없는 귀속 "아까 그렇게 말씀하셨죠"). 없으면 빈 목록."""
+    """인용 대조 대상(결정적 게이트): 초안이 남의 말·입장을 전하는 꼴(`QUOTE_MARKERS`)일 때만,
+    이름(성 포함·제외, "님" 유무, 지원자는 "지원자" 호칭도)이 나온 다른 참여자와, 지원자 메시지에
+    답할 때의 지원자(이름 없는 귀속 "아까 그렇게 말씀하셨죠"). 없으면 빈 목록(호출 0)."""
+    if not any(marker in content for marker in QUOTE_MARKERS):
+        return []
     found: list[str] = []
     for participant, name in names.items():
         if participant == seat or not name:
             continue
         forms = {name, name[1:]} if len(name) >= 3 else {name}
         if participant == "candidate":
-            forms.add("지원자")  # 표시 이름 대신 역할로 부른 귀속("지원자님은 ~하셨는데")
+            forms.add("지원자")
         if any(form and form in content for form in forms):
             found.append(participant)
     target = situation.get("reply_to") or {}
