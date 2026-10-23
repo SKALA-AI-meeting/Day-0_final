@@ -922,6 +922,11 @@ async def debate_state(
         if debate_phase
         else []
     )
+    open_mentions = (
+        await _open_mentions(db, session.id, phase, scenario, [i for i, _ in candidate_intents])
+        if debate_phase
+        else []
+    )
     first_spoke = dict(
         (
             await db.execute(
@@ -1005,7 +1010,48 @@ async def debate_state(
             for i, created in candidate_intents
         ],
         "first_spoke_at": {seat: iso(first_spoke.get(seat)) for seat in SEATS},
+        "open_mentions": open_mentions,
     }
+
+
+async def _open_mentions(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    phase: str,
+    scenario: dict,
+    intents: list[MessageIntent],
+) -> list[dict[str, str]]:
+    """그 단계 토론방 전체 기록에서 아직 답하지 않은 지명(진행 매니저 `open_mentions`, 결정 C1).
+
+    대화 창(최근 30개)이 아니라 전체 기록을 보므로 지명이 창 밖으로 밀려도 사라지지 않는다.
+    """
+    from app.agent.manager.rules import open_mentions
+
+    rows = (
+        await db.scalars(
+            select(Message)
+            .where(
+                Message.session_id == session_id,
+                Message.phase == phase,
+                Message.channel == "room",
+            )
+            .order_by(Message.created_at, Message.seq)
+        )
+    ).all()
+    messages = [
+        {
+            "id": str(m.id),
+            "sender": m.sender,
+            "content": m.content,
+            "reply_to": (m.meta or {}).get("reply_to"),
+        }
+        for m in rows
+    ]
+    by_id = {
+        str(i.message_id): {"addressed_to": list(i.addressed_to), "excluded": list(i.excluded)}
+        for i in intents
+    }
+    return open_mentions(messages, by_id, sc.seat_names(scenario))
 
 
 async def _spoken_since(

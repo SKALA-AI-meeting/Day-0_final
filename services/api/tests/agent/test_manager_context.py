@@ -164,3 +164,69 @@ def test_reactions_count_replies_and_name_calls_only(catalog):
     transcript.append({"id": "e", "sender": "candidate", "content": "한결님 근거가 궁금해요."})
     assert rules.reactions("p1", transcript, {}, catalog) == ["p3", "candidate"]
     assert rules.reactions("p2", transcript, {}, catalog) is None
+
+
+async def test_repeatedly_named_seats_do_not_starve(harness):
+    """세 자리를 연달아 세 번 불러도(화자 상한 2) 오래 기다린 자리가 먼저 답해 모두 답한다."""
+    h = harness("keyword")
+    h.server.invites.add("keyword")
+    to = ("p1", "p2", "p3")
+    mids, runs = [], []
+    for _ in range(3):
+        mid = h.candidate("한결님, 하람님, 지안님 모두 어떠세요?", intent_of("question", to=to))
+        mids.append(mid)
+        runs.append(await h.run("message", message_id=mid))
+    runs.append(await h.run("idle"))
+    replies = [[(s["seat"], s["reply_to"]) for s in r.decision["speakers"]] for r in runs]
+    assert replies == [
+        [("p1", mids[0]), ("p2", mids[0])],
+        [("p3", mids[1]), ("p1", mids[1])],  # 첫 메시지부터 기다린 서지안이 먼저
+        [("p2", mids[2]), ("p1", mids[2])],
+        [("p3", mids[2])],
+    ]
+    assert h.server.open_mentions() == []
+
+
+async def test_mention_pushed_out_of_the_transcript_window_is_still_answered(harness):
+    h = harness("keyword")
+    h.server.invites.add("keyword")
+    mid = h.candidate("지안님 어떻게 보세요?", intent_of("question", to=("p3",)))
+    for i in range(35):  # 최근 대화 30개 밖으로 민다
+        h.candidate(f"음 {i}", intent_of("other", confidence="low"))
+    run = await h.run("idle")
+    assert [(s["seat"], s["reply_to"]) for s in run.decision["speakers"]] == [("p3", mid)]
+
+
+async def test_fixed_card_line_does_not_answer_a_mention(harness):
+    """고정 문장 카드 발언(머뭇거림 한 줄)은 답한 메시지를 남기지 않는다. 지명은 다음 실행이
+    답한다."""
+    h = harness("solution")
+    h.server.confirm_keyword("water")
+    h.server.invites.add("solution")
+    mid = h.candidate("하람님 생각은요?", intent_of("question", to=("p2",)))
+    run = await h.run("card_due", card_id="inclusion_silence")
+    assert run.decision["speakers"][0] == {
+        "seat": "p2",
+        "reply_to": None,
+        "card_ids": ["inclusion_silence"],
+        "invite": False,
+    }
+    assert run.decision["queued"] == [{"seat": "p2", "message_id": mid}]
+    assert h.posted("p2")[0]["meta"]["reply_to"] is None
+    run = await h.run("idle")
+    assert [(s["seat"], s["reply_to"]) for s in run.decision["speakers"]] == [("p2", mid)]
+    assert h.posted("p2")[-1]["meta"]["reply_to"] == mid
+
+
+def test_open_mentions_age_by_earliest_and_close_on_later_reply(catalog):
+    from app.agent.manager import rules
+
+    def cand(i):
+        return {"id": f"c{i}", "sender": "candidate", "content": "지안님?"}
+
+    msgs = [cand(1), cand(2)]
+    assert rules.open_mentions(msgs, {}, catalog) == [
+        {"seat": "p3", "message_id": "c2", "since": "c1"}
+    ]
+    msgs.append({"id": "a", "sender": "p3", "content": "네", "reply_to": "c2"})
+    assert rules.open_mentions(msgs, {}, catalog) == []  # 뒤 지명에 답하면 앞 지명도 닫힌다

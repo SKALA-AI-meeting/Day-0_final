@@ -5,7 +5,7 @@
 ## 입력
 
 - 자극 `{type, phase, generation, message_id?, card_id?}`([architecture/agents.md](../architecture/agents.md) "AgentRunner 인터페이스")
-- DebateState(debate-mcp `get_debate_state`: 지지 현황·안·칸·카드 진행·남은 시간·그 단계 지원자 메시지의 저장된 의도 분류 `candidate_intents`), 최근 대화(그 단계 30개, AI 발언은 답한 메시지 `reply_to` 포함. 진행 매니저 LLM에는 마지막 10개)
+- DebateState(debate-mcp `get_debate_state`: 지지 현황·안·칸·카드 진행·남은 시간·그 단계 지원자 메시지의 저장된 의도 분류 `candidate_intents`·전체 기록에서 계산한 아직 답하지 않은 지명 `open_mentions`), 최근 대화(그 단계 30개, AI 발언은 답한 메시지 `reply_to` 포함. 진행 매니저 LLM에는 마지막 10개)
 - 지원자 메시지의 의도 분류 결과([의도 분류](intent.md): 대상 안·`addressed_to`·`excluded`(답하지 말라고 뺀 자리, 지명·턴 LLM 화자에서 뺀다)·`reservation`(설득 가능 규칙에서 세지 않음))
 - 채용 건에 고정된 카탈로그 복사본(`positions.scenario`)
 
@@ -28,11 +28,11 @@
 
 ## 코드 입구
 
-- `services/api/app/agent/manager/rules.py`: 결정적 규칙(`rule_decision`, 답하지 않은 지명 `open_replies`, 상황 정보 `situation`·`reactions`, 기본 응답 자리 `default_responder`, `card_brief`, `stance_plan`, `fill_seat`, `validate_turn_llm`, 카드 지시 `CARD_INSTRUCTIONS`·선점 금지 `preempt_bans`)
+- `services/api/app/agent/manager/rules.py`: 결정적 규칙(`rule_decision`, 답하지 않은 지명 `open_mentions`·`pending_mentions`, 상황 정보 `situation`·`reactions`, 기본 응답 자리 `default_responder`, `card_brief`, `stance_plan`, `fill_seat`, `validate_turn_llm`, 카드 지시 `CARD_INSTRUCTIONS`·선점 금지 `preempt_bans`)
 - `services/api/app/agent/debate/graph.py`: 이 규칙을 부르는 노드 `cards`·`turn`(+ `_turn_llm`)·`fill`. 그래프는 여러 역할을 잇는 배선이라 `debate/`에 둔다
 - 모델 역할 키 `turn`, env `MODEL_TURN`(역할 이름을 바꾸기 전 그대로). 타임아웃·재시도는 [architecture/harness.md](../architecture/harness.md) "역할별 모델"
 
 ## 검증
 
-- 단위(LLM mock): `services/api/tests/agent/test_turn.py`(지명 우선·제외 자리·화자 ≤ 2·침묵 초대·합의 채우기(같은 run 재판정 없음)·설득 가능 규칙 횟수·재실행 멱등), `test_manager_context.py`(지명 응답·넘친 지명의 다음 실행 응답(재시작 포함)·진행 발언 최소 1명·화자별 `reply_to`·`[상황]` 블록), `test_cards.py`(카드 전달·기준안 잠금), `test_script.py`(15분 대본)
+- 단위(LLM mock): `services/api/tests/agent/test_turn.py`(지명 우선·제외 자리·화자 ≤ 2·침묵 초대·합의 채우기(같은 run 재판정 없음)·설득 가능 규칙 횟수·재실행 멱등), `test_manager_context.py`(지명 응답·넘친 지명의 다음 실행 응답(재시작 포함)·반복 지명에서 굶지 않음·대화 창 밖 지명·고정 문장 카드는 지명을 닫지 않음·진행 발언 최소 1명·화자별 `reply_to`·`[상황]` 블록), `test_cards.py`(카드 전달·기준안 잠금), `test_script.py`(15분 대본)
 - 평가셋: `tests/eval/persona_scripts.yaml`의 지명 무응답·질문 무시 장면(`make eval-live`, `tests/eval/persona_eval.py`의 `replies`: 지원자 메시지마다 `reply_to`로 답한 발언이 있는지, 부른 자리가 답했는지)

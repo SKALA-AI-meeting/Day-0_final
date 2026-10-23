@@ -757,12 +757,14 @@ async def apply(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, A
     draft, plan = _restore(state)
     code = deps.tools.code
     card_ids = list(spk.get("card_ids") or [])
-    reply_to = _reply_to(state)
+    # 고정 문장(카드 고정 한 줄·입장 폴백·안전 문구)은 그 메시지에 답한 것이 아니므로 답한 메시지를
+    # 남기지 않는다. 그 자리의 지명은 열린 채로 다음 실행이 다시 답한다
+    reply_to = None if draft.fixed else _reply_to(state)
     meta = {
         **draft.meta,
         "model": getattr(deps.llms.persona, "model", None),
         "reply_to": reply_to,
-        "named": _situation(state, deps)["named"],
+        "named": bool(reply_to) and _situation(state, deps)["named"],
     }
     meta.pop("tool_calls", None)
     content = draft.content

@@ -210,12 +210,24 @@ class FakeServer:
                 seat: next((at for m, at in self.timed() if m["sender"] == seat), None)
                 for seat in SEATS
             },
+            # api처럼 그 단계 전체 기록(대화 창 30개와 무관)에서 계산한 열린 지명
+            "open_mentions": self.open_mentions(),
             "seats": [{"seat": "candidate", "display_name": self.candidate_name}]
             + [
                 {"seat": s, "display_name": self.catalog.name_of(s), "avatar_url": f"/a/{s}.png"}
                 for s in SEATS
             ],
         }
+
+    def open_mentions(self) -> list[dict[str, str]]:
+        from app.agent.manager import rules
+
+        rows = [
+            {**m, "reply_to": (m.get("meta") or {}).get("reply_to")}
+            for m in self.messages
+            if m.get("phase") == self.phase
+        ]
+        return rules.open_mentions(rows, self.intents, self.catalog)
 
     def card_row(self, card: dict[str, Any]) -> dict[str, Any]:
         """api처럼 카드 첫 발언과 그 뒤 AI 자리별 발언 수(전체 기록 기준)를 붙인다."""

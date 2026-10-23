@@ -407,13 +407,18 @@ def recent_streak_seat(transcript: list[dict[str, Any]]) -> str | None:
     return None
 
 
-def _name_forms(seat: str, catalog: Catalog) -> list[str]:
+Names = (
+    Catalog | dict[str, str]
+)  # 카탈로그 또는 {자리: 표시 이름}(api가 채용 건 복사본에서 만든 값)
+
+
+def _name_forms(seat: str, catalog: Names) -> list[str]:
     """자리 표시 이름의 두 형태(성까지 붙인 이름, 세 글자 이상이면 성을 뗀 이름)."""
-    name = catalog.name_of(seat)
+    name = catalog.name_of(seat) if isinstance(catalog, Catalog) else catalog.get(seat, seat)
     return [name, name[1:]] if len(name) >= 3 else [name]
 
 
-def named_seats(text: str, catalog: Catalog, *, honorific: bool = True) -> list[str]:
+def named_seats(text: str, catalog: Names, *, honorific: bool = True) -> list[str]:
     """메시지에서 이름으로 부른 자리(메시지에 나온 순서). honorific이면 "이름님"만, 아니면 "님"
     유무와 상관없이 이름이 나온 자리."""
     found: list[tuple[int, str]] = []
@@ -426,7 +431,7 @@ def named_seats(text: str, catalog: Catalog, *, honorific: bool = True) -> list[
     return [seat for _, seat in sorted(found)]
 
 
-def excluded_seats(text: str, excluded: list[str] | None, catalog: Catalog) -> list[str]:
+def excluded_seats(text: str, excluded: list[str] | None, catalog: Names) -> list[str]:
     """분류 excluded 중 메시지에 이름이 실제로 나온 자리만("님" 유무 무관).
 
     뺀다는 것은 그 동료를 이름으로 가리켰다는 사실을 전제한다. "3번은 보류"의 안 번호를 자리로
@@ -437,7 +442,7 @@ def excluded_seats(text: str, excluded: list[str] | None, catalog: Catalog) -> l
 
 
 def called_seats(
-    text: str, addressed: list[str], catalog: Catalog, excluded: list[str] | None = None
+    text: str, addressed: list[str], catalog: Names, excluded: list[str] | None = None
 ) -> list[str]:
     """지명 응답 자리와 순서.
 
@@ -480,7 +485,7 @@ def intent_map(
 
 
 def addressed(
-    message: dict[str, Any], intents: dict[str, dict[str, Any]], catalog: Catalog
+    message: dict[str, Any], intents: dict[str, dict[str, Any]], catalog: Names
 ) -> list[str]:
     """지원자 메시지가 부른 자리(`called_seats`).
 
@@ -494,31 +499,74 @@ def addressed(
     return called_seats(text, intent.get("addressed_to") or [], catalog, excluded)
 
 
-def open_replies(
-    transcript: list[dict[str, Any]], intents: dict[str, dict[str, Any]], catalog: Catalog
-) -> list[tuple[str, str]]:
-    """아직 답하지 않은 지명 [(자리, 지원자 메시지 id)].
+def open_mentions(
+    messages: list[dict[str, Any]], intents: dict[str, dict[str, Any]], catalog: Names
+) -> list[dict[str, str]]:
+    """아직 답하지 않은 지명 `[{seat, message_id, since}]`.
 
-    오래된 메시지 먼저, 메시지 안에서는 부른 순서다.
-
-    자리마다 그 자리를 부른 가장 최근 지원자 메시지 하나만 본다. 그 뒤 그 자리가 그 메시지나 더 뒤
-    지원자 메시지에 답한 발언(`reply_to`)이 있으면 답한 것이다. 메시지 기록에서 매번 계산하므로
-    한 실행에서 화자 상한을 넘어 남은 지명은 프로세스 메모리 없이 다음 실행이 이어서 답한다.
+    `messages`는 그 단계 토론방 메시지 전체(저장 순서, AI 발언은 `reply_to` 포함)다. 지원자
+    메시지가 자리를 부를 때마다 그 자리의 열린 지명이 쌓이고, 그 자리가 어떤 지원자 메시지에
+    답하면(`reply_to`) 그 메시지와 그 앞의 지명이 모두 닫힌다. `message_id`는 답할 메시지(그 자리의
+    가장 최근 열린 지명), `since`는 가장 오래된 열린 지명이다. 순서는 `since`가 오래된 자리
+    먼저(같은 메시지 안에서는 부른 순서)라 화자 상한(2)을 넘어 밀린 자리가 다음 실행에서 먼저
+    답하고, 계속 불려도 굶지 않는다.
     """
-    latest: dict[str, tuple[int, int, str]] = {}
-    for index, message in enumerate(transcript):
-        for position, seat in enumerate(addressed(message, intents, catalog)):
-            latest[seat] = (index, position, str(message.get("id")))
-    found: list[tuple[int, int, str, str]] = []
-    for seat, (index, position, message_id) in latest.items():
-        later = {str(m.get("id")) for m in transcript[index:] if m.get("sender") == "candidate"}
-        answered = any(
-            m.get("sender") == seat and str(m.get("reply_to")) in later
-            for m in transcript[index + 1 :]
-        )
-        if not answered:
-            found.append((index, position, seat, message_id))
-    return [(seat, message_id) for _, _, seat, message_id in sorted(found)]
+    pending: dict[str, list[tuple[int, int, str]]] = {}
+    index_of: dict[str, int] = {}
+    for index, message in enumerate(messages):
+        message_id = str(message.get("id"))
+        index_of[message_id] = index
+        sender = message.get("sender")
+        if sender == "candidate":
+            for position, seat in enumerate(addressed(message, intents, catalog)):
+                pending.setdefault(seat, []).append((index, position, message_id))
+        elif sender in SEATS and message.get("reply_to"):
+            target = index_of.get(str(message["reply_to"]))
+            if target is not None and messages[target].get("sender") == "candidate":
+                pending[sender] = [p for p in pending.get(sender, []) if p[0] > target]
+    rows = sorted(
+        (marks[0][0], marks[0][1], seat, marks[-1][2], marks[0][2])
+        for seat, marks in pending.items()
+        if marks
+    )
+    return [{"seat": seat, "message_id": mid, "since": first} for _, _, seat, mid, first in rows]
+
+
+def pending_mentions(
+    ds: dict[str, Any],
+    stimulus: dict[str, Any],
+    transcript: list[dict[str, Any]],
+    intents: dict[str, dict[str, Any]],
+    catalog: Catalog,
+) -> list[dict[str, str]]:
+    """이번 실행이 볼 열린 지명.
+
+    api가 그 단계 전체 기록에서 계산한 DebateState `open_mentions`를 쓰고(대화 창 30개에 묶이지
+    않음), 없으면(이전 api) 대화 창에서 계산한다. 이번 지원자 메시지의 분류가 아직 저장되지 않았을
+    수 있어 그 메시지가 부른 자리는 이번 분류로 더한다(이미 있는 자리는 답할 메시지만 이번 것으로).
+    """
+    if "open_mentions" in ds:
+        found = [dict(row) for row in ds.get("open_mentions") or []]
+    else:
+        found = open_mentions(transcript, intents, catalog)
+    current = next(
+        (
+            m
+            for m in transcript
+            if stimulus.get("type") == "message"
+            and str(m.get("id")) == str(stimulus.get("message_id"))
+        ),
+        None,
+    )
+    if current is not None:
+        mid = str(current.get("id"))
+        for seat in addressed(current, intents, catalog):
+            row = next((r for r in found if r["seat"] == seat), None)
+            if row is None:
+                found.append({"seat": seat, "message_id": mid, "since": mid})
+            else:
+                row["message_id"] = mid
+    return found
 
 
 def reactions(
@@ -648,16 +696,26 @@ def rule_decision(
             decision["reason"] = "합의 성립(지원자 포함 3/4), 채우기만"
             return decision
     intents = intent_map(ds, stimulus, intent)
-    pending = open_replies(transcript, intents, catalog)
-    waiting = dict((seat, mid) for seat, mid in pending)
+    pending = [
+        (r["seat"], r["message_id"])
+        for r in pending_mentions(ds, stimulus, transcript, intents, catalog)
+    ]
+    waiting = dict(pending)
     speakers: list[dict[str, Any]] = []
+    fixed: set[str] = set()  # 고정 문장 카드 화자: 어떤 메시지에도 답하지 않는다(지명은 열린 채)
     # 2. 카드 화자(미전달 화자 이어 말하기 포함). 답하지 않은 지명이 있는 자리는 그 메시지에 답한다
     for item in brief[:MAX_SPEAKERS]:
+        if any((catalog.card(c) or {}).get("fixed_line") for c in item.card_ids):
+            fixed.add(item.seat)
+            speakers.append(speaker(item.seat, card_ids=item.card_ids))
+            continue
         speakers.append(speaker(item.seat, reply_to=waiting.get(item.seat), card_ids=item.card_ids))
     used = {s["seat"] for s in speakers}
-    # 3. 지명 응답: 답하지 않은 지명(이번 메시지 포함)을 오래된 메시지부터. 넘치면 다음 실행
+    # 3. 지명 응답: 답하지 않은 지명(이번 메시지 포함)을 오래 기다린 자리부터. 넘치면 다음 실행
     for seat, mid in pending:
         if seat in used:
+            if seat in fixed:
+                decision["queued"].append({"seat": seat, "message_id": mid})
             continue
         if len(speakers) < MAX_SPEAKERS:
             speakers.append(speaker(seat, reply_to=mid))
@@ -687,7 +745,7 @@ def rule_decision(
             decision["reason"] = decision["reason"] or "전체 질문"
         # 답할 메시지가 정해지지 않은 화자(카드 화자)는 이번 지원자 메시지에 답한다
         for item in speakers:
-            if item["reply_to"] is None:
+            if item["reply_to"] is None and item["seat"] not in fixed:
                 item["reply_to"] = current
     # 4. 침묵 초대(단계당 1회, 고정 자리에서는 비판형)
     if kind == "idle" and phase in DEBATE_PHASES and not ds.get("invite_delivered"):
