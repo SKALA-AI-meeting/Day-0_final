@@ -276,7 +276,10 @@ class FakeServer:
         rows = [m for m in self.messages if phase is None or m["phase"] == phase]
         return ok(
             [
-                {k: m[k] for k in ("id", "sender", "content", "phase", "is_invite", "t_min")}
+                {
+                    **{k: m[k] for k in ("id", "sender", "content", "phase", "is_invite", "t_min")},
+                    "reply_to": (m.get("meta") or {}).get("reply_to"),
+                }
                 for m in rows[-limit:]
             ]
         )

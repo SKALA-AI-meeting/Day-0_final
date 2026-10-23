@@ -999,6 +999,8 @@ async def debate_state(
                 "new_option_label": i.new_option_label,
                 "confidence": i.confidence,
                 "reservation": i.reservation,
+                "addressed_to": list(i.addressed_to),
+                "excluded": list(i.excluded),
             }
             for i, created in candidate_intents
         ],

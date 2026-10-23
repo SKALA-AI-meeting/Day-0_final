@@ -48,7 +48,7 @@ def _event(session, seat_lines, *, to=None, decision=None, **step):
 
 
 def test_scoring_rules():
-    card = [{"seat": "p3", "purpose": "card"}]
+    card = [{"seat": "p3", "reply_to": None, "card_ids": ["persuasion_keyword"]}]
     events = [
         _event("keyword", [("p1", "불이 맞아요. 쓰임이 넓어요.")], kind="phase_started"),
         _event("keyword", [("p2", "음… 저는 나무요.")], to=["p2"]),
@@ -63,7 +63,7 @@ def test_scoring_rules():
             "keyword",
             [("p2", "저… 아니에요.")],
             to=["p2"],
-            decision=[{"seat": "p2", "purpose": "card"}],
+            decision=[{"seat": "p2", "purpose": "card"}],  # 예전 결정 형식도 읽는다
         ),
         _event("keyword", [], kind="progress", refs=["결정"]),  # 무응답으로 단계 끝
         _event("problem", [("p1", "그건 아니죠.")]),  # 다른 단계는 반복 쌍을 만들지 않는다
@@ -85,6 +85,30 @@ def test_scoring_rules():
     ]
     assert pe.response_rate(late)["evidence"] == {"n": 1, "hit": 0, "rate": 0.0, "unanswered": 0}
     assert pe.misquote([{**late[0], "misquote": "침수"}, late[1]])["misquote"] == 0
+
+
+def test_replies_count_reply_to_within_the_phase():
+    def say(mid, to=(), session="keyword"):
+        return {
+            "session": session,
+            "kind": "named",
+            "say": "x",
+            "message_id": mid,
+            "intent": {"addressed_to": list(to)},
+            "posts": [],
+            "decision": [],
+        }
+
+    def post(seat, reply_to):
+        return {"seat": seat, "content": "y", "meta": {"reply_to": reply_to}}
+
+    events = [say("m1", ("p1", "p2", "p3")), say("m2"), say("m3"), say("m4", session="problem")]
+    events[0]["posts"] = [post("p1", "m1"), post("p2", "m1")]
+    events[1]["posts"] = [post("p3", "m1"), post("p1", "m2")]  # 넘친 지명은 다음 실행이 답한다
+    events[3]["posts"] = [post("p1", "m3")]  # 다른 단계의 답은 세지 않는다
+    got = pe.replies(events)
+    assert (got["n"], got["answered"], got["ignored_rate"]) == (4, 2, 0.5)
+    assert got["named"] == {"n": 3, "answered": 3, "unanswered": 0, "details": []}
 
 
 async def test_runner_follows_the_graph_with_fake_llms():

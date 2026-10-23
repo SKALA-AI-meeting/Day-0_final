@@ -22,7 +22,8 @@ Seat = Literal["p1", "p2", "p3"]
 SlotPhase = Literal["keyword", "problem", "solution"]
 Phase = Literal["keyword", "problem", "solution", "proposal"]
 
-# get_transcript가 돌려주는 메시지 필드(meta·intent·origin·card_ids 없음)
+# get_transcript가 돌려주는 메시지 필드(meta·intent·origin·card_ids 없음). reply_to는 AI 발언이 답한
+# 메시지 id(meta.reply_to, 없으면 null)
 TRANSCRIPT_FIELDS = ("id", "sender", "content", "phase", "is_invite", "t_min")
 DRAFT_FIELDS = ("sections", "revision", "updated_at")
 
@@ -74,15 +75,21 @@ async def get_transcript(
 ) -> dict[str, Any]:
     """토론방 최근 메시지(기본 30개)를 시간순으로 조회한다.
 
-    각 메시지는 id·보낸 자리(sender)·본문·단계·침묵 초대 여부·세션 시각(t_min)만 담는다
-    (의도 분류·메타·발언 경위는 없다). 시각과 단계로 거를 수 있다.
+    각 메시지는 id·보낸 자리(sender)·본문·단계·침묵 초대 여부·세션 시각(t_min)과 그 발언이 답한
+    메시지 id(reply_to, 없으면 null)만 담는다(의도 분류·메타·발언 경위는 없다). 시각과 단계로 거를
+    수 있다.
     """
     # tail=N: api가 조건에 맞는 최근 N개를 오래된 순으로 준다
     params = {"since_t_min": since_t_min, "phase": phase, "tail": limit}
     result = await client.call("GET", f"{_base(session_id)}/messages", params=params)
     if not result["ok"]:
         return result
-    return client.ok([_pick(m, TRANSCRIPT_FIELDS) for m in result["data"]])
+    return client.ok(
+        [
+            {**_pick(m, TRANSCRIPT_FIELDS), "reply_to": (m.get("meta") or {}).get("reply_to")}
+            for m in result["data"]
+        ]
+    )
 
 
 @mcp.tool

@@ -38,13 +38,6 @@ PHASE_NAMES = {
     "solution": "해결책",
     "proposal": "기획안 작성",
 }
-PURPOSE_TEXT = {
-    "respond": "지원자의 방금 말(근거·질문)을 먼저 짧게 받아 답한 뒤 자기 생각을 말한다",
-    "push_option": "[내 입장 계획]의 안을 주장한다",
-    "react": "앞선 동료 발언에 짧게 반응한다",
-    "invite": '지원자에게 의견을 묻는다(짧게, "{name}님은 어떻게 생각하세요?" 골격)',
-    "card": "[카드 지시]를 이번 발언에서 자연스럽게 말한다",
-}
 OUTPUT_RULE = (
     '출력은 JSON 객체 하나다: {"content": "게시할 1~3문장", "proposes": null 또는 '
     '{"scenario_option_key": "키", "label": "라벨"}, "stance": null 또는 '
@@ -87,7 +80,7 @@ def build_messages(
     *,
     catalog: Catalog,
     seat: str,
-    purpose: str,
+    situation: dict[str, Any],
     plan: StancePlan,
     ds: dict[str, Any],
     names: dict[str, str],
@@ -151,8 +144,7 @@ def build_messages(
             "[내 입장 계획]\n아직 입장을 밝히지 않음. 어떤 안도 지지하거나 반대하지 않는다."
         )
 
-    goal = PURPOSE_TEXT.get(purpose, purpose).replace("{name}", candidate)
-    blocks.append(f"[이번 목적]\n{purpose}: {goal}")
+    blocks.append("[상황]\n" + situation_text(situation, names))
     if notice:
         blocks.append(
             f'[정해진 안내]\n이번 발언 맨 앞에 코드가 "{notice}"를 붙인다. '
@@ -173,6 +165,34 @@ def build_messages(
             f"[다시 쓰기]\n앞 응답은 쓸 수 없다: {violation}. 규칙에 맞게 처음부터 다시 쓴다."
         )
     return [SystemMessage(system), HumanMessage("\n\n".join(blocks))]
+
+
+def situation_text(situation: dict[str, Any], names: dict[str, str]) -> str:
+    """진행 매니저가 정한 상황 정보를 사실 문장으로(지시 없음, C1)."""
+    target = situation.get("reply_to")
+    if target:
+        sender = _display(target.get("sender"), names)
+        lines = [f'- 답할 메시지: {sender}: "{target.get("content")}"']
+        if target.get("sender") == "candidate":
+            lines.append(
+                f"- 이 메시지에서 지원자가 나를 이름으로 불렀는지: {_yes(situation.get('named'))}"
+            )
+    else:
+        lines = ["- 답할 메시지: 없음"]
+    lines.append(f"- 이번 발언이 내 카드 차례인지: {_yes(situation.get('card_turn'))}")
+    if situation.get("invite"):
+        lines.append("- 침묵 초대 차례: 예(지원자가 이번 단계에서 한동안 말이 없음)")
+    reacted = situation.get("reactions")
+    if reacted is None:
+        lines.append("- 내 지난 발언에 대한 반응: 이 단계에서 아직 말하지 않음")
+    else:
+        who = ", ".join(_display(p, names) for p in reacted) if reacted else "아직 없음"
+        lines.append(f"- 내 지난 발언에 대한 반응: {who}")
+    return "\n".join(lines)
+
+
+def _yes(value: Any) -> str:
+    return "예" if value else "아니요"
 
 
 def my_lines(transcript: list[dict[str, Any]], seat: str) -> list[str]:

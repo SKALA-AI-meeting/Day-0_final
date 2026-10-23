@@ -753,6 +753,8 @@ DEBATE_STATE = {
             "new_option_label": Opt(str),
             "confidence": Enum("high", "low"),
             "reservation": bool,
+            "addressed_to": [SEAT],
+            "excluded": [SEAT],
         }
     ],
     "first_spoke_at": {k: Opt(TS) for k in ("p1", "p2", "p3")},
@@ -967,7 +969,7 @@ MCP_TOOLS: dict[str, dict[str, tuple[Any, Any]]] = {
         "get_debate_state": ({"session_id": str}, {**DEBATE_STATE, "seats": [SEAT_PUBLIC]}),
         "get_transcript": (
             {"session_id": str, "since_t_min?": NUM, "phase?": PHASE, "limit?": int},
-            [{k: v for k, v in MESSAGE.items() if k != "created_at"}],
+            [{**{k: v for k, v in MESSAGE.items() if k != "created_at"}, "reply_to": Opt(str)}],
         ),
         "get_draft": (
             {"session_id": str},

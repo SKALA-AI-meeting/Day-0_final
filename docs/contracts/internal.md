@@ -49,11 +49,11 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
  "confirmed":[{"phase":"keyword","value":"물","option_id":"...","resolution":"consensus","filled_by":"candidate"}],
  "card_progress":[{"card_id":"<card_id>","locked_option_id":"...","delivered":["p1"],"trigger_message_id":"...","spoken_since_trigger":{"p1":2}}],
  "cost_left":1.79,
- "candidate_intents":[{"message_id":"...","created_at":"...","intent":"propose","target_option_id":"...","scenario_option_key":null,"new_option_label":null,"confidence":"high","reservation":false}],
+ "candidate_intents":[{"message_id":"...","created_at":"...","intent":"propose","target_option_id":"...","scenario_option_key":null,"new_option_label":null,"confidence":"high","reservation":false,"addressed_to":["p3"],"excluded":[]}],
  "first_spoke_at":{"p1":"...","p2":null,"p3":"..."}}
 ```
 
-`consensus_option_id`는 합의 판정 결과(없으면 null. 지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언일 때만 값이 있다, 아래 "의도 분류 출력 스키마"), `timeout_option_id`는 지금 마감되면 고를 안. 진행 매니저는 이 값을 그대로 쓴다. `card_progress`는 `session_cards` 행(처리가 시작된 카드)의 잠긴 기준안과 전달된 자리, 그 카드의 첫 발언(`observations.trigger_message_id`, 아직 없으면 null), 그 발언(포함)부터 같은 단계에서 AI 자리별 토론방 발언 수(`spoken_since_trigger`, 전체 기록 기준, 첫 발언이 없으면 `{}`. 진행 매니저의 압박 횟수)이고, 결정적 노드가 아직 전달되지 않은 담당 화자를 다음 run의 화자로 이어서 넣는다. `candidate_intents`는 그 단계 지원자 토론방 메시지의 저장된 의도 분류(`message_intents`, 메시지 순), `first_spoke_at`은 AI 자리별 그 단계 첫 토론방 발언 시각(없으면 null)이고, 진행 매니저가 설득 가능 규칙 횟수를 프로세스 메모리 없이 센다. **페르소나 컨텍스트에는 `card_progress`·`cost_left`·`candidate_intents`·`first_spoke_at`을 넣지 않는다**(카드 brief와 자기 입장 계획만 그 화자에게). `cost_left` = `SESSION_COST_HARD_USD`(기본 $2) − `sessions.debate_cost_usd`(리포트 비용 제외, `services/budget.py`가 계산)이고 0 이하면 페르소나는 LLM 없이 고정 안전 문구만 게시한다. 그래프 `load`는 위 필드를 걸러 낸 DebateState를 페르소나 컨텍스트에 미리 넣어 조회 도구 왕복을 줄인다.
+`consensus_option_id`는 합의 판정 결과(없으면 null. 지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언일 때만 값이 있다, 아래 "의도 분류 출력 스키마"), `timeout_option_id`는 지금 마감되면 고를 안. 진행 매니저는 이 값을 그대로 쓴다. `card_progress`는 `session_cards` 행(처리가 시작된 카드)의 잠긴 기준안과 전달된 자리, 그 카드의 첫 발언(`observations.trigger_message_id`, 아직 없으면 null), 그 발언(포함)부터 같은 단계에서 AI 자리별 토론방 발언 수(`spoken_since_trigger`, 전체 기록 기준, 첫 발언이 없으면 `{}`. 진행 매니저의 압박 횟수)이고, 결정적 노드가 아직 전달되지 않은 담당 화자를 다음 run의 화자로 이어서 넣는다. `candidate_intents`는 그 단계 지원자 토론방 메시지의 저장된 의도 분류(`message_intents`, 메시지 순, 부른 자리 `addressed_to`·뺀 자리 `excluded` 포함), `first_spoke_at`은 AI 자리별 그 단계 첫 토론방 발언 시각(없으면 null)이고, 진행 매니저가 설득 가능 규칙 횟수와 아직 답하지 않은 지명(아래 "진행 매니저 결정 스키마")을 프로세스 메모리 없이 계산한다. **페르소나 컨텍스트에는 `card_progress`·`cost_left`·`candidate_intents`·`first_spoke_at`을 넣지 않는다**(카드 brief와 자기 입장 계획만 그 화자에게). `cost_left` = `SESSION_COST_HARD_USD`(기본 $2) − `sessions.debate_cost_usd`(리포트 비용 제외, `services/budget.py`가 계산)이고 0 이하면 페르소나는 LLM 없이 고정 안전 문구만 게시한다. 그래프 `load`는 위 필드를 걸러 낸 DebateState를 페르소나 컨텍스트에 미리 넣어 조회 도구 왕복을 줄인다.
 
 ### Contributions
 
@@ -177,13 +177,16 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 
 ## 진행 매니저 결정 스키마
 
-토론 그래프 `turn` 노드의 출력. `agent_runs.decision`에 저장한다(관측·테스트용).
+토론 그래프 `turn` 노드의 출력. `agent_runs.decision`에 저장한다(관측·테스트용). 진행 매니저는 누가 어떤 메시지에 답할지와 그 자리의 차례(카드·침묵 초대)만 정하고, 무엇을 어떻게 말할지(발언 목적·대상 안)는 정하지 않는다(결정 C1).
 
 ```json
-{"stimulus": "message", "generation": 12, "speakers": [{"seat": "p1", "purpose": "push_option", "option_id": "...", "card_ids": []}], "fill": null, "invite": false, "llm_used": false, "dropped_seats": [], "reason": "지원자가 p1의 안에 반대함"}
+{"stimulus": "message", "generation": 12, "speakers": [{"seat": "p1", "reply_to": "<지원자 메시지 id>", "card_ids": [], "invite": false}], "fill": null, "invite": false, "llm_used": false, "queued": [{"seat": "p3", "message_id": "<지원자 메시지 id>"}], "dropped_seats": [], "reason": "지원자가 이름을 부름"}
 ```
 
-- `purpose`: `respond`(지원자에게 답) ∣ `push_option`(자기 고정 안 주장) ∣ `react`(다른 동료 발언에 반응) ∣ `invite`(침묵 초대) ∣ `card`(카드가 정한 발언. 이전 run에서 전달되지 않은 카드 화자를 이어서 포함). `card_ids`는 그 발언이 전달하는 카드 id 배열(카드 발언이 아니면 []).
-- `speakers`는 0~2명이고 일반 발언 루프(respond → apply)를 탄다. 합의 채우기 공지 화자는 `speakers`에 넣지 않는다.
+- `reply_to`: 그 화자가 답하는 메시지 id 또는 null(답할 메시지 없이 말을 꺼냄: 단계 시작 첫 화자·카드 시각·침묵 초대). 지원자 메시지 자극이면 그 자리를 부른 지원자 메시지(아직 답하지 않은 앞 메시지일 수 있음), 아니면 이번 지원자 메시지다. 지원자 메시지가 아닌 자극의 둘째 화자(침묵 초대 제외)는 같은 run에서 첫 화자가 게시한 발언에 답하며, 그 id는 게시 뒤 채워 저장한다. 게시한 발언의 `messages.meta.reply_to`에도 같은 값을, `meta.named`에 답한 메시지가 이 자리를 부른 지원자 메시지였는지를 남긴다.
+- `card_ids`: 그 발언이 전달하는 카드 id 배열(카드 발언이 아니면 [], 이전 run에서 전달되지 않은 카드 화자 포함). `invite`: 침묵 초대 발언이면 true(`post_message.is_invite`).
+- `queued`: 화자 상한(2명)을 넘어 이번 run에서 답하지 못한 지명 `{seat, message_id}`. 저장된 값은 관측용이고, 다음 run은 이 값이 아니라 메시지 기록(지원자 메시지의 부른 자리와 AI 발언의 `reply_to`)에서 아직 답하지 않은 지명을 다시 계산해 먼저 답한다.
+- `speakers`는 0~2명이고 일반 발언 루프(respond → apply)를 탄다. 합의 채우기 공지 화자는 `speakers`에 넣지 않는다. 지원자 메시지 자극에는 합의 채우기 run이 아니면 그 메시지에 답하는 화자가 최소 1명이다(화자 상한이 앞 메시지의 지명으로 찬 경우 제외).
+- 이전 결정 행에는 `purpose`(`respond`∣`push_option`∣`react`∣`invite`∣`card`)·`option_id`가 있고 `reply_to`·`invite`·`queued`가 없다. 읽는 쪽은 `card_ids`로 카드 발언을 가른다.
 - `fill`은 `{option_id, seat}`(합의 채우기만, seat = 공지·채우는 자리) 또는 null. `fill` 노드의 `announce_fill` 분기가 이 값으로 `fill_slot{option_id, seat, content, run_id}`를 한 번 불러 칸 확정과 공지를 함께 저장한다([세션 생명주기](../architecture/session-lifecycle.md) "합의 채우기"). 이 값은 load 때 읽은 합의로만 정한다. 이번 run의 AI 발언으로 지지가 바뀌어도 같은 run에서 다시 판정하지 않는다(이후 run이 다시 본다).
-- 규칙 결과가 0명이고 자극이 `message`일 때만 턴 LLM(`MODEL_TURN`)을 부른다(`llm_used`). 나머지 자극은 규칙만.
+- 자극이 `message`이고 규칙으로 그 메시지에 답할 화자가 정해지지 않았으며 자리가 남았을 때만 턴 LLM(`MODEL_TURN`)을 부른다(`llm_used`). 턴 LLM은 답할 자리만 고르고(`{"speakers": [{"seat"}], "reason"}`, 예전 출력의 `purpose`·`option_id`는 읽지 않음), 실패하거나 0명이면 기본 응답 자리가 답한다. 나머지 자극은 규칙만.

@@ -97,7 +97,9 @@
             "scenario_option_key": null,
             "new_option_label": null,
             "confidence": "high",
-            "reservation": false
+            "reservation": false,
+            "addressed_to": [],
+            "excluded": []
           }
         ],
         "first_spoke_at": {
@@ -141,7 +143,8 @@
           "content": "문제 상황 단계예요. 물과 관련된 문제 상황 하나를 정해 주세요. 이 단계 19분 남았어요. 자료 탭이 열렸어요.",
           "phase": "problem",
           "is_invite": false,
-          "t_min": 8.2
+          "t_min": 8.2,
+          "reply_to": null
         },
         {
           "id": "m-11",
@@ -149,7 +152,8 @@
           "content": "자료 탭에 물 부족 통계랑 침수 사례가 열렸네요. 먼저 같이 보죠.",
           "phase": "problem",
           "is_invite": false,
-          "t_min": 9.0
+          "t_min": 9.0,
+          "reply_to": null
         },
         {
           "id": "m-12",
@@ -157,7 +161,8 @@
           "content": "저는 가뭄으로 생활용수 제한이 잦아지는 문제가 제일 크다고 봐요. 통계를 보면 제한 일수가 매년 늘고 있어요.",
           "phase": "problem",
           "is_invite": false,
-          "t_min": 10.5
+          "t_min": 10.5,
+          "reply_to": null
         },
         {
           "id": "m-13",
@@ -165,7 +170,8 @@
           "content": "도심 폭우·침수 피해가 핵심이에요. 가뭄은 핵심이 아니에요. 침수는 해마다 피해액이 커지고 있어요.",
           "phase": "problem",
           "is_invite": false,
-          "t_min": 11.2
+          "t_min": 11.2,
+          "reply_to": null
         },
         {
           "id": "m-14",
@@ -173,7 +179,8 @@
           "content": "저도 도심 침수 쪽이 더 급하다고 봐요. 피해 사례가 훨씬 구체적이에요.",
           "phase": "problem",
           "is_invite": false,
-          "t_min": 11.6
+          "t_min": 11.6,
+          "reply_to": null
         },
         {
           "id": "m-15",
@@ -181,7 +188,8 @@
           "content": "침수도 중요하지만 가뭄은 생활 전체에 영향을 줘서 우선순위가 더 높다고 생각해요.",
           "phase": "problem",
           "is_invite": false,
-          "t_min": 13.0
+          "t_min": 13.0,
+          "reply_to": null
         },
         {
           "id": "m-16",
@@ -189,7 +197,8 @@
           "content": "그건 핵심이 아니에요. 침수 피해액이 더 크다니까요.",
           "phase": "problem",
           "is_invite": false,
-          "t_min": 13.8
+          "t_min": 13.8,
+          "reply_to": null
         }
       ]
     },

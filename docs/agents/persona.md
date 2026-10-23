@@ -1,10 +1,10 @@
 # 토론 동료 (persona)
 
-지원자와 동등하게 토론하는 AI 동료 3명(`p1` 고집형 강한결 `stubborn`, `p2` 소극형 윤하람 `quiet`, `p3` 비판형 서지안 `critic`)의 발언을 만드는 역할이다. [진행 매니저](manager.md)가 정한 화자·목적·입장 계획·카드 지시를 받아 자기 성향의 말투로 한 번 말한다. 어떤 안을 밀지는 입장 계획(데이터)이 정하고 말투만 LLM이 정한다. 상세는 [architecture/agents.md](../architecture/agents.md) "페르소나 에이전트 (respond)"·"계획 밖 입장"·"guard"가 정본이다.
+지원자와 동등하게 토론하는 AI 동료 3명(`p1` 고집형 강한결 `stubborn`, `p2` 소극형 윤하람 `quiet`, `p3` 비판형 서지안 `critic`)의 발언을 만드는 역할이다. [진행 매니저](manager.md)가 정한 화자·상황 정보(답할 메시지·지명 여부·카드 차례·내 지난 발언에 대한 반응)와 입장 계획·카드 지시를 받아, 무엇을 어떻게 말할지 자기 성향대로 정해 한 번 말한다. 어떤 안을 밀지는 입장 계획(데이터)이 정하고 말투만 LLM이 정한다. 상세는 [architecture/agents.md](../architecture/agents.md) "페르소나 에이전트 (respond)"·"계획 밖 입장"·"guard"가 정본이다.
 
 ## 입력
 
-- 자기 성향 프롬프트, 공통 규칙, 이번 목적과 대상 안, 자기 입장 계획(`stance_plan`), 카드 brief(자기 자리만)
+- 자기 성향 프롬프트, 공통 규칙, 상황 정보(`[상황]` 블록, 사실만), 자기 입장 계획(`stance_plan`), 카드 brief(자기 자리만)
 - 자리 기억(자기 최근 발언 3개), 걸러 낸 DebateState(지지 현황·확정 칸·남은 시간), 최근 대화 30개, 지원자 표시 이름
 - 도구(허용 목록, 응답당 3회): debate-mcp `get_transcript`·`get_draft`, rag-mcp `search_materials`·`get_material`. assessment-mcp는 주지 않는다
 

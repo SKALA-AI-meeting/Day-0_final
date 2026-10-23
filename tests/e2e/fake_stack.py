@@ -588,6 +588,7 @@ class FakeStack:
             "fill": extra.get("fill"),
             "invite": extra.get("invite", False),
             "llm_used": False,
+            "queued": [],
             "dropped_seats": [],
             "reason": "fake",
         }
@@ -1057,7 +1058,7 @@ class FakeStack:
                 s,
                 "message",
                 [
-                    {"seat": seat, "purpose": "respond", "option_id": None, "card_ids": []}
+                    {"seat": seat, "reply_to": message["id"], "card_ids": [], "invite": False}
                     for seat in speakers
                 ],
             )
@@ -1249,7 +1250,7 @@ class FakeStack:
                     self.run_record(
                         s,
                         "idle",
-                        [{"seat": "p3", "purpose": "invite", "option_id": None, "card_ids": []}],
+                        [{"seat": "p3", "reply_to": None, "card_ids": [], "invite": True}],
                         invite=True,
                     )
                 )
@@ -1298,7 +1299,7 @@ class FakeStack:
             )
             self.observe(s, card_id, m["id"])
             s.delivered.setdefault(card_id, set()).add(seat)
-            speakers = [{"seat": seat, "purpose": "card", "option_id": None, "card_ids": [card_id]}]
+            speakers = [{"seat": seat, "reply_to": None, "card_ids": [card_id], "invite": False}]
         elif card_id in ("flexibility_majority", "listening_pressure"):
             lead = self.lock_lead(s)
             m1 = self.speak(
@@ -1319,15 +1320,15 @@ class FakeStack:
             speakers = [
                 {
                     "seat": "p1",
-                    "purpose": "card",
-                    "option_id": lead["id"],
+                    "reply_to": None,
                     "card_ids": ["flexibility_majority", "listening_pressure"],
+                    "invite": False,
                 },
                 {
                     "seat": "p3",
-                    "purpose": "card",
-                    "option_id": lead["id"],
+                    "reply_to": m1["id"],
                     "card_ids": ["flexibility_majority"],
+                    "invite": False,
                 },
             ]
         elif card_id == "inclusion_silence":
@@ -1339,7 +1340,7 @@ class FakeStack:
             )
             self.observe(s, card_id, m["id"])
             s.delivered.setdefault(card_id, set()).add("p2")
-            speakers = [{"seat": "p2", "purpose": "card", "option_id": None, "card_ids": [card_id]}]
+            speakers = [{"seat": "p2", "reply_to": None, "card_ids": [card_id], "invite": False}]
         elif card_id == "persuasion_solution":
             support = s.stances["solution"].get("candidate")
             mine = next((o["key"] for o in s.options if o["id"] == support), None)
@@ -1353,9 +1354,7 @@ class FakeStack:
             )
             self.observe(s, card_id, m["id"])
             s.delivered.setdefault(card_id, set()).add(seat)
-            speakers = [
-                {"seat": seat, "purpose": "card", "option_id": option["id"], "card_ids": [card_id]}
-            ]
+            speakers = [{"seat": seat, "reply_to": None, "card_ids": [card_id], "invite": False}]
         s.agent_runs.append(self.run_record(s, "card_due", speakers))
         self.try_fill(s, phase)
 
