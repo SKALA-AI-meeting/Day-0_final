@@ -25,7 +25,13 @@ const SEAT: Record<AvatarSeat, string> = {
   candidate: "bg-seat-candidate",
 };
 
-const SIZE = { 20: "size-5 text-[10px]", 28: "size-7 text-xs", 36: "size-9 text-sm" } as const;
+const SIZE = {
+  20: "size-5 text-[10px]",
+  28: "size-7 text-xs",
+  36: "size-9 text-sm",
+  // 부모 크기를 채운다(크기가 바뀌는 프로필 카드). 글자 크기는 부모가 정한다
+  fill: "size-full",
+} as const;
 
 /** 이름의 첫 글자(문자 단위). 별칭이 비어 있으면 "?" */
 export function initial(name: string) {
@@ -54,7 +60,7 @@ export type AvatarProps = {
   seat?: AvatarSeat;
   /** 프로필 이미지(avatar_url). 없거나 로드 실패면 같은 크기 이니셜 */
   src?: string | null;
-  size?: 20 | 28 | 36;
+  size?: keyof typeof SIZE;
   online?: boolean;
   /** 화면 낭독용 이름 */
   name?: string;

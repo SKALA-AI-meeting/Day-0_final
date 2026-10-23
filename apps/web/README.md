@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 69개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 82개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -194,6 +194,21 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
+<details><summary><code>components/debate/speech.test.ts</code> (1)</summary>
+
+- 음성을 ${FAIL_LIMIT}번 연달아 받지 못하면 AI 동료 음성을 끄고 더 요청하지 않는다
+
+</details>
+
+<details><summary><code>components/debate/stage-layout.test.ts</code> (4)</summary>
+
+- 세션 첫 화면은 프로필 카드만 크게 보이고, 지원자 차례가 오면 토론방이 결정 사항과 함께 열린다
+- 자료가 열리면 결정 사항 아래에 자료·AI 어시스턴트 묶음이 생긴다
+- 기획안 단계는 오른쪽 위가 기획안으로 바뀌고 단계 안내가 왼쪽 아래에 남는다
+- 상단 바에서 직접 켜거나 끈 영역은 자동 판단보다 앞서고, 인사 화면에서는 무시된다
+
+</details>
+
 <details><summary><code>components/debate/voice/caption.test.ts</code> (2)</summary>
 
 - 문장 끝 뒤 공백에서 나누고 빈 문장은 버린다
@@ -216,6 +231,19 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
+<details><summary><code>components/debate/voice-fallback.test.ts</code> (2)</summary>
+
+- 글자 변환은 앞이 실패하면 다음으로 넘어가고, 모두 실패하면 오류를 낸다
+- 글자 변환이 ${FAIL_LIMIT}번 연달아 실패하면 말하기를 끄고 다시 시작하지 않는다
+
+</details>
+
+<details><summary><code>components/debate/voice.test.ts</code> (1)</summary>
+
+- 마이크 소리 크기: 무음은 0, 큰 소리는 1로 자르고, 빠르게 오르고 천천히 내려온다
+
+</details>
+
 <details><summary><code>components/debate/wording.test.ts</code> (3)</summary>
 
 - 디브리핑 전 지원자 화면·mock에 페르소나 유형 이름이 없다
@@ -229,6 +257,14 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - 계산식 확인: 흰색·검정 21:1, 다크 accent(#2997FF) 위 흰 글자는 AA 미달
 - 인쇄 블록은 다크 테마에서도 라이트 글자색(ink)을 흰 종이 위에 둔다
 - 시스템 다크(:root:not(.light))와 강제 다크(:root.dark) 값이 같다
+
+</details>
+
+<details><summary><code>components/ui/split-layout.test.ts</code> (3)</summary>
+
+- 사용자 비율은 보이는 칸 구성과 구간(epoch)이 같을 때만 기본 비율을 덮는다
+- 경계를 끌면 두 칸의 합은 그대로이고 최소 크기 밑으로 줄지 않는다
+- 사용자가 끈 분할의 칸은 fit·square 대신 비율로 나뉜다
 
 </details>
 
@@ -265,6 +301,13 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 - outcome이 표시를 정한다
 - outcome이 없으면 timeout만 시간 초과이고 나머지는 라벨이 없다
+
+</details>
+
+<details><summary><code>lib/voice-server.test.ts</code> (2)</summary>
+
+- 음성 모델 키 규칙: 음성 두 모델과 gpt-4o-mini는 제한 키, 그 밖의 gpt-*는 개인 키, 비면 멈춘다
+- VOICE_API=1이 아니면 음성 라우트는 닫혀 있다
 
 </details>
 
@@ -340,3 +383,14 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - [`docs/product/user-flows.md`](../../docs/product/user-flows.md): 화면 흐름
 - [`docs/contracts/ws.md`](../../docs/contracts/ws.md): WebSocket 계약
 - [`docs/guides/testing.md`](../../docs/guides/testing.md): 테스트 종류와 실행법
+
+## 토론 화면 배치와 음성 입출력(시험)
+
+토론 화면(`components/debate/debate-view.tsx`)은 크기를 바꿀 수 있는 분할 레이아웃이다. 위 문서들의 "우측 탭" 설명은 이 배치로 바뀌는 중이며, 바뀐 결정과 남은 문서 정리는 PR에서 다룬다.
+
+- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 토론방이 가운데에 열린다. 왼쪽은 프로필(누르면 이름과 이번 단계에서 한 말)·음성 패널·단계 안내, 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
+- 크기 조절: 영역 사이 경계를 끌거나 화살표 키로 바꾸고, 두 번 누르면 원래대로 돌아간다. 엔진은 `components/ui/split-layout.tsx`, 단계별 규칙은 `components/debate/stage-layout.ts`.
+- 말하기(STT): 입력창 옆 마이크로 녹음하면 글자로 바뀌어 입력창에 들어가고, 지원자가 고쳐서 보낸다. 녹음은 저장하지 않는다. 녹음 중에는 typing을 보내지 않는다(계약 그대로).
+- AI 동료 음성(TTS): 음성 패널에서 켜면 새로 온 AI 동료 메시지를 읽고, 읽는 동료를 프로필에서 강조한다. 목소리는 자리별로 고정하고 말투 지시는 세 명 모두 같다.
+- 대체 순서: 글자 변환은 웹 서버 라우트 → mock 예시 문장 → 없음 순서로 쓴다. 서버 음성 기능이 없거나(`/api/voice/status`) 2번 연달아 실패하면 그 화면에서 말하기·AI 동료 음성을 끄고 글자로만 진행한다. 플래그가 없으면 음성 UI는 보이지 않고 기존 화면과 같게 동작한다.
+- 켜는 법(개발용): `NEXT_PUBLIC_VOICE_API=1`(화면), `VOICE_API=1`(서버 라우트 `/api/voice/transcribe`·`/api/voice/speech`). 모델은 `MODEL_STT`(기본 `gpt-4o-mini-transcribe`)·`MODEL_TTS`(기본 `gpt-4o-mini-tts`), 키 선택은 `lib/voice-server.ts`의 `voiceKey`.

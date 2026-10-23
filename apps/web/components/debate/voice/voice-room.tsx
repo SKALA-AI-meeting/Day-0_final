@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_URL, api } from "@/lib/api";
-import { Avatar, Button } from "@/components/ui";
-import { ChatRoom } from "../chat";
-import type { StateSnapshot } from "../types";
+import { Button } from "@/components/ui";
+import type { Seat, StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
 import { sentences, spokenCount } from "./caption";
 import { finishOnce, normalize } from "./recorder";
@@ -56,12 +55,12 @@ function thinkLeft(snap: VoiceSnapshot): number {
   return Math.max(0, (Date.parse(snap.think_deadline_at) - Date.parse(snap.server_now)) / 1000);
 }
 const SEATS = new Set(["p1", "p2", "p3"]);
+const CANDIDATE_STATES = new Set(["USER_READY", "USER_SPEAKING", "TRANSCRIBING", "PROCESSING"]);
 // 음성 상태 확인 주기(ms). 평소 750(계약 docs/contracts/voice.md), 기다리는 상태에서는 250.
 // 작게 하면 준비된 발언을 더 빨리 알지만 서버 요청이 늘어난다(세션당 초당 4회).
 const POLL_MS = 750;
 const WAITING_POLL_MS = 250;
 const WAITING_STATES = new Set(["AI_GENERATING", "TRANSCRIBING", "PROCESSING"]);
-const noop = () => {};
 type Props = {
   auth: SessionAuth;
   snap: StateSnapshot;
@@ -79,7 +78,8 @@ const LABEL: Record<string, string> = {
   PROCESSING: "발언을 제출하고 있어요",
 };
 
-export function VoiceRoom(props: Props) {
+/** 음성 토론의 차례·녹음·재생·확인 동작. 화면 조각과 상태를 돌려주고, 배치는 토론 화면(debate-view)이 정한다. */
+export function useVoiceTurn(props: Props) {
   const latest = useRef(props);
   useEffect(() => {
     latest.current = props;
@@ -526,104 +526,75 @@ export function VoiceRoom(props: Props) {
     };
   }, [props.snap, heardIds, speaking]);
 
-  return (
-    <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="음성 회의">
-      <div className="flex shrink-0 flex-col items-center gap-4 p-5">
-        <p role="status" className="text-title3 font-semibold">
-          {props.locked
-            ? "토론이 종료됐어요"
-            : review
-              ? "받아 적은 내용을 확인해 주세요"
-              : LABEL[voice?.state ?? "AI_GENERATING"]}
-        </p>
-        <div className="grid w-full max-w-3xl grid-cols-4 gap-3">
-          {props.snap.participants.map((person) => (
-            <div
-              key={person.id}
-              className={`rounded-2xl border p-3 text-center ${active === person.id || (person.id === "candidate" && voice?.state === "USER_SPEAKING") ? "border-accent bg-accent/10" : "border-line bg-surface"}`}
-            >
-              <Avatar
-                name={person.display_name}
-                src={person.avatar_url}
-                seat={person.id}
-                size={36}
-                className="mx-auto mb-2 !h-12 !w-12 text-title3"
-              />
-              <p className="font-semibold">
-                {person.display_name}
-                {person.id === "candidate" ? " (나)" : ""}
-              </p>
-              <p className="text-footnote text-muted">
-                {active === person.id
-                  ? "발언 중"
-                  : person.id === "candidate" && voice?.state === "USER_SPEAKING"
-                    ? "마이크 켜짐"
-                    : "대기"}
-              </p>
-            </div>
-          ))}
-        </div>
-        {!props.locked &&
-          !error &&
-          voice?.state === "USER_READY" &&
-          !voice.blocked_reason &&
-          thinkLeft(voice) > 0 && (
-            <div className="flex flex-col items-center gap-3">
-              <p className="tabular-nums">생각할 시간 {Math.ceil(thinkLeft(voice))}초</p>
-              <Button disabled={!props.connected} onClick={() => void record(voice)}>
-                지금 발언하기
+  // 음성 칸(중범 님 분할 레이아웃의 voice 칸)에 들어갈 조작부. 프로필 강조·대화 기록은 토론 화면이 그린다.
+  const controls = (
+    <section aria-label="음성 회의" className="flex flex-col items-stretch gap-3">
+      <p role="status" className="text-callout font-semibold">
+        {props.locked
+          ? "토론이 종료됐어요"
+          : review
+            ? "받아 적은 내용을 확인해 주세요"
+            : LABEL[voice?.state ?? "AI_GENERATING"]}
+      </p>
+      {!props.locked &&
+        !error &&
+        voice?.state === "USER_READY" &&
+        !voice.blocked_reason &&
+        thinkLeft(voice) > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="tabular-nums">생각할 시간 {Math.ceil(thinkLeft(voice))}초</p>
+            <Button disabled={!props.connected} onClick={() => void record(voice)}>
+              지금 발언하기
+            </Button>
+            <p className="text-footnote text-muted">시간이 끝나면 녹음이 자동으로 시작돼요</p>
+          </div>
+        )}
+      {review && voice && (
+        <div className="flex flex-col gap-2">
+          <p className="rounded-xl border border-line bg-surface p-3">{review.transcript}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => submitNow(review.id)}>이대로 제출</Button>
+            {!voice.rerecorded && (
+              <Button variant="secondary" onClick={() => void rerecord(voice, review.id)}>
+                다시 녹음 (1회)
               </Button>
-              <p className="text-footnote text-muted">시간이 끝나면 녹음이 자동으로 시작돼요</p>
-            </div>
-          )}
-        {review && voice && (
-          <div className="flex w-full max-w-2xl flex-col items-center gap-3">
-            <p className="w-full rounded-xl border border-line bg-surface p-4 text-center">
-              {review.transcript}
-            </p>
-            <div className="flex gap-2">
-              <Button onClick={() => submitNow(review.id)}>이대로 제출</Button>
-              {!voice.rerecorded && (
-                <Button variant="secondary" onClick={() => void rerecord(voice, review.id)}>
-                  다시 녹음 (1회)
-                </Button>
-              )}
-            </div>
-            <p className="text-footnote text-muted tabular-nums">
-              {Math.ceil(confirmLeft(voice))}초 뒤 자동으로 제출돼요
-            </p>
+            )}
           </div>
-        )}
-        {!props.locked && voice?.state === "USER_SPEAKING" && (
-          <div className="flex flex-col items-center gap-3">
-            <p className="tabular-nums">내 발언 {remaining}초 남음</p>
-            <meter min={0} max={100} value={level} aria-label="마이크 입력 음량" />
-            <Button onClick={() => finish.current()}>발언 완료</Button>
-            <p className="text-footnote text-muted">시간이 끝나면 자동으로 제출해요</p>
-          </div>
-        )}
-        {error && (
-          <p role="alert" className="max-w-md text-center text-warning">
-            {error}
+          <p className="text-footnote text-muted tabular-nums">
+            {Math.ceil(confirmLeft(voice))}초 뒤 자동으로 제출돼요
           </p>
-        )}
-        {(!enabled || error || voice?.blocked_reason) && !props.locked && (
-          <Button disabled={!props.connected} onClick={() => void resume()}>
-            {enabled ? "다시 시도 / 발언 시작" : "음성 참여 시작"}
-          </Button>
-        )}
-      </div>
-      <div className="flex min-h-0 flex-1 border-t border-line">
-        <ChatRoom
-          snap={heard}
-          pending={[]}
-          typing={[]}
-          locked={props.locked}
-          readOnly
-          onSend={noop}
-          onTyping={noop}
-        />
-      </div>
+        </div>
+      )}
+      {!props.locked && voice?.state === "USER_SPEAKING" && (
+        <div className="flex flex-col gap-2">
+          <p className="tabular-nums">내 발언 {remaining}초 남음</p>
+          <meter min={0} max={100} value={level} aria-label="마이크 입력 음량" />
+          <Button onClick={() => finish.current()}>발언 완료</Button>
+          <p className="text-footnote text-muted">시간이 끝나면 자동으로 제출해요</p>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="text-warning">
+          {error}
+        </p>
+      )}
+      {(!enabled || error || voice?.blocked_reason) && !props.locked && (
+        <Button disabled={!props.connected} onClick={() => void resume()}>
+          {enabled ? "다시 시도 / 발언 시작" : "음성 참여 시작"}
+        </Button>
+      )}
     </section>
   );
+
+  return {
+    /** 음성 칸에 넣을 조작부 */
+    controls,
+    /** 지금 목소리가 나오는 동료 자리(프로필 강조용) */
+    speakingSeat: active as Seat | null,
+    /** 들은 만큼만 보이는 대화(토론방용) */
+    chatSnap: heard,
+    /** 지원자 차례가 한 번이라도 왔는지·지금 녹음 중인지(칸 펼치기·프로필 강조용) */
+    candidateTurn: !!voice && CANDIDATE_STATES.has(voice.state),
+    recording: voice?.state === "USER_SPEAKING",
+  };
 }

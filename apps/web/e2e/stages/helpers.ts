@@ -110,8 +110,31 @@ export async function say(page: Page, text: string): Promise<void> {
     .toBeTruthy();
 }
 
+/** 인사 화면(프로필 카드만 크게)이면 [바로 대화하기]로 토론방을 연다 */
+export async function enterRoom(page: Page): Promise<void> {
+  const skip = page.getByRole("button", { name: "바로 대화하기" });
+  if (await skip.isVisible()) await skip.click();
+  await expect(room(page)).toBeVisible();
+}
+
+const LIBRARY = "자료·AI 어시스턴트";
+
+/**
+ * 오른쪽 영역(결정 사항·기획안, 자료·AI 어시스턴트 묶음)이 숨어 있으면 상단 바에서 켜고,
+ * 제목(묶음은 그 탭)을 눌러 안 읽음 배지를 지운다
+ */
 export async function tab(page: Page, label: string): Promise<void> {
-  await page.getByRole("tab", { name: new RegExp(label) }).click();
+  const inLibrary = label === "자료" || label === "AI 어시스턴트";
+  const area = inLibrary ? LIBRARY : label;
+  const region = page.getByRole("region", { name: area, exact: true });
+  if (!(await region.isVisible())) {
+    await page
+      .getByRole("group", { name: "영역 보이기" })
+      .getByRole("button", { name: area })
+      .click();
+  }
+  if (inLibrary) await region.getByRole("tab", { name: label }).click();
+  else await region.getByRole("heading", { name: label }).click();
 }
 
 /** 토론방(말풍선 영역) */

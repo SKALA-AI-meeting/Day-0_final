@@ -63,9 +63,10 @@ export function MockControls({ token }: { token: string }) {
     window.location.assign(url.toString());
   };
   return (
+    // Next.js 개발 표시(왼쪽 아래 N, 20px 띄움·36px)와 겹치지 않게 그 오른쪽에 둔다
     <div
       data-mock-controls
-      className="no-print fixed bottom-2 left-2 z-[70] max-w-[340px] rounded-md border border-[#d1d5db] bg-[#f9fafb]/95 p-1.5 font-sans text-[11px] text-[#111827] shadow-sm"
+      className="no-print fixed bottom-5 left-16 z-[70] max-w-[340px] rounded-md border border-[#d1d5db] bg-[#f9fafb]/95 p-1.5 font-sans text-[11px] text-[#111827] shadow-sm"
     >
       <button type="button" onClick={() => setOpen((v) => !v)} className="px-1 font-semibold">
         mock 조작 {open ? "▾" : "▸"}
