@@ -5,7 +5,7 @@
 ## 입력
 
 - 자극 `{type, phase, generation, message_id?, card_id?}`([architecture/agents.md](../architecture/agents.md) "AgentRunner 인터페이스")
-- DebateState(debate-mcp `get_debate_state`: 지지 현황·안·칸·카드 진행·남은 시간), 최근 대화 30개
+- DebateState(debate-mcp `get_debate_state`: 지지 현황·안·칸·카드 진행·남은 시간), 최근 대화(진행 매니저 LLM에는 마지막 10개)
 - 지원자 메시지의 의도 분류 결과([의도 분류](intent.md): 대상 안·`addressed_to`)
 - 채용 건에 고정된 카탈로그 복사본(`positions.scenario`)
 
