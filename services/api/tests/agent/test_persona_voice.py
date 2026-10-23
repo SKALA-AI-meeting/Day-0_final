@@ -15,9 +15,13 @@ def block(text: str, name: str) -> str:
     return found.group(1) if found else ""
 
 
-def quote_llm(*verdicts: str) -> FakeLLM:
+def quote_llm(*verdicts: str, span: str = "김지원님") -> FakeLLM:
+    """판정 행의 span은 초안에 있어야 센다(없으면 코드가 버린다)."""
     return FakeLLM(
-        [{"attributions": [{"target": "candidate", "claim": "x", "verdict": v}]} for v in verdicts]
+        [
+            {"attributions": [{"target": "candidate", "span": span, "claim": "x", "verdict": v}]}
+            for v in verdicts
+        ]
     )
 
 
@@ -222,10 +226,21 @@ async def test_quote_check_uses_full_phase_history_not_the_window(harness):
 
 async def test_quote_check_covers_unnamed_attribution_to_the_candidate(harness):
     h = harness("keyword", persona=[say("아까 그렇게 말씀하셨죠. 그래도 불이에요.")])
-    h.runner.llms.quote = quote_llm("supported")
+    h.runner.llms.quote = quote_llm("supported", span="아까 그렇게 말씀하셨죠")
     mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
     await h.run("message", message_id=mid)
     assert len(h.runner.llms.quote.calls) == 1  # 이름이 없어도 지원자에 답하는 발언은 검사
+
+
+async def test_quote_check_drops_rows_whose_span_is_not_in_the_draft(harness):
+    """판정이 초안 자신의 주장을 귀속으로 읽으면(span이 초안에 없음) 코드가 버리고 게시한다."""
+    h = harness("keyword", persona=[say("김지원님, 저는 그래도 불이에요.")])
+    h.runner.llms.quote = quote_llm("not_found", span="지원자가 물이 좋다고 했다")
+    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
+    await h.run("message", message_id=mid)
+    post = h.posted("p1")[0]
+    assert post["content"] == "김지원님, 저는 그래도 불이에요."
+    assert post["meta"]["quote_check"] == "pass" and len(h.persona.calls) == 1
 
 
 async def test_quote_check_is_skipped_without_targets(harness):

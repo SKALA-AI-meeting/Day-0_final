@@ -50,14 +50,19 @@ OUTPUT_RULE = (
 )
 # 인용 대조(quote_check): 코드가 모은 출처(그 사람의 이 단계 발언·입장 기록)로 LLM이 판단한다
 QUOTE_SYSTEM = (
-    "토론 발언 초안이 다른 참여자의 말이나 입장을 그 사람 것으로 돌린 부분(이름을 붙였든 "
-    '"아까 그렇게 말씀하셨죠"처럼 붙이지 않았든)을 찾고, 출처(그 사람이 이 단계에서 실제로 한 '
-    "발언과 기록된 입장)와 맞는지 판단한다. 출력은 JSON 객체 하나: "
-    '{"attributions": [{"target": "자리 id 또는 candidate", "claim": "돌린 내용", '
-    '"verdict": "supported" | "contradicted" | "not_found"}]}. '
-    "supported는 출처에 같은 뜻의 말이나 입장이 있을 때, contradicted는 출처의 말·입장과 반대일 "
-    "때, not_found는 출처에 없을 때다. 초안 자신의 주장이나 질문은 넣지 않는다. "
-    "돌린 부분이 없으면 빈 목록이다."
+    "토론 발언 초안에서 다른 참여자가 이미 한 말이나 밝힌 입장을 **그 사람이 그렇게 말했다·"
+    "생각한다·동의했다·제안했다고 전하는 부분**(귀속)만 찾는다. "
+    '예: "OO님이 침수가 급하다고 하셨죠", "OO님 말씀처럼 비용이 문제라면", '
+    '"OO님도 동의하셨잖아요", "아까 그렇게 말씀하셨죠". '
+    "다음은 귀속이 아니므로 절대 넣지 않는다: 초안 자신의 주장·근거·반박, 상대에게 묻는 질문, "
+    '호칭("OO님,"), 상대 의견에 대한 평가("일리가 있어요"), 일반 설명. '
+    "귀속마다 초안에서 그 부분을 글자 그대로 복사한 `span`, 전한 내용 `claim`, 출처(그 사람이 "
+    "이 단계에서 실제로 한 발언과 기록된 입장)와 대조한 `verdict`를 낸다: supported는 출처에 같은 "
+    "뜻의 말이나 입장이 있을 때(표현이 달라도 됨), contradicted는 출처의 말·입장과 반대일 때, "
+    "not_found는 출처에 없을 때다. 출력은 JSON 객체 하나: "
+    '{"attributions": [{"target": "자리 id 또는 candidate", "span": "초안 원문 일부", '
+    '"claim": "전한 내용", "verdict": "supported" | "contradicted" | "not_found"}]}. '
+    "귀속이 없으면 빈 목록이다."
 )
 QUOTE_SCHEMA = {
     "type": "object",
@@ -68,13 +73,14 @@ QUOTE_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "target": {"type": "string"},
+                    "span": {"type": "string"},
                     "claim": {"type": "string"},
                     "verdict": {
                         "type": "string",
                         "enum": ["supported", "contradicted", "not_found"],
                     },
                 },
-                "required": ["target", "claim", "verdict"],
+                "required": ["target", "span", "claim", "verdict"],
                 "additionalProperties": False,
             },
         }
@@ -383,13 +389,16 @@ def plan_violation(draft: Draft, plan: StancePlan, ds: dict[str, Any]) -> str | 
     return None
 
 
-def sentence_violation(judged: dict[str, Any] | None, plan: StancePlan) -> str | None:
+def sentence_violation(
+    judged: dict[str, Any] | None, plan: StancePlan, draft: Draft | None = None
+) -> str | None:
     """문장 판정(의도 분류 형식)이 기록될 입장과 다른 **명시적 지지 이동**을 말하는지(C2).
 
-    거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(propose·agree), 자기 안 철회(oppose·
-    withhold), 입장이 없어야 할 때의 안 지지뿐이다. 유보가 든 동의("그 말도 맞지만…")·low·질문·
-    되짚기는 통과한다. 게시 문장과 저장 입장이 갈라지지 않게 구조화 stance가 자기 안 support여도
-    문장이 다른 안을 지지하면 거부한다.
+    거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(propose·agree), 구조화 stance가 없을 때의
+    자기 안 철회(oppose·withhold), 입장이 없어야 할 때의 안 지지뿐이다. 유보가 든 동의("그 말도
+    맞지만…")·low·질문·되짚기는 통과한다. 게시 문장과 저장 입장이 갈라지지 않게 구조화 stance가
+    자기 안 support여도 문장이 다른 안을 지지하면 거부한다. 구조화 stance가 자기 안 support인데
+    문장 판정만 철회로 읽은 경우("A도 심각하지만 B가 핵심")는 판정 쪽을 믿지 않는다.
     """
     if not judged or judged.get("confidence") != "high":
         return None
@@ -402,7 +411,8 @@ def sentence_violation(judged: dict[str, Any] | None, plan: StancePlan) -> str |
         return None
     if moves and (judged.get("new_option_label") or (target and not target & plan.targets)):
         return "문장이 계획과 다른 안을 지지함"
-    if intent in ("oppose", "withhold") and target & plan.targets:
+    structured = (draft.stance or {}).get("stance") if draft is not None else None
+    if intent in ("oppose", "withhold") and target & plan.targets and structured != "support":
         return "문장이 자기 계획 안을 철회함"
     return None
 
@@ -553,13 +563,23 @@ def quote_sources(
     return "\n".join(parts)
 
 
-def quote_verdict(result: dict[str, Any]) -> str | None:
-    """LLM 판정 결과에서 거부 사유(코드가 결과를 정한다). 문제 없으면 None."""
+def quote_verdict(result: dict[str, Any], content: str) -> str | None:
+    """LLM 판정 결과에서 거부 사유(코드가 결과를 정한다). 문제 없으면 None.
+
+    판정 행의 `span`이 초안에 글자 그대로 없으면 초안에 없는 말을 귀속으로 지어낸 것이라 버린다
+    (LLM이 초안 자신의 주장을 귀속으로 읽는 거짓 양성을 코드가 거른다).
+    """
     rows = result.get("attributions") if isinstance(result, dict) else None
     if not isinstance(rows, list):
         raise ValueError("quote result has no attributions")
+    body = _normal(content)
     bad = [
-        r for r in rows if isinstance(r, dict) and r.get("verdict") in ("contradicted", "not_found")
+        r
+        for r in rows
+        if isinstance(r, dict)
+        and r.get("verdict") in ("contradicted", "not_found")
+        and _normal(str(r.get("span") or ""))
+        and _normal(str(r.get("span") or "")) in body
     ]
     if not bad:
         return None

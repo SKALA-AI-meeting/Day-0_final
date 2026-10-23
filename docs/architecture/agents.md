@@ -110,14 +110,14 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 
 ### 계획 밖 입장 (stance_check, R5-8)
 
-- 검사: 구조화 출력의 `stance`·`proposes`가 `stance_plan`이 허용하는 안·방향과 같은지, 그리고 `content`가 **실제 지지 이동**을 말하는지(의도 분류 모듈로 같은 형식의 판정을 받아 대조) 본다. 문장 판정으로 거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(`propose`·`agree`), 자기 계획 안 철회(`oppose`·`withhold`), 입장이 없어야 할 때의 안 지지뿐이다(결정 C2). 유보가 든 동의("그 말도 맞지만…")·low·질문·되짚기는 통과한다. 구조화 stance가 자기 안 support여도 문장이 다른 안을 명시적으로 지지하면 게시 문장과 저장 입장이 갈라지므로 거부한다. 자기 계획 안에 `oppose`를 내는 구조화 출력도 계획 밖이다. 설득 가능 규칙으로 계획이 지원자 안으로 옮겨졌는데 그 자리의 현재 지지가 아직 계획 안이 아니면, 이번 발언은 그 안 지지를 밝혀야 하고(`stance` support·`proposes`·문장 판정 support 중 하나) 아니면 계획 밖이다(다른 안 `oppose`만 낸 경우 포함). 지지가 기록된 뒤에는 이 조건을 다시 걸지 않는다. 이 경우의 고정 문구는 이동을 드러내는 `stance_fallback.yaml`의 `moved`("듣고 보니 {option}이 더 낫겠네요. 저도 그쪽으로 옮길게요.", 설득 가능 자리만)다.
+- 검사: 구조화 출력의 `stance`·`proposes`가 `stance_plan`이 허용하는 안·방향과 같은지, 그리고 `content`가 **실제 지지 이동**을 말하는지(의도 분류 모듈로 같은 형식의 판정을 받아 대조) 본다. 문장 판정으로 거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(`propose`·`agree`), 구조화 stance가 없을 때의 자기 계획 안 철회(`oppose`·`withhold`), 입장이 없어야 할 때의 안 지지뿐이다(결정 C2). 구조화 stance가 자기 안 support인데 판정만 철회로 읽은 문장("A도 심각하지만 B가 핵심")은 판정을 믿지 않는다. 유보가 든 동의("그 말도 맞지만…")·low·질문·되짚기는 통과한다. 구조화 stance가 자기 안 support여도 문장이 다른 안을 명시적으로 지지하면 게시 문장과 저장 입장이 갈라지므로 거부한다. 자기 계획 안에 `oppose`를 내는 구조화 출력도 계획 밖이다. 설득 가능 규칙으로 계획이 지원자 안으로 옮겨졌는데 그 자리의 현재 지지가 아직 계획 안이 아니면, 이번 발언은 그 안 지지를 밝혀야 하고(`stance` support·`proposes`·문장 판정 support 중 하나) 아니면 계획 밖이다(다른 안 `oppose`만 낸 경우 포함). 지지가 기록된 뒤에는 이 조건을 다시 걸지 않는다. 이 경우의 고정 문구는 이동을 드러내는 `stance_fallback.yaml`의 `moved`("듣고 보니 {option}이 더 낫겠네요. 저도 그쪽으로 옮길게요.", 설득 가능 자리만)다.
 - 처리: 응답 **전체**를 같은 입력에 위반 사유를 붙여 1회 재생성한다. 그래도 어긋나면 계획과 맞는 자리별 고정 문구(시나리오 카탈로그)로 교체하고 입장도 계획 값으로 둔다. 메타데이터만 버리고 문장을 게시하는 일은 없다. 결과는 `messages.meta.stance_check`에 기록.
 
 ### 인용 대조 (quote_check)
 
 - 대상(결정적 게이트): 초안에 다른 참여자의 이름(성 포함·제외, "님" 유무)이 있거나, 답할 메시지가 지원자 메시지인 발언(이름 없는 귀속 "아까 그렇게 말씀하셨죠"를 지원자에게 돌릴 수 있음). 둘 다 아니면 호출 없이 `none`.
 - 출처(코드가 모은 사실): 대상마다 이 단계 **전체** 발언(debate-mcp `get_transcript(phase)`, 대화 창 30개와 무관)과 기록된 입장(지원자는 `candidate_intents`의 propose·agree·oppose·withhold 행과 유보 표현, 동료는 `options`의 지지·반대).
-- 판단(LLM, 의도 분류 모델 `MODEL_INTENT`, temperature 0): 초안이 그 사람 것으로 돌린 부분마다 `supported`·`contradicted`·`not_found`. 이것은 LLM 판단이고 코드는 결과만 정한다(`contradicted`·`not_found`가 하나라도 있으면 거부).
+- 판단(LLM, 의도 분류 모델 `MODEL_INTENT`, temperature 0): 초안이 그 사람이 말했다·동의했다고 전하는 부분(귀속)마다 초안 원문 `span`과 `supported`·`contradicted`·`not_found`. 이것은 LLM 판단이고 코드는 결과만 정한다: `span`이 초안에 글자 그대로 있는 행만 세고(판정이 초안 자신의 주장을 귀속으로 읽은 행은 버림), `contradicted`·`not_found`가 하나라도 있으면 거부.
 - 처리: 사유를 붙여 재생성 1회 → 재생성 초안도 guard → 입장 판정 → 인용 판정 순으로 다시 → 그래도 거부면 자리별 안전 문구. 타임아웃·JSON 오류·모델 없음이면 게시하고 `skipped`로 남긴다(관측). 고정 문장·비용 상한 발언은 검사하지 않는다. 결과는 `messages.meta.quote_check`(`none`·`pass`·`regenerated`·`safe`·`skipped`).
 
 ### 카드별 실행

@@ -683,7 +683,7 @@ async def _violation(
     if found:
         return found, None
     judged = await _judge_sentence(state, deps, draft.content)
-    found = persona.sentence_violation(judged, plan) or persona.move_unstated(
+    found = persona.sentence_violation(judged, plan, draft) or persona.move_unstated(
         draft, plan, state["ds"], judged
     )
     return found, judged
@@ -763,7 +763,7 @@ async def _quote_violation(
             usage=deps.usage,
             trace=deps.trace(state, f"quote_check:{seat}"),
         )
-        reason = persona.quote_verdict(result)
+        reason = persona.quote_verdict(result, draft.content)
     except (LLMUnavailable, ValueError) as exc:
         log.warning("quote_check %s skipped: %s", seat, exc)
         return None, "skipped"
