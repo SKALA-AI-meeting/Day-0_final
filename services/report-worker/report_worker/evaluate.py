@@ -347,7 +347,7 @@ def check_facts(row: dict[str, Any], refs: "RefIndex", dim: DimensionScenes | No
                 f"out_of_scene: 사실 — {ref}는 장면 {tag}가 근거로 받는 기획안 필드가 아니다. "
                 f"기획안 필드를 받는 보조 장면: {', '.join(allowed) or '없음'}"
             )
-    if not core.exists and all(t == CORE for t in tags.values()):
+    if not core.exists and not field_tags and all(t == CORE for t in tags.values()):
         return None  # 핵심 장면 없이 핵심 장면 근거만: not_fired가 event_not_fired로 바꾼다
     for ref, tag in tags.items():
         message_id = ref[4:]

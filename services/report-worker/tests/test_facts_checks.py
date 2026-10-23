@@ -338,6 +338,11 @@ async def test_proposal_field_tagged_with_aux_scene_counts_as_scene_evidence():
     assert check_on(tagged) is None
     wrong = level_row("flex_acceptance", ("proposal:idea_credit", "proposal_stage"))
     assert check_on(wrong).startswith("out_of_scene:")
+    candidate = next(m["id"] for m in record["messages"] if m["sender"] == "candidate")
+    mixed = level_row(  # 보조 필드 근거가 있어도 없는 핵심 장면 태그 메시지는 통과하지 않는다
+        "flex_acceptance", ("proposal:problem", "proposal_stage"), f"msg:{candidate}"
+    )
+    assert check_on(mixed).startswith(("out_of_scene:", "before_decision:"))
     out = copy.deepcopy(element_outputs()["flexibility"])
     dim(out, "flex_acceptance")["evidence"] = [
         {"ref": "proposal:problem", "scene": "proposal_stage"}
