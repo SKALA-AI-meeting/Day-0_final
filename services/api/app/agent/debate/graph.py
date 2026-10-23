@@ -172,9 +172,7 @@ def _card_text(state: DebateState, deps: DebateDeps, seat: str, card_ids: list[s
     texts = [rules.CARD_INSTRUCTIONS[c] for c in card_ids if c in rules.CARD_INSTRUCTIONS]
     if not card_ids and state["phase"] == "problem" and seat == deps.catalog.seat_of("stubborn"):
         card = rules.card_progress(state["ds"]).get("listening_pressure") or {}
-        count = rules.pressure_count(
-            state.get("transcript") or [], seat, "problem", card.get("trigger_message_id")
-        )
+        count = rules.pressure_count(card, seat)
         # 카드 첫 발언을 포함해 압박 발언은 최대 MAX_PRESSURE회(이번 발언이 그다음 회차)
         if card.get("delivered") and count < rules.MAX_PRESSURE:
             texts.append(rules.PRESSURE_FOLLOWUP)

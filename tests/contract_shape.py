@@ -666,6 +666,7 @@ CARD_PROGRESS = [
         "locked_option_id": Opt(str),
         "delivered": [SEAT],
         "trigger_message_id?": Opt(str),
+        "spoken_since_trigger?": Map(int),
     }
 ]
 DEBATE_STATE = {

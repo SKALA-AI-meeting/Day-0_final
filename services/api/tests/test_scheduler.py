@@ -1,6 +1,7 @@
 """스케줄러 틱(가짜 시계): 마감 임박 안내, card_due 재enqueue·기준안 잠금·공동 전달, 복구·outbox."""
 
 import asyncio
+import uuid
 from datetime import datetime, timedelta
 
 from app import scheduler
@@ -90,7 +91,7 @@ async def test_problem_cards_lock_lead_and_joint_message_delivers_both(api, ctx,
 
     classifier.rules["침수도 괜찮네요"] = high("agree", "water_p2")
     await api.say(sess, "침수도 괜찮네요")
-    await api.post_ai(
+    joint = await api.post_ai(
         sess,
         "p1",
         "침수 피해가 핵심이에요",
@@ -106,6 +107,24 @@ async def test_problem_cards_lock_lead_and_joint_message_delivers_both(api, ctx,
     await ctx.mailboxes.drain()
     due = [s.card_id for _, s, _ in ctx.runner.calls[calls:] if s.type == "card_due"]
     assert due == ["flexibility_majority"]  # 담당 p3가 남음
+
+    # 압박 횟수 원천: 카드 첫 발언(포함)부터 AI 자리별 발언 수(대화 창과 무관)
+    r = await api.internal.post(
+        f"/internal/sessions/{sess.id}/observations",
+        json={
+            "card_id": "listening_pressure",
+            "phase": "problem",
+            "trigger_message_id": joint["id"],
+            "run_id": str(uuid.uuid4()),
+        },
+    )
+    assert r.status_code == 200, r.text
+    clock.advance(seconds=1)
+    await api.post_ai(sess, "p1", "그래도 침수가 먼저예요")
+    state = (await api.internal.get(f"/internal/sessions/{sess.id}/debate_state")).json()
+    row = next(c for c in state["card_progress"] if c["card_id"] == "listening_pressure")
+    assert row["trigger_message_id"] == joint["id"]
+    assert row["spoken_since_trigger"] == {"p1": 2}
 
 
 async def test_recover_fills_missed_deadline_and_republishes(api, ctx, clock):

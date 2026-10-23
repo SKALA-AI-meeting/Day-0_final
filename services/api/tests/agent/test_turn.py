@@ -95,13 +95,22 @@ async def test_named_order_follows_the_message_not_the_classifier(harness):
     assert [s["seat"] for s in run.decision["speakers"]] == ["p2"] and not h.turn.calls
 
 
-async def test_named_but_excluded_seat_does_not_take_the_reply(harness):
-    """이름이 나왔어도 분류가 대상으로 보지 않은 자리는 답하지 않는다(대상=분류, 순서=메시지)."""
+async def test_classifier_addressed_seat_answers_first(harness):
+    """분류가 대상으로 본 자리가 메시지에서 먼저 불린 자리보다 먼저 답한다(지안님 말고 하람님)."""
     h = harness("solution")
     h.server.confirm_keyword("water")
     mid = h.candidate("지안님 말고 하람님 생각은 어때요?", intent_of("question", to=("p2",)))
     run = await h.run("message", message_id=mid)
-    assert [s["seat"] for s in run.decision["speakers"]] == ["p2"]
+    assert [s["seat"] for s in run.decision["speakers"]][0] == "p2"
+
+
+async def test_named_seat_missed_by_the_classifier_still_answers(harness):
+    """분류가 일부 호명을 놓쳐도 "이름님"으로 부른 자리는 모두 답한다(C1)."""
+    h = harness("solution")
+    h.server.confirm_keyword("water")
+    mid = h.candidate("한결님, 하람님 생각은요?", intent_of("question", to=("p2",)))
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p2", "p1"]
 
 
 async def test_quiet_only_when_called_or_asked_all(harness):

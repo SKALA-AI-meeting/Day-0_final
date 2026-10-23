@@ -379,10 +379,10 @@ def recent_streak_seat(transcript: list[dict[str, Any]]) -> str | None:
 def called_seats(text: str, addressed: list[str], catalog: Catalog) -> list[str]:
     """지명 응답 자리와 순서.
 
-    누구에게 말했는지(대상)는 분류 addressed_to가 정하고, 순서는 메시지에서 "이름님"이 나온
-    위치(사실)로 정한다. 이름이 나왔어도 분류가 대상으로 보지 않은 자리("지안님 말고 하람님")는
-    넣지 않는다. 분류가 대상을 하나도 내지 못했을 때만(전체 질문·분류 실패) "이름님"으로 부른
-    자리를 대상으로 쓴다.
+    대상 = 분류 addressed_to ∪ 메시지에서 "이름님"으로 부른 자리(부른 자리는 빠지지 않는다, C1).
+    순서 = addressed_to 자리 먼저(메시지에 나온 순서), 그다음 나머지 부른 자리(메시지 순서).
+    "지안님 말고 하람님"처럼 분류가 대상으로 본 자리가 먼저 답한다. 제외 표현 자체의 처리는
+    의도 분류(addressed_to) 개선에 맡긴다.
     """
     found: list[tuple[int, str]] = []
     for seat in SEATS:
@@ -393,9 +393,8 @@ def called_seats(text: str, addressed: list[str], catalog: Catalog) -> list[str]
             found.append((hit.start(), seat))
     order = [seat for _, seat in sorted(found)]
     targets = [s for s in addressed if s in SEATS]
-    if not targets:
-        return order
-    return [s for s in order if s in targets] + [s for s in targets if s not in order]
+    first = [s for s in order if s in targets] + [s for s in targets if s not in order]
+    return first + [s for s in order if s not in first]
 
 
 def rule_decision(
@@ -505,14 +504,10 @@ def validate_turn_llm(
     return result
 
 
-def pressure_count(
-    transcript: list[dict[str, Any]], seat: str, phase: str, since_message_id: str | None
-) -> int:
-    """압박 발언 수: 압박 카드의 첫 발언(since_message_id)부터 그 자리가 이 단계에서 한 발언.
+def pressure_count(card: dict[str, Any], seat: str) -> int:
+    """압박 발언 수: 압박 카드의 첫 발언부터 그 자리가 이 단계에서 한 발언(카드 발언 포함).
 
-    카드 전 발언(단계 시작 반응 등)은 압박이 아니므로 세지 않는다. 첫 발언이 최근 대화 창 밖이면
-    창 안의 그 자리 발언이 모두 카드 뒤 발언이다.
+    카드 전 발언(단계 시작 반응 등)은 세지 않는다. api가 전체 기록에서 센 값
+    (DebateState `card_progress[].spoken_since_trigger`)을 쓰므로 최근 대화 창에 묶이지 않는다.
     """
-    ids = [str(m.get("id")) for m in transcript]
-    start = ids.index(str(since_message_id)) if str(since_message_id) in ids else 0
-    return sum(1 for m in transcript[start:] if m.get("sender") == seat and m.get("phase") == phase)
+    return int((card.get("spoken_since_trigger") or {}).get(seat) or 0)

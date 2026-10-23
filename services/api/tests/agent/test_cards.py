@@ -317,3 +317,31 @@ async def test_pressure_counts_from_the_card_message_up_to_three(harness):
         followups.append(PRESSURE_FOLLOWUP in h.snapshots[0]["text"])
     # 카드 발언(1회) + 재반박 2회 = 3회, 그 뒤에는 재반박 지시가 없다
     assert followups == [True, True, False]
+
+
+async def test_pressure_count_is_not_limited_to_the_recent_window(harness):
+    """카드 발언·재반박이 최근 대화 30개 밖으로 밀려도 압박 횟수가 다시 시작되지 않는다."""
+    from app.agent.manager.rules import PRESSURE_FOLLOWUP
+
+    support_p2 = {"option_id": "water_p2", "stance": "support"}
+    h = problem(
+        harness,
+        persona=[
+            say("침수가 먼저예요.", support_p2),
+            say("저도 침수 쪽이에요.", support_p2),
+            say("그래도 침수가 핵심이에요.", support_p2),
+            say("피해 규모가 침수 쪽이 커요.", support_p2),
+            say("침수 대비가 더 급해요.", support_p2),
+        ],
+    )
+    h.candidate("가뭄 문제가 제일 커요.", intent_of("propose", key="water_p1"))
+    await h.run("card_due", card_id=FLEX)
+    for text in ("가뭄이 더 자주 와요.", "가뭄 피해도 커요."):
+        mid = h.candidate(f"한결님, {text}", intent_of("oppose", key="water_p2", to=("p1",)))
+        await h.run("message", message_id=mid)
+    for n in range(35):  # 카드 발언과 재반박 2회가 최근 대화 창 밖으로 밀린다
+        h.server.system_says(f"안내 {n}")
+    h.snapshots.clear()
+    mid = h.candidate("한결님, 그래도 가뭄이에요.", intent_of("oppose", key="water_p2", to=("p1",)))
+    await h.run("message", message_id=mid)
+    assert PRESSURE_FOLLOWUP not in h.snapshots[0]["text"]  # 이미 3회

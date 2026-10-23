@@ -188,15 +188,7 @@ class FakeServer:
             "invite_delivered": self.phase in self.invites,
             "last_room_message_t_min": 1.0,
             "confirmed": [s for s in self.slots.values() if s["status"] == "confirmed"],
-            "card_progress": [
-                {
-                    **c,
-                    "trigger_message_id": (self.observations.get(c["card_id"]) or {}).get(
-                        "trigger_message_id"
-                    ),
-                }
-                for c in self.cards.values()
-            ],
+            "card_progress": [self.card_row(c) for c in self.cards.values()],
             "cost_left": self.cost_left,
             "seats": [{"seat": "candidate", "display_name": self.candidate_name}]
             + [
@@ -204,6 +196,18 @@ class FakeServer:
                 for s in SEATS
             ],
         }
+
+    def card_row(self, card: dict[str, Any]) -> dict[str, Any]:
+        """api처럼 카드 첫 발언과 그 뒤 AI 자리별 발언 수(전체 기록 기준)를 붙인다."""
+        trigger = (self.observations.get(card["card_id"]) or {}).get("trigger_message_id")
+        ids = [m["id"] for m in self.messages]
+        spoken: dict[str, int] = {}
+        if trigger in ids:
+            start = self.messages[ids.index(trigger)]
+            for m in self.messages[ids.index(trigger) :]:
+                if m["sender"] in SEATS and m["phase"] == start["phase"]:
+                    spoken[m["sender"]] = spoken.get(m["sender"], 0) + 1
+        return {**card, "trigger_message_id": trigger, "spoken_since_trigger": spoken}
 
     def room(self, sender: str | None = None) -> list[dict[str, Any]]:
         return [m for m in self.messages if sender is None or m["sender"] == sender]

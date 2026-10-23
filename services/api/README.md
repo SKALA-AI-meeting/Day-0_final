@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 211개(live 3개 포함, `make test`는 live를 뺀다).
+총 213개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (22)</summary>
 
@@ -161,7 +161,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_cards.py</code> (14)</summary>
+<details><summary><code>tests/agent/test_cards.py</code> (15)</summary>
 
 - `test_c5_lead_lock_joint_delivery_and_observations`
 - `test_c5_api_lock_is_used`
@@ -176,6 +176,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_moved_critic_must_record_support_for_candidate_option`
 - `test_moved_critic_support_overrides_structured_oppose` ×2
 - `test_pressure_counts_from_the_card_message_up_to_three`
+- `test_pressure_count_is_not_limited_to_the_recent_window`
 
 </details>
 
@@ -257,14 +258,15 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_turn.py</code> (23)</summary>
+<details><summary><code>tests/agent/test_turn.py</code> (24)</summary>
 
 - `test_phase_started_keyword_pushers_and_problem_react`
 - `test_second_speaker_sees_the_first_speakers_line`
 - `test_proposal_phase_started_has_no_speakers`
 - `test_named_reply_first_and_at_most_two`
 - `test_named_order_follows_the_message_not_the_classifier`
-- `test_named_but_excluded_seat_does_not_take_the_reply`
+- `test_classifier_addressed_seat_answers_first`
+- `test_named_seat_missed_by_the_classifier_still_answers`
 - `test_quiet_only_when_called_or_asked_all`
 - `test_turn_llm_only_for_message`
 - `test_turn_llm_failure_means_no_speakers`
