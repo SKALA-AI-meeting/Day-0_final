@@ -502,14 +502,14 @@ def addressed(
 def open_mentions(
     messages: list[dict[str, Any]], intents: dict[str, dict[str, Any]], catalog: Names
 ) -> list[dict[str, str]]:
-    """아직 답하지 않은 지명 `[{seat, message_id, since}]`.
+    """아직 답하지 않은 지명 `[{seat, message_id, since, sender, content}]`.
 
     `messages`는 그 단계 토론방 메시지 전체(저장 순서, AI 발언은 `reply_to` 포함)다. 지원자
     메시지가 자리를 부를 때마다 그 자리의 열린 지명이 쌓이고, 그 자리가 어떤 지원자 메시지에
     답하면(`reply_to`) 그 메시지와 그 앞의 지명이 모두 닫힌다. `message_id`는 답할 메시지(그 자리의
-    가장 최근 열린 지명), `since`는 가장 오래된 열린 지명이다. 순서는 `since`가 오래된 자리
-    먼저(같은 메시지 안에서는 부른 순서)라 화자 상한(2)을 넘어 밀린 자리가 다음 실행에서 먼저
-    답하고, 계속 불려도 굶지 않는다.
+    가장 최근 열린 지명)이고 `sender`·`content`는 그 보낸 사람·본문, `since`는 가장 오래된 열린
+    지명이다. 순서는 `since`가 오래된 자리 먼저(같은 메시지 안에서는 부른 순서)라 화자 상한(2)을
+    넘어 밀린 자리가 다음 실행에서 먼저 답하고, 계속 불려도 굶지 않는다.
     """
     pending: dict[str, list[tuple[int, int, str]]] = {}
     index_of: dict[str, int] = {}
@@ -529,7 +529,16 @@ def open_mentions(
         for seat, marks in pending.items()
         if marks
     )
-    return [{"seat": seat, "message_id": mid, "since": first} for _, _, seat, mid, first in rows]
+    return [
+        {
+            "seat": seat,
+            "message_id": mid,
+            "since": first,
+            "sender": str(messages[index_of[mid]].get("sender")),
+            "content": str(messages[index_of[mid]].get("content") or ""),
+        }
+        for _, _, seat, mid, first in rows
+    ]
 
 
 def pending_mentions(
@@ -562,10 +571,11 @@ def pending_mentions(
         mid = str(current.get("id"))
         for seat in addressed(current, intents, catalog):
             row = next((r for r in found if r["seat"] == seat), None)
+            text = {"sender": "candidate", "content": str(current.get("content") or "")}
             if row is None:
-                found.append({"seat": seat, "message_id": mid, "since": mid})
+                found.append({"seat": seat, "message_id": mid, "since": mid, **text})
             else:
-                row["message_id"] = mid
+                row.update({"message_id": mid, **text})
     return found
 
 
@@ -606,8 +616,12 @@ def situation(
     transcript: list[dict[str, Any]],
     intents: dict[str, dict[str, Any]],
     catalog: Catalog,
+    mentions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """토론 동료에게 줄 상황 정보(사실만, 지시 없음, C1).
+
+    답할 메시지가 대화 창(최근 30개) 밖이면 DebateState `open_mentions`에 api가 담은 그 메시지의
+    보낸 사람·본문을 쓴다(창 밖 지명이어도 "답할 메시지: 없음"이 되지 않게).
 
     - `reply_to`: 답할 메시지 `{id, sender, content}` 또는 None
     - `named`: 답할 메시지가 이 자리를 부른 지원자 메시지인지
@@ -616,6 +630,10 @@ def situation(
     - `reactions`: 이 자리의 마지막 발언 뒤 반응한 참여자(`reactions`, 아직 말하지 않았으면 None)
     """
     target = next((m for m in transcript if reply_to and str(m.get("id")) == reply_to), None)
+    if target is None and reply_to:
+        row = next((r for r in mentions or [] if str(r.get("message_id")) == reply_to), None)
+        if row is not None:
+            target = {"id": reply_to, "sender": row.get("sender"), "content": row.get("content")}
     return {
         "reply_to": None
         if target is None

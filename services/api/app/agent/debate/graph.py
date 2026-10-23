@@ -129,7 +129,13 @@ def _situation(state: DebateState, deps: DebateDeps) -> dict[str, Any]:
     spk = _current(state)
     intents = rules.intent_map(state["ds"], state["stimulus"], state.get("intent"))
     return rules.situation(
-        spk["seat"], spk, _reply_to(state), state["transcript"], intents, deps.catalog
+        spk["seat"],
+        spk,
+        _reply_to(state),
+        state["transcript"],
+        intents,
+        deps.catalog,
+        state["ds"].get("open_mentions"),
     )
 
 

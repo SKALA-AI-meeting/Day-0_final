@@ -20,7 +20,13 @@ async def test_open_mention_survives_beyond_the_transcript_window(api, ctx, clas
         mention = await db.scalar(select(Message).where(Message.content == "한결님 어떻게 보세요?"))
     state = await _state(api, sess)
     assert state["open_mentions"] == [
-        {"seat": "p1", "message_id": str(mention.id), "since": str(mention.id)}
+        {
+            "seat": "p1",
+            "message_id": str(mention.id),
+            "since": str(mention.id),
+            "sender": "candidate",
+            "content": "한결님 어떻게 보세요?",
+        }
     ]
     await api.post_ai(sess, "p1", "불이 좋아요.", meta={"reply_to": str(mention.id)})
     assert (await _state(api, sess))["open_mentions"] == []

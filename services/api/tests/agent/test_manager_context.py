@@ -195,6 +195,10 @@ async def test_mention_pushed_out_of_the_transcript_window_is_still_answered(har
         h.candidate(f"음 {i}", intent_of("other", confidence="low"))
     run = await h.run("idle")
     assert [(s["seat"], s["reply_to"]) for s in run.decision["speakers"]] == [("p3", mid)]
+    # 창 밖 메시지여도 [상황]에 그 메시지의 보낸 사람·본문이 들어간다
+    block = _situation(h.snapshots[-1]["text"])
+    assert '- 답할 메시지: 김지원(지원자): "지안님 어떻게 보세요?"' in block
+    assert "- 이 메시지에서 지원자가 나를 이름으로 불렀는지: 예" in block
 
 
 async def test_fixed_card_line_does_not_answer_a_mention(harness):
@@ -226,7 +230,13 @@ def test_open_mentions_age_by_earliest_and_close_on_later_reply(catalog):
 
     msgs = [cand(1), cand(2)]
     assert rules.open_mentions(msgs, {}, catalog) == [
-        {"seat": "p3", "message_id": "c2", "since": "c1"}
+        {
+            "seat": "p3",
+            "message_id": "c2",
+            "since": "c1",
+            "sender": "candidate",
+            "content": "지안님?",
+        }
     ]
     msgs.append({"id": "a", "sender": "p3", "content": "네", "reply_to": "c2"})
     assert rules.open_mentions(msgs, {}, catalog) == []  # 뒤 지명에 답하면 앞 지명도 닫힌다

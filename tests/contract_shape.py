@@ -758,7 +758,9 @@ DEBATE_STATE = {
         }
     ],
     "first_spoke_at": {k: Opt(TS) for k in ("p1", "p2", "p3")},
-    "open_mentions": [{"seat": SEAT, "message_id": str, "since": str}],
+    "open_mentions": [
+        {"seat": SEAT, "message_id": str, "since": str, "sender": str, "content": str}
+    ],
 }
 CONTRIBUTIONS = {
     "options": [CONTRIBUTION_OPTION],
