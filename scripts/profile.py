@@ -57,6 +57,7 @@ HOST_ENV_MAP = {
     "INTERNAL_URL": ("E2E_INTERNAL_URL",),
     "WEB_URL": ("WEB_URL",),
     "SEED_DATABASE_URL": ("E2E_DATABASE_URL", "SEED_DATABASE_URL"),
+    "PG_CONTAINER": ("VC_PG_CONTAINER",),
 }
 DEFAULTS = {
     "PROFILE_PURPOSE": "dev",
@@ -180,6 +181,7 @@ class Profile:
             "WEB_URL": self.get("PROFILE_WEB_URL") or f"http://localhost:{self.get('WEB_PORT')}",
             "RAG_URL": self.get("PROFILE_RAG_URL") or "http://localhost:9102/mcp",
             "SEED_DATABASE_URL": self.get("PROFILE_DATABASE_URL"),
+            "PG_CONTAINER": f"{self.get('PROFILE_COMPOSE_PROJECT')}-postgres-1",
         }
 
     # ---- 검사 --------------------------------------------------------------------------

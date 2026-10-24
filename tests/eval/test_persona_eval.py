@@ -154,9 +154,8 @@ async def test_persona_quality_live():
     for run in range(repeat):
         for session in pe.load_scripts()["sessions"]:
             h = h_mod.Harness(catalog, session["seed"]["phase"])
-            intent = make_llm("intent")
             h.runner.llms = DebateLLMs(
-                persona=make_llm("persona"), turn=make_llm("turn"), intent=intent, quote=intent
+                persona=make_llm("persona"), turn=make_llm("turn"), intent=make_llm("intent")
             )
             got, used = await pe.run_session(h, session, run)
             events += got
