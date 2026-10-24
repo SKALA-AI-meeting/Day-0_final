@@ -6,9 +6,10 @@
 입력은 drive.py `export_session`이 만든 표별 JSON(session·position·messages·
 message_intents·agent_runs·options·stances·slots·session_cards·observations·
 assistant_calls·evaluation_runs·evaluations …)이다. 사실(누가·언제·있다/없다·횟수)은
-규칙으로 센다. 뜻을 읽어야 하는 지표(요약-차원 모순, 동료 응답 여부, 오인용)와 거짓 합의의
-"명시적 동의" 판정만 `--judge`일 때 LLM 판정을 쓴다. 판정 프롬프트는 judge_prompts.yaml에
-고정하고 결과에 모델·날짜를 남긴다. 판정 입력과 결과에는 지원자 표시 이름 대신 "지원자"를 쓴다.
+규칙으로 센다. 뜻을 읽어야 하는 지표(요약-차원 모순, 동료 응답 여부, 오인용, 귀속 판정)와 거짓
+합의의 "명시적 동의" 판정만 `--judge`일 때 LLM 판정을 쓴다. 판정 프롬프트는 judge_prompts.yaml
+(귀속 판정은 ../attribution_prompts.yaml)에 고정하고 결과에 모델·날짜를 남긴다. 판정 입력과
+결과에는 지원자 표시 이름 대신 "지원자"를 쓴다.
 """
 
 import argparse
@@ -24,6 +25,7 @@ from typing import Any
 import yaml
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[2])]
+from eval import attribution  # noqa: E402  귀속 추출·판정(persona_eval과 공용)
 from eval.assistant_eval import (  # noqa: E402  같은 채점 규칙(숫자·출처 줄·잘림)
     SOURCE_LINE,
     max_chars,
@@ -352,6 +354,7 @@ def _timeout_notices(s: Session, label: str) -> dict[str, str]:
 def persona_metrics(s: Session) -> dict[str, Any]:
     posts = [m for m in s.persona_room() if m["phase"] in DEBATE_PHASES]
     checks = Counter((m.get("meta") or {}).get("stance_check") or "none" for m in posts)
+    quote_checks = Counter((m.get("meta") or {}).get("quote_check", "absent") for m in posts)
     first_support: dict[tuple[str, str], str] = {}
     for st in sorted(s.data.get("stances") or [], key=lambda x: x["created_at"]):
         if st["participant"] in PEERS and st["stance"] == "support":
@@ -375,6 +378,7 @@ def persona_metrics(s: Session) -> dict[str, Any]:
         "persona_posts": len(posts),
         "stance_check": dict(checks),
         "stance_fallback_rate": _rate(checks.get("fallback", 0), len(posts)),
+        "quote_check": dict(quote_checks),  # 인용 검사가 없는 기록은 absent
         "own_option_push": {"n": pushed, "rate": _rate(pushed, len(posts))},
         "cards": {
             "reachable": len(configured),
@@ -558,7 +562,12 @@ class Judge:
         await self.http.aclose()
 
 
-async def judge(data: dict[str, Any], result: dict[str, Any], j: Judge) -> dict[str, Any]:
+async def judge(
+    data: dict[str, Any],
+    result: dict[str, Any],
+    j: Judge,
+    attribution_judge: attribution.AttributionJudge | None = None,
+) -> dict[str, Any]:
     s = Session(data)
     names = {p: n for p, n in (("p1", "강한결"), ("p2", "윤하람"), ("p3", "서지안"))}
     names["candidate"] = "지원자"
@@ -646,6 +655,19 @@ async def judge(data: dict[str, Any], result: dict[str, Any], j: Judge) -> dict[
         if verdict.get("misquote"):
             misquotes.append({"message": line(m)[:160], "reason": verdict.get("reason")})
     out["misquote"] = {"quotes": len(quotes), "misquotes": len(misquotes), "rows": misquotes}
+    # 5) 귀속 판정: 동료 발언 전체(토론 단계)에서 귀속을 뽑아 그 전 원문과 대조(주 지표. 4는 보조)
+    if attribution_judge is not None:
+        transcript = [
+            m
+            for m in attribution.transcript_from_session(data)
+            if not m["is_post"] or m["phase"] in DEBATE_PHASES
+        ]
+        rows = await attribution.judge_posts(transcript, attribution_judge, names)
+        out["attribution"] = {
+            "judge": attribution_judge.info(),
+            "summary": attribution.summarize(rows),
+            "rows": attribution.compact_rows(rows),
+        }
     return out
 
 
@@ -658,18 +680,22 @@ async def _main() -> None:
     sys.path[:0] = [str(ROOT / "tests")]
     from e2e.client import env
 
-    j = Judge(env()) if args.judge else None
+    values = env()
+    j = Judge(values) if args.judge else None
+    aj = attribution.AttributionJudge(values) if args.judge else None
     results = []
     try:
         for path in args.paths:
             data = json.loads(path.read_text("utf-8"))
             result = compute(data)
             if j:
-                result["judge"] = await judge(data, result, j)
+                result["judge"] = await judge(data, result, j, aj)
             results.append(result)
     finally:
         if j:
             await j.aclose()
+        if aj:
+            await aj.aclose()
     text = json.dumps(results if len(results) > 1 else results[0], ensure_ascii=False, indent=2)
     if args.out:
         args.out.write_text(text, "utf-8")

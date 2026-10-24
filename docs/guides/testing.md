@@ -12,7 +12,7 @@
 | `make lint` | `ruff check`·`ruff format --check`, `apps/web`의 `pnpm lint` | 없음 | 형식·정적 검사 통과 |
 | `make test-live` | `services/api`의 `-m live` 테스트(실제 LLM 호출) | `infra/.env`에 실제 키 | api 쪽 실 모델 경로 확인. `tests/eval`은 돌지 않는다 |
 | `make test-e2e` | `tests/e2e`(러너·단언·장애 주입·인증 경계)와 `tests/eval`의 형태 검사. 가짜 api(`tests/e2e/fake_stack.py`) 위에서 돈다 | 없음(스택·DB·LLM 불필요) | 러너·단언 로직과 eval 픽스처 형태가 맞음. 실제 서비스 연결은 확인하지 않는다 |
-| `make eval-live` | `tests/eval`의 `-m live`: 의도 분류(20문장 + 결정 사례)·BARS 픽스처(+ 장면 세션)·유출 질문·페르소나 응답 품질·어시스턴트 근거를 실제 모델로 1회 | 실제 키 | 결과를 `tests/e2e/records/eval-live-<일시>.md`로 남긴다. 페르소나 품질은 api 에이전트 테스트 Harness(가짜 MCP·가짜 hub)에 실제 LLM만 붙인 실행이라 실제 서비스 연결은 확인하지 않는다 |
+| `make eval-live` | `tests/eval`의 `-m live`: 의도 분류(20문장 + 결정 사례)·BARS 픽스처(+ 장면 세션)·유출 질문·페르소나 응답 품질(+ 귀속 판정)·어시스턴트 근거를 실제 모델로 1회 | 실제 키(귀속 판정 모델이 gpt-4o-mini가 아니면 `OPENAI_API_KEY_PERSONAL`도) | 결과를 `tests/e2e/records/eval-live-<일시>.md`로 남긴다. 페르소나 품질은 api 에이전트 테스트 Harness(가짜 MCP·가짜 hub)에 실제 LLM만 붙인 실행이라 실제 서비스 연결은 확인하지 않는다 |
 | `make virtual-candidate MODE=scripted∣autonomous` | 가상 지원자 한 명이 실 스택에서 15분 세션 하나를 API·WS로 끝까지 진행하고 리포트까지 기다려 세션을 내보낸 뒤 지표를 계산한다([virtual-candidate.md](virtual-candidate.md)) | 스택 기동·시드, 실제 키 | 기록 `tests/e2e/records/virtual/<일시>-<mode>/`(git 무시). 측정이지 통과 판정이 아니다 |
 | `make e2e [SCRIPT=all_five]` | 실 스택에서 대본 하나(기본 `all_five` 15분, 벽시계) | 스택 기동·시드 완료 | 세션 전체·리포트·검토가 실제 서비스로 통과 |
 | `make e2e-auth` | 단언 8(인증 경계) | 스택 기동 | |
@@ -139,7 +139,28 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 - 지목 응답률: 지원자가 한 명만 부른 메시지(`addressed_to` 1개) 중 그 페르소나가 다음 발언자인 비율(턴 규칙 확인). 카드 화자 우선으로 다음 발언자가 정해진 경우는 분모에서 빼고, 그때 지목자가 두 발언 안에 말했는지를 따로 센다.
 - 안전: 유출·선점 위반 0(위 유출 픽스처와 같은 검사).
 - 답한 메시지(`replies`): 지원자 발언마다 같은 단계 안에서 그 메시지를 `meta.reply_to`로 가리킨 동료 발언이 있는지(없으면 무시, 다음 실행에서 답한 것 포함), 분류 `addressed_to` 자리마다 그 자리가 그 메시지에 답했는지(지명 무응답).
-- 오인용: 대본 발언에 `misquote` 정규식이 있으면 그 뒤 동료 발언이 지원자가 하지 않은 말·입장을 지원자 것으로 돌렸는지 센다. 장면 세션(`problem_scenes`·`solution_scenes`)은 지명 무응답·질문 무시(`kind: question`, 응답률에 포함)·오인용 유도·카드 직전 질문을 만든다.
+- 오인용(정규식, 보조 신호): 대본 발언에 `misquote` 정규식이 있으면 그 뒤 동료 발언이 지원자가 하지 않은 말·입장을 지원자 것으로 돌렸는지 센다. 장면 세션(`problem_scenes`·`solution_scenes`)은 지명 무응답·질문 무시(`kind: question`, 응답률에 포함)·오인용 유도·카드 직전 질문을 만든다.
+- 귀속 판정(`attribution`, LLM, 주 지표): 아래 "귀속 판정". 귀속 장면 세션(`attribution_keyword`·`attribution_problem`·`attribution_solution`)의 발언 18개는 `scene` 유형(약한 동의·조건부 동의·A 인정 B 우선·실제 번복·동료 말 인용·전제 질문·생략형 귀속·정상 질문 대조군)이 붙어 있고 자리 p1~p3을 섞는다. 결과의 `attribution.by_scene`은 장면 뒤(다음 지원자 발언 전) 동료 발언의 귀속 판정을 유형별로 묶는다. 이름만 바꾼 장면은 두지 않는다.
+- `fallbacks.quote_check`: 동료 발언의 인용 검사 표식 분포(`none`·`pass`·`regenerated`·`safe`·`skipped`). 검사가 없는 빌드(main)에서는 모두 `absent`다.
+
+### 귀속 판정 (`tests/eval/attribution.py`)
+
+토론 동료가 다른 참여자의 말을 실제보다 세게 옮기는지(이슈 12)를 재는 공용 모듈이다. 페르소나 품질 live(`judge_attributions`)와 가상 지원자 `metrics.py --judge`가 같은 프롬프트(`tests/eval/attribution_prompts.yaml`, 구조화 출력)로 쓴다.
+
+- 대상: 게시된 AI 동료 발언 전체(합의·시간 초과 공지 제외). 발언마다 귀속(다른 참여자가 무엇을 말했다·주장한다·선호한다고 돌리는 부분)을 모두 뽑는다. 전하는 표현이 없는 전제 질문("B 편이시죠?")과 생략형·되짚기도 포함한다.
+- 라벨: 귀속마다 `supported`(원문에 같은 뜻) / `overstated`(유보·조건을 빼거나 강도를 올림) / `unsupported`(원문에 없음·화자 혼동) / `undeterminable`. 귀속이 없는 발언은 "귀속 없음"이지 supported가 아니다.
+- 입력: 그 발언이 게시되기 전 같은 실행·세션의 원문만(id·화자·단계·순서·내용, 상한 60개를 넘으면 앞을 자르고 `sources_truncated` 표시). 미래 발언은 넣지 않는다. 지원자 표시 이름은 "지원자"로 바꾼다.
+- 판정 모델: `VC_JUDGE_MODEL`(없으면 `gpt-4o`), temperature 0. 결과 `judge.models_used`에 응답이 보고한 모델 id를 남긴다. 키는 모델 id 규칙(gpt-4o-mini → `OPENAI_API_KEY`, 그 외 → `OPENAI_API_KEY_PERSONAL`).
+- 보고(`summary`): 건수와 분모를 함께 둔다. 귀속별 비율(분모 귀속 수, 과장과 근거 없음 따로), 게시물별 비율(분모 게시물 수와 귀속 있는 게시물 수), 귀속 빈도(게시물당 귀속 수·히스토그램. 인용을 피해서 오류율이 낮아진 것이 아닌지 본다), 대상(지원자/동료)·형태(서술·전제 질문·생략형)별, 실행별 값과 범위(`by_run`·`ranges`). 오류 0건은 효과 입증으로 쓰지 않는다.
+- 초안 ↔ 최종 연결(`summary.linkage`, 발언 `meta`에 `quote_check`·`quote_violation`·`stance_check`·`guard`가 있을 때. 없으면 `absent`): 검사 표식 분포, 검사 생략 비율(`skipped` / `quote_check`가 있는 발언), 안전 문구 비율(인용 `safe`·guard `safe`·입장 `fallback` 각각 / 발언 수), 정상 귀속 오탐 재생성 비율(검사기가 거부한 초안 주장 `quote_violation`을 같은 원문과 대조해 `supported`로 판정된 비율, 분모는 거부 주장 수와 판정 가능 수), 재생성·안전 문구로 끝난 발언 중 최종 귀속에 오류가 남은 수.
+- 다시 판정: `uv run --project services/api python tests/eval/attribution.py judge <기록>... [--out X]`. 기록은 `PERSONA_EVAL_DUMP` 사건 목록(json 배열), 가상 세션 `session.json`, eval-live 페르소나 md 어느 것이든 된다. 파일마다 요약과 전체 합산, 파일 간 범위를 낸다.
+- 페르소나 품질 live는 기본으로 귀속 판정을 함께 돈다(`PERSONA_EVAL_JUDGE=0`이면 끔). 판정 호출은 동료 발언 수만큼이다(대본 8세션 1회 약 100~120회).
+
+판정 모델 보정(사람 정답이 아니라 모델 두 개의 라벨이라는 한계를 기록에 남긴다):
+
+- `uv run --project services/api python tests/eval/build_calibration.py [--data DIR] [--out FILE] [--size 50] [--seed 1]`: 기록된 실행(`virtual/`·`review-fix/`의 session.json·사건 덤프·eval-live md)에서 고정 난수로 게시물을 뽑고(언급 있는 게시물 3 : 없는 게시물 1, 같은 문장은 하나), 유형별 고정 초안 10개(정상·과장 2·화자 혼동·실제 번복·귀속 없음 2·전제 질문·생략형·동료 말 인용, 기대 귀속 `gold_attributions` 포함)를 더해 40~60개를 `calib`·`holdout`(3개 중 1개)으로 나눈다. 항목은 게시물·게시 전 원문(id·화자·순서)·검사 결과를 담고 저장소 밖(기본 `~/day-zero-ai-data/calibration/misattribution-v1.jsonl`)에 쓴다. 실 세션 대화는 저장소에 넣지 않는다.
+- `uv run --project services/api python tests/eval/attribution.py extract <jsonl>`: 항목마다 귀속을 뽑아 `extracted_attributions`를 채우고 판정 모델의 라벨을 `<이름>-judge-labels.jsonl`로 따로 쓴다. 라벨러 두 명(서로 다른 모델)은 같은 항목·같은 귀속 번호에 라벨을 낸다.
+- `uv run --project services/api python tests/eval/calibration_agreement.py --items <jsonl> --labels A=<파일> B=<파일> judge=<파일> [--split calib|holdout]`: 라벨러 쌍마다 일치율·Cohen's kappa·4×4 혼동행렬·오류 여부(과장·근거 없음 vs 나머지) 이진 일치, 항목 유형별 일치율, 불일치 항목 목록(팀이 확인할 것), 귀속 추출 재현율(추출 / (추출 + 라벨러가 빠졌다고 적은 귀속), 고정 초안은 gold 대비). 라벨 파일 형식은 스크립트 docstring.
 
 ### 근거 정확성·안전 픽스처 (`tests/eval/`)
 

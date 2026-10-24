@@ -14,18 +14,22 @@ debate·rag MCP와 가짜 hub)에 LLM만 갈아 끼운다. 지원자 발언은 �
 - 오인용: misquote 정규식이 있는 발언 뒤(다음 지원자 발언 전) 동료 발언이 그 정규식에 걸린 수
 - 답한 메시지(reply_to): 지원자 발언마다 같은 단계 안에서 그 메시지에 답한(`meta.reply_to`) 동료
   발언이 있는지(없으면 무시), 분류 addressed_to 자리마다 그 자리가 그 메시지에 답했는지(지명 무응답)
+- 귀속 판정(attribution, LLM): 게시된 동료 발언 전체에서 귀속을 뽑아 supported/overstated/
+  unsupported/undeterminable로 판정(`judge_attributions`, 모듈 tests/eval/attribution.py). 위 규칙
+  misquote는 보조 신호로 남긴다
 """
 
 import importlib.util
 import re
 import sys
+from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from eval import evaluate
+from eval import attribution, evaluate
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -104,7 +108,12 @@ async def classify(h, mid: str) -> dict[str, Any]:
 
 def _ai_since(h, start: int) -> list[dict[str, Any]]:
     return [
-        {"seat": m["sender"], "content": m["content"], "meta": m.get("meta") or {}}
+        {
+            "id": m.get("id"),
+            "seat": m["sender"],
+            "content": m["content"],
+            "meta": m.get("meta") or {},
+        }
         for m in h.server.messages[start:]
         if m["sender"] in ("p1", "p2", "p3")
     ]
@@ -375,6 +384,7 @@ def fallbacks(events: list[dict[str, Any]]) -> dict[str, int]:
         "guard_safe": sum(p["meta"].get("guard") == "safe" for p in posts),
         "stance_regenerated": sum(p["meta"].get("stance_check") == "regenerated" for p in posts),
         "stance_fallback": sum(p["meta"].get("stance_check") == "fallback" for p in posts),
+        "quote_check": dict(Counter(p["meta"].get("quote_check", "absent") for p in posts)),
         "repeat_regenerated": sum(p["meta"].get("repeat") == "regenerated" for p in posts),
         "repeat_kept": sum(p["meta"].get("repeat") == "kept" for p in posts),
         "no_reply_steps": sum(not e["posts"] for e in events if e["kind"] not in ("card",)),
@@ -382,15 +392,62 @@ def fallbacks(events: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-def score(events: list[dict[str, Any]], prompts: dict[str, str]) -> dict[str, Any]:
-    return {
+def score(
+    events: list[dict[str, Any]],
+    prompts: dict[str, str],
+    attribution_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """규칙 지표. `attribution_result`(judge_attributions 결과)가 있으면 그대로 붙인다."""
+    out = {
         "repetition": repetition(events),
         "response": response_rate(events),
         "named": named_rate(events),
         "replies": replies(events),
         "safety": safety(events, prompts),
         "misquote": misquote(events),
+        "attribution": attribution_result,
         "fallbacks": fallbacks(events),
+    }
+    return out
+
+
+def scene_counts(events: list[dict[str, Any]], rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """장면 유형(`scene`)별로 그 발언 뒤(다음 지원자 발언 전) 동료 발언의 귀속 판정을 묶는다.
+    rows는 judge_attributions의 행(post_id로 연결, id가 없는 예전 기록은 내용으로)."""
+    by_id = {r["post_id"]: r for r in rows}
+    by_text = {r["content"]: r for r in rows}
+    out: dict[str, dict[str, int]] = {}
+    for i, event in enumerate(events):
+        scene = event.get("scene")
+        if not scene:
+            continue
+        bucket = out.setdefault(
+            scene, {"scenes": 0, "posts": 0, "attributions": 0, "overstated": 0, "unsupported": 0}
+        )
+        bucket["scenes"] += 1
+        for post in following(events, i, 3):
+            row = by_id.get(post.get("id")) or by_text.get(post["content"])
+            if row is None:
+                continue
+            bucket["posts"] += 1
+            bucket["attributions"] += len(row["attributions"])
+            for a in row["attributions"]:
+                if a["verdict"] in attribution.ERRORS:
+                    bucket[a["verdict"]] += 1
+    return out
+
+
+async def judge_attributions(
+    events: list[dict[str, Any]], judge: attribution.AttributionJudge, names: dict[str, str]
+) -> dict[str, Any]:
+    """사건 목록의 동료 발언 전부를 귀속 판정한다(실행·세션 단위로 그 전 원문만 준다)."""
+    transcript = attribution.transcript_from_events(events)
+    rows = await attribution.judge_posts(transcript, judge, {**attribution.NAMES, **names})
+    return {
+        "judge": judge.info(),
+        "summary": attribution.summarize(rows),
+        "by_scene": scene_counts(events, rows),
+        "rows": attribution.compact_rows(rows),
     }
 
 
@@ -410,8 +467,8 @@ def transcript_md(events: list[dict[str, Any]], names: dict[str, str]) -> str:
         for post in event["posts"]:
             flags = [
                 f"{k}={post['meta'][k]}"
-                for k in ("guard", "stance_check")
-                if post["meta"].get(k) not in (None, "pass")
+                for k in ("guard", "stance_check", "quote_check")
+                if post["meta"].get(k) not in (None, "pass", "none")
             ]
             tail = f" `{' '.join(flags)}`" if flags else ""
             lines.append(f"  - {names.get(post['seat'], post['seat'])}: {post['content']}{tail}")

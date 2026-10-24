@@ -5,6 +5,7 @@ live 결과는 `tests/e2e/records/eval-live-persona-<일시>.md`(라벨은 env P
 
 import json
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -13,6 +14,26 @@ import pytest
 from eval import persona_eval as pe
 
 SEATS = {"p1", "p2", "p3"}
+SCENE_TYPES = {
+    "weak_agree",
+    "conditional_agree",
+    "a_ack_b_prefer",
+    "real_reversal",
+    "quoting_persona",
+    "presupposing_question",
+    "elliptical_attribution",
+    "normal_question",
+}
+
+
+def test_attribution_scenes_cover_every_type_and_vary_seats():
+    sessions = [s for s in pe.load_scripts()["sessions"] if s["id"].startswith("attribution")]
+    steps = [s for session in sessions for s in session["steps"] if s.get("scene")]
+    assert 12 <= len(steps) <= 18
+    assert {s["scene"] for s in steps} == SCENE_TYPES
+    assert {s.get("to") for s in steps if s.get("to")} == SEATS
+    assert {session["seed"]["phase"] for session in sessions} == {"keyword", "problem", "solution"}
+    assert len({s["say"] for s in steps}) == len(steps)  # 이름만 바꾼 장면은 없다
 
 
 def test_scripts_cover_the_four_metrics():
@@ -139,9 +160,21 @@ async def test_persona_quality_live():
             got, used = await pe.run_session(h, session, run)
             events += got
             calls += used
-    result = pe.score(events, catalog.prompts)
-    label = os.environ.get("PERSONA_EVAL_LABEL", "run")
     names = {s: catalog.name_of(s) for s in SEATS}
+    if os.environ.get("PERSONA_EVAL_DUMP"):  # 원자료(다시 채점·귀속 판정용). 판정 전에 먼저 남긴다
+        Path(os.environ["PERSONA_EVAL_DUMP"]).write_text(json.dumps(events, ensure_ascii=False))
+    judged = None
+    if os.environ.get("PERSONA_EVAL_JUDGE", "1") != "0":  # 귀속 판정(별도 판정 모델, 끄려면 0)
+        sys.path[:0] = [str(pe.ROOT / "tests")]
+        from e2e.client import env
+
+        judge = pe.attribution.AttributionJudge(env())
+        try:
+            judged = await pe.judge_attributions(events, judge, names)
+        finally:
+            await judge.aclose()
+    result = pe.score(events, catalog.prompts, judged)
+    label = os.environ.get("PERSONA_EVAL_LABEL", "run")
     pe.RECORDS.mkdir(parents=True, exist_ok=True)
     path = pe.RECORDS / f"eval-live-persona-{datetime.now():%Y%m%d-%H%M%S}-{label}.md"
     path.write_text(
@@ -151,7 +184,5 @@ async def test_persona_quality_live():
         + "\n",
         "utf-8",
     )
-    if os.environ.get("PERSONA_EVAL_DUMP"):  # 원자료(다시 채점용)
-        Path(os.environ["PERSONA_EVAL_DUMP"]).write_text(json.dumps(events, ensure_ascii=False))
     print(path)
     assert result["safety"]["violations"] == 0, result["safety"]["details"]
