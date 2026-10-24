@@ -26,7 +26,7 @@ import { ChatRoom } from "./chat";
 import { SessionGuide } from "./link-screens";
 import { PhaseSummary, ProfileStage } from "./profile-stage";
 import { ProposalEditor } from "./proposal-editor";
-import { phaseRemaining, type PanelTab, type View } from "./reducer";
+import { phaseRemaining, typingSeats, type PanelTab, type View } from "./reducer";
 import { AssistantPanel, MaterialsPanel } from "./side-panels";
 import {
   STAGE_TREE,
@@ -429,7 +429,7 @@ export function DebateView({
             <ChatRoom
               snap={snap}
               pending={view.pending}
-              typing={snap.typing}
+              typing={typingSeats(view)}
               locked={locked}
               onSend={session.sendMessage}
               onTyping={session.sendTyping}

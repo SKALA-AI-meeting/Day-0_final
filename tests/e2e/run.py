@@ -139,7 +139,7 @@ class Runner:
         self.step_marks: list[int] = []
         self.materials_before: dict[str, Any] = {}
         self.started_wall = time.time()
-        self.voice_mode = os.environ.get("VOICE_ENABLED", "").lower() in ("1", "true")
+        self.voice_mode = os.environ.get("VOICE_ENABLED", "1").lower() in ("1", "true")
         self.voice_task = None
 
     # ---- 준비 -----------------------------------------------------------------------------

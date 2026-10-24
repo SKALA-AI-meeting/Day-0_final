@@ -44,4 +44,4 @@ TtsService·SttService는 토론 에이전트와 독립 인터페이스다. 기�
 
 `infra/.env.example`의 Azure 설정을 실제 `.env`에 채우고 새 스키마·채용 건으로 실행한다. 새 DB는 schema.sql을 적용한다. 기존 로컬 DB는 [DB 가이드](../guides/database.md)에 따라 백업한 뒤 음성 테이블 3개의 DDL만 추가할 수 있다. 기존 개발 DB를 초기화하지 않는다. F0 설정이 없으면 시작을 차단한다. 재연결할 기존 음성 세션에도 같은 공급자 설정을 유지해야 한다.
 
-격리 스택은 `LLM_FAKE=1`, `VOICE_PROVIDER=fake`를 강제한다. FakeSpeech TTS는 짧은 무음 WAV이며 한국어 음질 검증이 아니다. 내부 `/test/voice-transcript`로 전사 결과만 지정하고 실제 브라우저의 녹음·업로드·재생 이벤트는 통과한다. 실 Azure·한국어 품질 검증은 별도 live 작업이다. 현재 클라우드 키를 제공하지 않으면 실제 전사·합성 품질을 확인했다고 보고하지 않는다.
+격리 스택의 모드는 프로필이 정한다. `test-text`는 가짜 LLM·음성 끔, `test-voice`는 가짜 LLM·FakeSpeech, `eval-text`는 실제 LLM·음성 끔, `eval-voice`는 실제 LLM·FakeSpeech다. FakeSpeech TTS는 짧은 무음 WAV이며 한국어 음질 검증이 아니다. 내부 `/test/voice-transcript`로 전사 결과만 지정하고 음성 프로필에서는 실제 브라우저의 녹음·업로드·재생 이벤트를 통과한다. 실 Azure·한국어 품질 검증은 별도 live 작업이다. 현재 클라우드 키를 제공하지 않으면 실제 전사·합성 품질을 확인했다고 보고하지 않는다.

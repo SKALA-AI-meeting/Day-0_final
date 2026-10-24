@@ -130,7 +130,8 @@ class FakeEvaluatorLLM:
     """`LLM_FAKE=1`: 호출 없이 요소 척도의 차원마다 고정 출력(비용 0, 키 불필요).
 
     `[사실]`의 그 차원 핵심 장면에 지원자 메시지가 있으면 첫 메시지를 근거(장면 `core`)로 수준
-    3·medium, 핵심 장면이 없으면 event_not_fired, 있는데 지원자 메시지가 없으면 no_activity.
+    3·medium. hon_credit_record에 기획안 idea_credit이 있으면 그 필드를 근거로 쓴다.
+    핵심 장면이 없으면 event_not_fired, 있는데 지원자 메시지가 없으면 no_activity.
     워커 검증(근거 형식·개수·금지어·사실 모순)을 그대로 통과하고, 같은 입력에는 같은 출력을 낸다.
     """
 
