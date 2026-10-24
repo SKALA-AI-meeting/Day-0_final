@@ -96,7 +96,7 @@ class FakeLLM(BaseLLM):
 # docs/architecture/agents.md "결정적 LLM 모드". 노드 코드는 모드를 모르고, 역할마다 입력에서 필요한
 # 값만 읽어
 # 같은 입력에 같은 고정 응답을 낸다. 네트워크 호출·사용량(토큰·비용)은 0이다.
-_PLAN = re.compile(r"\[내 입장 계획\]\n이번 단계에서 미는 안: (.+) \((\S+)\)\.")
+_PLAN = re.compile(r"\[내 입장\]\n- 이 단계의 내 안: (.+) \((\S+)\)")
 _INVITE = re.compile(r"- 침묵 초대 차례: 예")
 _CANDIDATE = re.compile(r"- 지원자: (.+)님")
 _OPPOSE = ("아니", "반대", "글쎄")

@@ -9,6 +9,7 @@
 #     to: 이름을 부른 자리(지목 응답률). refs: 다음 발언이 언급해야 할 낱말(정규식, 응답률)
 #     repeat: true면 같은 질문 반복(반복률의 대조 상황)
 #     kind question: 지원자가 동료에게 직접 한 질문(무시 장면). refs로 응답률에 들어간다
+#     kind ack: 반대·다른 안 없는 짧은 호응("네, 알겠어요"). 뒤 동료 발언이 입장을 다시 기록하면 push_after_ack
 #     misquote: 이 발언 뒤 동료 발언이 걸리면 오인용(지원자가 하지 않은 말·입장을 지원자 것으로 돌림, 정규식)
 #   장면 세션(problem_scenes, solution_scenes) [초안]: 지명 무응답·질문 무시·오인용 유도·카드 직전 질문(결정 C1·C2·C3)
 #   scene: 귀속 장면 유형(attribution_* 세션, 이슈 12). weak_agree(약한 동의) · conditional_agree(조건부 동의) ·
@@ -16,7 +17,7 @@
 #     presupposing_question(전제 질문을 유도하는 맥락) · elliptical_attribution(생략형 귀속 유도) · normal_question(대조군).
 #     misquote 정규식은 보조 신호이고 주 지표는 귀속 판정(persona_eval.judge_attributions, 동료 발언 전체)
 #   card: card_due 자극(카드 id)
-version: 1
+version: 2
 candidate_name: 김지원
 sessions:
   - id: keyword
@@ -39,6 +40,8 @@ sessions:
         kind: evidence
         to: p1
         refs: ['범위|넓|산불|주택|성격']
+      - say: 네, 무슨 말씀인지 알겠어요.
+        kind: ack
       - say: 키워드는 어디서 고르나요?
         kind: progress
         repeat: true
@@ -61,6 +64,8 @@ sessions:
         kind: evidence
         to: p1
         refs: ['피해|규모|침수']
+      - say: 아, 그렇군요. 알겠습니다.
+        kind: ack
       - say: 하람님은 어떤 문제가 더 중요하다고 보세요?
         kind: named
         to: p2
@@ -127,6 +132,13 @@ sessions:
         kind: named
         to: p2
         misquote: '(네|맞아요|맞습니다).{0,15}(침수.{0,10}(좋|괜찮)|그렇게 말)'
+      - say: 저는 가뭄은 아직 보류예요. 결정은 조금 미루고 싶어요.
+        kind: evidence
+        refs: ['보류|미루|가뭄|결정']
+      - say: 한결님, 제가 가뭄에 동의한 걸로 하셨죠?
+        kind: named
+        to: p1
+        misquote: '(네|맞아요|맞습니다|그렇죠).{0,20}(동의|찬성|가뭄.{0,6}(하셨|하신|했))'
   - id: solution_scenes
     seed: { phase: solution, confirmed: { keyword: water, problem: water_p2 } }
     steps:
@@ -147,6 +159,10 @@ sessions:
         kind: named
         to: p3
         misquote: '님(도|께서|이)?\s?.{0,20}(캠페인|절수|센서).{0,20}(동의|찬성|좋다고)\s?(하셨|하신|했)'
+      - say: 한결님, 아까 제가 센서 쪽에 찬성한다고 하셨는데 저는 그런 말 한 적 없어요.
+        kind: named
+        to: p1
+        misquote: '(아까|앞서|방금).{0,15}(찬성|동의|좋다고).{0,10}(하셨|하신|말씀하셨)'
   # ---- 귀속 장면(이슈 12 측정 기반). 표현·맥락을 달리하고 자리 p1~p3을 섞는다. 정규식은 보조 신호다.
   - id: attribution_keyword
     seed: { phase: keyword }

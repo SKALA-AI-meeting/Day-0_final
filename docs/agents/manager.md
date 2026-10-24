@@ -12,7 +12,7 @@
 ## 출력
 
 - 진행 매니저 결정(`agent_runs.decision`, 형식은 [contracts/internal.md](../contracts/internal.md) "진행 매니저 결정 스키마"): 화자별 답할 메시지(`reply_to`)·카드(`card_ids`)·침묵 초대(`invite`), 다음 실행으로 넘긴 지명(`queued`), 채우기
-- 화자별 상황 정보(`[상황]` 블록, `rules.situation`)·입장 계획(`stance_plan`)·카드 지시 → 토론 동료 입력. 게시한 발언의 `meta.reply_to`·`meta.named`
+- 화자별 상황 정보(`[상황]` 블록, `rules.situation`: 답할 메시지·지명·카드 차례·반응·내 안을 두고 온 지원자 메시지 수·다른 안·이동 미발언)·입장 계획(`stance_plan`, 동료에게는 `[내 입장]` 상태로)·카드 차례 사실(장면 목적은 `cards.yaml` `purpose`) → 토론 동료 입력. 게시한 발언의 `meta.reply_to`·`meta.named`
 - 합의가 있으면 `fill_slot`(공지 고정 문장 포함), 카드 첫 발언 뒤 assessment-mcp `record_observation`
 
 ## 데이터 파일 (`scenarios/missions/debate/`)
@@ -28,7 +28,7 @@
 
 ## 코드 입구
 
-- `services/api/app/agent/manager/rules.py`: 결정적 규칙(`rule_decision`, 답하지 않은 지명 `open_mentions`·`pending_mentions`, 상황 정보 `situation`·`reactions`, 기본 응답 자리 `default_responder`, `card_brief`, `stance_plan`, `fill_seat`, `validate_turn_llm`, 카드 지시 `CARD_INSTRUCTIONS`·선점 금지 `preempt_bans`)
+- `services/api/app/agent/manager/rules.py`: 결정적 규칙(`rule_decision`, 답하지 않은 지명 `open_mentions`·`pending_mentions`, 상황 정보 `situation`·`reactions`·`intents_toward`, 소극형 전체 질문 상태 조건 `answered_open_question_last`, 기본 응답 자리 `default_responder`, `card_brief`, `stance_plan`, `fill_seat`, `validate_turn_llm`, 선점 금지 `preempt_bans`)
 - `services/api/app/agent/debate/graph.py`: 이 규칙을 부르는 노드 `cards`·`turn`(+ `_turn_llm`)·`fill`. 그래프는 여러 역할을 잇는 배선이라 `debate/`에 둔다
 - 모델 역할 키 `turn`, env `MODEL_TURN`(역할 이름을 바꾸기 전 그대로). 타임아웃·재시도는 [architecture/harness.md](../architecture/harness.md) "역할별 모델"
 

@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 285개(live 3개 포함, `make test`는 live를 뺀다).
+총 297개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -240,7 +240,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_manager_context.py</code> (14)</summary>
+<details><summary><code>tests/agent/test_manager_context.py</code> (15)</summary>
 
 - `test_addressed_message_is_answered_with_reply_to`
 - `test_named_seat_overflow_is_answered_next_run_after_restart`
@@ -256,6 +256,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_mention_pushed_out_of_the_transcript_window_is_still_answered`
 - `test_fixed_card_line_does_not_answer_a_mention`
 - `test_open_mentions_age_by_earliest_and_close_on_later_reply`
+- `test_intents_toward_counts_only_after_stance_stated`
 
 </details>
 
@@ -297,6 +298,22 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_notice_is_attached_to_safe_phrase`
 - `test_repeat_regeneration_shares_the_tool_budget`
 - `test_regeneration_paths_share_the_tool_budget` ×2
+
+</details>
+
+<details><summary><code>tests/agent/test_persona_voice.py</code> (11)</summary>
+
+- `test_stance_block_is_state_not_instruction`
+- `test_undeclared_stance_is_a_fact_and_only_structured_output_counts`
+- `test_unnamed_objection_counts_from_stored_intents`
+- `test_moved_stance_is_shown_as_a_fact`
+- `test_card_turn_shows_facts_and_scene_purpose_from_data`
+- `test_agreeable_phrasing_with_reservation_passes`
+- `test_explicit_support_move_in_text_is_rejected_even_with_own_stance`
+- `test_withdrawal_in_text_conflicting_with_structured_support_is_regenerated`
+- `test_withdrawal_of_own_option_in_text_is_rejected_without_structured_stance`
+- `test_quiet_skips_a_second_open_question_until_spoken_again`
+- `test_quiet_exclusion_needs_an_answered_open_question`
 
 </details>
 

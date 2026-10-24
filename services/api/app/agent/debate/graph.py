@@ -1,9 +1,10 @@
 """토론 그래프(docs/architecture/agents.md "토론 그래프"): 진행 매니저 + 페르소나 3.
 
 ```
-load → cards → turn ─┬─ (화자마다) respond → guard → stance_check → wait_typing → apply ─┐
-                     │                                                               ├→ fill → END
-                     └─ 화자 0명 ────────────────────────────────────────────────────────┘
+load → cards → turn ─┬─ (화자마다) respond → guard → stance_check
+                     │                        → wait_typing → apply ─┐
+                     │                                               ├→ fill → END
+                     └─ 화자 0명 ────────────────────────────────────────┘
 ```
 
 typing start는 respond 시작, stop은 apply 끝(또는 버림·미룸)에서 보낸다. 실행은 api 메일박스가
@@ -127,15 +128,25 @@ def _reply_to(state: DebateState) -> str | None:
 
 def _situation(state: DebateState, deps: DebateDeps) -> dict[str, Any]:
     spk = _current(state)
+    seat = spk["seat"]
     intents = rules.intent_map(state["ds"], state["stimulus"], state.get("intent"))
+    plan = _plan_for(state, deps, seat)
+    move = None
+    if persona.move_pending(plan, state["ds"]):
+        before = rules.option_by_id(state["ds"], rules.support_of(state["ds"], seat))
+        move = {"from": (before or {}).get("label"), "to": plan.label}
     return rules.situation(
-        spk["seat"],
+        seat,
         spk,
         _reply_to(state),
         state["transcript"],
         intents,
         deps.catalog,
         state["ds"].get("open_mentions"),
+        ds=state["ds"],
+        stance_targets=plan.targets if plan.declared else None,
+        since=(state["ds"].get("first_stated_at") or {}).get(seat),
+        move=move,
     )
 
 
@@ -200,15 +211,30 @@ def _plan_for(state: DebateState, deps: DebateDeps, seat: str) -> StancePlan:
     return rules.stance_plan(seat, state["phase"], _plan_context(state, deps))
 
 
-def _card_text(state: DebateState, deps: DebateDeps, seat: str, card_ids: list[str]) -> str | None:
-    texts = [rules.CARD_INSTRUCTIONS[c] for c in card_ids if c in rules.CARD_INSTRUCTIONS]
-    if not card_ids and state["phase"] == "problem" and seat == deps.catalog.seat_of("stubborn"):
+def _card_info(
+    state: DebateState, deps: DebateDeps, seat: str, card_ids: list[str]
+) -> dict[str, Any] | None:
+    """카드 차례의 사실과 설계된 장면 목적(cards.yaml `purpose`, 데이터). 카드 시각·담당은 바꾸지
+    않는다. 압박 카드는 첫 발언 뒤에도 최대 MAX_PRESSURE회까지 `followup_purpose`로 이어진다."""
+    purposes = [
+        str((deps.catalog.card(c) or {}).get("purpose") or "")
+        for c in card_ids
+        if (deps.catalog.card(c) or {}).get("purpose")
+    ]
+    info: dict[str, Any] = {"turn": bool(card_ids), "purposes": purposes, "pressure": None}
+    if state["phase"] == "problem" and seat == deps.catalog.seat_of("stubborn"):
         card = rules.card_progress(state["ds"]).get("listening_pressure") or {}
         count = rules.pressure_count(card, seat)
         # 카드 첫 발언을 포함해 압박 발언은 최대 MAX_PRESSURE회(이번 발언이 그다음 회차)
         if card.get("delivered") and count < rules.MAX_PRESSURE:
-            texts.append(rules.PRESSURE_FOLLOWUP)
-    return " ".join(texts) or None
+            info["pressure"] = (count + 1, rules.MAX_PRESSURE)
+            if not card_ids:
+                followup = (deps.catalog.card("listening_pressure") or {}).get("followup_purpose")
+                if followup:
+                    info["purposes"].append(str(followup))
+    if not info["turn"] and not info["purposes"]:
+        return None
+    return info
 
 
 def _typing_off(deps: DebateDeps, seat: str) -> None:
@@ -536,7 +562,7 @@ async def _generate(
         ds=state["ds"],
         names=state["names"],
         transcript=state["transcript"],
-        card_text=_card_text(state, deps, seat, spk.get("card_ids") or []),
+        card=_card_info(state, deps, seat, spk.get("card_ids") or []),
         bans=rules.preempt_bans(seat, state["phase"], state["ds"], deps.catalog, brief),
         violation=violation,
         notice=_first_notice(state),

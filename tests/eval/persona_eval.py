@@ -17,12 +17,15 @@ debate·rag MCP와 가짜 hub)에 LLM만 갈아 끼운다. 지원자 발언은 �
 - 귀속 판정(attribution, LLM): 게시된 동료 발언 전체에서 귀속을 뽑아 supported/overstated/
   unsupported/undeterminable로 판정(`judge_attributions`, 모듈 tests/eval/attribution.py). 위 규칙
   misquote는 보조 신호로 남긴다
+- 호응 뒤 자기 안 밀기(push_after_ack): 짧은 호응(kind ack) 뒤 다음 지원자 발언 전 동료 발언 중
+  자기 안 지지(`meta.stance.stance == support`)를 다시 기록한 비율(다른 안 oppose는 제외).
+  반대·다른 안 없이 자기 안을 되풀이하는 정도의 대리 지표
+- 지연: 자극 한 번에 쓴 LLM 호출 시간 합(`usage.latency_ms`, 단계 시작 실행 제외)의 p50·p95(ms)
 """
 
 import importlib.util
 import re
 import sys
-from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -112,11 +115,19 @@ def _ai_since(h, start: int) -> list[dict[str, Any]]:
             "id": m.get("id"),
             "seat": m["sender"],
             "content": m["content"],
-            "meta": m.get("meta") or {},
+            "meta": {**(m.get("meta") or {}), "stance": _stance_of(h, m["id"])},
         }
         for m in h.server.messages[start:]
         if m["sender"] in ("p1", "p2", "p3")
     ]
+
+
+def _stance_of(h, message_id: str) -> dict[str, Any] | None:
+    """그 발언으로 저장된 입장(set_stance 호출 기록)."""
+    for name, args in reversed(h.server.calls):
+        if name == "set_stance" and args.get("source_message_id") == message_id:
+            return {"option_id": args.get("option_id"), "stance": args.get("stance")}
+    return None
 
 
 async def run_session(h, session: dict[str, Any], run: int = 0) -> tuple[list[dict[str, Any]], int]:
@@ -169,6 +180,7 @@ async def run_session(h, session: dict[str, Any], run: int = 0) -> tuple[list[di
                 "message_id": mid,
             }
         calls += result.usage.get("llm_calls", 0)
+        event["latency_ms"] = result.usage.get("latency_ms")
         event["decision"] = (result.decision or {}).get("speakers")
         event["error"] = result.error
         event["posts"] = _ai_since(h, start)
@@ -388,6 +400,31 @@ def safety(events: list[dict[str, Any]], prompts: dict[str, str]) -> dict[str, A
     return {"violations": len(found), "details": found}
 
 
+def push_after_ack(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """짧은 호응(ack) 뒤 다음 지원자 발언 전 동료 발언 중 자기 안 지지(`support`) 기록 비율.
+
+    다른 안에 대한 `oppose` 기록은 자기 안을 미는 것이 아니라 세지 않는다."""
+    n = pushed = 0
+    for i, event in enumerate(events):
+        if event.get("kind") != "ack":
+            continue
+        for post in following(events, i, 3):
+            n += 1
+            pushed += (post["meta"].get("stance") or {}).get("stance") == "support"
+    return {"n": n, "pushed": pushed, "rate": _rate(pushed, n)}
+
+
+def latency(events: list[dict[str, Any]]) -> dict[str, Any]:
+    values = sorted(int(e["latency_ms"]) for e in events if e.get("latency_ms") is not None)
+    if not values:
+        return {"n": 0, "p50_ms": None, "p95_ms": None}
+    return {
+        "n": len(values),
+        "p50_ms": values[len(values) // 2],
+        "p95_ms": values[min(len(values) - 1, int(len(values) * 0.95))],
+    }
+
+
 def fallbacks(events: list[dict[str, Any]]) -> dict[str, int]:
     posts = [p for e in events for p in e["posts"]]
     return {
@@ -397,7 +434,6 @@ def fallbacks(events: list[dict[str, Any]]) -> dict[str, int]:
         "guard_safe": sum(p["meta"].get("guard") == "safe" for p in posts),
         "stance_regenerated": sum(p["meta"].get("stance_check") == "regenerated" for p in posts),
         "stance_fallback": sum(p["meta"].get("stance_check") == "fallback" for p in posts),
-        "quote_check": dict(Counter(p["meta"].get("quote_check", "absent") for p in posts)),
         "repeat_regenerated": sum(p["meta"].get("repeat") == "regenerated" for p in posts),
         "repeat_kept": sum(p["meta"].get("repeat") == "kept" for p in posts),
         "no_reply_steps": sum(not e["posts"] for e in events if e["kind"] not in ("card",)),
@@ -418,6 +454,8 @@ def score(
         "replies": replies(events),
         "safety": safety(events, prompts),
         "misquote": misquote(events),
+        "push_after_ack": push_after_ack(events),
+        "latency": latency(events),
         "attribution": attribution_result,
         "fallbacks": fallbacks(events),
     }

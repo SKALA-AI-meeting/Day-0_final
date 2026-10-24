@@ -45,6 +45,7 @@ class FakeServer:
         self.keyword: str | None = None
         self.options: list[dict[str, Any]] = []
         self.support: dict[str, str | None] = {p: None for p in ("candidate", *SEATS)}
+        self.stated: dict[str, str | None] = {}  # 자리별 첫 지지 입장 기록 시각
         # 지원자의 이 단계 최신 발언이 지지로 세는 발언이면 그 안(api candidate_confirmed)
         self.confirmed: str | None = None
         self.intents: dict[str, dict[str, Any]] = {}  # message_intents(저장된 분류)
@@ -210,6 +211,7 @@ class FakeServer:
                 seat: next((at for m, at in self.timed() if m["sender"] == seat), None)
                 for seat in SEATS
             },
+            "first_stated_at": {seat: self.stated.get(seat) for seat in SEATS},
             # api처럼 그 단계 전체 기록(대화 창 30개와 무관)에서 계산한 열린 지명
             "open_mentions": self.open_mentions(),
             "seats": [{"seat": "candidate", "display_name": self.candidate_name}]
@@ -350,11 +352,15 @@ class FakeServer:
             if scenario_option_key and o["scenario_option_key"] == scenario_option_key:
                 return ok({**o, "existing": True})
         oid = self.add_option(scenario_option_key, proposer, label)
+        at = next((t for m, t in self.timed() if m["id"] == source_message_id), None)
+        self.stated.setdefault(proposer, at)
         self.support[proposer] = oid
         return ok({**self.options[-1], "existing": False, "option_id": oid})
 
     def t_set_stance(self, participant, option_id, stance, source_message_id, run_id):
         if stance == "support":
+            at = next((t for m, t in self.timed() if m["id"] == source_message_id), None)
+            self.stated.setdefault(participant, at)
             self.support[participant] = option_id
             self.opposers.get(option_id, set()).discard(participant)
         else:

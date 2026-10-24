@@ -37,7 +37,6 @@ attribution:
 
     1) post에서 귀속을 모두 뽑는다. 귀속의 정의와 귀속이 아닌 것은 아래 기준을 따른다. 귀속이 아닌 구절은 뽑지 않는다. 귀속이 없으면 attributions는 빈 배열이다.
     2) 귀속마다 아래 기준으로 verdict를 정한다. quote는 post에서 그 귀속이 담긴 구절을 그대로, claim은 "누가 무엇을 했다/한다"로 한 문장, source_ids는 판단 근거가 된 원문 id(unsupported면 비어 있을 수 있다)다. 뽑고 나서 다시 보니 귀속이 아니면 verdict를 not_attribution으로 둔다.
-    3) draft_rejected_claims가 있으면 각 항목(게시 전 검사기가 거부한 초안의 귀속: target·claim과 초안 속 구절 span, 있으면 초안 전문 draft)도 같은 기준으로 본다. 먼저 span의 의견 주인이 초안 화자 자신이면(화자의 의견·평가·호칭) not_attribution이고, target의 귀속이면 sources와 대조해 verdict를 낸다. 순서는 입력과 같고, 없으면 rejected_claims는 빈 배열이다.
 
     target은 participants의 키(candidate, p1, p2, p3)로 쓴다. form은 statement(서술형 귀속), presupposing_question(상대 입장을 전제한 질문), elliptical(전하는 표현 없는 생략형·되짚기·요약) 중 하나다.
 

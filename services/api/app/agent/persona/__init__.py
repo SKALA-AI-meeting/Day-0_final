@@ -44,11 +44,18 @@ OUTPUT_RULE = (
     '출력은 JSON 객체 하나다: {"content": "게시할 1~3문장", "proposes": null 또는 '
     '{"scenario_option_key": "키", "label": "라벨"}, "stance": null 또는 '
     '{"option_id": "안 id 또는 키", "stance": "support" 또는 "oppose"}}. '
-    "입장을 표현하지 않는 발언이면 stance는 null이다. "
-    "proposes·stance는 [내 입장 계획]의 안만 쓸 수 있다."
+    "stance는 이번 발언이 어떤 안의 지지·반대를 새로 밝히거나 되풀이해 밝힐 때만 채운다. "
+    "질문에 답하거나 묻거나 받아 주는 발언이면 null이다. "
+    "proposes·stance에 쓸 수 있는 안은 [내 입장]의 내 안뿐이다."
 )
 # 페르소나 컨텍스트에서 빼는 DebateState 필드(docs/contracts/internal.md DebateState)
-HIDDEN_STATE_KEYS = ("card_progress", "cost_left", "candidate_intents", "first_spoke_at")
+HIDDEN_STATE_KEYS = (
+    "card_progress",
+    "cost_left",
+    "candidate_intents",
+    "first_spoke_at",
+    "first_stated_at",
+)
 
 
 @dataclass
@@ -87,7 +94,7 @@ def build_messages(
     ds: dict[str, Any],
     names: dict[str, str],
     transcript: list[dict[str, Any]],
-    card_text: str | None,
+    card: dict[str, Any] | None,
     bans: list[str],
     violation: str | None = None,
     notice: str | None = None,
@@ -134,26 +141,15 @@ def build_messages(
         )
     blocks.append("[토론 상태]\n" + "\n".join(status))
 
-    if plan.declared:
-        ident = plan.option_id or plan.key
-        move = " 지원자 안으로 옮김." if plan.moved else ""
-        if move_pending(plan, ds):
-            move += " 이번 발언에서 이 안을 지지한다고 밝힌다."
-        lock = " 지지를 바꾸지 않는다." if not plan.can_move else ""
-        blocks.append(f"[내 입장 계획]\n이번 단계에서 미는 안: {plan.label} ({ident}).{move}{lock}")
-    else:
-        blocks.append(
-            "[내 입장 계획]\n아직 입장을 밝히지 않음. 어떤 안도 지지하거나 반대하지 않는다."
-        )
-
+    blocks.append("[내 입장]\n" + stance_text(plan, ds))
     blocks.append("[상황]\n" + situation_text(situation, names))
     if notice:
         blocks.append(
             f'[정해진 안내]\n이번 발언 맨 앞에 코드가 "{notice}"를 붙인다. '
             "이 문장을 다시 쓰지 말고 이어질 한두 문장만 쓴다. 이전에 안내했다고 말하지 않는다."
         )
-    if card_text:
-        blocks.append(f"[카드 지시]\n{card_text}")
+    if card:
+        blocks.append("[카드 차례]\n" + card_text(card))
     if bans:
         blocks.append("[지킬 것]\n" + "\n".join(f"- {b}" for b in bans))
     mine = my_lines(transcript, seat)
@@ -169,8 +165,36 @@ def build_messages(
     return [SystemMessage(system), HumanMessage("\n\n".join(blocks))]
 
 
+def stance_text(plan: StancePlan, ds: dict[str, Any]) -> str:
+    """내 입장을 상태 사실로(지시 없음, C2). 무엇을 어떻게 말할지는 성향이 정한다."""
+    if not plan.declared:
+        return (
+            "- 이 단계의 내 안: 아직 없음 (칸이 정해지기 전까지 어느 안도 내 지지로 기록되지 않음)"
+        )
+    ident = plan.option_id or plan.key
+    recorded = support_of(ds, plan.seat) == plan.option_id if plan.option_id else False
+    lines = [
+        f"- 이 단계의 내 안: {plan.label} ({ident})",
+        f"- 이 안 지지를 말로 밝혔는지: {'예 (기록됨)' if recorded else '아니요 (아직 기록 없음)'}",
+        f"- 이 단계에서 지지를 옮길 수 있는지: {_yes(plan.can_move)}",
+    ]
+    return "\n".join(lines)
+
+
+def card_text(card: dict[str, Any]) -> str:
+    """카드 차례의 사실(코드)과 설계된 장면의 목적(cards.yaml `purpose`, 데이터)."""
+    turn = "예" if card.get("turn") else "아니요 (앞 카드 발언을 이어가는 차례)"
+    pressure = card.get("pressure")
+    if pressure:
+        turn += f" (이 단계 압박 발언 {pressure[0]}회째, 최대 {pressure[1]}회)"
+    lines = [f"- 이번 발언이 내 카드 차례: {turn}"]
+    for purpose in card.get("purposes") or []:
+        lines.append(f"- 이 장면의 목적: {purpose}")
+    return "\n".join(lines)
+
+
 def situation_text(situation: dict[str, Any], names: dict[str, str]) -> str:
-    """진행 매니저가 정한 상황 정보를 사실 문장으로(지시 없음, C1)."""
+    """진행 매니저가 정한 상황 정보를 사실 문장으로(지시 없음, C1·C2)."""
     target = situation.get("reply_to")
     if target:
         sender = _display(target.get("sender"), names)
@@ -190,6 +214,28 @@ def situation_text(situation: dict[str, Any], names: dict[str, str]) -> str:
     else:
         who = ", ".join(_display(p, names) for p in reacted) if reacted else "아직 없음"
         lines.append(f"- {REACTION_LABEL}: {who}")
+    toward = situation.get("toward_mine")
+    if toward is not None:
+        line = (
+            "- 내가 입장을 밝힌 뒤 내 안을 두고 온 지원자 메시지: "
+            f"반대 {toward['oppose']}개, 보류 {toward['withhold']}개, 질문 {toward['question']}개"
+        )
+        if toward.get("last"):
+            line += f' (마지막: "{toward["last"]}")'
+        lines.append(line)
+    counters = situation.get("counters")
+    if counters is not None:
+        labels = ", ".join(counters.get("labels") or []) or "없음"
+        lines.append(
+            f"- 내가 입장을 밝힌 뒤 지원자가 다른 안을 지지한 메시지: {counters['n']}개 "
+            f"(안: {labels})"
+        )
+    move = situation.get("move")
+    if move:
+        lines.append(
+            f"- 내 지지가 옮겨졌는데 아직 말로 밝히지 않음: 예 ({move.get('from') or '없음'} → "
+            f"{move.get('to')}, 지원자 안)"
+        )
     return "\n".join(lines)
 
 
@@ -313,20 +359,23 @@ def plan_violation(draft: Draft, plan: StancePlan, ds: dict[str, Any]) -> str | 
 
 
 def sentence_violation(judged: dict[str, Any] | None, plan: StancePlan) -> str | None:
-    """문장 판정(의도 분류 형식)이 계획과 다른 입장을 말하는지."""
-    if not judged or judged.get("confidence") != "high":
+    """문장 판정(의도 분류 형식)이 기록될 입장과 다른 **명시적 지지 이동**을 말하는지(C2).
+
+    거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(propose·agree)와 자기 안 철회(oppose·
+    withhold)뿐이다. 유보가 든 동의("그 말도 맞지만…")·low·질문·되짚기는 통과한다. 게시 문장과
+    저장 입장이 갈라지지 않게 구조화 stance가 자기 안 support여도 문장이 다른 안을 지지하거나 자기
+    안을 철회하면 거부한다(충돌이면 재생성). 입장이 없는 상태(카드 전·기획안 단계)는 구조화 출력만
+    본다(`plan_violation`): 안을 나열하는 중립 문장을 판정이 propose로 읽는 경우가 많다.
+    """
+    if not judged or judged.get("confidence") != "high" or not plan.declared:
         return None
     intent = judged.get("intent")
     target = {v for v in (judged.get("target_option_id"), judged.get("scenario_option_key")) if v}
-    if intent in ("propose", "agree"):
-        if not plan.declared and (target or judged.get("new_option_label")):
-            return "문장이 입장을 밝힘"
-        if plan.declared and (
-            judged.get("new_option_label") or (target and not target & plan.targets)
-        ):
-            return "문장이 계획과 다른 안을 지지함"
-    if intent == "oppose" and plan.declared and target & plan.targets:
-        return "문장이 자기 계획 안에 반대함"
+    moves = intent in ("propose", "agree") and not judged.get("reservation")
+    if moves and (judged.get("new_option_label") or (target and not target & plan.targets)):
+        return "문장이 계획과 다른 안을 지지함"
+    if intent in ("oppose", "withhold") and target & plan.targets:
+        return "문장이 자기 계획 안을 철회함"
     return None
 
 

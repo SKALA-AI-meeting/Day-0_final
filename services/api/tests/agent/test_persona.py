@@ -262,7 +262,7 @@ async def test_decide_question_gets_fixed_notice_first(harness):
     assert "[정해진 안내]" in h.snapshots[0]["text"]
     # 새 규칙 두 가지가 실제 모델 입력에 들어간다
     system, human = (str(m.content) for m in h.persona.calls[0].messages)
-    assert "그 사람이 실제로 한 말만 인용한다" in system
+    assert "실제로 한 말·밝힌 입장만 쓴다" in system
     assert "이전에 안내했다고 말하지 않는다" in human
 
 

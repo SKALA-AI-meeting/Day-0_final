@@ -61,8 +61,7 @@ uv run --project services/api python tests/eval/virtual_candidate/metrics.py <se
 | 카드 | 도달한 단계의 카드 수, 발동, 전달(전달 자리 있음), 미발동 카드 | 규칙 |
 | 동료 무응답 | 지원자가 동료를 부르거나 물은 메시지 뒤 다음 지원자 발언 전 동료 발언이 없음(규칙), 부른 동료가 말하지 않음(규칙), 답이 실제로 그 말에 응답하지 않음(LLM). `reply_to`: 동료 발언의 `meta.reply_to`로 센 값(토론 단계 지원자 메시지 중 답한 발언이 없는 수, 부른 자리 중 그 메시지에 답하지 않은 자리 수, 다음 지원자 메시지 뒤에 답한 것 포함. 그 기록이 없는 이전 세션은 null) | 규칙·LLM |
 | 오인용(보조) | 지원자 이름을 언급한 동료 발언 중 지원자가 하지 않은 말·입장을 지원자 것으로 돌린 것 | LLM |
-| 귀속 판정(`judge.attribution`) | 토론 단계 동료 발언 전체에서 귀속을 뽑아 게시 전 원문과 대조(`supported`·`overstated`·`unsupported`·`undeterminable`). 건수·분모, 귀속별·게시물별 비율, 귀속 빈도, 초안 검사(`quote_check`)와의 연결. 정의는 [testing.md](testing.md) "귀속 판정" | LLM(`VC_JUDGE_MODEL`, 없으면 gpt-4o) |
-| 인용 검사 표식(`persona.quote_check`) | 동료 발언의 `meta.quote_check` 분포(`none`·`pass`·`regenerated`·`safe`·`skipped`). 검사가 없는 빌드의 기록은 `absent` | 규칙 |
+| 귀속 판정(`judge.attribution`) | 토론 단계 동료 발언 전체에서 귀속을 뽑아 게시 전 원문과 대조(`supported`·`overstated`·`unsupported`·`undeterminable`). 건수·분모, 귀속별·게시물별 비율, 귀속 빈도, 초안 검사(guard·`stance_check`)와의 연결. 정의는 [testing.md](testing.md) "귀속 판정" | LLM(`VC_JUDGE_MODEL`, 없으면 gpt-4o) |
 | 어시스턴트 근거 | 답의 숫자가 열린 자료 원문에 없는 호출, 도구 결과 없는 출처 줄, 잘림 의심 | 규칙 |
 
 ## 안전 규칙

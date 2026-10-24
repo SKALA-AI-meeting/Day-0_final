@@ -941,6 +941,21 @@ async def debate_state(
             )
         ).all()
     )
+    # AI 자리별 이 단계 첫 지지 입장 기록 시각(입장을 밝힌 뒤 반응을 세는 기준)
+    first_stated = dict(
+        (
+            await db.execute(
+                select(Stance.participant, func.min(Stance.created_at))
+                .where(
+                    Stance.session_id == session.id,
+                    Stance.phase == phase,
+                    Stance.stance == "support",
+                    Stance.participant.in_(SEATS),
+                )
+                .group_by(Stance.participant)
+            )
+        ).all()
+    )
     return {
         "phase": phase,
         "generation": session.generation,
@@ -1010,6 +1025,7 @@ async def debate_state(
             for i, created in candidate_intents
         ],
         "first_spoke_at": {seat: iso(first_spoke.get(seat)) for seat in SEATS},
+        "first_stated_at": {seat: iso(first_stated.get(seat)) for seat in SEATS},
         "open_mentions": open_mentions,
     }
 

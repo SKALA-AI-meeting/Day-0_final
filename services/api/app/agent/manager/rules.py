@@ -9,6 +9,7 @@ LLM 없는 순수 함수만 둔다. 입력은 DebateState(docs/contracts/interna
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from app.agent.catalog import DEBATE_PHASES, SEATS, Catalog
@@ -17,26 +18,6 @@ MAX_SPEAKERS = 2
 MAX_PRESSURE = 3
 CONSECUTIVE_LIMIT = 3
 
-# 카드 지시(담당 자리에게만). 카드 이름·요소 이름·다른 자리 성향은 넣지 않는다.
-CARD_INSTRUCTIONS: dict[str, str] = {
-    "persuasion_keyword": (
-        "자기 키워드를 이유 한 가지와 함께 미세요. 지원자가 낸 안이 있으면 그 안의 약점 하나를 "
-        "물어보세요. 지원자가 아직 안을 내지 않았으면 모두에게 자기 키워드를 미세요."
-    ),
-    "flexibility_majority": "[내 입장 계획]의 안을 지지한다고 분명하게 밝히세요.",
-    "listening_pressure": (
-        '[내 입장 계획]의 안을 강하게 미세요. 지원자 안은 짧게 일축하고("그건 핵심이 아니에요") '
-        "같은 근거를 반복하세요. 욕설·인신공격·비하는 하지 않습니다."
-    ),
-    "persuasion_solution": (
-        "지원자 안의 약점(비용·실현 가능성 등) 하나를 자료 근거로 짚고 [내 입장 계획]의 안을 "
-        "미세요. 지원자가 아직 안을 내지 않았으면 모두에게 자기 안을 미세요."
-    ),
-}
-PRESSURE_FOLLOWUP = (
-    "지원자가 반박하면 [내 입장 계획]의 안으로 다시 짧게 재반박하세요. 같은 근거를 반복하고 "
-    "인신공격·비하는 하지 않습니다."
-)
 # 카드 담당이 아닌 자리가 그 단계에서 지킬 선점 금지(docs/product/scenario.md 4.2를 중립 문장으로)
 PREEMPT_BANS: dict[str, str] = {
     "persuasion_keyword": "다른 사람 대신 지원자 안을 요약하거나 변호하지 않는다.",
@@ -480,7 +461,9 @@ def intent_map(
     """
     found = {str(r.get("message_id")): r for r in ds.get("candidate_intents") or []}
     if intent and stimulus.get("message_id"):
-        found[str(stimulus["message_id"])] = intent
+        mid = str(stimulus["message_id"])
+        # 이번 분류가 저장 행을 대신하되 메시지 id·저장 시각은 남긴다(상황 사실 계산용)
+        found[mid] = {**(found.get(mid) or {}), **intent, "message_id": mid}
     return found
 
 
@@ -609,6 +592,64 @@ def reactions(
     return found
 
 
+def intents_toward(
+    rows: list[dict[str, Any]],
+    targets: set[str],
+    since: Any,
+    ds: dict[str, Any],
+    catalog: Catalog,
+    transcript: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """내가 지지 입장을 처음 기록한 뒤(since) 지원자 메시지의 저장 의도를 내 안 기준으로 센다(C2).
+
+    `toward_mine`: 대상이 내 지지 안인 `oppose`·`withhold`·`question` 수와 마지막 메시지 본문(대화
+    창에 있을 때만). `counters`: 내 안이 아닌 안을 지지로 세는 발언(`counter_count`와 같은 규칙,
+    high·유보 없음)의 메시지 수(`n`)와 그 안 라벨 목록(중복 없음, 따로 센다).
+    뜻은 저장된 분류가, 횟수는 코드가 정한다. 낱말 검사 없음.
+    """
+    toward = {"oppose": 0, "withhold": 0, "question": 0, "last": None}
+    labels: list[str] = []
+    counters = 0
+    text_of = {str(m.get("id")): str(m.get("content") or "") for m in transcript}
+    for row in rows if since is not None else []:
+        # 저장 시각이 없는 행은 이번 자극 메시지(가장 최신)라 센다
+        if _after(row.get("created_at"), since) is False:
+            continue
+        target = row.get("target_option_id") or row.get("scenario_option_key")
+        mine = bool(target) and (target in targets or key_of(ds, target) in targets)
+        intent = row.get("intent")
+        if mine and intent in ("oppose", "withhold", "question"):
+            toward[intent] += 1
+            toward["last"] = text_of.get(str(row.get("message_id"))) or toward["last"]
+            continue
+        if (
+            intent in ("propose", "agree")
+            and row.get("confidence") == "high"
+            and not row.get("reservation")
+            and ((target and not mine) or row.get("new_option_label"))
+        ):
+            option = option_by_id(ds, target) or option_by_key(ds, target)
+            label = (
+                (option or {}).get("label")
+                or catalog.label_of(str(target or ""))
+                or row.get("new_option_label")
+            )
+            counters += 1
+            if label and label not in labels:
+                labels.append(str(label))
+    return {"toward_mine": toward, "counters": {"n": counters, "labels": labels}}
+
+
+def _after(value: Any, since: Any) -> bool | None:
+    """value가 since보다 뒤인지(둘 다 ISO 시각). 비교할 수 없으면 None."""
+    try:
+        a = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        b = datetime.fromisoformat(str(since).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return a > b
+
+
 def situation(
     seat: str,
     spk: dict[str, Any],
@@ -617,8 +658,13 @@ def situation(
     intents: dict[str, dict[str, Any]],
     catalog: Catalog,
     mentions: list[dict[str, Any]] | None = None,
+    *,
+    ds: dict[str, Any] | None = None,
+    stance_targets: set[str] | None = None,
+    since: Any = None,
+    move: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """토론 동료에게 줄 상황 정보(사실만, 지시 없음, C1).
+    """토론 동료에게 줄 상황 정보(사실만, 지시 없음, C1·C2).
 
     답할 메시지가 대화 창(최근 30개) 밖이면 DebateState `open_mentions`에 api가 담은 그 메시지의
     보낸 사람·본문을 쓴다(창 밖 지명이어도 "답할 메시지: 없음"이 되지 않게).
@@ -628,13 +674,17 @@ def situation(
     - `card_turn`: 이번 발언이 이 자리의 카드 차례인지(`card_brief`가 정한 카드가 있음)
     - `invite`: 침묵 초대 차례인지
     - `reactions`: 이 자리의 마지막 발언 뒤 반응한 참여자(`reactions`, 아직 말하지 않았으면 None)
+    - `toward_mine`·`counters`: 내 지지 안(`stance_targets`)에 대한 지원자의 저장 의도 수
+      (`intents_toward`, 이 자리가 처음 지지 입장을 기록한 시각 `since` 뒤, 아직이면 0).
+      입장이 없으면 None
+    - `move`: 지지가 옮겨졌는데 아직 말로 밝히지 않았을 때 `{from, to}`
     """
     target = next((m for m in transcript if reply_to and str(m.get("id")) == reply_to), None)
     if target is None and reply_to:
         row = next((r for r in mentions or [] if str(r.get("message_id")) == reply_to), None)
         if row is not None:
             target = {"id": reply_to, "sender": row.get("sender"), "content": row.get("content")}
-    return {
+    found: dict[str, Any] = {
         "reply_to": None
         if target is None
         else {
@@ -646,7 +696,15 @@ def situation(
         "card_turn": bool(spk.get("card_ids")),
         "invite": bool(spk.get("invite")),
         "reactions": reactions(seat, transcript, intents, catalog),
+        "toward_mine": None,
+        "counters": None,
+        "move": move,
     }
+    if stance_targets and ds is not None:
+        # 저장 시각이 없는 행은 이번 자극 메시지라 맨 뒤(가장 최신)
+        rows = sorted(intents.values(), key=lambda r: str(r.get("created_at") or "~"))
+        found.update(intents_toward(rows, stance_targets, since, ds, catalog, transcript))
+    return found
 
 
 def default_responder(
@@ -755,7 +813,10 @@ def rule_decision(
         answered = any(s["reply_to"] == current for s in speakers)
         # 전체 질문(부른 자리 없음): 소극형·비판형(뺀 자리 제외)
         if (intent or {}).get("intent") == "question" and not answered and phase in DEBATE_PHASES:
-            for seat in (catalog.seat_of("quiet"), catalog.seat_of("critic")):
+            quiet = catalog.seat_of("quiet")
+            if quiet and answered_open_question_last(quiet, transcript, intents, catalog):
+                excluded = [*excluded, quiet]
+            for seat in (quiet, catalog.seat_of("critic")):
                 if seat and seat not in excluded and seat not in used:
                     if len(speakers) < MAX_SPEAKERS:
                         speakers.append(speaker(seat, reply_to=current))
@@ -787,6 +848,28 @@ def rule_decision(
         decision["reason"] = decision["reason"] or "단계 시작"
     decision["speakers"] = speakers[:MAX_SPEAKERS]
     return decision
+
+
+def answered_open_question_last(
+    seat: str,
+    transcript: list[dict[str, Any]],
+    intents: dict[str, dict[str, Any]],
+    catalog: Names,
+) -> bool:
+    """이 자리의 마지막 발언이 부르지 않은 지원자 질문(저장 의도 `question`인 전체 질문)에 답한
+    것이고 그 뒤 이 자리가 말한 적이 없는지(상태 조건). 참이면 새 맥락 없이 같은 자리가 또 전체
+    질문을 받는 상태라 소극형을 전체 질문 화자에서 뺀다(지명·카드 차례는 제한하지 않는다, C2 구현
+    세부).
+    """
+    last = next((m for m in reversed(transcript) if m.get("sender") == seat), None)
+    if last is None or not last.get("reply_to"):
+        return False
+    answered = next((m for m in transcript if str(m.get("id")) == str(last["reply_to"])), None)
+    if answered is None or answered.get("sender") != "candidate":
+        return False
+    if (intents.get(str(answered.get("id"))) or {}).get("intent") != "question":
+        return False
+    return seat not in addressed(answered, intents, catalog)
 
 
 def needs_responder(decision: dict[str, Any], stimulus: dict[str, Any]) -> bool:
