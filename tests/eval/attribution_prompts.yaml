@@ -1,9 +1,11 @@
 # 귀속 추출·판정 프롬프트(고정, tests/eval/attribution.py). 바꾸면 이전 측정·보정 세트와 비교할 수 없으므로
 # version을 올리고 기준선 기록에 바뀐 날짜를 남긴다. 입력은 JSON 한 덩어리, 출력은 구조화 출력(JSON Schema).
 # temperature 0. 지원자 표시 이름은 "지원자"로 바꿔 넣는다.
+# v3(2026-10-24): 오류 판정(overstated·unsupported)에만 2차 확인 호출(verify)을 더한다. 귀속 표지(cue)를 게시물에서 그대로 인용해야 하고,
+# 표지가 없으면 코드가 not_attribution으로 바꾼다. 기준선에서 unsupported의 대부분이 화자 자신의 의견·질문이었기 때문이다.
 # v2(2026-10-24): 보정 결과 반영. 화자 자신의 의견·호칭을 귀속으로 뽑던 오류를 막고(not_attribution),
 # overstated 대조 규칙을 일반 원리로 적는다. criteria는 attribution(추출+판정)과 relabel(고정 귀속 재판정)이 함께 쓴다.
-version: 2
+version: 3
 criteria: |
   [귀속의 정의]
   귀속 = post의 화자(speaker)가 "다른 참여자"(지원자 또는 다른 동료)가 무엇을 말했다·주장한다·선호한다·동의했다·제안했다·바꿨다고 돌리는 부분이다. 전하는 표현("~라고 하셨")이 없어도 귀속이다: 상대 입장을 전제한 질문("B 편이시죠?", "캠페인 쪽으로 기우신 것 같은데 맞나요?"), 생략형·되짚기("지원자님 안은 ~", "다들 B로 가자는 분위기니"), 요약("지원자님 말씀처럼 ~").
@@ -45,5 +47,20 @@ relabel:
     너는 토론 기록 검수자다. 입력은 AI 동료 한 명이 게시한 발언(post), 그 발언이 게시되기 전까지의 대화 원문(sources: id·화자·단계·순서·내용), 그리고 이미 추출된 귀속 목록(attributions: attribution_id·quote·target·claim)이다. 추출을 다시 하지 않는다. 목록의 attribution_id마다 verdict와 reason을 하나씩 내고, 목록에 없는 id는 만들지 않는다.
 
     귀속마다 두 단계로 본다. (1) owner: 그 구절의 의견·주장·판단의 주인이 누구인가. speaker(화자 자신의 견해·평가·안내·질문) / target(화자가 target이 말했다·그런 입장이라고 돌림) / unclear. 1인칭 표지와 화자의 추론은 speaker다. (2) owner가 speaker이거나 구절이 호칭·권유·상대 입장을 전제하지 않은 질문이면 verdict는 not_attribution이다. owner가 target일 때만 sources의 target 원문과 대조해 [verdict 기준]대로 정한다. 추출기의 target·claim은 틀릴 수 있으므로 구절 자체로 판단한다.
+
+    {criteria}
+verify:
+  system: |
+    너는 토론 기록 검수자다. 1차 판정이 "귀속 오류"(overstated 또는 unsupported)라고 본 구절 하나를 다시 확인한다. 입력은 AI 동료의 게시 발언(post: speaker·content), 문제의 귀속(attribution: quote = 발언 속 구절, target, claim, 1차 verdict·reason), 게시 전 대화 원문(sources), participants다.
+
+    1) 먼저 묻는다: post의 문장 자체가 "target이 그렇게 말했다·그런 입장이다·선호한다·제안했다"고 단정하거나 전제하는가? 그렇다면 그것을 드러내는 귀속 표지(cue)를 post에서 글자 그대로 한 구절 인용한다. 표지의 종류(cue_kind):
+       - reported_speech: 전하는 어미·표현("~라고 하셨", "~하셨죠", "~라고 보신다", "~이라고 들었어요").
+       - named_reference: "OO님이 말씀하신/제안한/지지하신 ~", "OO님 안은 ~", "OO님 말씀처럼 ~".
+       - presupposing_question: target의 입장을 전제한 질문("OO님은 B 편이시죠?", "~로 기우신 것 같은데 맞나요?", "왜 B가 낫다고 보세요?").
+       - collective: "다들/모두/우리 모두 ~로 가자는" 같이 target을 포함한 집단의 입장 단정.
+       - other: 위에 없지만 target의 말·입장을 분명히 돌리는 표현.
+       표지가 없으면 cue는 빈 문자열, cue_kind는 none이다. 화자 자신의 의견·평가·걱정·제안("~하면 좋겠네요", "~해볼 필요가 있지 않을까요?", "~입니다"), 화자의 보통 질문·반문("정말 ~할까요?"), target 안에 대한 화자의 평가는 표지가 아니다. 문장에 target의 이름이 있다는 것만으로는 표지가 아니다(호칭·부름). claim이 target에게 돌린 내용이어도 post의 표현이 그것을 단정하지 않으면 표지가 없는 것이다.
+    2) 표지가 없으면 verdict는 not_attribution이다. 표지가 있으면 sources의 target 원문과 대조해 [verdict 기준]대로 verdict를 유지하거나 고친다(supported로 고쳐도 된다).
+    owner는 구절의 의견 주인(speaker/target/unclear)이고, reason은 한 문장이다.
 
     {criteria}

@@ -29,6 +29,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from datetime import date
@@ -128,6 +129,30 @@ def mark_self_target(attributions: list[dict[str, Any]], speaker: str | None) ->
             a["verdict"], a["reason"], a["owner"] = NOT_ATTRIBUTION, SELF_TARGET_REASON, "speaker"
             n += 1
     return n
+
+
+VERIFY_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["cue", "cue_kind", "owner", "verdict", "reason"],
+    "properties": {
+        "cue": {"type": "string"},
+        "cue_kind": {
+            "type": "string",
+            "enum": [
+                "reported_speech",
+                "named_reference",
+                "presupposing_question",
+                "collective",
+                "other",
+                "none",
+            ],
+        },
+        "owner": {"type": "string", "enum": ["speaker", "target", "unclear"]},
+        "verdict": {"type": "string", "enum": list(VERDICTS)},
+        "reason": {"type": "string"},
+    },
+}
 
 
 def load_prompts() -> dict[str, Any]:
@@ -486,6 +511,9 @@ class AttributionJudge:
         self.prompts = load_prompts()
         self.used_models: Counter = Counter()
         self.calls = 0
+        self.verify_calls = 0  # 오류 판정 2차 확인 호출 수
+        self.verify_forced = 0  # 표지 없음으로 코드가 not_attribution을 강제한 수
+        self.verify_failed = 0  # 2차 확인 실패·빈 응답(원래 판정 유지)
         self._ask = ask
         self.http = None
         if ask is None:
@@ -557,11 +585,44 @@ class AttributionJudge:
             for aid in wanted
         ]
 
+    async def verify(self, payload: dict[str, Any], scopes: list[str]) -> dict[str, Any]:
+        """오류 판정 하나의 2차 확인(verify 프롬프트). 모델이 인용한 귀속 표지(cue)가 `scopes`(귀속
+        구절이 든 문장 + 앞 문장, 출현마다 하나) 중 하나 안에 글자 그대로 있어야 한다. 비었거나
+        cue_kind가 none이거나 정규화 뒤 2자 미만이거나 범위 밖이면 코드가 not_attribution으로
+        강제한다(`forced`, `forced_reason`). 호출이 실패하거나 응답이 비면 `failed`."""
+        self.verify_calls += 1
+        try:
+            raw = await self._complete("verify", VERIFY_SCHEMA, payload)
+        except Exception as exc:  # noqa: BLE001  판정 실패가 측정 전체를 멈추지 않게
+            self.verify_failed += 1
+            return {"failed": True, "error": type(exc).__name__}
+        if not isinstance(raw, dict) or not raw:
+            self.verify_failed += 1
+            return {"failed": True, "error": "empty"}
+        raw_cue = str(raw.get("cue") or "").strip()
+        forced_reason = cue_rejection(raw_cue, raw.get("cue_kind"), scopes)
+        if forced_reason:
+            self.verify_forced += 1
+        verdict = raw.get("verdict") if raw.get("verdict") in VERDICTS else "undeterminable"
+        return {
+            "failed": False,
+            "raw_cue": raw_cue,
+            "cue": raw_cue if forced_reason is None else "",
+            "cue_kind": raw.get("cue_kind") if forced_reason is None else "none",
+            "forced": forced_reason is not None,
+            "forced_reason": forced_reason,
+            "verdict": verdict if forced_reason is None else NOT_ATTRIBUTION,
+            "reason": str(raw.get("reason") or "").strip(),
+        }
+
     def info(self) -> dict[str, Any]:
         return {
             "model": self.model,
             "models_used": dict(self.used_models),
             "calls": self.calls,
+            "verify_calls": self.verify_calls,
+            "verify_forced": self.verify_forced,
+            "verify_failed": self.verify_failed,
             "prompt_version": self.prompts.get("version"),
             "date": date.today().isoformat(),
         }
@@ -569,6 +630,152 @@ class AttributionJudge:
     async def aclose(self) -> None:
         if self.http is not None:
             await self.http.aclose()
+
+
+def _normal(text: str) -> str:
+    """대조용 정규화: NFKC 뒤 공백·문장부호 제거."""
+    return re.sub(r"[\s\W_]+", "", unicodedata.normalize("NFKC", text))
+
+
+SENTENCE_END = re.compile(r"[.?!…]+|\n+")
+
+
+def quote_scopes(text: str, quote: str) -> list[str]:
+    """귀속 구절 `quote`가 나오는 자리마다, 그 구절이 든 문장(들)과 바로 앞 문장을 합친 범위. 문장은
+    `.?!…`와 줄바꿈으로 나누고 정규화(NFKC·공백·문장부호 제거) 기준으로 찾는다(모든 출현). 한국어는
+    표지가 앞 문장에 오는 일이 잦다("서지안님이 그러셨죠. 예산이 부족하다고."). 구절이 본문에 없으면
+    빈 목록(추출이 본문에 없는 구절을 만든 것)."""
+    nq = _normal(quote)
+    if not nq:
+        return []
+    pieces: list[str] = []
+    start = 0
+    for found in SENTENCE_END.finditer(text):
+        pieces.append(text[start : found.end()])
+        start = found.end()
+    if start < len(text):
+        pieces.append(text[start:])
+    # 구분자뿐인 조각("…" 뒤의 줄바꿈 등)은 앞 문장에 붙여 "앞 문장"이 빈 조각이 되지 않게 한다
+    merged: list[str] = []
+    for piece in pieces:
+        if merged and not _normal(piece):
+            merged[-1] += piece
+        else:
+            merged.append(piece)
+    pieces = merged
+    normals = [_normal(piece) for piece in pieces]
+    joined = "".join(normals)
+    bounds = []
+    cursor = 0
+    for normal in normals:
+        bounds.append((cursor, cursor + len(normal)))
+        cursor += len(normal)
+    scopes = []
+    pos = joined.find(nq)
+    while pos >= 0:
+        end = pos + len(nq)
+        hit = [i for i, (lo, hi) in enumerate(bounds) if lo < end and hi > pos]
+        first = max(hit[0] - 1, 0) if hit else 0
+        last = hit[-1] if hit else -1
+        scope = "".join(pieces[first : last + 1])
+        if scope not in scopes:
+            scopes.append(scope)
+        pos = joined.find(nq, pos + 1)
+    return scopes
+
+
+QUOTE_NOT_IN_POST = "quote_not_in_post"
+
+
+def cue_rejection(cue: str, cue_kind: Any, scopes: list[str]) -> str | None:
+    """표지를 받지 않는 이유(코드 규칙). None이면 표지를 인정한다."""
+    normal_cue = _normal(cue)
+    if not cue or cue_kind == "none":
+        return "no_cue"
+    if len(normal_cue) < 2:
+        return "cue_too_short"
+    if not any(normal_cue in _normal(scope) for scope in scopes):
+        return "cue_outside_quote_sentence"
+    return None
+
+
+def force_not_attribution(a: dict[str, Any], reason: str) -> None:
+    """코드가 귀속 아님으로 확정할 때 귀속 행을 일관되게 바꾼다(reason·owner·source_ids)."""
+    a["verdict"] = NOT_ATTRIBUTION
+    a["reason"] = reason
+    if "owner" in a:
+        a["owner"] = "speaker"
+    if "source_ids" in a:
+        a["source_ids"] = []
+
+
+async def verify_errors(
+    judge: AttributionJudge,
+    post: dict[str, Any],
+    sources: list[dict[str, Any]],
+    attributions: list[dict[str, Any]],
+    names: dict[str, str] | None = None,
+) -> int:
+    """오류 판정(overstated·unsupported)마다 2차 확인 호출을 하고 결과로 verdict를 바꾼다(제자리).
+    귀속마다 `verification`{before, raw_cue, cue, cue_kind, forced, failed}를 남긴다. 실패하면 원래
+    판정을 유지한다. 호출 수를 돌려준다."""
+    names = names or NAMES
+    n = 0
+    for a in attributions:
+        if a.get("verdict") not in ERRORS:
+            continue
+        n += 1
+        scopes = quote_scopes(post.get("content", ""), a.get("quote", ""))
+        if not scopes:  # 추출된 구절이 본문에 없다: 호출 없이 귀속 아님
+            judge.verify_forced += 1
+            a["verification"] = {
+                "before": a["verdict"],
+                "forced": True,
+                "forced_reason": QUOTE_NOT_IN_POST,
+                "failed": False,
+            }
+            force_not_attribution(a, QUOTE_NOT_IN_POST)
+            continue
+        payload = {
+            "participants": {k: names.get(k, k) for k in TARGETS},
+            "post": {
+                "speaker": post.get("speaker"),
+                "speaker_name": names.get(post.get("speaker"), post.get("speaker")),
+                "content": post.get("content", ""),
+            },
+            "attribution": {
+                "quote": a.get("quote", ""),
+                "target": a.get("target", ""),
+                "target_name": names.get(a.get("target"), a.get("target")),
+                "claim": a.get("claim", ""),
+                "verdict": a["verdict"],
+                "reason": a.get("reason", ""),
+            },
+            "sources": [
+                {**m, "speaker_name": names.get(m["sender"], m["sender"])} for m in sources
+            ],
+        }
+        result = await judge.verify(payload, scopes)
+        if result["failed"]:
+            a["verification"] = {"before": a["verdict"], "failed": True, "error": result["error"]}
+            continue
+        a["verification"] = {
+            "before": a["verdict"],
+            "raw_cue": result["raw_cue"],
+            "cue": result["cue"],
+            "cue_kind": result["cue_kind"],
+            "forced": result["forced"],
+            "forced_reason": result["forced_reason"],
+            "failed": False,
+        }
+        if result["forced"]:
+            a["verification"]["model_reason"] = result["reason"]
+            force_not_attribution(a, result["forced_reason"])
+            continue
+        a["verdict"] = result["verdict"]
+        if result["reason"]:
+            a["reason"] = result["reason"]
+    return n
 
 
 async def judge_posts(
@@ -584,6 +791,13 @@ async def judge_posts(
         payload = payload_for(transcript, index, names)
         verdict = await judge.ask(payload)
         mark_self_target(verdict["attributions"], m["sender"])
+        await verify_errors(
+            judge,
+            {"speaker": m["sender"], "content": m["content"]},
+            payload["sources"],
+            verdict["attributions"],
+            names,
+        )
         rows.append(
             {
                 "run": m["unit"][0],
@@ -737,9 +951,21 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "attributions_per_post": span("attributions_per_post"),
         },
         "sources_truncated_posts": sum(r["sources_truncated"] for r in rows),
+        "verification": verification_counts(rows),
         "linkage": linkage(rows),
         "examples": examples,
         "note": "오류 0건은 효과 입증이 아니다. 귀속 빈도와 함께 본다.",
+    }
+
+
+def verification_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """2차 확인 집계: 확인한 귀속 수, 코드가 not_attribution으로 강제한 수, 실패(판정 유지) 수."""
+    checked = [a["verification"] for r in rows for a in r["attributions"] if a.get("verification")]
+    return {
+        "checked": len(checked),
+        "forced_not_attribution": sum(bool(v.get("forced")) for v in checked),
+        "quote_not_in_post": sum(v.get("forced_reason") == QUOTE_NOT_IN_POST for v in checked),
+        "failed": sum(bool(v.get("failed")) for v in checked),
     }
 
 
@@ -896,6 +1122,7 @@ async def extract_items(
         }
         verdict = await judge.ask(payload)
         mark_self_target(verdict["attributions"], (item.get("post") or {}).get("speaker"))
+        await verify_errors(judge, item["post"], payload["sources"], verdict["attributions"])
         item["extracted_attributions"] = [
             {
                 "attribution_id": attribution_id(item["item_id"], n),
@@ -912,6 +1139,7 @@ async def extract_items(
                         "attribution_id": attribution_id(item["item_id"], n),
                         "verdict": a["verdict"],
                         "reason": a["reason"],
+                        **({"verification": a["verification"]} if "verification" in a else {}),
                     }
                     for n, a in enumerate(verdict["attributions"], 1)
                 ],
@@ -996,6 +1224,11 @@ async def relabel_items(
                 ],
             }
             labels = await judge.relabel(payload)
+            by_id = {a["attribution_id"]: a for a in asked}
+            merged = [{**by_id[x["attribution_id"]], **x} for x in labels]
+            await verify_errors(judge, item["post"], payload["sources"], merged)
+            keep = ("attribution_id", "verdict", "owner", "reason", "verification")
+            labels = [{k: v for k, v in x.items() if k in keep} for x in merged]
         judged = {x["attribution_id"]: x for x in labels} | fixed
         rows.append(
             {
