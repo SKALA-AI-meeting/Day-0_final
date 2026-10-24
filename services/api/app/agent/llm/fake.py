@@ -143,19 +143,30 @@ def _last_human(messages: list[BaseMessage]) -> str:
 
 
 def _stance(data: dict[str, Any]) -> str:
-    """입장 판정(가짜 모델, persona.STANCE_SCHEMA): 초안에 보류어 → withdraw, 다른 안 라벨 → move,
-    내 안 라벨 → keep, 아니면 none. 의도 분류 역할 모델이 `[초안]` 입력을 받으면 이 규칙을 쓴다."""
+    """입장 판정(가짜 모델, persona.STANCE_SCHEMA). 프롬프트와 같은 원리로 초안이 **끝내 어디에
+    서는지**로 정한다: 가장 뒤에 나온 안 라벨이 내 안이면 keep, 다른 안이면 move("물도 좋지만 저는
+    불"은 keep). 보류어가 마지막 안 언급보다 뒤에 있으면(또는 안 언급이 없으면) withdraw, 아무 안도
+    없으면 none. 의도 분류 역할 모델이 `[초안]` 입력을 받으면 이 규칙을 쓴다."""
     text = str(data.get("초안") or "")
     mine = data.get("내 안") or {}
-    others = [o for o in data.get("다른 안") or [] if o.get("label") and o["label"] in text]
-    if any(w in text for w in _WITHHOLD):
+    named = [(mine.get("label"), mine.get("id"), True)] + [
+        (o.get("label"), o.get("id"), False) for o in data.get("다른 안") or []
+    ]
+    mentions = [
+        (text.rfind(label), oid, is_mine)
+        for label, oid, is_mine in named
+        if label and label in text
+    ]
+    last = max(mentions, default=None)
+    withhold_at = max((text.rfind(w) for w in _WITHHOLD if w in text), default=-1)
+    if withhold_at >= 0 and (last is None or withhold_at > last[0]):
         out = {"verdict": "withdraw", "target": mine.get("id"), "confidence": "high"}
-    elif others:
-        out = {"verdict": "move", "target": others[0]["id"], "confidence": "high"}
-    elif mine.get("label") and mine["label"] in text:
-        out = {"verdict": "keep", "target": mine.get("id"), "confidence": "high"}
-    else:
+    elif last is None:
         out = {"verdict": "none", "target": None, "confidence": "high"}
+    elif last[2]:
+        out = {"verdict": "keep", "target": last[1], "confidence": "high"}
+    else:
+        out = {"verdict": "move", "target": last[1], "confidence": "high"}
     return json.dumps(out, ensure_ascii=False)
 
 

@@ -32,4 +32,4 @@
 
 - 단위(LLM mock): `services/api/tests/agent/test_intent.py`(픽스처 `services/api/tests/agent/fixtures/intent_keyword_20.jsonl`)
 - 단위(DB): `services/api/tests/test_c02_consensus_fill.py`(보류 철회, 유보 동의 미저장, 최신 발언 동의 조건), `services/api/tests/test_mailbox.py`(유보·제외 자리 저장)
-- 평가셋: `tests/eval/intent_cases.yaml`(20문장 + 결정 사례 `decided_cases`: 보류·새 안·A 말고 B·정정·자리 빼기), `tests/eval/test_eval.py::test_intent_live`. 보류 세트 `tests/eval/intent_holdout_cases.yaml`(18문장: 양보·보류·지지·질문, 프롬프트 예시·20문장과 겹치지 않음), `test_intent_holdout_live`. `make eval PROFILE=eval-text ALLOW_API=1`
+- 평가셋: `tests/eval/intent_cases.yaml`(20문장 + 결정 사례 `decided_cases`: 보류·새 안·A 말고 B·정정·자리 빼기), `tests/eval/test_eval.py::test_intent_live`. 보류 세트 `tests/eval/intent_holdout_cases.yaml`(18문장: 양보·보류·지지·질문, 프롬프트 예시·20문장과 겹치지 않음), `test_intent_holdout_live`. `make eval PROFILE=eval-text SUITE=fixtures ALLOW_API=1`

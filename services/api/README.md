@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 303개(live 3개 포함, `make test`는 live를 뺀다).
+총 304개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -228,7 +228,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_llm.py</code> (8)</summary>
+<details><summary><code>tests/agent/test_llm.py</code> (9)</summary>
 
 - `test_role_models_and_temperature`
 - `test_missing_key_is_config_error`
@@ -237,6 +237,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_llm_fake_needs_no_key`
 - `test_agent_runner_default_is_session`
 - `test_fake_intent_rules`
+- `test_fake_stance_judge_follows_where_the_draft_ends`
 - `test_llm_fake_mode_is_deterministic`
 
 </details>

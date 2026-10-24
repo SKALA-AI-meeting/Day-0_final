@@ -386,7 +386,7 @@ async def test_save_eval_fixture_writes_session_record(tmp_path):
         await script.save("sess-2", broken, tmp_path)
 
 
-# ---- live (make eval-live) --------------------------------------------------------------------
+# ---- live (make eval SUITE=fixtures) -------------------------------------------------------
 
 
 @pytest.mark.live
@@ -415,8 +415,9 @@ async def test_intent_live(live_report):
 @pytest.mark.live
 async def test_intent_holdout_live(live_report):
     """보류 세트(intent_holdout_cases.yaml)를 운영과 같은 입력으로 1회 분류한다. 프롬프트 예시를
-    바꾼 뒤 20문장 점수가 예시 암기로 부풀지 않았는지 보는 용도다. 실행: `make eval-live`
-    (또는 `pytest -m live tests/eval/test_eval.py -k holdout`)."""
+    바꾼 뒤 20문장 점수가 예시 암기로 부풀지 않았는지 보는 용도다. 실행:
+    `make eval PROFILE=eval-text SUITE=fixtures ALLOW_API=1`(tests/eval live 전체) 또는 같은 env로
+    `pytest -m live tests/eval/test_eval.py -k holdout`."""
     from app.agent.intent import classify
     from app.agent.llm import make_llm
 

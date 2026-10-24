@@ -43,13 +43,14 @@
 |---|---|---|
 | 그 안을 고른다("그래도 그걸로 가요") | `agree`(남의 안)·`propose`(자기 안) | `false` |
 | 그 안을 고르되 걱정·조건을 붙인다("비용만 맞으면요") | `agree`·`propose` | `true` |
-| 고르지 않고 미룬다·보류한다("아직 정하진 않을게요") | `withhold` | `true` |
+| 고르지 않는다: 걱정·의문만 붙이거나 미룬다·보류한다("아직 정하진 않을게요", "~가 걱정이에요") | `withhold` | `true` |
 | 다른 안을 고른다("그래도 저는 다른 쪽이요") | 그 다른 안에 `agree`·`propose` | 그 다른 안 기준 |
 
 짝 예시(같은 양보, 다른 끝):
 
 - "B안 좋긴 한데, 그래도 B안으로 가요" → `agree` B안, reservation false.
-- "B안 좋긴 한데 운영 인력이 걱정이에요" → `agree` B안, reservation true(고르면서 걱정을 붙임).
+- "B안 좋긴 한데 운영 인력이 걱정이에요" → `withhold` B안, reservation true(고르지 않고 걱정만 붙임).
+- "B안으로 가요. 운영 인력은 걱정이지만요" → `agree` B안, reservation true(고르면서 걱정을 붙임).
 - "B안 좋긴 한데 아직 정하진 않을게요" → `withhold` B안, reservation true(고르지 않고 미룸).
 - "B안 좋긴 한데 저는 C안이 더 끌려요" → `propose`·`agree` C안(누가 먼저 냈는지에 따라), reservation false(B안은 대상이 아님).
 
@@ -73,7 +74,7 @@
 
 ## reservation
 
-`target`·`new_option_label`로 정한 **대상 안 하나만** 본다. 지원자가 그 안을 고르거나 지지하면서 그 안에 망설임·조건·걱정·보류를 붙였으면 `true`, 아니면 `false`다("~ 좋은데 비용이 걱정이에요", "~라면 괜찮아요"). 같은 메시지에 다른 안에 대한 반대·보류·걱정이 있어도 대상 안에 붙은 것이 아니면 `false`다. 예: "A안은 보류고 제 표는 C안이에요" → 대상 C안, `false`. "A안 말고 B안으로 가요" → 대상 B안, `false`. "A안이나 B안은 비용이 걱정이고 저는 이런 방식을 생각했어요" → 대상은 새 방식, `false`. `withhold`·`oppose`는 `true`다.
+`target`·`new_option_label`로 정한 **대상 안 하나만** 본다. 지원자가 그 안을 고르거나 지지하면서 그 안에 망설임·조건·걱정·보류를 붙였으면 `true`, 아니면 `false`다("~로 가요, 비용은 걱정이지만", "~라면 괜찮아요"). 같은 메시지에 다른 안에 대한 반대·보류·걱정이 있어도 대상 안에 붙은 것이 아니면 `false`다. 예: "A안은 보류고 제 표는 C안이에요" → 대상 C안, `false`. "A안 말고 B안으로 가요" → 대상 B안, `false`. "A안이나 B안은 비용이 걱정이고 저는 이런 방식을 생각했어요" → 대상은 새 방식, `false`. `withhold`·`oppose`는 `true`다.
 
 ## addressed_to와 excluded
 
@@ -97,7 +98,8 @@ JSON 하나만 낸다. 다른 글은 쓰지 않는다.
 - 메시지 "가온님, 주정차는 이미 단속하고 있어서 새롭지 않은 것 같아요" → `oppose`, 대상 `x_p1`, high, reservation true, `["p1"]`.
 - 메시지 "조명 쪽은 판단을 조금 미룰게요. 자료를 더 보고 싶어요" → `withhold`, 대상 `x_p2`, high, reservation true.
 - 메시지 "순찰 봉사단이 끌리긴 하는데 아직 고르진 못하겠어요" → `withhold`, 대상 `x_s2`, high, reservation true.
-- 메시지 "단속 카메라 좋은데 설치비가 걱정이에요" → `agree`, 대상 `x_s1`, high, reservation true.
+- 메시지 "단속 카메라 좋은데 설치비가 걱정이에요" → 고르지 않았으므로 `withhold`, 대상 `x_s1`, high, reservation true.
+- 메시지 "단속 카메라로 가요. 설치비는 걱정이지만요" → `agree`, 대상 `x_s1`, high, reservation true.
 - 메시지 "주정차 말고 쓰레기 쪽으로 가요" → `propose`, 대상 `x_p3`, high, reservation false.
 - 메시지 "나래님은 해결책 뭐가 좋다고 보세요?" → `question`, 대상 없음, high, `["p2"]`.
 - 메시지 "다온님 말고 나래님은 어떻게 보세요?" → `question`, 대상 없음, high, addressed_to `["p2"]`, excluded `["p3"]`.

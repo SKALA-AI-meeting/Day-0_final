@@ -687,7 +687,7 @@ def test_intent_prompt_examples_do_not_leak_eval_sentences_or_catalog_labels(key
     """intent.md 예시에 평가셋 문장이나 카탈로그 안 라벨이 들어가면 평가 점수가 부풀므로 막는다.
 
     예시는 가상의 안(placeholder)으로 쓴다. 한 글자 키워드 라벨(물·불 등)은 보통 낱말에 들어가
-    부분 문자열 검사가 뜻이 없으므로 두 글자 이상 라벨만 본다.
+    부분 문자열 검사가 뜻이 없으므로 안 이름으로 홀로 쓰인 꼴만 본다.
     """
     prompt = _plain((MISSION / "prompts/intent/intent.md").read_text(encoding="utf-8"))
     eval_dir = REPO / "tests" / "eval"
@@ -704,5 +704,12 @@ def test_intent_prompt_examples_do_not_leak_eval_sentences_or_catalog_labels(key
         labels += [p["label"] for p in k["problems"]] + [s["label"] for s in k["solutions"]]
     found = [label for label in labels if len(label) >= 2 and _plain(label) in prompt]
     assert found == [], f"카탈로그 라벨이 프롬프트에 있음: {found}"
+    # 한 글자 라벨은 안 이름으로 홀로 쓰인 꼴(앞은 경계, 뒤는 조사·경계)만 본다
+    raw = (MISSION / "prompts/intent/intent.md").read_text(encoding="utf-8")
+    edge = "\\s\"'“”‘’()\\[\\],.!?…`:/→"
+    for label in (label for label in labels if len(label) == 1):
+        josa = "은|는|이|가|을|를|도|로|으로|안|이요|요"
+        pattern = rf"(?:^|[{edge}]){label}(?:{josa})?(?=[{edge}]|$)"
+        assert not re.search(pattern, raw, re.M), f"한 글자 라벨 {label}이 안 이름으로 쓰임"
     for key in ("water", "fire", "tree", "wind"):  # 시나리오 안 키도 쓰지 않는다
         assert not re.search(rf"\b{key}(_[ps]\d)?\b", prompt)
