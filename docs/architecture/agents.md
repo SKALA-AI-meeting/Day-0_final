@@ -160,7 +160,7 @@ D16·R4·R5-6. api 메일박스가 `message` 자극마다 들어온 순서대로
 - 출력: 계약의 의도 분류 스키마(`intent`(보류·기권 `withhold` 포함), 대상 안(생긴 안이면 option_id, 아직 안 생긴 카탈로그 안이면 `scenario_option_key`), `new_option_label`(핵심이 같은 안이 없을 때만), `confidence: high|low`, `reservation`(대상 안에 대한 보류·반대·조건 표현), `addressed_to`, `excluded`(지원자가 뺀 자리)). 허용 값 밖·없는 option_id·스키마 위반은 폴백 `{intent: other, ...}`, `fallback=true`.
 - 쓰임: 안별 지지자 누적(high이고 유보 표현이 없는 agree·propose만 지지, withhold는 그 안 지지 철회), 카탈로그 안의 최초 제안자 귀속, 진행 매니저 규칙 3, 합의 판정, 침묵 초대 조건, 설득 가능 규칙. stance_check의 문장 판정은 같은 모델 역할을 쓰지만 별도 프롬프트·스키마다("계획 밖 입장"). **평가 수준에 직접 쓰지 않는다.** 평가 에이전트에는 참고 입력(사실 지표 `intent_counts`, 메시지별 의도)으로만 가고, 원문과 다르면 원문을 따른다([product/rubric.md](../product/rubric.md) 1.2).
 - 지원자 칸 확정 값의 안 연결에는 쓰지 않는다. 확정 경로에는 LLM이 없다(R5-5, [services/api.md](../services/api.md)).
-- 실 모델 정확도 목표는 픽스처 20문장에서 0.85이고 최근 측정은 0.95다(2026-10-23, gpt-4o-mini, [harness.md](harness.md) "실측 기준선"). MVP 통과 조건은 아니다.
+- 실 모델 정확도 목표는 픽스처 20문장에서 0.85이고 최근 측정은 0.85, 프롬프트 예시와 겹치지 않는 보류 세트에서는 0.78이다(2026-10-24, gpt-4o-mini, [harness.md](harness.md) "실측 기준선"). 양보 뒤 결론을 말한 문장("~는 알겠는데, 그래도 침수가 핵심")을 반대로 읽는 경우가 남아 있다. MVP 통과 조건은 아니다.
 
 ## 어시스턴트 (`app/agent/assistant/`)
 
