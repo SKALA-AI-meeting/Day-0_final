@@ -444,6 +444,14 @@ async def test_judge_posts_and_summary_math():
     seen = []
 
     async def ask(payload):
+        if payload["_prompt"] == "verify":  # 2차 확인: 표지가 있고 1차 판정 유지
+            return {
+                "cue": payload["post"]["content"][:3],
+                "cue_kind": "other",
+                "owner": "target",
+                "verdict": payload["attribution"]["verdict"],
+                "reason": "",
+            }
         seen.append(payload)
         assert all(s["order"] < payload["post"]["order"] for s in payload["sources"])
         return answers[payload["post"]["id"]]
@@ -451,8 +459,8 @@ async def test_judge_posts_and_summary_math():
     judge = at.AttributionJudge({"VC_JUDGE_MODEL": "test-model"}, ask=ask)
     events = _events()
     rows = await at.judge_posts(at.transcript_from_events(events), judge)
-    assert [r["post_id"] for r in rows] == ["a1", "a2", "a3", "b1"] and judge.calls == 4
-    assert judge.info()["models_used"] == {"test-model": 4}
+    assert [r["post_id"] for r in rows] == ["a1", "a2", "a3", "b1"] and judge.calls == 6
+    assert judge.info()["models_used"] == {"test-model": 6} and judge.verify_calls == 2
     s = at.summarize(rows)
     assert (s["posts"], s["attributions"]) == (4, 3)
     assert s["per_attribution"]["overstated"] == {"n": 1, "rate": 0.333}
@@ -830,3 +838,113 @@ def test_agreement_normalizes_labeler_not_attribution_reason():
     got = ca.report(items, {"A": human, "judge": old_judge}, None)
     assert got["pairs"]["A~judge"]["matrix"]["not_attribution"]["unsupported"] == 1
     assert got["pairs_without_not_attribution_class"]["A~judge"]["agree"] == 1
+
+
+async def test_verify_pass_requires_a_cue_in_the_quote_sentence():
+    post = {"speaker": "p3", "content": "지원자님이 가뭄에 동의하셨죠. 저는 침수가 걱정이에요."}
+
+    def attr(quote, verdict):
+        return {
+            "quote": quote,
+            "target": "candidate",
+            "claim": "c",
+            "verdict": verdict,
+            "reason": "1차",
+        }
+
+    attrs = [
+        attr("지원자님이 가뭄에 동의하셨죠", "overstated"),  # 표지가 같은 문장 안 → 모델 판정대로
+        attr("저는 침수가 걱정이에요", "unsupported"),  # 다른 문장의 표지를 빌려옴 → 강제
+        attr("저는 침수가 걱정이에요", "unsupported"),  # 문장부호뿐인 표지 → 강제
+        attr("x", "supported"),  # supported는 2차 확인 대상이 아니다
+    ]
+    replies = iter(
+        [
+            {
+                "cue": "동의하셨죠",
+                "cue_kind": "reported_speech",
+                "owner": "target",
+                "verdict": "supported",
+                "reason": "원문에 있다",
+            },
+            {
+                "cue": "동의하셨죠",
+                "cue_kind": "reported_speech",
+                "owner": "target",
+                "verdict": "unsupported",
+                "reason": "유지",
+            },
+            {
+                "cue": "…?",
+                "cue_kind": "other",
+                "owner": "target",
+                "verdict": "unsupported",
+                "reason": "유지",
+            },
+        ]
+    )
+
+    async def ask(payload):
+        assert payload["_prompt"] == "verify" and payload["post"]["speaker_name"] == "서지안"
+        return next(replies)
+
+    judge = at.AttributionJudge({"VC_JUDGE_MODEL": "t"}, ask=ask)
+    assert await at.verify_errors(judge, post, [], attrs) == 3
+    assert judge.verify_calls == 3 and judge.verify_forced == 2 and judge.verify_failed == 0
+    assert attrs[0]["verdict"] == "supported" and attrs[0]["verification"] == {
+        "before": "overstated",
+        "raw_cue": "동의하셨죠",
+        "cue": "동의하셨죠",
+        "cue_kind": "reported_speech",
+        "forced": False,
+        "failed": False,
+    }
+    assert attrs[1]["verdict"] == "not_attribution" and attrs[1]["verification"]["forced"]
+    assert (
+        attrs[1]["verification"]["raw_cue"] == "동의하셨죠"
+        and attrs[1]["verification"]["cue"] == ""
+    )
+    assert (
+        attrs[2]["verdict"] == "not_attribution" and attrs[2]["verification"]["cue_kind"] == "none"
+    )
+    assert "verification" not in attrs[3]
+    assert "{criteria}" not in judge.system("verify") and judge.info()["prompt_version"] == 3
+    assert at.quote_scope("ａ 하나. 둘 셋! 넷", "하나") == "ａ 하나."  # NFKC·문장 범위
+    assert at.quote_scope("하나. 둘 셋! 넷", "하나 둘") == "하나. 둘 셋!"  # 여러 문장에 걸침
+    assert at.quote_scope("하나. 둘", "없음") == "하나. 둘"  # 못 찾으면 전체
+    assert at.verification_counts([{"attributions": attrs}]) == {
+        "checked": 3,
+        "forced_not_attribution": 2,
+        "failed": 0,
+    }
+
+
+async def test_verify_failure_keeps_the_original_verdict():
+    attrs = [
+        {
+            "quote": "q",
+            "target": "candidate",
+            "claim": "c",
+            "verdict": "unsupported",
+            "reason": "1차",
+        }
+    ]
+    calls = {"n": 0}
+
+    async def ask(payload):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {}  # 빈 응답
+        raise RuntimeError("boom")  # 호출 실패
+
+    judge = at.AttributionJudge({"VC_JUDGE_MODEL": "t"}, ask=ask)
+    post = {"speaker": "p1", "content": "q"}
+    await at.verify_errors(judge, post, [], attrs)
+    assert attrs[0]["verdict"] == "unsupported"
+    assert attrs[0]["verification"] == {"before": "unsupported", "failed": True, "error": "empty"}
+    await at.verify_errors(judge, post, [], attrs)
+    assert (
+        attrs[0]["verdict"] == "unsupported" and attrs[0]["verification"]["error"] == "RuntimeError"
+    )
+    assert judge.verify_failed == 2 and judge.verify_forced == 0
+    assert at.verification_counts([{"attributions": attrs}])["failed"] == 1

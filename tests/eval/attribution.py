@@ -29,6 +29,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from datetime import date
@@ -128,6 +129,30 @@ def mark_self_target(attributions: list[dict[str, Any]], speaker: str | None) ->
             a["verdict"], a["reason"], a["owner"] = NOT_ATTRIBUTION, SELF_TARGET_REASON, "speaker"
             n += 1
     return n
+
+
+VERIFY_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["cue", "cue_kind", "owner", "verdict", "reason"],
+    "properties": {
+        "cue": {"type": "string"},
+        "cue_kind": {
+            "type": "string",
+            "enum": [
+                "reported_speech",
+                "named_reference",
+                "presupposing_question",
+                "collective",
+                "other",
+                "none",
+            ],
+        },
+        "owner": {"type": "string", "enum": ["speaker", "target", "unclear"]},
+        "verdict": {"type": "string", "enum": list(VERDICTS)},
+        "reason": {"type": "string"},
+    },
+}
 
 
 def load_prompts() -> dict[str, Any]:
@@ -486,6 +511,9 @@ class AttributionJudge:
         self.prompts = load_prompts()
         self.used_models: Counter = Counter()
         self.calls = 0
+        self.verify_calls = 0  # 오류 판정 2차 확인 호출 수
+        self.verify_forced = 0  # 표지 없음으로 코드가 not_attribution을 강제한 수
+        self.verify_failed = 0  # 2차 확인 실패·빈 응답(원래 판정 유지)
         self._ask = ask
         self.http = None
         if ask is None:
@@ -557,11 +585,43 @@ class AttributionJudge:
             for aid in wanted
         ]
 
+    async def verify(self, payload: dict[str, Any], scope: str) -> dict[str, Any]:
+        """오류 판정 하나의 2차 확인(verify 프롬프트). 모델이 인용한 귀속 표지(cue)가 `scope`(귀속
+        구절이 든 문장) 안에 글자 그대로 있어야 한다. 비었거나 정규화 뒤 2자 미만이거나 범위 밖이면
+        코드가 not_attribution으로 강제한다(`forced`). 호출이 실패하거나 응답이 비면 `failed`."""
+        self.verify_calls += 1
+        try:
+            raw = await self._complete("verify", VERIFY_SCHEMA, payload)
+        except Exception as exc:  # noqa: BLE001  판정 실패가 측정 전체를 멈추지 않게
+            self.verify_failed += 1
+            return {"failed": True, "error": type(exc).__name__}
+        if not isinstance(raw, dict) or not raw:
+            self.verify_failed += 1
+            return {"failed": True, "error": "empty"}
+        raw_cue = str(raw.get("cue") or "").strip()
+        normal_cue = _normal(raw_cue)
+        forced = len(normal_cue) < 2 or normal_cue not in _normal(scope)
+        if forced:
+            self.verify_forced += 1
+        verdict = raw.get("verdict") if raw.get("verdict") in VERDICTS else "undeterminable"
+        return {
+            "failed": False,
+            "raw_cue": raw_cue,
+            "cue": "" if forced else raw_cue,
+            "cue_kind": "none" if forced else raw.get("cue_kind"),
+            "forced": forced,
+            "verdict": NOT_ATTRIBUTION if forced else verdict,
+            "reason": str(raw.get("reason") or "").strip(),
+        }
+
     def info(self) -> dict[str, Any]:
         return {
             "model": self.model,
             "models_used": dict(self.used_models),
             "calls": self.calls,
+            "verify_calls": self.verify_calls,
+            "verify_forced": self.verify_forced,
+            "verify_failed": self.verify_failed,
             "prompt_version": self.prompts.get("version"),
             "date": date.today().isoformat(),
         }
@@ -569,6 +629,94 @@ class AttributionJudge:
     async def aclose(self) -> None:
         if self.http is not None:
             await self.http.aclose()
+
+
+def _normal(text: str) -> str:
+    """대조용 정규화: NFKC 뒤 공백·문장부호 제거."""
+    return re.sub(r"[\s\W_]+", "", unicodedata.normalize("NFKC", text))
+
+
+SENTENCE_END = re.compile(r"[.?!…]+|\n+")
+
+
+def quote_scope(text: str, quote: str) -> str:
+    """귀속 구절 `quote`가 든 문장(들). 문장은 `.?!…`와 줄바꿈으로 나누고 정규화 기준으로 찾는다.
+    구절이 여러 문장에 걸치면 그 문장들 전부, 못 찾으면 본문 전체."""
+    nq = _normal(quote)
+    pieces = []
+    start = 0
+    for found in SENTENCE_END.finditer(text):
+        pieces.append(text[start : found.end()])
+        start = found.end()
+    if start < len(text):
+        pieces.append(text[start:])
+    normals = [_normal(piece) for piece in pieces]
+    joined = "".join(normals)
+    pos = joined.find(nq) if nq else -1
+    if pos < 0:
+        return text
+    end, cursor, scope = pos + len(nq), 0, []
+    for piece, normal in zip(pieces, normals, strict=True):
+        lo, hi = cursor, cursor + len(normal)
+        if lo < end and hi > pos:
+            scope.append(piece)
+        cursor = hi
+    return "".join(scope)
+
+
+async def verify_errors(
+    judge: AttributionJudge,
+    post: dict[str, Any],
+    sources: list[dict[str, Any]],
+    attributions: list[dict[str, Any]],
+    names: dict[str, str] | None = None,
+) -> int:
+    """오류 판정(overstated·unsupported)마다 2차 확인 호출을 하고 결과로 verdict를 바꾼다(제자리).
+    귀속마다 `verification`{before, raw_cue, cue, cue_kind, forced, failed}를 남긴다. 실패하면 원래
+    판정을 유지한다. 호출 수를 돌려준다."""
+    names = names or NAMES
+    n = 0
+    for a in attributions:
+        if a.get("verdict") not in ERRORS:
+            continue
+        n += 1
+        payload = {
+            "participants": {k: names.get(k, k) for k in TARGETS},
+            "post": {
+                "speaker": post.get("speaker"),
+                "speaker_name": names.get(post.get("speaker"), post.get("speaker")),
+                "content": post.get("content", ""),
+            },
+            "attribution": {
+                "quote": a.get("quote", ""),
+                "target": a.get("target", ""),
+                "target_name": names.get(a.get("target"), a.get("target")),
+                "claim": a.get("claim", ""),
+                "verdict": a["verdict"],
+                "reason": a.get("reason", ""),
+            },
+            "sources": [
+                {**m, "speaker_name": names.get(m["sender"], m["sender"])} for m in sources
+            ],
+        }
+        result = await judge.verify(
+            payload, quote_scope(post.get("content", ""), a.get("quote", ""))
+        )
+        if result["failed"]:
+            a["verification"] = {"before": a["verdict"], "failed": True, "error": result["error"]}
+            continue
+        a["verification"] = {
+            "before": a["verdict"],
+            "raw_cue": result["raw_cue"],
+            "cue": result["cue"],
+            "cue_kind": result["cue_kind"],
+            "forced": result["forced"],
+            "failed": False,
+        }
+        a["verdict"] = result["verdict"]
+        if result["reason"]:
+            a["reason"] = result["reason"]
+    return n
 
 
 async def judge_posts(
@@ -584,6 +732,13 @@ async def judge_posts(
         payload = payload_for(transcript, index, names)
         verdict = await judge.ask(payload)
         mark_self_target(verdict["attributions"], m["sender"])
+        await verify_errors(
+            judge,
+            {"speaker": m["sender"], "content": m["content"]},
+            payload["sources"],
+            verdict["attributions"],
+            names,
+        )
         rows.append(
             {
                 "run": m["unit"][0],
@@ -737,9 +892,20 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "attributions_per_post": span("attributions_per_post"),
         },
         "sources_truncated_posts": sum(r["sources_truncated"] for r in rows),
+        "verification": verification_counts(rows),
         "linkage": linkage(rows),
         "examples": examples,
         "note": "오류 0건은 효과 입증이 아니다. 귀속 빈도와 함께 본다.",
+    }
+
+
+def verification_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """2차 확인 집계: 확인한 귀속 수, 코드가 not_attribution으로 강제한 수, 실패(판정 유지) 수."""
+    checked = [a["verification"] for r in rows for a in r["attributions"] if a.get("verification")]
+    return {
+        "checked": len(checked),
+        "forced_not_attribution": sum(bool(v.get("forced")) for v in checked),
+        "failed": sum(bool(v.get("failed")) for v in checked),
     }
 
 
@@ -896,6 +1062,7 @@ async def extract_items(
         }
         verdict = await judge.ask(payload)
         mark_self_target(verdict["attributions"], (item.get("post") or {}).get("speaker"))
+        await verify_errors(judge, item["post"], payload["sources"], verdict["attributions"])
         item["extracted_attributions"] = [
             {
                 "attribution_id": attribution_id(item["item_id"], n),
@@ -996,6 +1163,11 @@ async def relabel_items(
                 ],
             }
             labels = await judge.relabel(payload)
+            by_id = {a["attribution_id"]: a for a in asked}
+            merged = [{**by_id[x["attribution_id"]], **x} for x in labels]
+            await verify_errors(judge, item["post"], payload["sources"], merged)
+            keep = ("attribution_id", "verdict", "owner", "reason", "verification")
+            labels = [{k: v for k, v in x.items() if k in keep} for x in merged]
         judged = {x["attribution_id"]: x for x in labels} | fixed
         rows.append(
             {
