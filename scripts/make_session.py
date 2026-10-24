@@ -7,10 +7,10 @@
 디브리핑 토큰, 관리자 리포트 링크)다. `--llm`은 어느 스택이어야 하는지 안내만 하고 스택은 건드리지
 않는다. 토큰은 시드 세션 것만 찍고 내부 토큰은 찍지 않는다.
 
-과금 게이트: 시드 세션은 만들어지는 순간부터 AI 동료가 진행하므로 대상 스택이 실제 LLM이면
-(`--llm live`이거나 env `LLM_FAKE=0`) `ALLOW_API=1`이 없으면 시작하지 않는다. `LLM_FAKE`가 없으면
-결정적 모드로 본다. `stage_advance.py`도 같은 규칙이다(`make stage*`는 프로필의 `LLM_FAKE`를
-넘긴다).
+과금 게이트: 시드 세션은 만들어지는 순간부터 AI 동료가 진행하므로, 결정적 스택이 명시되지
+않았으면(`--llm live`, env `LLM_FAKE=0`, `LLM_FAKE` 없음) `ALLOW_API=1` 없이는 시작하지 않는다.
+없음을 실제로 보는 것은 api(`LLM_FAKE == "1"`만 fake)와 같은 규칙이다. `stage_advance.py`도 같다
+(`make stage*`는 프로필의 `LLM_FAKE`를 넘긴다).
 """
 
 import argparse
@@ -41,9 +41,13 @@ def env() -> dict[str, str]:
 
 
 def require_allow_api(values: dict[str, str], what: str, live: bool = False) -> None:
-    """대상 스택이 실제 LLM(`live` 또는 env LLM_FAKE=0)이면 `ALLOW_API=1` 없이는 끝낸다."""
-    source = "--llm live" if live else f"env LLM_FAKE={values.get('LLM_FAKE', '')}"
-    if not live and values.get("LLM_FAKE", "1").strip().lower() in ("1", "true", "yes"):
+    """env `LLM_FAKE=1`로 명시된 결정적 스택이 아니면(live·0·없음) `ALLOW_API=1` 없이는 끝낸다."""
+    value = values.get("LLM_FAKE")
+    if live:
+        source = "--llm live"
+    else:
+        source = "LLM_FAKE 없음" if value is None else f"env LLM_FAKE={value}"
+    if not live and value is not None and value.strip() == "1":
         return
     if values.get("ALLOW_API") != "1":
         raise SystemExit(

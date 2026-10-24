@@ -14,10 +14,11 @@ final·전체 기록 → 내부 API·DB에서 결과 수집 → 단언(asserts.p
 시계: `real`은 벽시계로 기다리고(실 스택 15분), `fake`는 내부 테스트 API `advance`로 시간을
 당긴다. 실패한 step은 멈추지 않고 step_errors에 남긴다(러너는 결함을 가리지 않는다).
 
-과금 게이트: `--script`·`--auth`는 대상 스택이 실제 LLM이면(`--live`이거나 env `LLM_FAKE=0`)
-세션 진행이 곧 모델 호출이라 `ALLOW_API=1`이 없으면 시작하지 않는다. `LLM_FAKE`가 없으면
-결정적 모드로 본다(detect_llm_fake와 같은 규칙). `--faults`는 러너가 `LLM_FAKE=1`로 앱을 띄우므로
-게이트가 없다. `make e2e PROFILE=…`은 프로필의 `LLM_FAKE`를 env로 넘겨 같은 규칙을 탄다.
+과금 게이트: `--script`·`--auth`는 env `LLM_FAKE=1`로 명시된 결정적 스택이 아니면(`--live`,
+`LLM_FAKE=0`, `LLM_FAKE` 없음 모두) 세션 진행이 곧 모델 호출이라 `ALLOW_API=1`이 없으면 시작하지
+않는다. 없음을 실제로 보는 것은 api(`services/api/app/config.py`, `LLM_FAKE == "1"`만 fake)와 같은
+규칙이다. `--faults`는 러너가 `LLM_FAKE=1`로 앱을 띄우므로 게이트가 없다. `make e2e PROFILE=…`은
+프로필의 `LLM_FAKE`를 env로 넘겨 같은 규칙을 탄다.
 """
 
 import argparse
@@ -581,13 +582,16 @@ class Runner:
 
 
 def detect_llm_fake(live: bool) -> tuple[bool, str]:
-    """스택이 결정적 LLM 모드(LLM_FAKE=1)인지와 판별 근거. --live가 우선, 아니면 env의 LLM_FAKE."""
+    """스택이 결정적 LLM 모드(LLM_FAKE=1)인지와 판별 근거. --live가 우선, 아니면 env의 LLM_FAKE.
+
+    api와 같이 `LLM_FAKE=1`만 결정적 모드이고 없으면 실제 LLM으로 본다(과금 쪽으로 보수적).
+    """
     if live:
         return False, "--live 옵션"
     value = env().get("LLM_FAKE")
     if value is None:
-        return True, "LLM_FAKE 없음(기본: 결정적 모드로 가정)"
-    return value.strip().lower() in ("1", "true", "yes"), f"env LLM_FAKE={value}"
+        return False, "LLM_FAKE 없음(api 기본: 실제 LLM)"
+    return value.strip() == "1", f"env LLM_FAKE={value}"
 
 
 def require_allow_api(source: str, values: dict[str, str] | None = None) -> None:

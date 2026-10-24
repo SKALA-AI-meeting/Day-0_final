@@ -8,7 +8,6 @@ LLM·MCP·RabbitMQ는 쓰지 않는다(FakeAgentRunner, FakeSessionPorts).
 """
 
 import os
-import re
 import uuid
 
 import asyncpg
@@ -116,22 +115,26 @@ async def api(ctx):
 
 
 def pytest_collection_modifyitems(config, items):
-    """`live` 테스트(실제 API·과금)는 `ALLOW_API=1`일 때만 돈다.
-
-    기본 실행(`-m`에 live 선택 없음)은 live를 skip한다. `-m live`처럼 live를 명시해 골랐는데
-    동의가 없으면 조용히 0으로 끝나지 않고 세션을 실패로 끝낸다(수집만 하는 `--collect-only`는
-    호출이 없으므로 예외: docs_gen이 live 목록을 센다).
-    """
+    """`live` 테스트(실제 API·과금)는 `ALLOW_API=1`일 때만 돈다. 기본 실행은 live를 skip한다."""
     if os.environ.get("ALLOW_API") == "1":
         return
-    markexpr = config.getoption("-m", default="") or ""
-    selected = re.search(r"\blive\b", markexpr) and not re.search(r"\bnot\s+live\b", markexpr)
-    if selected and not config.getoption("collectonly"):
-        pytest.exit(
-            f"-m {markexpr!r}: live 테스트는 실제 API 호출(과금)이다. ALLOW_API=1을 명시해야 돈다",
-            returncode=1,
-        )
     skip = pytest.mark.skip(reason="실제 API 호출(과금). ALLOW_API=1을 명시해야 돈다")
     for item in items:
-        if "live" in item.keywords:
+        if item.get_closest_marker("live"):  # keywords는 파라미터 id도 담는다
             item.add_marker(skip)
+
+
+def pytest_collection_finish(session):
+    """`-m`으로 live를 명시해 골랐는데(deselect 뒤에도 live 항목이 남음) 동의가 없으면 skip 대신
+    세션을 실패로 끝낸다. `-m` 없음은 skip, `--collect-only`는 호출이 없으므로 예외(docs_gen)."""
+    config = session.config
+    if os.environ.get("ALLOW_API") == "1" or not config.getoption("-m"):
+        return
+    if config.getoption("collectonly"):
+        return
+    if any(item.get_closest_marker("live") for item in session.items):
+        pytest.exit(
+            f"-m {config.getoption('-m')!r}: live 테스트는 실제 API 호출(과금)이다. "
+            "ALLOW_API=1을 명시해야 돈다",
+            returncode=1,
+        )
