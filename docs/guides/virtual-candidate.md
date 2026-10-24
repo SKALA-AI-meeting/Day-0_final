@@ -11,6 +11,7 @@
 | `tests/eval/virtual_candidate/drive.py` | 진행 스크립트(관리자 로그인 → 초대 → 동의·시작 → 진행 → 제출 → 리포트 대기 → 내보내기 → 지표) |
 | `tests/eval/virtual_candidate/metrics.py` | 세션 내보내기 하나에서 지표 계산. `--judge`면 뜻을 읽어야 하는 지표에 LLM 판정 |
 | `tests/eval/virtual_candidate/judge_prompts.yaml` | LLM 판정 프롬프트(고정) |
+| `tests/eval/attribution.py`, `tests/eval/attribution_prompts.yaml` | 귀속 추출·판정(페르소나 품질 live와 공용, [testing.md](testing.md) "귀속 판정") |
 
 대본형 장면:
 
@@ -37,7 +38,7 @@ uv run --project services/api python tests/eval/virtual_candidate/metrics.py <se
 
 두 모드는 서로 다른 세션이라 동시에 돌려도 된다. 기록은 `tests/e2e/records/virtual/<일시>-<mode>/`에 남고 git이 무시한다: `log.md`(시각 · 단계 · 행동 · 의도 · 직후 반응), `transcript.jsonl`(WS 프레임·REST 호출), `session.json`(내보내기), `metrics.json`. 측정 결과를 남길 때는 요약 수치만 `tests/e2e/records/`의 기준선 기록으로 옮긴다.
 
-환경 변수(모두 선택): `VC_API_URL`(기본 `http://localhost:8000`), `VC_POSITION`(채용 건 이름, 기본은 `scripts/seed.py` `--position` 기본값. 같은 이름 중 15분 채용 건만 보고 재시드로 여럿이면 가장 최근 것), `VC_ADMIN_EMAIL`·`VC_ADMIN_PASSWORD`(없으면 `scripts/seed.py` 기본값), `VC_MODEL`(자율형 지원자 모델, 기본 `OPENAI_MODEL`), `VC_JUDGE_MODEL`(판정 모델, 기본 gpt-4o-mini), `VC_PG_CONTAINER`(내보내기에 쓰는 postgres 컨테이너, 기본 `infra-postgres-1`).
+환경 변수(모두 선택): `VC_API_URL`(기본 `http://localhost:8000`), `VC_POSITION`(채용 건 이름, 기본은 `scripts/seed.py` `--position` 기본값. 같은 이름 중 15분 채용 건만 보고 재시드로 여럿이면 가장 최근 것), `VC_ADMIN_EMAIL`·`VC_ADMIN_PASSWORD`(없으면 `scripts/seed.py` 기본값), `VC_MODEL`(자율형 지원자 모델, 기본 `OPENAI_MODEL`), `VC_JUDGE_MODEL`(판정 모델. 기존 판정(요약 모순·거짓 합의·동료 응답·오인용)은 없으면 gpt-4o-mini, 귀속 판정은 없으면 gpt-4o), `VC_PG_CONTAINER`(내보내기에 쓰는 postgres 컨테이너, 기본 `infra-postgres-1`).
 
 내보내기는 compose의 postgres 컨테이너에서 `psql`로 그 세션의 행만 읽는다(읽기 전용, 포트를 열지 않는다). 표는 sessions·positions(시나리오 복사본)·messages·message_intents·agent_runs·options·stances·slots·session_cards·observations·proposals·assistant_calls·material_views·connection_gaps·evaluation_runs·evaluations·reports이고, 초대 토큰 해시·이메일은 읽지 않는다.
 
@@ -59,7 +60,9 @@ uv run --project services/api python tests/eval/virtual_candidate/metrics.py <se
 | 자기 안 반복 | 동료 발언 중 그 단계에서 처음 지지한 자기 안을 다시 지지로 남긴 비율 | 규칙 |
 | 카드 | 도달한 단계의 카드 수, 발동, 전달(전달 자리 있음), 미발동 카드 | 규칙 |
 | 동료 무응답 | 지원자가 동료를 부르거나 물은 메시지 뒤 다음 지원자 발언 전 동료 발언이 없음(규칙), 부른 동료가 말하지 않음(규칙), 답이 실제로 그 말에 응답하지 않음(LLM). `reply_to`: 동료 발언의 `meta.reply_to`로 센 값(토론 단계 지원자 메시지 중 답한 발언이 없는 수, 부른 자리 중 그 메시지에 답하지 않은 자리 수, 다음 지원자 메시지 뒤에 답한 것 포함. 그 기록이 없는 이전 세션은 null) | 규칙·LLM |
-| 오인용 | 지원자 이름을 언급한 동료 발언 중 지원자가 하지 않은 말·입장을 지원자 것으로 돌린 것 | LLM |
+| 오인용(보조) | 지원자 이름을 언급한 동료 발언 중 지원자가 하지 않은 말·입장을 지원자 것으로 돌린 것 | LLM |
+| 귀속 판정(`judge.attribution`) | 토론 단계 동료 발언 전체에서 귀속을 뽑아 게시 전 원문과 대조(`supported`·`overstated`·`unsupported`·`undeterminable`). 건수·분모, 귀속별·게시물별 비율, 귀속 빈도, 초안 검사(`quote_check`)와의 연결. 정의는 [testing.md](testing.md) "귀속 판정" | LLM(`VC_JUDGE_MODEL`, 없으면 gpt-4o) |
+| 인용 검사 표식(`persona.quote_check`) | 동료 발언의 `meta.quote_check` 분포(`none`·`pass`·`regenerated`·`safe`·`skipped`). 검사가 없는 빌드의 기록은 `absent` | 규칙 |
 | 어시스턴트 근거 | 답의 숫자가 열린 자료 원문에 없는 호출, 도구 결과 없는 출처 줄, 잘림 의심 | 규칙 |
 
 ## 안전 규칙

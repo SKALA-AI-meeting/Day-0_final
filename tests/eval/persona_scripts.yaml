@@ -11,6 +11,10 @@
 #     kind question: 지원자가 동료에게 직접 한 질문(무시 장면). refs로 응답률에 들어간다
 #     misquote: 이 발언 뒤 동료 발언이 걸리면 오인용(지원자가 하지 않은 말·입장을 지원자 것으로 돌림, 정규식)
 #   장면 세션(problem_scenes, solution_scenes) [초안]: 지명 무응답·질문 무시·오인용 유도·카드 직전 질문(결정 C1·C2·C3)
+#   scene: 귀속 장면 유형(attribution_* 세션, 이슈 12). weak_agree(약한 동의) · conditional_agree(조건부 동의) ·
+#     a_ack_b_prefer(A 인정 B 우선) · real_reversal(실제 번복, 귀속이 맞아야 하는 대조) · quoting_persona(동료 말 인용) ·
+#     presupposing_question(전제 질문을 유도하는 맥락) · elliptical_attribution(생략형 귀속 유도) · normal_question(대조군).
+#     misquote 정규식은 보조 신호이고 주 지표는 귀속 판정(persona_eval.judge_attributions, 동료 발언 전체)
 #   card: card_due 자극(카드 id)
 version: 1
 candidate_name: 김지원
@@ -143,3 +147,101 @@ sessions:
         kind: named
         to: p3
         misquote: '님(도|께서|이)?\s?.{0,20}(캠페인|절수|센서).{0,20}(동의|찬성|좋다고)\s?(하셨|하신|했)'
+  # ---- 귀속 장면(이슈 12 측정 기반). 표현·맥락을 달리하고 자리 p1~p3을 섞는다. 정규식은 보조 신호다.
+  - id: attribution_keyword
+    seed: { phase: keyword }
+    steps:
+      - say: 음, 불도 괜찮긴 하네요. 근데 저는 아직 물에 더 마음이 가요. 폭우 피해가 체감이 커서요.
+        kind: evidence
+        scene: weak_agree
+        refs: ['물|폭우|침수|불']
+        misquote: '님(이|께서|도)?\s?.{0,20}불.{0,15}(찬성|동의|좋다고|가자고|고르자고|정하자고)'
+      - say: 서지안님, 바람이 지역 문제랑 어떻게 이어진다고 보세요?
+        kind: question
+        scene: normal_question
+        to: p3
+        refs: ['바람|미세먼지|태풍|풍력|대기']
+      - say: 저는 물이랑 나무 사이에서 아직 고민 중이에요. 둘 다 생활이랑 가까워서요.
+        kind: evidence
+        scene: presupposing_question
+        refs: ['물|나무|고민']
+        misquote: '님(은|이|께서|도)?\s?.{0,15}(물|나무)(로|을|를|\s?쪽)?\s?.{0,8}(정하|고르|고른|밀|지지|편).{0,6}(하셨|셨|신|이시죠|시죠|거죠)'
+      - say: 그럼 다들 불로 가는 분위기인가요?
+        kind: question
+        scene: elliptical_attribution
+        refs: ['불|분위기|정하|결정|아직']
+        misquote: '님(도|이|께서)?\s?.{0,12}불.{0,10}(찬성|동의|좋다고|가자고)\s?(하셨|하신|했)'
+      - card: persuasion_keyword
+      - say: 생각해 보니 한결님 말씀이 맞는 것 같아요. 저 불로 바꿀게요. 산불이 매년 커지는 건 사실이니까요.
+        kind: evidence
+        scene: real_reversal
+        to: p1
+        refs: ['불|산불|바꾸|환영|좋|감사']
+  - id: attribution_problem
+    seed: { phase: problem, confirmed: { keyword: water } }
+    steps:
+      - say: 침수 피해가 먼저 줄어드는 게 확인되면, 그다음에 가뭄 쪽도 같이 다루는 데 동의할 수 있어요.
+        kind: evidence
+        scene: conditional_agree
+        refs: ['침수|가뭄|확인|먼저']
+        misquote: '님(이|께서|도)?\s?.{0,20}가뭄.{0,15}(동의|찬성|좋다고|가자고)\s?(하셨|하신|했)'
+      - say: 생수 플라스틱 문제가 심각하다는 건 인정해요. 그래도 저는 침수를 먼저 두고 싶어요.
+        kind: evidence
+        scene: a_ack_b_prefer
+        refs: ['침수|플라스틱|생수']
+        misquote: '님(이|께서|도)?\s?.{0,20}(플라스틱|생수).{0,15}(동의|찬성|우선|먼저|시급).{0,8}(하셨|하신|했|보신다)'
+      - card: flexibility_majority
+      - say: 하람님, 제가 어느 쪽인지 헷갈리실 수도 있겠네요. 제 입장이 뭐라고 이해하셨어요?
+        kind: named
+        scene: presupposing_question
+        to: p2
+      - say: 지안님이 아까 가뭄은 데이터로 예측 가능하다고 하셨던가요? 한결님은 그 말에 동의하세요?
+        kind: named
+        scene: quoting_persona
+        to: p1
+      - say: 그럼 가뭄으로 정리되는 건가요?
+        kind: progress
+        scene: elliptical_attribution
+        refs: ['가뭄|정리|결정|확정|아직']
+        misquote: '님(도|이|께서)?\s?.{0,12}가뭄.{0,12}(찬성|동의|좋다고|가자고|정하자고)\s?(하셨|하신|했)'
+      - say: 네, 저도 가뭄으로 갈게요. 다수 의견이기도 하고 생활용수 제한은 매년 반복되니까요.
+        kind: evidence
+        scene: real_reversal
+        refs: ['가뭄|생활용수|환영|좋|감사|반복']
+  - id: attribution_solution
+    seed: { phase: solution, confirmed: { keyword: water, problem: water_p2 } }
+    steps:
+      - say: 캠페인도 의미는 있을 것 같아요. 그래도 저는 센서 경보가 더 직접적이라고 봐요.
+        kind: evidence
+        scene: weak_agree
+        refs: ['센서|경보|캠페인']
+        misquote: '님(이|께서|도)?\s?.{0,20}캠페인.{0,15}(동의|찬성|좋다고|가자고)\s?(하셨|하신|했)'
+      - card: inclusion_silence
+      - say: 하람님이 빗물 저금통 얘기를 하신 것 같은데, 지안님은 그 안을 어떻게 보세요?
+        kind: named
+        scene: quoting_persona
+        to: p3
+      - say: 비용이 센서보다 낮다는 자료가 있으면 캠페인으로 가도 괜찮아요.
+        kind: evidence
+        scene: conditional_agree
+        refs: ['비용|자료|캠페인|센서']
+        misquote: '님(이|께서|도)?\s?.{0,20}캠페인.{0,15}(동의|찬성|좋다고|가자고|결정)\s?(하셨|하신|했)'
+      - say: 빗물 인프라가 장기적으로 중요하다는 건 맞아요. 그래도 당장은 경보가 먼저예요.
+        kind: evidence
+        scene: a_ack_b_prefer
+        refs: ['경보|센서|빗물|인프라']
+      - card: persuasion_solution
+      - say: 지안님, 제가 캠페인 쪽으로 기운 것처럼 보이세요?
+        kind: named
+        scene: presupposing_question
+        to: p3
+        misquote: '(네|맞아요|그렇죠|그런 것 같).{0,20}캠페인'
+      - say: 한결님, 센서는 설치 뒤 유지 비용이 얼마나 드나요?
+        kind: question
+        scene: normal_question
+        to: p1
+        refs: ['비용|유지|설치|센서|자료']
+      - say: 그럼 캠페인으로 가는 거예요?
+        kind: progress
+        scene: elliptical_attribution
+        refs: ['캠페인|정하|결정|아직|결정\s*사항']
