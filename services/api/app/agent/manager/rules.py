@@ -600,7 +600,7 @@ def intents_toward(
     catalog: Catalog,
     transcript: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """내가 입장을 밝힌 뒤(since) 지원자 메시지의 저장 의도를 내 지지 안 기준으로 센 사실(C2).
+    """내가 지지 입장을 처음 기록한 뒤(since) 지원자 메시지의 저장 의도를 내 안 기준으로 센다(C2).
 
     `toward_mine`: 대상이 내 지지 안인 `oppose`·`withhold`·`question` 수와 마지막 메시지 본문(대화
     창에 있을 때만). `counters`: 내 안이 아닌 안을 지지로 세는 발언(`counter_count`와 같은 규칙,
@@ -675,7 +675,8 @@ def situation(
     - `invite`: 침묵 초대 차례인지
     - `reactions`: 이 자리의 마지막 발언 뒤 반응한 참여자(`reactions`, 아직 말하지 않았으면 None)
     - `toward_mine`·`counters`: 내 지지 안(`stance_targets`)에 대한 지원자의 저장 의도 수
-      (`intents_toward`, 이 자리의 단계 첫 발언 `since` 뒤). 입장이 없으면 None
+      (`intents_toward`, 이 자리가 처음 지지 입장을 기록한 시각 `since` 뒤, 아직이면 0).
+      입장이 없으면 None
     - `move`: 지지가 옮겨졌는데 아직 말로 밝히지 않았을 때 `{from, to}`
     """
     target = next((m for m in transcript if reply_to and str(m.get("id")) == reply_to), None)

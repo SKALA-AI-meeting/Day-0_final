@@ -145,7 +145,7 @@ def _situation(state: DebateState, deps: DebateDeps) -> dict[str, Any]:
         state["ds"].get("open_mentions"),
         ds=state["ds"],
         stance_targets=plan.targets if plan.declared else None,
-        since=(state["ds"].get("first_spoke_at") or {}).get(seat),
+        since=(state["ds"].get("first_stated_at") or {}).get(seat),
         move=move,
     )
 

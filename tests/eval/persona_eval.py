@@ -18,8 +18,9 @@ debate·rag MCP와 가짜 hub)에 LLM만 갈아 끼운다. 지원자 발언은 �
   unsupported/undeterminable로 판정(`judge_attributions`, 모듈 tests/eval/attribution.py). 위 규칙
   misquote는 보조 신호로 남긴다
 - 호응 뒤 자기 안 밀기(push_after_ack): 짧은 호응(kind ack) 뒤 다음 지원자 발언 전 동료 발언 중
-  입장(`meta.stance`)을 다시 기록한 비율. 반대·다른 안 없이 자기 안을 되풀이하는 정도의 대리 지표
-- 지연: 자극 한 번의 그래프 실행 시간(ms) p95
+  자기 안 지지(`meta.stance.stance == support`)를 다시 기록한 비율(다른 안 oppose는 제외).
+  반대·다른 안 없이 자기 안을 되풀이하는 정도의 대리 지표
+- 지연: 자극 한 번에 쓴 LLM 호출 시간 합(`usage.latency_ms`, 단계 시작 실행 제외)의 p50·p95(ms)
 """
 
 import importlib.util
@@ -400,14 +401,16 @@ def safety(events: list[dict[str, Any]], prompts: dict[str, str]) -> dict[str, A
 
 
 def push_after_ack(events: list[dict[str, Any]]) -> dict[str, Any]:
-    """짧은 호응(ack) 뒤 다음 지원자 발언 전 동료 발언 중 입장을 다시 기록한 비율."""
+    """짧은 호응(ack) 뒤 다음 지원자 발언 전 동료 발언 중 자기 안 지지(`support`) 기록 비율.
+
+    다른 안에 대한 `oppose` 기록은 자기 안을 미는 것이 아니라 세지 않는다."""
     n = pushed = 0
     for i, event in enumerate(events):
         if event.get("kind") != "ack":
             continue
         for post in following(events, i, 3):
             n += 1
-            pushed += bool(post["meta"].get("stance"))
+            pushed += (post["meta"].get("stance") or {}).get("stance") == "support"
     return {"n": n, "pushed": pushed, "rate": _rate(pushed, n)}
 
 

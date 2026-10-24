@@ -49,7 +49,13 @@ OUTPUT_RULE = (
     "proposes·stance에 쓸 수 있는 안은 [내 입장]의 내 안뿐이다."
 )
 # 페르소나 컨텍스트에서 빼는 DebateState 필드(docs/contracts/internal.md DebateState)
-HIDDEN_STATE_KEYS = ("card_progress", "cost_left", "candidate_intents", "first_spoke_at")
+HIDDEN_STATE_KEYS = (
+    "card_progress",
+    "cost_left",
+    "candidate_intents",
+    "first_spoke_at",
+    "first_stated_at",
+)
 
 
 @dataclass

@@ -243,3 +243,30 @@ def test_open_mentions_age_by_earliest_and_close_on_later_reply(catalog):
     ]
     msgs.append({"id": "a", "sender": "p3", "content": "네", "reply_to": "c2"})
     assert rules.open_mentions(msgs, {}, catalog) == []  # 뒤 지명에 답하면 앞 지명도 닫힌다
+
+
+def test_intents_toward_counts_only_after_stance_stated(catalog):
+    from app.agent.manager import rules
+
+    ds = {"options": [{"option_id": "o1", "scenario_option_key": "k1", "label": "안1"}]}
+    rows = [
+        {
+            "message_id": "c1",
+            "created_at": "2026-10-21T01:00:01Z",
+            "intent": "oppose",
+            "target_option_id": "o1",
+        },
+        {
+            "message_id": "c2",
+            "created_at": "2026-10-21T01:00:20Z",
+            "intent": "question",
+            "target_option_id": "o1",
+        },
+    ]
+    # 입장을 밝히기 전(c1)의 반대는 세지 않고, 밝힌 뒤(c2)의 질문만 센다
+    found = rules.intents_toward(rows, {"o1"}, "2026-10-21T01:00:10Z", ds, catalog, [])
+    assert found["toward_mine"]["oppose"] == 0
+    assert found["toward_mine"]["question"] == 1
+    # 아직 입장을 밝히지 않았으면(since 없음) 아무것도 세지 않는다
+    none = rules.intents_toward(rows, {"o1"}, None, ds, catalog, [])
+    assert none["toward_mine"] == {"oppose": 0, "withhold": 0, "question": 0, "last": None}

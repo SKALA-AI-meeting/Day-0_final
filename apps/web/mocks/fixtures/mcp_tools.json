@@ -107,6 +107,11 @@
           "p2": null,
           "p3": "2026-10-21T01:10:40Z"
         },
+        "first_stated_at": {
+          "p1": "2026-10-21T01:10:10Z",
+          "p2": null,
+          "p3": null
+        },
         "open_mentions": [],
         "seats": [
           {

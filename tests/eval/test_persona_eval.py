@@ -187,3 +187,24 @@ async def test_persona_quality_live():
     )
     print(path)
     assert result["safety"]["violations"] == 0, result["safety"]["details"]
+
+
+def test_push_after_ack_counts_only_support_of_own_option():
+    def post(stance):
+        return {"seat": "p1", "content": "x", "meta": {"stance": stance}}
+
+    events = [
+        {"kind": "ack", "session": "s", "phase": "problem", "posts": []},
+        {
+            "kind": "ai",
+            "session": "s",
+            "phase": "problem",
+            "posts": [
+                post({"option_id": "o1", "stance": "support"}),
+                post({"option_id": "o2", "stance": "oppose"}),
+                post(None),
+            ],
+        },
+    ]
+    out = pe.push_after_ack(events)
+    assert (out["n"], out["pushed"]) == (3, 1)

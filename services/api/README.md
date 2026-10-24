@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 296개(live 3개 포함, `make test`는 live를 뺀다).
+총 297개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -240,7 +240,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_manager_context.py</code> (14)</summary>
+<details><summary><code>tests/agent/test_manager_context.py</code> (15)</summary>
 
 - `test_addressed_message_is_answered_with_reply_to`
 - `test_named_seat_overflow_is_answered_next_run_after_restart`
@@ -256,6 +256,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_mention_pushed_out_of_the_transcript_window_is_still_answered`
 - `test_fixed_card_line_does_not_answer_a_mention`
 - `test_open_mentions_age_by_earliest_and_close_on_later_reply`
+- `test_intents_toward_counts_only_after_stance_stated`
 
 </details>
 
