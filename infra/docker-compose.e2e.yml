@@ -1,36 +1,19 @@
-# stage-e2e용 override: 별도 프로젝트로 토론형 스택을 띄운다(`make e2e-stack-up`).
-#   docker compose -p dayzero-debate -f infra/docker-compose.yml -f infra/docker-compose.e2e.yml up -d --build --wait
+# 격리 스택 override(test-text·eval-text 프로필): 별도 compose 프로젝트 dayzero-debate로 띄운다.
+#   make up PROFILE=test-text   (= DAYZERO_ENV_FILE=.env.resolved-test-text docker compose -p dayzero-debate
+#                                  --env-file infra/.env.resolved-test-text -f infra/docker-compose.yml -f infra/docker-compose.e2e.yml up -d --build --wait)
 # 호스트 포트는 다른 스택과 겹치지 않게 api 8100·내부 8101·web 3100·rabbitmq UI 15674(127.0.0.1)로 옮기고,
-# 시드·테스트 API용으로 postgres 5442·rag-mcp 9112를 127.0.0.1에만 연다. env는 infra/.env.e2e(git 무시,
-# infra/.env.example에서 복사해 LLM_FAKE=1·ENABLE_TEST_API=1·AGENT_RUNNER=session으로 둔다).
+# 시드·테스트 API용으로 postgres 5442·rag-mcp 9112를 127.0.0.1에만 연다. env는 base의 DAYZERO_ENV_FILE
+# (프로필이 합친 파일)을 그대로 쓰며 모드 값(LLM_FAKE·ENABLE_TEST_API)은 프로필이 정한다.
 # 모델 캐시 볼륨은 이미 받아 둔 infra_hfcache를 재사용한다(없으면 external을 지우면 새로 받는다).
 services:
   postgres:
-    env_file: !override [.env.e2e]
     ports: ["127.0.0.1:5442:5432"]
-  rabbitmq:
-    env_file: !override [.env.e2e]
   api:
-    env_file: !override [.env.e2e]
     ports: !override
       - "${API_PORT:-8100}:8000"
       - "127.0.0.1:8101:8001"   # 내부 API(테스트 API 포함). 로컬 전용
-  debate-mcp:
-    env_file: !override [.env.e2e]
   rag-mcp:
-    env_file: !override [.env.e2e]
     ports: ["127.0.0.1:9112:9102"]
-  assessment-mcp:
-    env_file: !override [.env.e2e]
-  report-worker:
-    env_file: !override [.env.e2e]
-  web:
-    env_file: !override [.env.e2e]
-    build:
-      context: ../apps/web
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:8100
-        NEXT_PUBLIC_WS_URL: ws://localhost:8100
 volumes:
   hfcache:
     external: true
