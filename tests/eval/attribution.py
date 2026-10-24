@@ -585,10 +585,11 @@ class AttributionJudge:
             for aid in wanted
         ]
 
-    async def verify(self, payload: dict[str, Any], scope: str) -> dict[str, Any]:
-        """오류 판정 하나의 2차 확인(verify 프롬프트). 모델이 인용한 귀속 표지(cue)가 `scope`(귀속
-        구절이 든 문장) 안에 글자 그대로 있어야 한다. 비었거나 정규화 뒤 2자 미만이거나 범위 밖이면
-        코드가 not_attribution으로 강제한다(`forced`). 호출이 실패하거나 응답이 비면 `failed`."""
+    async def verify(self, payload: dict[str, Any], scopes: list[str]) -> dict[str, Any]:
+        """오류 판정 하나의 2차 확인(verify 프롬프트). 모델이 인용한 귀속 표지(cue)가 `scopes`(귀속
+        구절이 든 문장 + 앞 문장, 출현마다 하나) 중 하나 안에 글자 그대로 있어야 한다. 비었거나
+        cue_kind가 none이거나 정규화 뒤 2자 미만이거나 범위 밖이면 코드가 not_attribution으로
+        강제한다(`forced`, `forced_reason`). 호출이 실패하거나 응답이 비면 `failed`."""
         self.verify_calls += 1
         try:
             raw = await self._complete("verify", VERIFY_SCHEMA, payload)
@@ -599,18 +600,18 @@ class AttributionJudge:
             self.verify_failed += 1
             return {"failed": True, "error": "empty"}
         raw_cue = str(raw.get("cue") or "").strip()
-        normal_cue = _normal(raw_cue)
-        forced = len(normal_cue) < 2 or normal_cue not in _normal(scope)
-        if forced:
+        forced_reason = cue_rejection(raw_cue, raw.get("cue_kind"), scopes)
+        if forced_reason:
             self.verify_forced += 1
         verdict = raw.get("verdict") if raw.get("verdict") in VERDICTS else "undeterminable"
         return {
             "failed": False,
             "raw_cue": raw_cue,
-            "cue": "" if forced else raw_cue,
-            "cue_kind": "none" if forced else raw.get("cue_kind"),
-            "forced": forced,
-            "verdict": NOT_ATTRIBUTION if forced else verdict,
+            "cue": raw_cue if forced_reason is None else "",
+            "cue_kind": raw.get("cue_kind") if forced_reason is None else "none",
+            "forced": forced_reason is not None,
+            "forced_reason": forced_reason,
+            "verdict": verdict if forced_reason is None else NOT_ATTRIBUTION,
             "reason": str(raw.get("reason") or "").strip(),
         }
 
@@ -639,29 +640,73 @@ def _normal(text: str) -> str:
 SENTENCE_END = re.compile(r"[.?!…]+|\n+")
 
 
-def quote_scope(text: str, quote: str) -> str:
-    """귀속 구절 `quote`가 든 문장(들). 문장은 `.?!…`와 줄바꿈으로 나누고 정규화 기준으로 찾는다.
-    구절이 여러 문장에 걸치면 그 문장들 전부, 못 찾으면 본문 전체."""
+def quote_scopes(text: str, quote: str) -> list[str]:
+    """귀속 구절 `quote`가 나오는 자리마다, 그 구절이 든 문장(들)과 바로 앞 문장을 합친 범위. 문장은
+    `.?!…`와 줄바꿈으로 나누고 정규화(NFKC·공백·문장부호 제거) 기준으로 찾는다(모든 출현). 한국어는
+    표지가 앞 문장에 오는 일이 잦다("서지안님이 그러셨죠. 예산이 부족하다고."). 구절이 본문에 없으면
+    빈 목록(추출이 본문에 없는 구절을 만든 것)."""
     nq = _normal(quote)
-    pieces = []
+    if not nq:
+        return []
+    pieces: list[str] = []
     start = 0
     for found in SENTENCE_END.finditer(text):
         pieces.append(text[start : found.end()])
         start = found.end()
     if start < len(text):
         pieces.append(text[start:])
+    # 구분자뿐인 조각("…" 뒤의 줄바꿈 등)은 앞 문장에 붙여 "앞 문장"이 빈 조각이 되지 않게 한다
+    merged: list[str] = []
+    for piece in pieces:
+        if merged and not _normal(piece):
+            merged[-1] += piece
+        else:
+            merged.append(piece)
+    pieces = merged
     normals = [_normal(piece) for piece in pieces]
     joined = "".join(normals)
-    pos = joined.find(nq) if nq else -1
-    if pos < 0:
-        return text
-    end, cursor, scope = pos + len(nq), 0, []
-    for piece, normal in zip(pieces, normals, strict=True):
-        lo, hi = cursor, cursor + len(normal)
-        if lo < end and hi > pos:
-            scope.append(piece)
-        cursor = hi
-    return "".join(scope)
+    bounds = []
+    cursor = 0
+    for normal in normals:
+        bounds.append((cursor, cursor + len(normal)))
+        cursor += len(normal)
+    scopes = []
+    pos = joined.find(nq)
+    while pos >= 0:
+        end = pos + len(nq)
+        hit = [i for i, (lo, hi) in enumerate(bounds) if lo < end and hi > pos]
+        first = max(hit[0] - 1, 0) if hit else 0
+        last = hit[-1] if hit else -1
+        scope = "".join(pieces[first : last + 1])
+        if scope not in scopes:
+            scopes.append(scope)
+        pos = joined.find(nq, pos + 1)
+    return scopes
+
+
+QUOTE_NOT_IN_POST = "quote_not_in_post"
+
+
+def cue_rejection(cue: str, cue_kind: Any, scopes: list[str]) -> str | None:
+    """표지를 받지 않는 이유(코드 규칙). None이면 표지를 인정한다."""
+    normal_cue = _normal(cue)
+    if not cue or cue_kind == "none":
+        return "no_cue"
+    if len(normal_cue) < 2:
+        return "cue_too_short"
+    if not any(normal_cue in _normal(scope) for scope in scopes):
+        return "cue_outside_quote_sentence"
+    return None
+
+
+def force_not_attribution(a: dict[str, Any], reason: str) -> None:
+    """코드가 귀속 아님으로 확정할 때 귀속 행을 일관되게 바꾼다(reason·owner·source_ids)."""
+    a["verdict"] = NOT_ATTRIBUTION
+    a["reason"] = reason
+    if "owner" in a:
+        a["owner"] = "speaker"
+    if "source_ids" in a:
+        a["source_ids"] = []
 
 
 async def verify_errors(
@@ -680,6 +725,17 @@ async def verify_errors(
         if a.get("verdict") not in ERRORS:
             continue
         n += 1
+        scopes = quote_scopes(post.get("content", ""), a.get("quote", ""))
+        if not scopes:  # 추출된 구절이 본문에 없다: 호출 없이 귀속 아님
+            judge.verify_forced += 1
+            a["verification"] = {
+                "before": a["verdict"],
+                "forced": True,
+                "forced_reason": QUOTE_NOT_IN_POST,
+                "failed": False,
+            }
+            force_not_attribution(a, QUOTE_NOT_IN_POST)
+            continue
         payload = {
             "participants": {k: names.get(k, k) for k in TARGETS},
             "post": {
@@ -699,9 +755,7 @@ async def verify_errors(
                 {**m, "speaker_name": names.get(m["sender"], m["sender"])} for m in sources
             ],
         }
-        result = await judge.verify(
-            payload, quote_scope(post.get("content", ""), a.get("quote", ""))
-        )
+        result = await judge.verify(payload, scopes)
         if result["failed"]:
             a["verification"] = {"before": a["verdict"], "failed": True, "error": result["error"]}
             continue
@@ -711,8 +765,13 @@ async def verify_errors(
             "cue": result["cue"],
             "cue_kind": result["cue_kind"],
             "forced": result["forced"],
+            "forced_reason": result["forced_reason"],
             "failed": False,
         }
+        if result["forced"]:
+            a["verification"]["model_reason"] = result["reason"]
+            force_not_attribution(a, result["forced_reason"])
+            continue
         a["verdict"] = result["verdict"]
         if result["reason"]:
             a["reason"] = result["reason"]
@@ -905,6 +964,7 @@ def verification_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
     return {
         "checked": len(checked),
         "forced_not_attribution": sum(bool(v.get("forced")) for v in checked),
+        "quote_not_in_post": sum(v.get("forced_reason") == QUOTE_NOT_IN_POST for v in checked),
         "failed": sum(bool(v.get("failed")) for v in checked),
     }
 
@@ -1079,6 +1139,7 @@ async def extract_items(
                         "attribution_id": attribution_id(item["item_id"], n),
                         "verdict": a["verdict"],
                         "reason": a["reason"],
+                        **({"verification": a["verification"]} if "verification" in a else {}),
                     }
                     for n, a in enumerate(verdict["attributions"], 1)
                 ],

@@ -420,7 +420,7 @@ async def test_judge_posts_and_summary_math():
         "b1": {
             "attributions": [
                 {
-                    "quote": "x",
+                    "quote": "가뭄이 핵심이에요",
                     "target": "p3",
                     "claim": "y",
                     "form": "elliptical",
@@ -840,7 +840,7 @@ def test_agreement_normalizes_labeler_not_attribution_reason():
     assert got["pairs_without_not_attribution_class"]["A~judge"]["agree"] == 1
 
 
-async def test_verify_pass_requires_a_cue_in_the_quote_sentence():
+async def test_verify_pass_requires_a_cue_near_the_quote():
     post = {"speaker": "p3", "content": "지원자님이 가뭄에 동의하셨죠. 저는 침수가 걱정이에요."}
 
     def attr(quote, verdict):
@@ -850,13 +850,17 @@ async def test_verify_pass_requires_a_cue_in_the_quote_sentence():
             "claim": "c",
             "verdict": verdict,
             "reason": "1차",
+            "owner": "target",
+            "source_ids": ["c1"],
         }
 
     attrs = [
         attr("지원자님이 가뭄에 동의하셨죠", "overstated"),  # 표지가 같은 문장 안 → 모델 판정대로
-        attr("저는 침수가 걱정이에요", "unsupported"),  # 다른 문장의 표지를 빌려옴 → 강제
+        attr("저는 침수가 걱정이에요", "unsupported"),  # 앞 문장의 표지는 허용(앞 문장까지 범위)
         attr("저는 침수가 걱정이에요", "unsupported"),  # 문장부호뿐인 표지 → 강제
         attr("x", "supported"),  # supported는 2차 확인 대상이 아니다
+        attr("저는 침수가 걱정이에요", "unsupported"),  # cue_kind none → 강제
+        attr("본문에 없는 구절", "unsupported"),  # 구절이 본문에 없음 → 호출 없이 강제
     ]
     replies = iter(
         [
@@ -879,6 +883,13 @@ async def test_verify_pass_requires_a_cue_in_the_quote_sentence():
                 "cue_kind": "other",
                 "owner": "target",
                 "verdict": "unsupported",
+                "reason": "모델 이유",
+            },
+            {
+                "cue": "걱정이에요",
+                "cue_kind": "none",
+                "owner": "speaker",
+                "verdict": "unsupported",
                 "reason": "유지",
             },
         ]
@@ -889,34 +900,59 @@ async def test_verify_pass_requires_a_cue_in_the_quote_sentence():
         return next(replies)
 
     judge = at.AttributionJudge({"VC_JUDGE_MODEL": "t"}, ask=ask)
-    assert await at.verify_errors(judge, post, [], attrs) == 3
-    assert judge.verify_calls == 3 and judge.verify_forced == 2 and judge.verify_failed == 0
+    assert await at.verify_errors(judge, post, [], attrs) == 5
+    assert judge.verify_calls == 4 and judge.verify_forced == 3 and judge.verify_failed == 0
     assert attrs[0]["verdict"] == "supported" and attrs[0]["verification"] == {
         "before": "overstated",
         "raw_cue": "동의하셨죠",
         "cue": "동의하셨죠",
         "cue_kind": "reported_speech",
         "forced": False,
+        "forced_reason": None,
         "failed": False,
     }
-    assert attrs[1]["verdict"] == "not_attribution" and attrs[1]["verification"]["forced"]
-    assert (
-        attrs[1]["verification"]["raw_cue"] == "동의하셨죠"
-        and attrs[1]["verification"]["cue"] == ""
-    )
-    assert (
-        attrs[2]["verdict"] == "not_attribution" and attrs[2]["verification"]["cue_kind"] == "none"
-    )
+    assert attrs[1]["verdict"] == "unsupported" and not attrs[1]["verification"]["forced"]
+    v2 = attrs[2]["verification"]
+    assert attrs[2]["verdict"] == "not_attribution" and v2["forced_reason"] == "cue_too_short"
+    assert v2["model_reason"] == "모델 이유" and attrs[2]["reason"] == "cue_too_short"
+    assert attrs[2]["owner"] == "speaker" and attrs[2]["source_ids"] == []  # 강제 시 일관되게 비움
     assert "verification" not in attrs[3]
+    assert (
+        attrs[4]["verdict"] == "not_attribution"
+        and attrs[4]["verification"]["forced_reason"] == "no_cue"
+    )
+    assert attrs[5]["verdict"] == "not_attribution"
+    assert (
+        attrs[5]["verification"]["forced_reason"] == "quote_not_in_post"
+        and attrs[5]["reason"] == "quote_not_in_post"
+    )
     assert "{criteria}" not in judge.system("verify") and judge.info()["prompt_version"] == 3
-    assert at.quote_scope("ａ 하나. 둘 셋! 넷", "하나") == "ａ 하나."  # NFKC·문장 범위
-    assert at.quote_scope("하나. 둘 셋! 넷", "하나 둘") == "하나. 둘 셋!"  # 여러 문장에 걸침
-    assert at.quote_scope("하나. 둘", "없음") == "하나. 둘"  # 못 찾으면 전체
     assert at.verification_counts([{"attributions": attrs}]) == {
-        "checked": 3,
-        "forced_not_attribution": 2,
+        "checked": 5,
+        "forced_not_attribution": 3,
+        "quote_not_in_post": 1,
         "failed": 0,
     }
+
+
+def test_quote_scopes_include_the_preceding_sentence_and_every_occurrence():
+    # 표지가 앞 문장에 오는 한국어 문장
+    assert at.quote_scopes("서지안님이 그러셨죠. 예산이 부족하다고.", "예산이 부족하다고") == [
+        "서지안님이 그러셨죠. 예산이 부족하다고."
+    ]
+    assert at.quote_scopes(
+        "지원자님 말씀은…\n결국 B안이 낫다는 거죠?", "결국 B안이 낫다는 거죠"
+    ) == ["지원자님 말씀은…\n결국 B안이 낫다는 거죠?"]
+    # 같은 구절이 두 번 나오면 두 출현 모두 범위가 되고, 둘째 출현의 표지 "하셨죠"가 인정된다
+    text = "저는 B안이 낫다고 봐요. 지원자님도 B안이 낫다고 하셨죠."
+    scopes = at.quote_scopes(text, "B안이 낫다고")
+    assert scopes == ["저는 B안이 낫다고 봐요.", text]
+    assert at.cue_rejection("하셨죠", "reported_speech", scopes) is None
+    assert at.cue_rejection("하셨죠", "reported_speech", scopes[:1]) == "cue_outside_quote_sentence"
+    # NFKC·여러 문장 걸침·못 찾음
+    assert at.quote_scopes("ａ 하나. 둘 셋! 넷", "하나") == ["ａ 하나."]
+    assert at.quote_scopes("영. 하나. 둘 셋! 넷", "하나 둘") == ["영. 하나. 둘 셋!"]
+    assert at.quote_scopes("하나. 둘", "없음") == [] and at.quote_scopes("하나", "") == []
 
 
 async def test_verify_failure_keeps_the_original_verdict():
