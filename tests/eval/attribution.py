@@ -626,23 +626,31 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     - 안전 문구 비율: quote_check=safe · guard=safe · stance_check=fallback 각각 / 게시물 수.
     - 검사 생략 비율: quote_check=skipped / quote_check 키가 있는 게시물 수.
     - 재생성 뒤 최종: 재생성·안전 문구로 끝난 게시물 중 최종 귀속에 오류가 남은 수.
+
+    검사 기록을 복원할 수 없는 게시물(`unknown`, 예전 md)이 하나라도 있는 기록(실행·세션 단위)은
+    통째로 위 비율에서 뺀다. 그 기록은 생략된 게시물만 남고 통과한 게시물이 빠져 비율이 왜곡되기
+    때문이다. 뺀 기록 수와 게시물 수를 `linkage_unavailable_records`·`_posts`로 따로 센다.
     """
-    posts = len(rows)
-    quote = Counter(r["draft"]["quote_check"] for r in rows)
-    stance = Counter(r["draft"]["stance_check"] for r in rows)
-    guard = Counter(r["draft"]["guard"] for r in rows)
-    checked = posts - quote.get("absent", 0) - quote.get("unknown", 0)
-    rejected = [c for r in rows for c in r["rejected_claims"]]
+    unavailable = {tuple(r["unit"]) for r in rows if r["draft"]["quote_check"] == "unknown"}
+    usable = [r for r in rows if tuple(r["unit"]) not in unavailable]
+    posts = len(usable)
+    quote = Counter(r["draft"]["quote_check"] for r in usable)
+    stance = Counter(r["draft"]["stance_check"] for r in usable)
+    guard = Counter(r["draft"]["guard"] for r in usable)
+    checked = posts - quote.get("absent", 0)
+    rejected = [c for r in usable for c in r["rejected_claims"]]
     rejected_by = Counter(c["verdict"] for c in rejected)
     determined = len(rejected) - rejected_by.get("undeterminable", 0)
-    regenerated = [r for r in rows if r["draft"]["quote_check"] in ("regenerated", "safe")]
+    regenerated = [r for r in usable if r["draft"]["quote_check"] in ("regenerated", "safe")]
     still = sum(any(a["verdict"] in ERRORS for a in r["attributions"]) for r in regenerated)
     return {
         "quote_check": dict(quote),
         "stance_check": dict(stance),
         "guard": dict(guard),
+        "posts_with_linkage": posts,
         "quote_checked_posts": checked,
-        "linkage_unavailable_posts": quote.get("unknown", 0),
+        "linkage_unavailable_records": len(unavailable),
+        "linkage_unavailable_posts": len(rows) - posts,
         "skip_rate": {
             "n": quote.get("skipped", 0),
             "of": checked,
@@ -720,11 +728,12 @@ async def extract_items(
     items: list[dict[str, Any]], judge: AttributionJudge, force: bool = False
 ) -> list[dict[str, Any]]:
     """항목마다 귀속을 뽑아 `extracted_attributions`(안정 id `attribution_id`, verdict 없음)를
-    채운다. 이미 채워진 항목은 건드리지 않는다(`force`가 아니면). 라벨은 그 id로 붙이므로 추출을
-    다시 하면 기존 라벨과 어긋난다. 돌려주는 값은 판정 모델의 라벨 행(판정한 항목만)."""
+    채우고 `extraction: {model, date}` 표식을 남긴다. 표식이 있는 항목(귀속이 0개여도)은 `force`가
+    아니면 건드리지 않는다. 라벨은 그 id로 붙이므로 추출을 다시 하면 기존 라벨과 어긋난다. 돌려주는
+    값은 판정 모델의 라벨 행(이번에 추출한 항목만)."""
     labels = []
     for item in items:
-        if item.get("extracted_attributions") and not force:
+        if item.get("extraction") and not force:
             continue
         payload = {
             "participants": {k: NAMES[k] for k in TARGETS},
@@ -761,6 +770,16 @@ async def extract_items(
     return labels
 
 
+def merge_labels(
+    existing: list[dict[str, Any]], fresh: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """라벨 파일 병합(항목 단위). 이번에 추출한 항목은 새 행으로 바꾸고(옛 라벨은 버림), 건너뛴
+    항목의 행은 그대로 둔다."""
+    rows = {r["item_id"]: r for r in existing}
+    rows.update({r["item_id"]: r for r in fresh})
+    return list(rows.values())
+
+
 async def _extract(
     items_path: Path, labels_path: Path | None, judge: AttributionJudge, force: bool
 ) -> None:
@@ -768,12 +787,24 @@ async def _extract(
     labels = await extract_items(items, judge, force)
     items_path.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), "utf-8")
     labels_path = labels_path or items_path.with_name(items_path.stem + "-judge-labels.jsonl")
+    existing = (
+        [json.loads(line) for line in labels_path.read_text("utf-8").splitlines() if line]
+        if labels_path.is_file()
+        else []
+    )
+    merged = merge_labels(existing, labels)
     labels_path.write_text(
-        "".join(json.dumps(x, ensure_ascii=False) + "\n" for x in labels), "utf-8"
+        "".join(json.dumps(x, ensure_ascii=False) + "\n" for x in merged), "utf-8"
     )
     print(
         json.dumps(
-            {"items": len(items), "labels": str(labels_path), **judge.info()}, ensure_ascii=False
+            {
+                "items": len(items),
+                "extracted_now": len(labels),
+                "labels": str(labels_path),
+                **judge.info(),
+            },
+            ensure_ascii=False,
         )
     )
 

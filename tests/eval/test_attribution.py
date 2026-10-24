@@ -249,6 +249,14 @@ async def test_extract_freezes_attributions_and_passes_truncation():
             "post": {"id": "q", "speaker": "p1", "phase": "problem", "order": 2, "content": "x"},
             "sources": [],
             "extracted_attributions": [{"attribution_id": "i2#a1", "quote": "old"}],
+            "extraction": {"model": "old", "date": "2026-10-24"},
+        },
+        {  # 귀속 0개로 끝난 추출도 표식이 있으면 동결
+            "item_id": "i3",
+            "post": {"id": "r", "speaker": "p1", "phase": "problem", "order": 2, "content": "x"},
+            "sources": [],
+            "extracted_attributions": [],
+            "extraction": {"model": "old", "date": "2026-10-24"},
         },
     ]
     seen = []
@@ -271,7 +279,8 @@ async def test_extract_freezes_attributions_and_passes_truncation():
 
     judge = at.AttributionJudge({"VC_JUDGE_MODEL": "t"}, ask=ask)
     labels = await at.extract_items(items, judge)
-    assert seen == [True] and judge.calls == 1  # 이미 추출된 i2는 건드리지 않는다
+    assert seen == [True] and judge.calls == 1  # 표식이 있는 i2·i3는 건드리지 않는다
+    assert items[2]["extracted_attributions"] == [] and items[0]["extraction"]["model"] == "t"
     assert items[0]["extracted_attributions"][0]["attribution_id"] == "i1#a1"
     assert items[1]["extracted_attributions"] == [{"attribution_id": "i2#a1", "quote": "old"}]
     assert labels == [
@@ -281,8 +290,17 @@ async def test_extract_freezes_attributions_and_passes_truncation():
             "missed_attributions": [],
         }
     ]
-    await at.extract_items(items, judge, force=True)
-    assert judge.calls == 3 and items[1]["extracted_attributions"][0]["quote"] == "q"
+    again = await at.extract_items(items, judge, force=True)
+    assert judge.calls == 4 and items[1]["extracted_attributions"][0]["quote"] == "q"
+    # 라벨 병합: 다시 추출한 항목은 새 행으로 바뀌고(옛 라벨 폐기), 건너뛴 항목 행은 남는다
+    old = [
+        {"item_id": "i2", "labels": [{"attribution_id": "i2#a1", "verdict": "overstated"}]},
+        {"item_id": "i9", "labels": []},
+    ]
+    merged = {r["item_id"]: r for r in at.merge_labels(old, labels)}
+    assert set(merged) == {"i1", "i2", "i9"} and merged["i2"] == old[0]
+    merged = {r["item_id"]: r for r in at.merge_labels(old, again)}
+    assert merged["i2"]["labels"][0]["verdict"] == "supported" and "i9" in merged
 
 
 def test_parse_verdict_normalizes_unknown_values():
@@ -407,6 +425,16 @@ async def test_judge_posts_and_summary_math():
     assert link["false_positive_regeneration"]["rejected_claims"] == 1
     assert link["false_positive_regeneration"]["rate_of_determined"] == 1.0
     assert link["after_regeneration"] == {"posts": 1, "final_still_error": 1, "final_clean": 0}
+    assert link["linkage_unavailable_records"] == 0 and link["posts_with_linkage"] == 4
+    # 복원 불가 게시물이 하나라도 있는 기록은 통째로 비율에서 뺀다(skipped만 남아 100%가 되지 않게)
+    legacy = [
+        {**rows[1], "unit": [9, "x"], "draft": {**rows[1]["draft"], "quote_check": "unknown"}},
+        {**rows[2], "unit": [9, "x"], "draft": {**rows[2]["draft"], "quote_check": "skipped"}},
+    ]
+    link2 = at.linkage(rows + legacy)
+    assert link2["linkage_unavailable_records"] == 1 and link2["linkage_unavailable_posts"] == 2
+    assert link2["skip_rate"] == {"n": 0, "of": 2, "rate": 0.0} and link2["posts_with_linkage"] == 4
+    assert "unknown" not in link2["quote_check"] and "skipped" not in link2["quote_check"]
     scored = pe.score(events, {}, {"summary": s})
     assert scored["attribution"]["summary"]["posts"] == 4
     assert scored["fallbacks"]["quote_check"] == {"absent": 2, "regenerated": 1, "none": 1}
@@ -527,7 +555,11 @@ def test_agreement_confusion_kappa_and_recall():
         {"item_id": "i3", "attribution_id": "i3#a2", "a": "unsupported", "b": "overstated"}
     ]
     assert pair["by_type"]["recorded:mention"] == {"n": 2, "agree": 1}
-    assert got["extraction"]["recall_vs_labeler"] == {"A": 0.75, "B": 1.0}
+    recall = got["extraction"]["recall_vs_labeler"]  # A·B는 i1·i3만 봤다(i2 제외)
+    assert recall["A"]["reviewed_items"] == 2 and recall["A"]["coverage"] == 0.667
+    assert (recall["A"]["extracted_in_reviewed"], recall["A"]["missed"]) == (3, 1)
+    assert recall["A"]["recall"] == 0.75 and "warning" in recall["A"]
+    assert recall["B"]["recall"] == 1.0 and "warning" in recall["B"]
     assert got["extraction"]["gold"] == {"n": 1, "hit": 1, "recall": 1.0, "misses": []}
     assert got["extraction"]["no_attribution_items"] == {"n": 1, "extracted_something": 0}
     calib = ca.report(items, {"A": a, "B": b}, "calib")

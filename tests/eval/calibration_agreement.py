@@ -106,15 +106,33 @@ def by_type(items: dict[str, dict], a: dict, b: dict) -> dict[str, Any]:
 def extraction_recall(
     items: list[dict[str, Any]], labels: dict[str, list[dict[str, Any]]]
 ) -> dict[str, Any]:
+    """라벨러 대비 재현율은 그 라벨러가 본 항목(라벨 파일에 행이 있는 항목)만으로 분자·분모를
+    잡는다.
+    본 항목 비율(coverage)이 1 미만이면 경고를 붙인다."""
     extracted = sum(len(i.get("extracted_attributions") or []) for i in items)
-    missed = {
-        name: sum(
+    by_labeler = {}
+    for name, rows in labels.items():
+        reviewed_ids = {r["item_id"] for r in rows}
+        reviewed = [i for i in items if i["item_id"] in reviewed_ids]
+        got = sum(len(i.get("extracted_attributions") or []) for i in reviewed)
+        miss = sum(
             len(r.get("missed_attributions") or [])
             for r in rows
-            if r["item_id"] in {i["item_id"] for i in items}
+            if r["item_id"] in {i["item_id"] for i in reviewed}
         )
-        for name, rows in labels.items()
-    }
+        coverage = round(len(reviewed) / len(items), 3) if items else None
+        by_labeler[name] = {
+            "reviewed_items": len(reviewed),
+            "coverage": coverage,
+            "extracted_in_reviewed": got,
+            "missed": miss,
+            "recall": round(got / (got + miss), 3) if got + miss else None,
+            **(
+                {"warning": "본 항목이 전체가 아니다"}
+                if coverage is not None and coverage < 1
+                else {}
+            ),
+        }
     gold_n = gold_hit = 0
     gold_misses = []
     for item in items:
@@ -136,11 +154,8 @@ def extraction_recall(
     false_extractions = sum(bool(i.get("extracted_attributions")) for i in no_attr_items)
     return {
         "extracted": extracted,
-        "missed_by_labeler": missed,
-        "recall_vs_labeler": {
-            name: round(extracted / (extracted + m), 3) if extracted + m else None
-            for name, m in missed.items()
-        },
+        "items": len(items),
+        "recall_vs_labeler": by_labeler,
         "gold": {
             "n": gold_n,
             "hit": gold_hit,
