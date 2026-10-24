@@ -218,6 +218,11 @@ def following(events: list[dict[str, Any]], index: int, limit: int) -> list[dict
     return window(events, index, limit)[0]
 
 
+def following_all(events: list[dict[str, Any]], index: int) -> list[dict[str, Any]]:
+    """events[index] 메시지 뒤, 다음 지원자 발언 또는 세션 끝까지의 AI 발언 전부(카드 뒤 포함)."""
+    return window(events, index, sys.maxsize)[0]
+
+
 def repetition(events: list[dict[str, Any]]) -> dict[str, Any]:
     by_seat: dict[tuple, list[str]] = {}
     for event in events:
@@ -433,7 +438,7 @@ def scene_counts(events: list[dict[str, Any]], rows: list[dict[str, Any]]) -> di
             scene, {"scenes": 0, "posts": 0, "attributions": 0, "overstated": 0, "unsupported": 0}
         )
         bucket["scenes"] += 1
-        for post in following(events, i, 3):
+        for post in following_all(events, i):  # 규칙 misquote는 3개 상한을 그대로 둔다
             row = by_key.get(keys.get(id(post)))
             if row is None:
                 continue

@@ -210,6 +210,13 @@ def test_scene_counts_keys_by_unit_and_order_not_content():
             "scene": "weak_agree",
             "posts": [dict(post)],
         },
+        {  # 두 번째 실행의 카드 뒤 발언 3개: 장면 뒤 4번째 발언까지 장면에 든다
+            "session": "problem",
+            "run": 1,
+            "kind": "card",
+            "card": "x",
+            "posts": [dict(post), dict(post), dict(post)],
+        },
     ]
     transcript = at.transcript_from_events(events)
     rows = [
@@ -225,12 +232,13 @@ def test_scene_counts_keys_by_unit_and_order_not_content():
     assert pe.scene_counts(events, rows) == {
         "weak_agree": {
             "scenes": 2,
-            "posts": 2,
+            "posts": 5,
             "attributions": 1,
             "overstated": 1,
             "unsupported": 0,
         }
     }
+    assert len(pe.following(events, 1, 3)) == 3 and len(pe.following_all(events, 1)) == 4
 
 
 async def test_extract_freezes_attributions_and_passes_truncation():
@@ -435,6 +443,12 @@ async def test_judge_posts_and_summary_math():
     assert link2["linkage_unavailable_records"] == 1 and link2["linkage_unavailable_posts"] == 2
     assert link2["skip_rate"] == {"n": 0, "of": 2, "rate": 0.0} and link2["posts_with_linkage"] == 4
     assert "unknown" not in link2["quote_check"] and "skipped" not in link2["quote_check"]
+    # 같은 (실행, 세션) 단위라도 파일이 다르면 다른 기록이다: 예전 md가 다른 파일의 정상 기록을
+    # 끌어내리지 않는다
+    other = [{**r, "source": "old.md", "unit": [0, "problem"]} for r in legacy]
+    link3 = at.linkage(rows + other)
+    assert link3["linkage_unavailable_records"] == 1 and link3["posts_with_linkage"] == 4
+    assert at.record_key(rows[1]) != at.record_key(other[0])
     scored = pe.score(events, {}, {"summary": s})
     assert scored["attribution"]["summary"]["posts"] == 4
     assert scored["fallbacks"]["quote_check"] == {"absent": 2, "regenerated": 1, "none": 1}
@@ -569,3 +583,40 @@ def test_agreement_confusion_kappa_and_recall():
         {("x", 0): "supported", ("y", 0): "overstated"},
     )
     assert perfect["kappa"] == 1.0
+
+
+async def test_judge_files_keeps_same_named_files_apart(tmp_path):
+    data = {
+        "session": [{"id": "s", "display_name": ""}],
+        "messages": [
+            {
+                "id": "m1",
+                "sender": "candidate",
+                "phase": "keyword",
+                "content": "물",
+                "created_at": "2026-10-23T00:00:01+00:00",
+                "meta": {},
+            },
+            {
+                "id": "m2",
+                "sender": "p1",
+                "phase": "keyword",
+                "content": "불",
+                "created_at": "2026-10-23T00:00:02+00:00",
+                "meta": {},
+            },
+        ],
+    }
+    paths = []
+    for name in ("a", "b"):
+        (tmp_path / name).mkdir()
+        paths.append(tmp_path / name / "session.json")
+        paths[-1].write_text(json.dumps(data), "utf-8")
+
+    async def ask(payload):
+        return {"attributions": [], "rejected_claims": []}
+
+    got = await at._judge_files(paths, at.AttributionJudge({"VC_JUDGE_MODEL": "t"}, ask=ask))
+    assert got["files"] == ["a/session.json", "b/session.json"] == list(got["per_file"])
+    assert got["combined"]["posts"] == 2 and [r["source"] for r in got["rows"]] == got["files"]
+    assert at.source_labels([paths[0], paths[0]]) == ["session.json", "session.json#2"]

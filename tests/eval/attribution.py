@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -279,16 +280,28 @@ def transcript_from_markdown(
     return out
 
 
-def load_transcript(path: Path) -> list[dict[str, Any]]:
-    """기록 파일 형식을 보고 고른다: 사건 목록(json 배열) · 세션 내보내기(json, messages) · md."""
+def load_transcript(path: Path, source: str | None = None) -> list[dict[str, Any]]:
+    """기록 파일 형식을 보고 고른다: 사건 목록(json 배열) · 세션 내보내기(json, messages) · md.
+    메시지마다 `source`(파일 식별자, 기본은 절대 경로)를 붙여 다른 파일의 같은 (실행, 세션) 단위와
+    섞이지 않게 한다."""
     if path.suffix == ".md":
-        return transcript_from_markdown(path.read_text("utf-8"))
-    data = json.loads(path.read_text("utf-8"))
-    if isinstance(data, list):
-        return transcript_from_events(data)
-    if isinstance(data, dict) and "messages" in data:
-        return transcript_from_session(data)
-    raise ValueError(f"{path}: 사건 목록·세션 내보내기·md 중 어느 것도 아니다")
+        out = transcript_from_markdown(path.read_text("utf-8"))
+    else:
+        data = json.loads(path.read_text("utf-8"))
+        if isinstance(data, list):
+            out = transcript_from_events(data)
+        elif isinstance(data, dict) and "messages" in data:
+            out = transcript_from_session(data)
+        else:
+            raise ValueError(f"{path}: 사건 목록·세션 내보내기·md 중 어느 것도 아니다")
+    for m in out:
+        m["source"] = source if source is not None else str(path.resolve())
+    return out
+
+
+def record_key(row: dict[str, Any]) -> tuple:
+    """기록 단위 = (파일, 실행, 세션). linkage 제외 판단과 묶기에 쓴다."""
+    return (row.get("source", ""), *row["unit"])
 
 
 def sources_before(transcript: list[dict[str, Any]], index: int) -> tuple[list[dict], bool]:
@@ -475,6 +488,7 @@ async def judge_posts(
             {
                 "run": m["unit"][0],
                 "unit": list(m["unit"]),
+                "source": m.get("source", ""),
                 "post_id": m["id"],
                 "seat": m["sender"],
                 "phase": m["phase"],
@@ -631,8 +645,8 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     통째로 위 비율에서 뺀다. 그 기록은 생략된 게시물만 남고 통과한 게시물이 빠져 비율이 왜곡되기
     때문이다. 뺀 기록 수와 게시물 수를 `linkage_unavailable_records`·`_posts`로 따로 센다.
     """
-    unavailable = {tuple(r["unit"]) for r in rows if r["draft"]["quote_check"] == "unknown"}
-    usable = [r for r in rows if tuple(r["unit"]) not in unavailable]
+    unavailable = {record_key(r) for r in rows if r["draft"]["quote_check"] == "unknown"}
+    usable = [r for r in rows if record_key(r) not in unavailable]
     posts = len(usable)
     quote = Counter(r["draft"]["quote_check"] for r in usable)
     stance = Counter(r["draft"]["stance_check"] for r in usable)
@@ -686,6 +700,7 @@ def compact_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
             "unit": r["unit"],
+            "source": r.get("source", ""),
             "post_id": r["post_id"],
             "seat": r["seat"],
             "phase": r["phase"],
@@ -701,15 +716,32 @@ def compact_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # ---- 명령줄 ------------------------------------------------------------
 
 
+def source_labels(paths: list[Path]) -> list[str]:
+    """입력 파일마다 겹치지 않는 표시 이름: 공통 상위 폴더 기준 상대 경로(같은 이름의 session.json이
+    다른 폴더에 있어도 구분). 같은 경로를 두 번 주면 번호를 붙인다."""
+    resolved = [p.resolve() for p in paths]
+    try:
+        common = Path(os.path.commonpath([str(p.parent) for p in resolved]))
+        labels = [str(p.relative_to(common)) for p in resolved]
+    except ValueError:  # 드라이브가 다르면 공통 경로가 없다
+        labels = [str(p) for p in resolved]
+    seen: Counter = Counter()
+    out = []
+    for label in labels:
+        seen[label] += 1
+        out.append(label if seen[label] == 1 else f"{label}#{seen[label]}")
+    return out
+
+
 async def _judge_files(paths: list[Path], judge: AttributionJudge) -> dict[str, Any]:
     per_file = {}
     all_rows: list[dict[str, Any]] = []
-    for offset, path in enumerate(paths):
-        transcript = load_transcript(path)
+    for offset, (path, label) in enumerate(zip(paths, source_labels(paths), strict=True)):
+        transcript = load_transcript(path, source=label)
         rows = await judge_posts(transcript, judge)
         for r in rows:  # 파일마다 다른 실행으로 세어 파일 간 범위를 낸다
             r["run"] = f"{offset}:{r['run']}"
-        per_file[path.name] = summarize(rows)
+        per_file[label] = summarize(rows)
         all_rows += rows
     return {
         "judge": judge.info(),

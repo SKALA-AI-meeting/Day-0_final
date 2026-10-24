@@ -140,7 +140,7 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 - 안전: 유출·선점 위반 0(위 유출 픽스처와 같은 검사).
 - 답한 메시지(`replies`): 지원자 발언마다 같은 단계 안에서 그 메시지를 `meta.reply_to`로 가리킨 동료 발언이 있는지(없으면 무시, 다음 실행에서 답한 것 포함), 분류 `addressed_to` 자리마다 그 자리가 그 메시지에 답했는지(지명 무응답).
 - 오인용(정규식, 보조 신호): 대본 발언에 `misquote` 정규식이 있으면 그 뒤 동료 발언이 지원자가 하지 않은 말·입장을 지원자 것으로 돌렸는지 센다. 장면 세션(`problem_scenes`·`solution_scenes`)은 지명 무응답·질문 무시(`kind: question`, 응답률에 포함)·오인용 유도·카드 직전 질문을 만든다.
-- 귀속 판정(`attribution`, LLM, 주 지표): 아래 "귀속 판정". 귀속 장면 세션(`attribution_keyword`·`attribution_problem`·`attribution_solution`)의 발언 18개는 `scene` 유형(약한 동의·조건부 동의·A 인정 B 우선·실제 번복·동료 말 인용·전제 질문·생략형 귀속·정상 질문 대조군)이 붙어 있고 자리 p1~p3을 섞는다. 결과의 `attribution.by_scene`은 장면 뒤(다음 지원자 발언 전) 동료 발언의 귀속 판정을 유형별로 묶는다. 이름만 바꾼 장면은 두지 않는다.
+- 귀속 판정(`attribution`, LLM, 주 지표): 아래 "귀속 판정". 귀속 장면 세션(`attribution_keyword`·`attribution_problem`·`attribution_solution`)의 발언 18개는 `scene` 유형(약한 동의·조건부 동의·A 인정 B 우선·실제 번복·동료 말 인용·전제 질문·생략형 귀속·정상 질문 대조군)이 붙어 있고 자리 p1~p3을 섞는다. 결과의 `attribution.by_scene`은 장면 뒤 다음 지원자 발언(또는 세션 끝)까지의 동료 발언 전부(카드 뒤 발언 포함)의 귀속 판정을 유형별로 묶는다(규칙 `misquote`는 앞 3개만 본다). 이름만 바꾼 장면은 두지 않는다.
 - `fallbacks.quote_check`: 동료 발언의 인용 검사 표식 분포(`none`·`pass`·`regenerated`·`safe`·`skipped`). 검사가 없는 빌드(main)에서는 모두 `absent`다.
 
 ### 귀속 판정 (`tests/eval/attribution.py`)
@@ -153,7 +153,7 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 - 판정 모델: `VC_JUDGE_MODEL`(없으면 `gpt-4o`), temperature 0. 결과 `judge.models_used`에 응답이 보고한 모델 id를 남긴다. 키는 모델 id 규칙(gpt-4o-mini → `OPENAI_API_KEY`, 그 외 → `OPENAI_API_KEY_PERSONAL`).
 - 보고(`summary`): 건수와 분모를 함께 둔다. 귀속별 비율(분모 귀속 수, 과장과 근거 없음 따로), 게시물별 비율(분모 게시물 수와 귀속 있는 게시물 수), 귀속 빈도(게시물당 귀속 수·히스토그램. 인용을 피해서 오류율이 낮아진 것이 아닌지 본다), 대상(지원자/동료)·형태(서술·전제 질문·생략형)별, 실행별 값과 범위(`by_run`·`ranges`). 오류 0건은 효과 입증으로 쓰지 않는다.
 - 초안 ↔ 최종 연결(`summary.linkage`, 발언 `meta`에 `quote_check`·`quote_violation`·`stance_check`·`guard`가 있을 때. 없으면 `absent`): 검사 표식 분포, 검사 생략 비율(`skipped` / `quote_check`가 있는 발언), 안전 문구 비율(인용 `safe`·guard `safe`·입장 `fallback` 각각 / 발언 수), 정상 귀속 오탐 재생성 비율(검사기가 거부한 초안 주장 `quote_violation`을 같은 원문과 대조해 `supported`로 판정된 비율, 분모는 거부 주장 수와 판정 가능 수), 재생성·안전 문구로 끝난 발언 중 최종 귀속에 오류가 남은 수.
-- 다시 판정: `uv run --project services/api python tests/eval/attribution.py judge <기록>... [--out X]`. 기록은 `PERSONA_EVAL_DUMP` 사건 목록(json 배열), 가상 세션 `session.json`, eval-live 페르소나 md 어느 것이든 된다. 파일마다 요약과 전체 합산, 파일 간 범위를 낸다. 페르소나 md의 대화 절은 되읽을 수 있게 쓴다(세션 제목에 단계, 발언 한 줄에 줄바꿈은 `\n`, 동료 발언 끝에 검사 기록 전부를 백틱 JSON으로). 이 형식 이전의 md는 검사 기록을 복원할 수 없어(`unknown`) 그 게시물이 든 기록(실행·세션)을 통째로 검사 연결 비율(생략·안전 문구·오탐 재생성)에서 빼고 `linkage_unavailable_records`·`_posts`로 센다. 생략된 게시물만 남아 비율이 왜곡되는 것을 막기 위해서다(`absent`와 다르다).
+- 다시 판정: `uv run --project services/api python tests/eval/attribution.py judge <기록>... [--out X]`. 기록은 `PERSONA_EVAL_DUMP` 사건 목록(json 배열), 가상 세션 `session.json`, eval-live 페르소나 md 어느 것이든 된다. 파일마다 요약과 전체 합산, 파일 간 범위를 낸다(파일 키는 공통 상위 폴더 기준 상대 경로라 다른 폴더의 같은 `session.json`도 구분되고, 기록 단위는 파일·실행·세션이다). 페르소나 md의 대화 절은 되읽을 수 있게 쓴다(세션 제목에 단계, 발언 한 줄에 줄바꿈은 `\n`, 동료 발언 끝에 검사 기록 전부를 백틱 JSON으로). 이 형식 이전의 md는 검사 기록을 복원할 수 없어(`unknown`) 그 게시물이 든 기록(실행·세션)을 통째로 검사 연결 비율(생략·안전 문구·오탐 재생성)에서 빼고 `linkage_unavailable_records`·`_posts`로 센다. 생략된 게시물만 남아 비율이 왜곡되는 것을 막기 위해서다(`absent`와 다르다).
 - 페르소나 품질 live는 기본으로 귀속 판정을 함께 돈다(`PERSONA_EVAL_JUDGE=0`이면 끔). 판정 호출은 동료 발언 수만큼이다(대본 8세션 1회 약 100~120회).
 
 판정 모델 보정(사람 정답이 아니라 모델 두 개의 라벨이라는 한계를 기록에 남긴다):
