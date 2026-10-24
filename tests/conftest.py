@@ -5,6 +5,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -30,9 +31,21 @@ def scenarios_dir() -> Path:
 
 
 def pytest_collection_modifyitems(config, items):
-    """`live` 테스트(실제 API·과금)는 `ALLOW_API=1`일 때만 돈다. -m 마커 선택은 그대로다."""
+    """`live` 테스트(실제 API·과금)는 `ALLOW_API=1`일 때만 돈다.
+
+    기본 실행(`-m`에 live 선택 없음)은 live를 skip한다. `-m live`처럼 live를 명시해 골랐는데
+    동의가 없으면 조용히 0으로 끝나지 않고 세션을 실패로 끝낸다(수집만 하는 `--collect-only`는
+    호출이 없으므로 예외: docs_gen이 live 목록을 센다).
+    """
     if os.environ.get("ALLOW_API") == "1":
         return
+    markexpr = config.getoption("-m", default="") or ""
+    selected = re.search(r"\blive\b", markexpr) and not re.search(r"\bnot\s+live\b", markexpr)
+    if selected and not config.getoption("collectonly"):
+        pytest.exit(
+            f"-m {markexpr!r}: live 테스트는 실제 API 호출(과금)이다. ALLOW_API=1을 명시해야 돈다",
+            returncode=1,
+        )
     skip = pytest.mark.skip(reason="실제 API 호출(과금). ALLOW_API=1을 명시해야 돈다")
     for item in items:
         if "live" in item.keywords:

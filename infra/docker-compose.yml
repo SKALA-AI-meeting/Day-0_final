@@ -1,7 +1,9 @@
 # Day Zero 전체 구성(8개 서비스, docs/architecture/deployment.md "Docker Compose").
 # 공개 포트는 web(3000), api(8000), rabbitmq 관리 UI(127.0.0.1 전용)뿐이다. MCP 3개와 api 내부 8001은 compose 네트워크 안.
 # 공개 포트 번호는 env(WEB_PORT·API_PORT·RABBITMQ_UI_PORT)로 바꿀 수 있다(같은 기계에서 스택 두 개를 띄울 때).
-# 서비스 간 주소는 아래 environment가 정하므로 env 파일의 같은 키보다 우선한다.
+# 서비스 간 주소(DB·큐·내부 API·MCP)는 아래 environment가 정하므로 env 파일의 같은 키보다 우선한다.
+# env 파일에 호스트용 주소(localhost)가 있거나 그 키가 없어도(infra/.env 없이 dev-fake·test-text를 띄울 때)
+# 컨테이너는 항상 compose 서비스 이름으로 닿는다.
 # 컨테이너 env 파일은 DAYZERO_ENV_FILE(없으면 .env). make up PROFILE=…이 프로필과 .env를 합친
 # .env.resolved-<프로필>을 만들어 --env-file과 여기 둘 다에 준다(scripts/profile.py render).
 services:
@@ -36,6 +38,8 @@ services:
     build: ../services/api
     env_file: ${DAYZERO_ENV_FILE:-.env}
     environment:
+      DATABASE_URL: postgresql+asyncpg://dayzero:dayzero@postgres:5432/dayzero
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       DEBATE_MCP_URL: http://debate-mcp:9101/mcp
       RAG_MCP_URL: http://rag-mcp:9102/mcp
       ASSESSMENT_MCP_URL: http://assessment-mcp:9103/mcp
@@ -72,6 +76,7 @@ services:
     build: ../services/rag-mcp
     env_file: ${DAYZERO_ENV_FILE:-.env}
     environment:
+      DATABASE_URL: postgresql+asyncpg://dayzero:dayzero@postgres:5432/dayzero
       API_INTERNAL_URL: http://api:8001
     expose: ["9102"]
     healthcheck:
@@ -105,6 +110,8 @@ services:
     build: ../services/report-worker
     env_file: ${DAYZERO_ENV_FILE:-.env}
     environment:
+      DATABASE_URL: postgresql+asyncpg://dayzero:dayzero@postgres:5432/dayzero
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       API_INTERNAL_URL: http://api:8001
       ASSESSMENT_MCP_URL: http://assessment-mcp:9103/mcp
     healthcheck:   # 워커가 30초마다 갱신하는 heartbeat 파일

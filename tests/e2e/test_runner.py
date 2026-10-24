@@ -212,6 +212,12 @@ async def test_live_llm_mode_skips_level_expectations(fake, target, monkeypatch)
     assert run_mod.detect_llm_fake(False)[0] is True
 
 
+def test_live_stack_requires_allow_api():
+    with pytest.raises(SystemExit, match="ALLOW_API=1"):
+        run_mod.require_allow_api("env LLM_FAKE=0", {})
+    run_mod.require_allow_api("env LLM_FAKE=0", {"ALLOW_API": "1"})
+
+
 async def test_assistant_must_cite_keyword_materials(fake, target):
     """assistant step이 있는 대본: 인용이 비면(색인 버전 불일치 등) 단언 5가 실패한다."""
     bundle = await run_script(fake, target, "all_five")

@@ -13,6 +13,11 @@ final·전체 기록 → 내부 API·DB에서 결과 수집 → 단언(asserts.p
 
 시계: `real`은 벽시계로 기다리고(실 스택 15분), `fake`는 내부 테스트 API `advance`로 시간을
 당긴다. 실패한 step은 멈추지 않고 step_errors에 남긴다(러너는 결함을 가리지 않는다).
+
+과금 게이트: `--script`·`--auth`는 대상 스택이 실제 LLM이면(`--live`이거나 env `LLM_FAKE=0`)
+세션 진행이 곧 모델 호출이라 `ALLOW_API=1`이 없으면 시작하지 않는다. `LLM_FAKE`가 없으면
+결정적 모드로 본다(detect_llm_fake와 같은 규칙). `--faults`는 러너가 `LLM_FAKE=1`로 앱을 띄우므로
+게이트가 없다. `make e2e PROFILE=…`은 프로필의 `LLM_FAKE`를 env로 넘겨 같은 규칙을 탄다.
 """
 
 import argparse
@@ -585,6 +590,15 @@ def detect_llm_fake(live: bool) -> tuple[bool, str]:
     return value.strip().lower() in ("1", "true", "yes"), f"env LLM_FAKE={value}"
 
 
+def require_allow_api(source: str, values: dict[str, str] | None = None) -> None:
+    """실제 LLM 스택을 상대로 세션을 진행하기 전 과금 동의(`ALLOW_API=1`)를 요구한다."""
+    if (os.environ if values is None else values).get("ALLOW_API") != "1":
+        sys.exit(
+            f"e2e 러너: 대상 스택이 실제 LLM({source})이라 세션 진행이 모델 호출(과금)이다. "
+            "ALLOW_API=1을 명시해야 실행한다"
+        )
+
+
 async def run_script(name: str, target: Target, out: Path, clock: str, live: bool) -> bool:
     script = scripts.load(name)
     fake, source = detect_llm_fake(live)
@@ -613,6 +627,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=records.RECORDS)
     args = parser.parse_args()
     target = Target.from_env()
+    if (args.auth or args.script) and not detect_llm_fake(args.live)[0]:
+        require_allow_api(detect_llm_fake(args.live)[1])
     if args.auth:
         from e2e import auth
 

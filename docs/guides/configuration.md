@@ -64,8 +64,8 @@ env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값�
 | 대상 | 순서(앞이 이김) |
 |---|---|
 | 프로필 해석(`scripts/profile.py`) | `infra/profiles/<PROFILE>.env` > `infra/.env` > 기본값. 셸의 모드 변수가 다르면 오류 |
-| compose 컨테이너 | `docker-compose*.yml`의 `environment:`(서비스 주소) > `env_file`(`DAYZERO_ENV_FILE`, make가 주는 `infra/.env.resolved-<프로필>`; 없으면 `infra/.env`) |
-| `make eval/measure/e2e/stage`의 호스트 러너 | 프로필 해석 결과를 프로세스 env로 받는다(`E2E_INTERNAL_URL`·`WEB_URL`·`SEED_DATABASE_URL` 등 호스트 주소 포함) > 아래 로컬 규칙 |
+| compose 컨테이너 | `docker-compose*.yml`의 `environment:`(DB·큐·내부 API·MCP 주소를 compose 서비스 이름으로 고정) > `env_file`(`DAYZERO_ENV_FILE`, make가 주는 `infra/.env.resolved-<프로필>`; 없으면 `infra/.env`). `infra/.env`에 호스트용 주소가 있거나 파일이 없어도(가짜 LLM 프로필) 컨테이너 주소는 바뀌지 않는다 |
+| `make eval/measure/e2e/stage`의 호스트 러너 | 프로필 해석 결과를 프로세스 env로 받는다(`E2E_PUBLIC_URL`·`E2E_INTERNAL_URL`·`WEB_URL`·`VC_API_URL`·`E2E_DATABASE_URL`·`SEED_DATABASE_URL` 호스트 주소 포함). 셸에 같은 이름이 다른 값으로 있으면 모드 변수와 같이 오류다 > 아래 로컬 규칙 |
 | 로컬 Python 서비스(api·MCP 3개·report-worker) | 이미 설정된 프로세스 env > `infra/.env.local` > `infra/.env`(`python-dotenv`, 덮어쓰지 않음) |
 | 로컬 web(`pnpm dev`) | 프로세스 env와 `apps/web/.env*`(Next.js 규칙). `infra/.env`는 읽지 않는다 |
 | web 컨테이너 | `NEXT_PUBLIC_*`는 **이미지 빌드 시점**의 build arg(`apps/web/Dockerfile`). 컨테이너 env를 바꿔도 번들은 바뀌지 않으므로 다시 빌드한다. 값이 없으면 `http://localhost:8000`·`ws://localhost:8000` |

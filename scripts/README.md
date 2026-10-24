@@ -41,7 +41,7 @@ uv run --project services/api python scripts/seed.py --skip-position --skip-rein
 | 실행 위치 | 저장소 루트 |
 | 필요한 서비스 | api 내부 앱(`E2E_INTERNAL_URL`, 기본 `http://localhost:8001`), `ENABLE_TEST_API=1` |
 | env | `E2E_INTERNAL_URL`, `INTERNAL_TOKEN`(`infra/.env` → `infra/.env.local`, 환경변수가 우선. 값은 출력하지 않음) |
-| 인자 | `--start-at entry\|keyword\|problem\|solution\|proposal\|ended`, `--minutes 15\|60`, `--stage`(재생할 시드 이름), `--llm fake\|live`(스택이 어떤 모드여야 하는지 안내만. `make stage`는 프로필의 `LLM_FAKE`로 채운다) |
+| 인자 | `--start-at entry\|keyword\|problem\|solution\|proposal\|ended`, `--minutes 15\|60`, `--stage`(재생할 시드 이름), `--llm fake\|live`(스택이 어떤 모드여야 하는지 안내만. `make stage`는 프로필의 `LLM_FAKE`로 채운다). `--llm live`이거나 env `LLM_FAKE=0`이면 `ALLOW_API=1` 없이는 시작하지 않는다(시드 세션은 곧 AI 동료의 모델 호출) |
 | 출력 | 초대 링크, 세션 id, 단계별 확인용 정보(세션 토큰, 디브리핑 토큰, 관리자 리포트 링크) |
 
 ```
@@ -57,7 +57,7 @@ make stage STAGE=problem MIN=15 PROFILE=dev-fake
 | 실행 위치 | 저장소 루트 |
 | 필요한 서비스 | api 내부 앱, `ENABLE_TEST_API=1` |
 | env | `E2E_INTERNAL_URL`, `INTERNAL_TOKEN` |
-| 인자 | `--sid <세션 id>`, `--to deadline\|idle\|card:<카드 id>\|<초>` |
+| 인자 | `--sid <세션 id>`, `--to deadline\|idle\|card:<카드 id>\|<초>`. env `LLM_FAKE=0`이면 `ALLOW_API=1` 없이는 시작하지 않는다(당긴 시계가 곧 모델 호출) |
 | 하는 일 | 세션 시계를 앞당긴다. 시간 초과·침묵 초대·카드·자동 제출은 다음 스케줄러 틱(5초)이 평소 경로로 처리한다 |
 
 ```

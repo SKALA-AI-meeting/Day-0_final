@@ -118,6 +118,20 @@ def test_render_and_exec_env(root):
     assert d["LLM_MODE"] == "fake" and d["ENV_FILE"] == ".env.resolved-test-text"
 
 
+def test_profile_host_addresses_win_over_stale_shell(root):
+    """묵은 셸 값은 덮이고, 다른 값이 명시돼 있으면 모드 변수처럼 오류다."""
+    stale = {"E2E_INTERNAL_URL": "http://localhost:8001", "SEED_DATABASE_URL": "x"}
+    p = profile.Profile("test-text", root=root, shell=stale)
+    env = p.exec_env()
+    assert env["E2E_INTERNAL_URL"] == "http://localhost:8101"
+    assert env["SEED_DATABASE_URL"].endswith(":5442/dayzero")
+    problems = p.problems()
+    assert any("E2E_INTERNAL_URL" in x for x in problems)
+    assert any("SEED_DATABASE_URL" in x for x in problems)
+    same = {"E2E_INTERNAL_URL": "http://localhost:8101"}
+    assert profile.Profile("test-text", root=root, shell=same).problems() == []
+
+
 def test_cli_get_never_prints_secret_values(root, capsys):
     assert profile.main(["--root", str(root), "get", "eval-text", "OPENAI_API_KEY"]) == 0
     assert capsys.readouterr().out.strip() == ""

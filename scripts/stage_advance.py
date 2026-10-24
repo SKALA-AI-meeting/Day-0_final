@@ -9,7 +9,7 @@ import argparse
 import asyncio
 
 import httpx
-from make_session import env
+from make_session import env, require_allow_api
 
 
 def parse_to(to: str) -> dict:
@@ -26,6 +26,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 async def main() -> None:
     args = parse_args()
     values = env()
+    require_allow_api(values, "stage_advance")
     internal_url = values.get("E2E_INTERNAL_URL", "http://localhost:8001")
     headers = {"X-Internal-Token": values.get("INTERNAL_TOKEN", "")}
     async with httpx.AsyncClient(base_url=internal_url, timeout=30, headers=headers) as internal:

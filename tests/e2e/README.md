@@ -21,6 +21,7 @@
 make test SUITE=tools          # mock: 가짜 api에서 러너·단언·장애 주입·인증 경계 + tests/eval 형태 검사 (스택·DB·LLM 불필요)
 make e2e PROFILE=…             # 실 스택에서 all_five 15분 1회(벽시계). SCRIPT=timeout_all 등으로 대본 변경
 uv run --project services/api python tests/e2e/run.py --script timeout_all --clock fake   # 시간을 당겨 빠르게(ENABLE_TEST_API=1)
+# 대상 스택이 실제 LLM(--live 또는 env LLM_FAKE=0)이면 --script·--auth는 ALLOW_API=1이 있어야 시작한다
 make e2e SUITE=faults          # 단언 10: 러너가 앱을 띄우고 큐 DLQ·LLM timeout 주입(가짜 LLM 프로필)
 make e2e SUITE=auth PROFILE=…  # 단언 8
 make eval PROFILE=eval-text ALLOW_API=1   # tests/eval을 실제 모델로 1회 → records/eval-live-<일시>.md

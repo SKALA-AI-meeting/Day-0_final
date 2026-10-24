@@ -1,8 +1,9 @@
 """실행 프로필 해석기(표준 라이브러리만). `make profile`·`make doctor`·`make up` 등이 부른다.
 
 값은 기본값 → `infra/.env`(비밀값) → `infra/profiles/<PROFILE>.env`(비밀 아닌 선택값) 순으로 겹친다.
-셸에 모드 변수(`LLM_FAKE`·`ENABLE_TEST_API`·`AGENT_RUNNER`·추적 플래그)가 프로필과 다르게 있으면
-오류다(어느 쪽이 맞는지 추측하지 않는다). 비밀값은 이름과 있음·없음만 출력하고 값은 쓰지 않는다.
+셸에 모드 변수(`LLM_FAKE`·`ENABLE_TEST_API`·`AGENT_RUNNER`·추적 플래그)나 호스트 주소 변수
+(`E2E_INTERNAL_URL`·`WEB_URL` 등)가 프로필과 다르게 있으면 오류다(어느 쪽이 맞는지 추측하지 않는다).
+비밀값은 이름과 있음·없음만 출력하고 값은 쓰지 않는다.
 
     python3 scripts/profile.py show   [PROFILE]                 # 유효 모드 출력
     python3 scripts/profile.py doctor [PROFILE] [--starting]    # 출력 + 검사(외부 호출 없음)
@@ -47,12 +48,13 @@ MODE_KEYS = (
 )
 SECRET_MARKERS = ("KEY", "SECRET", "TOKEN", "PASSWORD")
 PLACEHOLDER = "change-me"
-# 프로필이 정하는 호스트 쪽 주소 → 호스트 러너가 읽는 env 이름(exec 때 넣는다)
+# 프로필이 정하는 호스트 쪽 주소(derived 키) → 호스트 러너가 읽는 env 이름. exec 때 프로필 값이
+# 이기고, 셸에 다른 값이 있으면 모드 변수처럼 오류다(묵은 셸·.env 값이 대상 스택을 바꾸지 못하게)
 HOST_ENV_MAP = {
-    "PROFILE_PUBLIC_URL": ("E2E_PUBLIC_URL", "VC_API_URL"),
-    "PROFILE_INTERNAL_URL": ("E2E_INTERNAL_URL",),
-    "PROFILE_WEB_URL": ("WEB_URL",),
-    "PROFILE_DATABASE_URL": ("E2E_DATABASE_URL", "SEED_DATABASE_URL"),
+    "PUBLIC_URL": ("E2E_PUBLIC_URL", "VC_API_URL"),
+    "INTERNAL_URL": ("E2E_INTERNAL_URL",),
+    "WEB_URL": ("WEB_URL",),
+    "SEED_DATABASE_URL": ("E2E_DATABASE_URL", "SEED_DATABASE_URL"),
 }
 DEFAULTS = {
     "PROFILE_PURPOSE": "dev",
@@ -183,6 +185,11 @@ class Profile:
         for key in MODE_KEYS:
             if key in self.shell and self.shell[key] != self.get(key):
                 out.append(f"셸의 {key}={self.shell[key]!r}가 프로필 값 {self.get(key)!r}과 다르다")
+        for key, value in self.host_env().items():
+            if key in self.shell and self.shell[key] != value:
+                out.append(
+                    f"셸의 {key}={self.shell[key]!r}가 프로필 호스트 주소 {value!r}와 다르다"
+                )
         if self.purpose == "deploy":
             if self.llm_fake:
                 out.append("deploy 프로필에 LLM_FAKE=1은 금지")
@@ -275,13 +282,19 @@ class Profile:
         body = [f"{k}={v}" for k, v in sorted(self.values.items())]
         return "\n".join(head + body) + "\n"
 
+    def host_env(self) -> dict[str, str]:
+        """호스트 러너에 주는 주소 env(프로필이 정한 값만. 빈 값은 넣지 않는다)."""
+        derived = self.derived()
+        return {
+            target: derived[src]
+            for src, targets in HOST_ENV_MAP.items()
+            if derived[src]
+            for target in targets
+        }
+
     def exec_env(self) -> dict[str, str]:
-        env = {**self.shell, **self.values}
-        for src, targets in HOST_ENV_MAP.items():
-            if self.get(src):
-                for t in targets:
-                    env.setdefault(t, self.get(src))
-        return env
+        """셸 < 프로필 값 < 프로필 호스트 주소. 충돌은 problems()가 먼저 거른다."""
+        return {**self.shell, **self.values, **self.host_env()}
 
 
 def _fail(problems: list[str]) -> None:
