@@ -591,7 +591,7 @@ def detect_llm_fake(live: bool) -> tuple[bool, str]:
     value = env().get("LLM_FAKE")
     if value is None:
         return False, "LLM_FAKE 없음(api 기본: 실제 LLM)"
-    return value.strip() == "1", f"env LLM_FAKE={value}"
+    return value == "1", f"env LLM_FAKE={value}"
 
 
 def require_allow_api(source: str, values: dict[str, str] | None = None) -> None:

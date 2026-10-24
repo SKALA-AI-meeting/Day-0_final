@@ -47,7 +47,7 @@ def require_allow_api(values: dict[str, str], what: str, live: bool = False) -> 
         source = "--llm live"
     else:
         source = "LLM_FAKE 없음" if value is None else f"env LLM_FAKE={value}"
-    if not live and value is not None and value.strip() == "1":
+    if not live and value == "1":
         return
     if values.get("ALLOW_API") != "1":
         raise SystemExit(
