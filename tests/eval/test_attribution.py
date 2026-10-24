@@ -36,6 +36,7 @@ def _events():
                         "quote_check": "regenerated",
                         "quote_violation": "candidate의 이 단계 발언·입장 기록에 없는 말을 "
                         "그 사람 것으로 돌림: 지원자가 가뭄에 동의했다",
+                        "quote_span": "지원자님이 가뭄에 동의하셨죠",
                         "stance_check": "pass",
                         "guard": "pass",
                     },
@@ -67,8 +68,19 @@ def test_transcript_from_events_keeps_order_and_only_past_sources():
     payload = at.payload_for(t, 2)
     assert payload["post"]["id"] == "a2" and payload["sources"][1]["speaker_name"] == "지원자"
     assert payload["draft_rejected_claims"] == [
-        {"target": "candidate", "claim": "지원자가 가뭄에 동의했다"}
+        {
+            "target": "candidate",
+            "claim": "지원자가 가뭄에 동의했다",
+            "span": "지원자님이 가뭄에 동의하셨죠",
+            "draft": None,
+        }
     ]
+    assert payload["rejected_unrecoverable"] == 0
+    # 거부 구절 기록이 없으면(PR 10 빌드) 주장만으로 판정하지 않고 복구 불가로 센다
+    blind = [dict(m, meta={k: v for k, v in m["meta"].items() if k != "quote_span"}) for m in t]
+    payload = at.payload_for(blind, 2)
+    assert payload["draft_rejected_claims"] == [] and payload["rejected_unrecoverable"] == 1
+    assert at.rejected_claim(blind[2]["meta"])["recoverable"] is False
 
 
 def test_transcript_from_session_and_markdown():
@@ -166,6 +178,7 @@ def test_markdown_round_trip_keeps_multiline_phase_and_all_flags():
                         "stance_check": "regenerated",
                         "quote_check": "regenerated",
                         "quote_violation": "candidate의 기록에 없는 말: 지원자가 가뭄에 동의했다",
+                        "quote_span": "지원자님이 가뭄에 동의하셨죠",
                         "model": "x",
                     },
                 }
@@ -181,9 +194,12 @@ def test_markdown_round_trip_keeps_multiline_phase_and_all_flags():
     assert back[0]["phase"] == "problem"  # 세션 id 접두가 아니어도 단계가 남는다
     assert at.draft_checks(back[0]["meta"]) == at.draft_checks(original[0]["meta"])
     assert at.draft_checks(back[2]["meta"]) == at.draft_checks(original[2]["meta"])
-    assert at.rejected_claim(back[2]["meta"]) == {
+    assert at.rejected_claim(back[2]["meta"]) == {  # 거부 구절도 md를 거쳐 남는다
         "target": "candidate",
         "claim": "지원자가 가뭄에 동의했다",
+        "span": "지원자님이 가뭄에 동의하셨죠",
+        "draft": None,
+        "recoverable": True,
     }
     # 예전 md의 여러 줄 발언(이어지는 줄)은 앞 발언에 붙는다
     legacy = "## 대화\n\n### problem\n\n- (단계 시작)\n  - 강한결: 첫 줄\n둘째 줄\n- (카드 x)\n"
@@ -375,6 +391,9 @@ def test_parse_verdict_normalizes_unknown_values():
     assert at.rejected_claim({"quote_violation": "형식이 다른 사유"}) == {
         "target": "",
         "claim": "형식이 다른 사유",
+        "span": None,
+        "draft": None,
+        "recoverable": False,
     }
 
 
@@ -457,6 +476,25 @@ async def test_judge_posts_and_summary_math():
     assert link["skip_rate"] == {"n": 0, "of": 2, "rate": 0.0}
     assert link["false_positive_regeneration"]["rejected_claims"] == 1
     assert link["false_positive_regeneration"]["rate_of_determined"] == 1.0
+    assert link["false_positive_regeneration"]["rejected_unrecoverable"] == 0
+    blind_rows = await at.judge_posts(
+        at.transcript_from_events(
+            [
+                dict(
+                    e,
+                    posts=[
+                        dict(p, meta={k: v for k, v in p["meta"].items() if k != "quote_span"})
+                        for p in e["posts"]
+                    ],
+                )
+                for e in events
+            ]
+        ),
+        judge,
+    )
+    fp = at.linkage(blind_rows)["false_positive_regeneration"]
+    # 판정이 거부 주장을 돌려줘도(가짜 판정기) 보내지 않았으니 버리고 복구 불가로만 센다
+    assert (fp["rejected_claims"], fp["rejected_unrecoverable"]) == (0, 1)
     assert link["after_regeneration"] == {"posts": 1, "final_still_error": 1, "final_clean": 0}
     assert link["linkage_unavailable_records"] == 0 and link["posts_with_linkage"] == 4
     # 복원 불가 게시물이 하나라도 있는 기록은 통째로 비율에서 뺀다(skipped만 남아 100%가 되지 않게)

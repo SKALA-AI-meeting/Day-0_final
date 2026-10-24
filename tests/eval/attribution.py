@@ -241,7 +241,15 @@ MD_SESSION = re.compile(r"^### (\S+)(?: \((\w+)\))?")
 MD_CANDIDATE = re.compile(r"^- \*\*지원자\*\*\((\w+)\): (.*)$")
 MD_POST = re.compile(r"^  - ([^:]+): (.*?)(?: `([^`]*)`)?$")
 MD_SKIP = re.compile(r"^- \((단계 시작|카드) ?.*\)$")
-MD_FLAG_KEYS = ("guard", "stance_check", "quote_check", "quote_violation", "stance_violation")
+MD_FLAG_KEYS = (
+    "guard",
+    "stance_check",
+    "quote_check",
+    "quote_violation",
+    "quote_span",
+    "quote_draft",
+    "stance_violation",
+)
 
 
 def md_escape(text: str) -> str:
@@ -366,18 +374,29 @@ def sources_before(transcript: list[dict[str, Any]], index: int) -> tuple[list[d
 # ---- 초안 ↔ 최종 연결(PR 10 meta, 없으면 absent) ----------------------------------------
 
 
-def rejected_claim(meta: dict[str, Any]) -> dict[str, str] | None:
-    """`quote_violation`("candidate의 … 돌림: <주장>")에서 (대상, 거부된 주장). 형식이 다르면 전체를
-    주장으로 둔다."""
+def rejected_claim(meta: dict[str, Any]) -> dict[str, Any] | None:
+    """`quote_violation`("candidate의 … 돌림: <주장>")에서 (대상, 거부된 주장)과, 기록돼 있으면
+    거부된 초안 구절 `quote_span`·초안 전문 `quote_draft`. 형식이 다르면 전체를 주장으로 둔다.
+    `recoverable`은 구절이 있어 판정에 보낼 수 있는지다(구절 없이 주장만으로는 화자 자신의 의견을
+    잘못 뽑은 거부인지 가릴 수 없어 판정하지 않는다)."""
     text = meta.get("quote_violation")
     if not text:
         return None
     found = REJECTED.match(text.strip())
-    if not found:
-        return {"target": "", "claim": text.strip()}
-    who = found.group("who")
-    seats = {v: k for k, v in NAMES.items()}
-    return {"target": who if who in TARGETS else seats.get(who, ""), "claim": found.group("claim")}
+    span = str(meta.get("quote_span") or "").strip() or None
+    out = {
+        "target": "",
+        "claim": text.strip(),
+        "span": span,
+        "draft": str(meta.get("quote_draft") or "").strip() or None,
+        "recoverable": span is not None,
+    }
+    if found:
+        who = found.group("who")
+        seats = {v: k for k, v in NAMES.items()}
+        out["target"] = who if who in TARGETS else seats.get(who, "")
+        out["claim"] = found.group("claim")
+    return out
 
 
 def draft_checks(meta: dict[str, Any]) -> dict[str, Any]:
@@ -415,7 +434,12 @@ def payload_for(
         },
         "sources": [{**m, "speaker_name": names.get(m["sender"], m["sender"])} for m in sources],
         "sources_truncated": truncated,
-        "draft_rejected_claims": [rejected] if rejected else [],
+        "draft_rejected_claims": (
+            [{k: rejected[k] for k in ("target", "claim", "span", "draft")}]
+            if rejected and rejected["recoverable"]
+            else []
+        ),
+        "rejected_unrecoverable": int(bool(rejected) and not rejected["recoverable"]),
     }
 
 
@@ -574,7 +598,11 @@ async def judge_posts(
                 "sources_truncated": payload["sources_truncated"],
                 "draft": draft_checks(m["meta"]),
                 "attributions": verdict["attributions"],
-                "rejected_claims": verdict["rejected_claims"],
+                # 보내지 않은 거부 주장을 판정이 지어내면 버린다
+                "rejected_claims": verdict["rejected_claims"][
+                    : len(payload["draft_rejected_claims"])
+                ],
+                "rejected_unrecoverable": payload["rejected_unrecoverable"],
             }
         )
     return rows
@@ -720,7 +748,8 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
     - 정상 귀속 오탐 재생성: 검사기가 거부한 초안 주장(quote_violation) 중 판정이 supported이거나
       not_attribution(귀속이 아닌 구절을 귀속 오류로 거부)인 것 = 잘못된 거부. 분모는 거부 주장 수
-      (undeterminable 제외 분모도 함께).
+      (undeterminable 제외 분모도 함께). 거부된 초안 구절(`quote_span`)이 기록에 없는 거부는
+      주장만으로 판정하지 않고 `rejected_unrecoverable`로 센다.
     - 안전 문구 비율: quote_check=safe · guard=safe · stance_check=fallback 각각 / 게시물 수.
     - 검사 생략 비율: quote_check=skipped / quote_check 키가 있는 게시물 수.
     - 재생성 뒤 최종: 재생성·안전 문구로 끝난 게시물 중 최종 귀속에 오류가 남은 수.
@@ -737,6 +766,7 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     guard = Counter(r["draft"]["guard"] for r in usable)
     checked = posts - quote.get("absent", 0)
     rejected = [c for r in usable for c in r["rejected_claims"]]
+    unrecoverable = sum(r.get("rejected_unrecoverable", 0) for r in usable)
     rejected_by = Counter(c["verdict"] for c in rejected)
     determined = len(rejected) - rejected_by.get("undeterminable", 0)
     wrong = rejected_by.get("supported", 0) + rejected_by.get(NOT_ATTRIBUTION, 0)
@@ -765,6 +795,7 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "false_positive_regeneration": {
             "rejected_claims": len(rejected),
+            "rejected_unrecoverable": unrecoverable,  # 거부 구절 기록이 없어 판정하지 않음
             "judged_supported": rejected_by.get("supported", 0),
             "judged_not_attribution": rejected_by.get(NOT_ATTRIBUTION, 0),
             "judged_overstated": rejected_by.get("overstated", 0),
