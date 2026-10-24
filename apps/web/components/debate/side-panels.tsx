@@ -1,6 +1,6 @@
 "use client";
 
-// 우측 패널의 자료(MaterialList + MarkdownViewer)와 AI 어시스턴트(AssistantPanel).
+// 그리드 블록의 자료(MaterialList + MarkdownViewer)와 AI 어시스턴트(AssistantPanel).
 // 자료는 키워드가 정해진 뒤에만 열리고, 어시스턴트는 열린 자료만 찾는다. 반짝이·로봇 아이콘은 쓰지 않는다.
 import { ChevronLeft, ChevronRight, Copy, FileText, Lock } from "lucide-react";
 import { useState } from "react";

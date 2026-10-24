@@ -1272,3 +1272,50 @@ def assert_shape(actual: Any, expected: Any, path: str = "$") -> None:
     elif isinstance(expected, list) and expected:
         for index, item in enumerate(actual):
             assert_shape(item, expected[0], f"{path}[{index}]")
+
+
+SHAPES["voice_state"] = {
+    "turn_id": str,
+    "epoch": Opt(str),
+    "generation": int,
+    "phase": str,
+    "state": Enum(
+        "AI_GENERATING", "AI_SPEAKING", "USER_READY", "USER_SPEAKING", "TRANSCRIBING", "PROCESSING"
+    ),
+    "ready_at": str,
+    "server_now": str,
+    "items": [
+        {
+            "id": str,
+            "message_id": str,
+            "seat": str,
+            "status": str,
+            "duration_ms": Opt(NUM),
+            "error": Opt(str),
+        }
+    ],
+    "blocked_reason?": Opt(str),
+    "release_ready?": bool,
+    "utterance_id?": Opt(str),
+    "speech_started_at?": str,
+    "speech_deadline_at?": str,
+    "heard_message_ids?": [str],
+    "think_deadline_at?": str,
+    "turn_until_at?": str,
+    "speech_limit_seconds?": int,
+    "rerecorded?": bool,
+    "priority?": Enum("hand", "forced"),
+    "hand?": Opt(ANY),
+    "hand_turn?": Opt(ANY),
+    "utterance?": {
+        "id": str,
+        "status": str,
+        "transcript": Opt(str),
+        "message_id": Opt(str),
+        "error": Opt(str),
+        "confirm_deadline_at?": str,
+    },
+}
+
+FACTS["voice_usage?"] = Map(ANY)
+SHAPES["voice_state"]["capture_count?"] = int

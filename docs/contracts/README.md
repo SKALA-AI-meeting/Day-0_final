@@ -1,5 +1,7 @@
 # 인터페이스 계약
 
+음성 턴·최종 파일·재생 확인·message.send 확장은 [음성 계약](voice.md)을 따른다.
+
 서비스끼리 주고받는 경로·필드·오류 코드·이벤트의 정본이다. 이 폴더의 예시 JSON은 mock 서버와 테스트 픽스처(`tests/fixtures/contracts/`, 사본 `apps/web/mocks/fixtures/`)의 정본이다. 단, **요소·카드·페르소나 유형·평가표 차원(`dimension_id`)의 id는 문자열로만 받고 실제 목록은 [평가표](../product/rubric.md)(BARS 척도, 차원 19개)·[시나리오 모델](../product/scenario.md)이 정본**이다. 예시의 `persuasion`·`stubborn`·`listen_engage` 같은 값은 자리표시다.
 
 | 문서 | 내용 |

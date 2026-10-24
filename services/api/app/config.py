@@ -65,12 +65,19 @@ class Settings:
     web_base_url: str = "http://localhost:3000"
     public_port: int = 8000
     internal_port: int = 8001
+    voice_enabled: bool = True
 
 
 @lru_cache
 def get_settings() -> Settings:
     _load_env_files()
     env = os.environ
+    voice_value = env.get("VOICE_ENABLED", "1").lower()
+    if voice_value not in ("0", "1", "false", "true"):
+        raise ValueError("VOICE_ENABLED must be true or false (1 or 0)")
+    voice_enabled = voice_value in ("1", "true")
+    if not voice_enabled and env.get("ENABLE_TEST_API") != "1":
+        raise ValueError("VOICE_ENABLED=0 requires ENABLE_TEST_API=1")
     return Settings(
         database_url=env.get(
             "DATABASE_URL", "postgresql+asyncpg://dayzero:dayzero@localhost:5432/dayzero"
@@ -91,4 +98,5 @@ def get_settings() -> Settings:
         web_origins=_origins(env.get("WEB_ORIGIN", DEFAULT_WEB_ORIGIN)),
         contact_email=env.get("CONTACT_EMAIL", "recruit@example.com"),
         web_base_url=env.get("WEB_BASE_URL", DEFAULT_WEB_ORIGIN),
+        voice_enabled=voice_enabled,
     )

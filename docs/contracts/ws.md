@@ -1,5 +1,7 @@
 # WebSocket
 
+음성 턴·최종 파일·재생 확인·message.send 확장은 [음성 계약](voice.md)을 따른다.
+
 공통 규칙은 [계약 README](README.md). 재연결 뒤 상태는 [State 스냅샷](api.md)으로 다시 읽는다.
 
 ## WebSocket `/ws/sessions/{id}?token=<세션 JWT>`

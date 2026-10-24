@@ -1,6 +1,6 @@
 # Day Zero 설계 문서
 
-Day Zero는 지원자가 AI 동료 3명과 채팅으로 토론해 키워드 → 문제 상황 → 해결책을 합의하고 기획안을 제출하면, 그 과정의 행동으로 인성을 보는 채용 서비스다. 기획 정본은 루트 [`PRD.md`](../PRD.md)이고 이 폴더는 그것을 구현 수준으로 구체화한다. 이 파일이 문서 구조의 색인이다.
+Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론해 키워드 → 문제 상황 → 해결책을 합의하고 기획안을 제출하면, 그 과정의 행동으로 인성을 보는 채용 서비스다. 기획 정본은 루트 [`PRD.md`](../PRD.md)이고 이 폴더는 그것을 구현 수준으로 구체화한다. 이 파일이 문서 구조의 색인이다.
 
 ## 목적별 색인
 
@@ -17,6 +17,9 @@ Day Zero는 지원자가 AI 동료 3명과 채팅으로 토론해 키워드 → 
 | 세션 상태·실행 순서·메일박스·복구 | [architecture/session-lifecycle.md](architecture/session-lifecycle.md) |
 | 에이전트(토론 그래프·의도 분류·어시스턴트·평가 에이전트) | [architecture/agents.md](architecture/agents.md), [architecture/harness.md](architecture/harness.md) |
 | AI 역할 하나를 고치기(하는 일·입력·출력·데이터 파일·코드 입구·검증) | [agents/manager.md](agents/manager.md) 진행 매니저, [agents/persona.md](agents/persona.md) 토론 동료, [agents/intent.md](agents/intent.md) 의도 분류, [agents/assistant.md](agents/assistant.md) 어시스턴트, [agents/evaluator.md](agents/evaluator.md) 평가자 |
+| 음성 토론 현재 구현·설정·복구 | [architecture/voice.md](architecture/voice.md) |
+| 턴 기반 음성 토론 구조 | [architecture/voice-turns.md](architecture/voice-turns.md) |
+| 음성 모델 후보·무료 티어·비용 정책 | [architecture/voice-services.md](architecture/voice-services.md) |
 | 권한 경계·비밀값 | [architecture/security.md](architecture/security.md) |
 | 테이블과 컬럼 | [architecture/data-model.md](architecture/data-model.md), 스키마 변경 [guides/database.md](guides/database.md) |
 | 디자인 토큰·컴포넌트 | [architecture/design-system.md](architecture/design-system.md) |

@@ -1,5 +1,7 @@
 # 공개 REST (포트 8000)
 
+음성 턴·최종 파일·재생 확인·message.send 확장은 [음성 계약](voice.md)을 따른다.
+
 공통 규칙(오류 형식·인증 헤더·멱등)은 [계약 README](README.md). WebSocket은 [ws.md](ws.md).
 
 ## 관리자 REST (`/admin`, 포트 8000)

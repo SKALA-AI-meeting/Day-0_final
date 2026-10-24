@@ -82,6 +82,9 @@ class Hub:
     def is_connected(self, session_id: uuid.UUID) -> bool:
         return session_id in self._sockets
 
+    def is_current(self, session_id: uuid.UUID, ws: SocketLike) -> bool:
+        return self._sockets.get(session_id) is ws
+
     # ---- 송신 -------------------------------------------------------------------------------
 
     def last_seq(self, session_id: uuid.UUID) -> int:

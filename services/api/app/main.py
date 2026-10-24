@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-PUBLIC_ROUTERS: tuple[str, ...] = ("candidate", "admin", "ws")
+PUBLIC_ROUTERS: tuple[str, ...] = ("candidate", "admin", "ws", "voice")
 INTERNAL_ROUTERS: tuple[str, ...] = ("internal",)
 CORS_HEADERS = ["Authorization", "Content-Type"]
 

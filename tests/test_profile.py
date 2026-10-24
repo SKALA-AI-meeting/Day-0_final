@@ -38,11 +38,63 @@ def test_layering_profile_over_env_over_defaults(root):
 
 
 def test_profiles_exist_and_describe_without_secrets(root):
-    for name in ("dev-fake", "test-text", "eval-text", "dev-real", "deploy"):
+    for name in (
+        "dev-fake",
+        "test-text",
+        "test-voice",
+        "eval-text",
+        "eval-voice",
+        "dev-real",
+        "deploy",
+    ):
         p = profile.Profile(name, root=root, shell={})
         text = p.describe()
         assert SECRET not in text and "OPENAI_API_KEY 있음" in text
         assert name in text
+
+
+def test_voice_profile_modes_and_deploy_guard(root):
+    expected = {
+        "dev-fake": "fake",
+        "test-text": "off",
+        "test-voice": "fake",
+        "eval-text": "off",
+        "eval-voice": "fake",
+        "dev-real": "azure",
+        "deploy": "azure",
+    }
+    for name, mode in expected.items():
+        p = profile.Profile(name, root=root, shell={})
+        assert p.voice_mode == mode
+        assert not any("VOICE_" in problem for problem in p.problems())
+        assert (
+            "AZURE_SPEECH_KEY" in p.describe()
+            if mode == "azure"
+            else "AZURE_SPEECH_KEY" not in p.describe()
+        )
+    path = root / "infra" / "profiles" / "deploy.env"
+    path.write_text(
+        path.read_text("utf-8").replace("VOICE_PROVIDER=azure", "VOICE_PROVIDER=fake"), "utf-8"
+    )
+    assert any(
+        "VOICE_PROVIDER=azure" in x
+        for x in profile.Profile("deploy", root=root, shell={}).problems()
+    )
+
+
+def test_voice_false_spelling_requires_test_api(root):
+    path = root / "infra" / "profiles" / "test-text.env"
+    path.write_text(
+        path.read_text("utf-8").replace("VOICE_ENABLED=0", "VOICE_ENABLED=false"), "utf-8"
+    )
+    assert profile.Profile("test-text", root=root, shell={}).voice_mode == "off"
+    path.write_text(
+        path.read_text("utf-8").replace("ENABLE_TEST_API=1", "ENABLE_TEST_API=0"), "utf-8"
+    )
+    assert any(
+        "ENABLE_TEST_API=1" in x
+        for x in profile.Profile("test-text", root=root, shell={}).problems()
+    )
 
 
 def test_unknown_profile_lists_choices(root):

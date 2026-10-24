@@ -1,5 +1,7 @@
 # api
 
+음성 API와 테스트 전용 텍스트 모드는 [음성 계약](../../docs/contracts/voice.md)을 따른다.
+
 토론형 세션의 상태·단계·칸·메일박스·스케줄러와 토론 에이전트(진행 매니저·페르소나·어시스턴트·의도 분류)를 한 프로세스에서 돌리고, 공개(8000)·내부(8001) REST와 WebSocket을 낸다.
 
 ## 한눈에
@@ -9,7 +11,7 @@
 | 역할 | 인증, 세션 수명주기(초대~제출), 단계·칸·합의 판정, 토론 그래프 실행, 실시간 의도 분류, 어시스턴트, 리포트 저장·검토 |
 | 사용 기술 | Python 3.12, FastAPI + uvicorn, SQLAlchemy(asyncpg), LangGraph·langchain-openai, aio-pika, fastmcp(MCP 클라이언트) |
 | 포트 | 공개 8000(`/admin`·`/s`·`/sessions`·`/ws`·`/assets`), 내부 8001(`/internal`, `X-Internal-Token`) |
-| 필요한 env | `DATABASE_URL` `RABBITMQ_URL` `JWT_SECRET` `INTERNAL_TOKEN` `ASSESSMENT_MCP_TOKEN` `DEBATE_MCP_URL` `RAG_MCP_URL` `ASSESSMENT_MCP_URL` `SCENARIOS_DIR` `OPENAI_API_KEY` `OPENAI_MODEL` `MODEL_INTENT` `MODEL_TURN` `MODEL_PERSONA` `MODEL_ASSISTANT` `MODEL_EVALUATOR` `OPENAI_API_KEY_PERSONAL` `GEMINI_API_KEY` `WEB_ORIGIN` `WEB_BASE_URL` `CONTACT_EMAIL` `SESSION_COST_HARD_USD` `AGENT_RUNNER` `LLM_FAKE` `LLM_FAULT` `ENABLE_TEST_API` |
+| 필요한 env | `DATABASE_URL` `RABBITMQ_URL` `JWT_SECRET` `INTERNAL_TOKEN` `ASSESSMENT_MCP_TOKEN` `DEBATE_MCP_URL` `RAG_MCP_URL` `ASSESSMENT_MCP_URL` `SCENARIOS_DIR` `OPENAI_API_KEY` `OPENAI_MODEL` `MODEL_INTENT` `MODEL_TURN` `MODEL_PERSONA` `MODEL_ASSISTANT` `MODEL_EVALUATOR` `GEMINI_API_KEY` `WEB_ORIGIN` `WEB_BASE_URL` `CONTACT_EMAIL` `SESSION_COST_HARD_USD` `AGENT_RUNNER` `LLM_FAKE` `LLM_FAULT` `ENABLE_TEST_API` `VOICE_ENABLED` `VOICE_PROVIDER` |
 | 의존 서비스 | postgres(필수), rabbitmq(큐 발행), debate-mcp·rag-mcp·assessment-mcp(토론 그래프·결정적 노드의 도구 호출) |
 
 env의 의미·기본값은 `config.py`(`get_settings`)와 `agent/llm/roles.py`, 예시는 `infra/.env.example`이다. 로컬 실행은 `infra/.env.local` → `infra/.env` 순으로 읽고 이미 있는 환경변수를 덮어쓰지 않는다. `LLM_FAKE=1`은 LLM 호출만 결정적 고정 응답으로 바꾸고, `ENABLE_TEST_API=1`이면 `/internal/test/*`가 열린다(운영은 비움). `LLM_FAULT`는 e2e 장애 주입 전용이다.
@@ -120,6 +122,7 @@ debate-mcp·assessment-mcp도 떠 있어야 토론 그래프와 리포트 평가
 | POST | `/internal/sessions/{session_id}/report_failed` | 리포트 생성 실패 기록 |
 | POST | `/internal/test/sessions` | 단계 시드 세션 생성(ENABLE_TEST_API=1) |
 | POST | `/internal/test/sessions/{session_id}/advance` | 세션 시간 당기기(ENABLE_TEST_API=1) |
+| POST | `/internal/test/voice-transcript` | FakeSpeech 전사 대본 설정(테스트 전용) |
 <!-- /gen:api -->
 
 요청·응답 형식은 [`docs/contracts/api.md`](../../docs/contracts/api.md)(공개), [`docs/contracts/internal.md`](../../docs/contracts/internal.md)(내부), [`docs/contracts/ws.md`](../../docs/contracts/ws.md)(WebSocket)에 있다.
@@ -146,7 +149,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 314개(live 3개 포함, `make test`는 live를 뺀다).
+총 338개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -585,6 +588,40 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_ended_seed_submits_and_publishes`
 - `test_advance_to_deadline_and_card`
 - `test_test_api_is_404_when_disabled`
+
+</details>
+
+<details><summary><code>tests/test_voice.py</code> (22)</summary>
+
+- `test_voice_playback_barrier_and_single_message`
+- `test_voice_heard_ids_follow_playback_end`
+- `test_voice_plays_first_ready_while_next_is_made`
+- `test_voice_normal_turn_waits_for_press`
+- `test_voice_rerecord_once_with_fresh_time`
+- `test_voice_zero_speakers_stale_and_audio_validation`
+- `test_voice_quota_refuses_before_provider_and_other_session`
+- `test_pcm_rejects_truncated_and_long_audio`
+- `test_azure_paid_sku_rejected_before_synthesis`
+- `test_azure_fast_transcription_request`
+- `test_live_cut_lands_in_pause`
+- `test_live_segments_then_tail_in_order`
+- `test_live_gap_or_length_mismatch_falls_back`
+- `test_voice_stream_chunks_used_for_transcript`
+- `test_voice_playback_end_after_phase_change_counts_as_heard`
+- `test_voice_hand_raise_takes_turn_after_current`
+- `test_voice_hand_raise_keeps_card_utterance`
+- `test_voice_hand_turn_not_stolen_and_stale_not_replayed`
+- `test_voice_forced_turn_before_phase_ends`
+- `test_voice_short_turn_near_deadline_is_announced`
+- `test_voice_recording_cut_by_deadline_still_submits`
+- `test_voice_no_forced_turn_after_candidate_spoke`
+
+</details>
+
+<details><summary><code>tests/test_voice_config.py</code> (2)</summary>
+
+- `test_voice_off_requires_test_api`
+- `test_voice_off_does_not_construct_speech`
 
 </details>
 

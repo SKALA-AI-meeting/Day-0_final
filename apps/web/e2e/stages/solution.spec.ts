@@ -2,7 +2,7 @@
 // 반대가 남은 상태의 지원자 혼자 확정(solo_confirm)
 import { expect, test } from "@playwright/test";
 
-import { type Seed, advance, internalGet, room, say, seed, settle, shot } from "./helpers";
+import { type Seed, advance, internalGet, say, seed, settle, shot } from "./helpers";
 
 type Slot = {
   phase: string;
@@ -38,7 +38,13 @@ test("AI 합의 채우기: 공지 메시지 → 결정 사항 칸 확정 → 기
   }
   await shot(page, "solution", "01-합의 직전");
 
-  await expect(room(page).getByText(/그럼 .+로 정리할게요/)).toBeVisible();
+  await expect
+    .poll(async () =>
+      (await internalGet<{ content: string }[]>(s.sessionId, "/messages")).some((m) =>
+        /그럼 .+로 정리할게요/.test(m.content),
+      ),
+    )
+    .toBeTruthy();
   const result = page.locator('[data-slot="solution"]');
   await expect(result).toContainText("합의");
   await expect(result).toContainText(S3);
@@ -53,8 +59,14 @@ test("silent: 침묵하면 idle 뒤 비판형 초대 메시지가 1건", async (
   await page.goto(s.link);
   await expect(page.locator('[data-slot-input="solution"]')).toBeVisible();
   await advance(s.sessionId, "idle");
-  const invite = room(page).getByText(/님은 어떻게 생각하세요\?/);
-  await expect(invite).toHaveCount(1);
+  await expect
+    .poll(
+      async () =>
+        (await internalGet<{ is_invite: boolean }[]>(s.sessionId, "/messages")).filter(
+          (m) => m.is_invite,
+        ).length,
+    )
+    .toBe(1);
   await shot(page, "solution", "03-침묵 초대");
   const invites = (
     await internalGet<{ is_invite: boolean; sender: string; phase: string }[]>(
@@ -87,9 +99,10 @@ test("solo_confirm: 반대가 남아도 지원자가 혼자 확정하면 칸이 
   await shot(page, "solution", "04-혼자 확정");
   const slot = await slotOf(s.sessionId, "solution");
   expect(slot).toMatchObject({ filled_by: "candidate", resolution: "consensus" });
-  // 확정 안(S3)의 지지자는 지원자뿐이고, 다른 안(고집형의 S1 등)에는 지지자가 남아 있다
+  // 확정 안(S3)은 지원자를 포함해도 합의 조건인 3명에 못 미치고, 다른 안(고집형의 S1 등)에는 지지자가 남아 있다
   const confirmed = slot?.support.find((x) => x.option_id === slot.option_id);
-  expect(confirmed?.supporters).toEqual(["candidate"]);
+  expect(confirmed?.supporters).toContain("candidate");
+  expect(confirmed!.supporters.length).toBeLessThan(3);
   const others = slot?.support.filter((x) => x.option_id !== slot.option_id) ?? [];
   expect(others.some((x) => x.supporters.length > 0)).toBe(true);
 });

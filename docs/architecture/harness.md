@@ -1,5 +1,14 @@
 # 하네스 8요소
 
+음성 토론의 현재 구현은 [음성 구현](voice.md)을 따른다.
+
+## 음성 하네스 경계
+
+Instructions·Tools·Context의 기존 페르소나/모델/MCP 경계를 유지한다. State·Memory에는 voice_states·speech_jobs·speech_quotas를 추가한다. Agent Loop는 녹음·전사·준비 예약 중 메일박스 실행을 보류하고 실제 재생 완료 장벽으로 발언권을 연다. typing은 음성 보호 수단이 아니다. Guardrails는 최종 저장 본문만 TTS에 전달하고 확정 전사·phase·generation·epoch를 검증한다. Recovery는 캐시 재생·제한된 같은 파일 재전사·DB 복구를 사용한다. Observability는 facts.voice_usage와 작업별 시도·단위·청구 상태를 기록한다.
+
+기존 토론 LLM 비용 상한은 유지한다. 음성은 Azure F0 확인과 별도 사전 quota 차감으로 유료 호출을 차단한다. 무료 순비용도 사용량은 차감하며 불확실 호출은 예약을 반환하지 않는다. 역할 LLM 5개·기본 모델·평가 척도는 변경하지 않는다.
+
+
 구성은 [overview.md](overview.md), 노드·규칙은 [architecture/agents.md](agents.md), 도구 경계는 [contracts/mcp.md](../contracts/mcp.md) 도구 허용 목록이 정본이다.
 
 | 요소 | 구현 위치 | 수치·규칙 | 확인 방법 |

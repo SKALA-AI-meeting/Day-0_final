@@ -79,7 +79,7 @@ export function EntryScreen({ entry, onNext }: { entry: Entry; onNext: () => voi
         <p className="text-footnote font-semibold text-muted">{entry.company_name}</p>
         <h1 className="text-large font-bold">새 프로젝트 팀 토론</h1>
         <p className="text-callout text-muted">
-          {entry.duration_minutes}분 · AI 동료 3명과 채팅 토론
+          {entry.duration_minutes}분 · AI 동료 3명과 음성 토론
         </p>
       </div>
       <ul className="flex flex-col gap-2 text-callout leading-relaxed">
@@ -122,7 +122,7 @@ export function ConsentScreen({
           { title: "형식", body: FORMAT_NOTICE },
           {
             title: "기록되는 것",
-            body: "토론방 대화, 결정 사항 선택, 기획안, AI 어시스턴트 요청 원문, 자료 열람",
+            body: "음성 발언의 최종 전사, 결정 사항 선택, 기획안, AI 어시스턴트 요청 원문, 자료 열람. 음성은 Azure Speech에서 처리하며 원음은 전사 성공 시 삭제하고, 처리 실패 시 최대 24시간 임시 보관합니다.",
           },
           {
             title: "평가 방식",
@@ -207,11 +207,18 @@ export function LayoutSketch() {
         </div>
         <div className="grid grid-cols-[1.7fr_1fr]">
           <div className="flex flex-col gap-2 border-r border-line p-3">
-            <span className="text-caption font-semibold text-muted">토론방</span>
-            <span className="h-4 w-3/5 rounded-bubble bg-bubble-p1" />
-            <span className="h-4 w-2/5 rounded-bubble bg-bubble-p2" />
-            <span className="h-4 w-1/2 self-end rounded-bubble bg-bubble-candidate" />
-            <span className="h-4 w-3/5 rounded-bubble bg-bubble-p3" />
+            <span className="text-caption font-semibold text-muted">음성 회의</span>
+            <div className="grid grid-cols-2 gap-2">
+              {["나", "강한결", "윤하람", "서지안"].map((name) => (
+                <span
+                  key={name}
+                  className="rounded-md border border-line p-2 text-center text-caption"
+                >
+                  {name}
+                </span>
+              ))}
+            </div>
+            <span className="text-caption text-muted">내 발언 남은 시간 · 발언 완료</span>
           </div>
           <div className="flex flex-col gap-2 p-3">
             <span className="text-caption font-semibold text-muted">우측 탭</span>
@@ -225,7 +232,7 @@ export function LayoutSketch() {
       </div>
       <figcaption className="flex flex-col gap-1 text-footnote text-muted">
         <span>상단: 단계 진행바와 이 단계의 남은 시간</span>
-        <span>가운데: 토론방(AI 동료 3명과 나)</span>
+        <span>가운데: 음성 회의(AI 동료 3명과 나)</span>
         <span>오른쪽: 결정 사항 · 자료 · AI 어시스턴트 · 기획안 탭</span>
       </figcaption>
     </figure>
@@ -268,8 +275,8 @@ export function SessionGuide({
       </p>
       <LayoutSketch />
       <p className="text-body">
-        상단에는 이 단계의 남은 시간이, 메시지 옆에는 회의 속 시각({snap.session.office_start}~
-        {snap.session.office_end})이 보입니다.
+        상단에는 이 단계의 남은 시간이 보입니다. 동료의 음성이 모두 끝나면 마이크가 켜집니다. 최대
+        60초 동안 말할 수 있고, 발언 완료를 누르면 바로 제출합니다.
       </p>
     </div>
   );

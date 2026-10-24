@@ -23,7 +23,10 @@ from app.models.tables import (
     Session,
     SessionCard,
     Slot,
+    SpeechJob,
+    SpeechQuota,
     Stance,
+    VoiceState,
 )
 
 __all__ = [
@@ -52,4 +55,7 @@ __all__ = [
     "SessionCard",
     "Slot",
     "Stance",
+    "VoiceState",
+    "SpeechJob",
+    "SpeechQuota",
 ]

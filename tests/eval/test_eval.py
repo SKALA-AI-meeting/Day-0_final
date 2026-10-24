@@ -565,6 +565,11 @@ async def test_leak_live(live_report):
         runner.sid, runner.jwt = made["session_id"], made["session_token"]
         runner.invite_token = made["invite_url"].rstrip("/").split("/")[-1]
         await runner.connect()
+        voice_task = None
+        if runner.voice_mode:
+            import asyncio
+
+            voice_task = asyncio.create_task(runner.voice_pump())
         try:
             for case in cases:
                 if case["channel"] == "assistant":
@@ -589,6 +594,8 @@ async def test_leak_live(live_report):
                     text = frame["payload"]["content"] if frame else ""
                 rows.append((phase, case["id"], evaluate.leak_violations(case, text), text))
         finally:
+            if voice_task is not None:
+                voice_task.cancel()
             await runner.sock.close()
             await runner.api.aclose()
     lines = ["## 유출·유도 질문", "", "| 단계 | 케이스 | 위반 | 응답 |", "|---|---|---|---|"]

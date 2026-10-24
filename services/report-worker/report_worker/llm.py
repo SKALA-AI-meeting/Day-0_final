@@ -139,10 +139,35 @@ class FakeEvaluatorLLM:
 
     async def complete(self, system: str, user: str) -> Completion:
         facts = json.loads(user.split("\n\n[사실]\n", 1)[1].split("\n\n[세션 기록]", 1)[0])
+        record = json.loads(user.split("\n\n[세션 기록]\n", 1)[1])
         dimensions = []
         for dimension in facts["dimensions"]:
             core = dimension["scenes"][0]
-            if core["candidate_messages"]:
+            credit_scene = next(
+                (
+                    scene
+                    for scene in dimension["scenes"]
+                    if "idea_credit" in scene.get("proposal_fields", [])
+                ),
+                None,
+            )
+            credit = dimension["dimension_id"] == "hon_credit_record" and (
+                (record.get("proposal") or {}).get("sections") or {}
+            ).get("idea_credit")
+            if credit:
+                row = {
+                    "level": 3,
+                    "evidence": [
+                        {
+                            "ref": "proposal:idea_credit",
+                            "scene": credit_scene["id"] if credit_scene else "core",
+                        }
+                    ],
+                    "rationale": "고정 출력: 제출한 기여 기록을 근거로 중간 수준.",
+                    "summary_line": "고정 출력: 제출한 기여 기록으로 판단함",
+                    "confidence": "medium",
+                }
+            elif core["candidate_messages"]:
                 row = {
                     "level": 3,
                     "evidence": [{"ref": core["candidate_messages"][0], "scene": "core"}],

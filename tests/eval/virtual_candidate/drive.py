@@ -19,13 +19,16 @@ LLM(autonomous.md 성격)이 보이는 대화로 다음 행동을 고른다 → 
 
 import argparse
 import asyncio
+import base64
 import contextlib
+import io
 import json
 import re
 import subprocess
 import sys
 import time
 import uuid
+import wave
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -132,6 +135,8 @@ class Driver:
         self.ended = asyncio.Event()
         self.phase_changed = asyncio.Event()
         self.ws: Any = None
+        self.voice_mode = values.get("VOICE_ENABLED", "1").lower() not in ("0", "false")
+        self.voice_task: asyncio.Task | None = None
         out.mkdir(parents=True, exist_ok=True)
         self.transcript = (out / "transcript.jsonl").open("a", encoding="utf-8")
         self.log_path = out / "log.md"
@@ -261,10 +266,95 @@ class Driver:
                 await asyncio.sleep(2)
 
     async def say(self, text: str, intent: str) -> None:
-        payload = {"client_msg_id": str(uuid.uuid4()), "content": text}
+        payload = (
+            await self.say_voice(text)
+            if self.voice_mode
+            else {"client_msg_id": str(uuid.uuid4()), "content": text}
+        )
         await self.ws.send(json.dumps({"type": "message.send", "payload": payload}))
         self.record("say", text=text, intent=intent)
         self.log(f"보냄: {text}", intent)
+
+    async def voice_pump(self) -> None:
+        base = f"/sessions/{self.sid}/voice"
+        while not self.ended.is_set():
+            try:
+                state = await self.must("GET", base, token=self.jwt)
+                if state["state"] == "AI_SPEAKING" and state["items"]:
+                    item = state["items"][0]
+                    if item["status"] == "ready":
+                        body = {
+                            "turn_id": state["turn_id"],
+                            "epoch": state["epoch"],
+                            "job_id": item["id"],
+                        }
+                        await self.must(
+                            "POST",
+                            base + "/playback",
+                            token=self.jwt,
+                            body={**body, "outcome": "start"},
+                        )
+                        await asyncio.sleep(item["duration_ms"] / 1000)
+                        await self.must(
+                            "POST",
+                            base + "/playback",
+                            token=self.jwt,
+                            body={**body, "outcome": "ended"},
+                        )
+            except (RuntimeError, KeyError):
+                pass
+            await asyncio.sleep(0.3)
+
+    async def say_voice(self, text: str) -> dict[str, str]:
+        if self.values.get("VOICE_PROVIDER") != "fake":
+            raise RuntimeError("가상 지원자의 음성 경로는 VOICE_PROVIDER=fake 전용")
+        base = f"/sessions/{self.sid}/voice"
+        internal = self.values.get("E2E_INTERNAL_URL", "http://localhost:8001")
+        async with httpx.AsyncClient(base_url=internal, timeout=30) as client:
+            response = await client.post(
+                "/internal/test/voice-transcript",
+                json={"content": text},
+                headers={"X-Internal-Token": self.values.get("INTERNAL_TOKEN", "")},
+            )
+            response.raise_for_status()
+        for _ in range(300):
+            state = await self.must("GET", base, token=self.jwt)
+            if state["state"] == "USER_READY" and state.get("epoch"):
+                break
+            await asyncio.sleep(0.3)
+        else:
+            raise TimeoutError("voice turn not ready")
+        turn = {"turn_id": state["turn_id"], "epoch": state["epoch"]}
+        capture = await self.must("POST", base + "/capture", token=self.jwt, body=turn)
+        output = io.BytesIO()
+        with wave.open(output, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(16000)
+            wav.writeframes(b"\0\0" * 1600)
+        await self.must(
+            "POST",
+            base + "/audio",
+            token=self.jwt,
+            body={
+                **turn,
+                "utterance_id": capture["utterance_id"],
+                "audio_base64": base64.b64encode(output.getvalue()).decode(),
+                "stop_reason": "button",
+            },
+        )
+        for _ in range(300):
+            state = await self.must("GET", base, token=self.jwt)
+            utterance = state.get("utterance") or {}
+            if utterance.get("status") == "ready":
+                return {
+                    "client_msg_id": utterance["id"],
+                    "content": utterance["transcript"],
+                    "voice_turn_id": turn["turn_id"],
+                    "epoch": turn["epoch"],
+                }
+            await asyncio.sleep(0.3)
+        raise TimeoutError("voice transcript not ready")
 
     async def ask_assistant(self, text: str, intent: str) -> None:
         status, data = await self.call(
@@ -643,6 +733,8 @@ async def main() -> None:
         listener = asyncio.create_task(driver.listen())
         while driver.ws is None:
             await asyncio.sleep(0.2)
+        if driver.voice_mode:
+            driver.voice_task = asyncio.create_task(driver.voice_pump())
         if args.mode == "scripted":
             await driver.run_scripted(brief)
         else:
@@ -651,6 +743,8 @@ async def main() -> None:
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(driver.ended.wait(), timeout=20 * 60)
         listener.cancel()
+        if driver.voice_task:
+            driver.voice_task.cancel()
         ready = True if args.no_report else await driver.wait_report()
         driver.log("리포트", "대기 결과", "ready" if ready else "not ready")
         data = export_session(driver.sid, values)
