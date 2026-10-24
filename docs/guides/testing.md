@@ -153,14 +153,14 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 - 판정 모델: `VC_JUDGE_MODEL`(없으면 `gpt-4o`), temperature 0. 결과 `judge.models_used`에 응답이 보고한 모델 id를 남긴다. 키는 모델 id 규칙(gpt-4o-mini → `OPENAI_API_KEY`, 그 외 → `OPENAI_API_KEY_PERSONAL`).
 - 보고(`summary`): 건수와 분모를 함께 둔다. 귀속별 비율(분모 귀속 수, 과장과 근거 없음 따로), 게시물별 비율(분모 게시물 수와 귀속 있는 게시물 수), 귀속 빈도(게시물당 귀속 수·히스토그램. 인용을 피해서 오류율이 낮아진 것이 아닌지 본다), 대상(지원자/동료)·형태(서술·전제 질문·생략형)별, 실행별 값과 범위(`by_run`·`ranges`). 오류 0건은 효과 입증으로 쓰지 않는다.
 - 초안 ↔ 최종 연결(`summary.linkage`, 발언 `meta`에 `quote_check`·`quote_violation`·`stance_check`·`guard`가 있을 때. 없으면 `absent`): 검사 표식 분포, 검사 생략 비율(`skipped` / `quote_check`가 있는 발언), 안전 문구 비율(인용 `safe`·guard `safe`·입장 `fallback` 각각 / 발언 수), 정상 귀속 오탐 재생성 비율(검사기가 거부한 초안 주장 `quote_violation`을 같은 원문과 대조해 `supported`로 판정된 비율, 분모는 거부 주장 수와 판정 가능 수), 재생성·안전 문구로 끝난 발언 중 최종 귀속에 오류가 남은 수.
-- 다시 판정: `uv run --project services/api python tests/eval/attribution.py judge <기록>... [--out X]`. 기록은 `PERSONA_EVAL_DUMP` 사건 목록(json 배열), 가상 세션 `session.json`, eval-live 페르소나 md 어느 것이든 된다. 파일마다 요약과 전체 합산, 파일 간 범위를 낸다.
+- 다시 판정: `uv run --project services/api python tests/eval/attribution.py judge <기록>... [--out X]`. 기록은 `PERSONA_EVAL_DUMP` 사건 목록(json 배열), 가상 세션 `session.json`, eval-live 페르소나 md 어느 것이든 된다. 파일마다 요약과 전체 합산, 파일 간 범위를 낸다. 페르소나 md의 대화 절은 되읽을 수 있게 쓴다(세션 제목에 단계, 발언 한 줄에 줄바꿈은 `\n`, 동료 발언 끝에 검사 기록 전부를 백틱 JSON으로). 이 형식 이전의 md는 검사 기록을 복원할 수 없어 `quote_check`가 `unknown`(`linkage_unavailable_posts`)으로 잡히고 생략 비율 분모에서 빠진다(`absent`와 다르다).
 - 페르소나 품질 live는 기본으로 귀속 판정을 함께 돈다(`PERSONA_EVAL_JUDGE=0`이면 끔). 판정 호출은 동료 발언 수만큼이다(대본 8세션 1회 약 100~120회).
 
 판정 모델 보정(사람 정답이 아니라 모델 두 개의 라벨이라는 한계를 기록에 남긴다):
 
 - `uv run --project services/api python tests/eval/build_calibration.py [--data DIR] [--out FILE] [--size 50] [--seed 1]`: 기록된 실행(`virtual/`·`review-fix/`의 session.json·사건 덤프·eval-live md)에서 고정 난수로 게시물을 뽑고(언급 있는 게시물 3 : 없는 게시물 1, 같은 문장은 하나), 유형별 고정 초안 10개(정상·과장 2·화자 혼동·실제 번복·귀속 없음 2·전제 질문·생략형·동료 말 인용, 기대 귀속 `gold_attributions` 포함)를 더해 40~60개를 `calib`·`holdout`(3개 중 1개)으로 나눈다. 항목은 게시물·게시 전 원문(id·화자·순서)·검사 결과를 담고 저장소 밖(기본 `~/day-zero-ai-data/calibration/misattribution-v1.jsonl`)에 쓴다. 실 세션 대화는 저장소에 넣지 않는다.
-- `uv run --project services/api python tests/eval/attribution.py extract <jsonl>`: 항목마다 귀속을 뽑아 `extracted_attributions`를 채우고 판정 모델의 라벨을 `<이름>-judge-labels.jsonl`로 따로 쓴다. 라벨러 두 명(서로 다른 모델)은 같은 항목·같은 귀속 번호에 라벨을 낸다.
-- `uv run --project services/api python tests/eval/calibration_agreement.py --items <jsonl> --labels A=<파일> B=<파일> judge=<파일> [--split calib|holdout]`: 라벨러 쌍마다 일치율·Cohen's kappa·4×4 혼동행렬·오류 여부(과장·근거 없음 vs 나머지) 이진 일치, 항목 유형별 일치율, 불일치 항목 목록(팀이 확인할 것), 귀속 추출 재현율(추출 / (추출 + 라벨러가 빠졌다고 적은 귀속), 고정 초안은 gold 대비). 라벨 파일 형식은 스크립트 docstring.
+- `uv run --project services/api python tests/eval/attribution.py extract <jsonl> [--force]`: 아직 비어 있는 항목만 귀속을 뽑아 `extracted_attributions`(안정 id `attribution_id` = `<item_id>#a<n>`)를 채우고 판정 모델의 라벨을 `<이름>-judge-labels.jsonl`로 따로 쓴다. 이미 채워진 항목은 `--force`가 아니면 그대로 둔다(다시 뽑으면 기존 라벨과 어긋난다). 항목의 `sources_truncated`를 판정 입력에 그대로 넘긴다. 라벨러 두 명(서로 다른 모델)은 같은 항목의 같은 `attribution_id`에 라벨을 낸다.
+- `uv run --project services/api python tests/eval/calibration_agreement.py --items <jsonl> --labels A=<파일> B=<파일> judge=<파일> [--split calib|holdout]`: 라벨러 쌍마다 일치율·Cohen's kappa·4×4 혼동행렬·오류 여부(과장·근거 없음 vs 나머지) 이진 일치, 항목 유형별 일치율, 불일치 항목 목록(팀이 확인할 것), 귀속 추출 재현율(추출 / (추출 + 라벨러가 빠졌다고 적은 귀속), 고정 초안은 gold 대비). 라벨은 `attribution_id`로 잇고(배열 번호 아님) 항목에 없는 id는 버린다. 라벨 파일 형식은 스크립트 docstring.
 
 ### 근거 정확성·안전 픽스처 (`tests/eval/`)
 

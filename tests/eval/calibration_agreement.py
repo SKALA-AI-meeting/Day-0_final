@@ -4,9 +4,11 @@
         --items ~/day-zero-ai-data/calibration/misattribution-v1.jsonl \\
         --labels A=<라벨 A.jsonl> B=<라벨 B.jsonl> judge=<판정 라벨.jsonl> [--split calib|holdout]
 
-라벨 파일 한 줄 = 항목 하나: {"item_id", "labels": [{"index": 추출 귀속 번호, "verdict": 라벨}],
-"missed_attributions": ["추출에 빠진 귀속 설명", …]}. 라벨은 supported·overstated·unsupported·
-undeterminable. 같은 (item_id, index)에 두 라벨러가 모두 라벨을 냈을 때만 일치도에 든다.
+라벨 파일 한 줄 = 항목 하나: {"item_id", "labels": [{"attribution_id": 추출 귀속의 안정 id
+(항목의 extracted_attributions[].attribution_id), "verdict": 라벨}], "missed_attributions":
+["추출에 빠진 귀속 설명", …]}. 라벨은 supported·overstated·unsupported·undeterminable. 같은
+(item_id, attribution_id)에 두 라벨러가 모두 라벨을 냈을 때만 일치도에 들고, 항목에 없는 id의
+라벨은 버린다(배열 번호로 잇지 않는다).
 
 출력: 라벨러 쌍마다 일치율·Cohen's kappa·혼동행렬(행 = 첫째, 열 = 둘째), 항목 유형별 일치율,
 불일치 항목 목록(팀이 확인할 것), 귀속 추출 재현율 = 추출 귀속 / (추출 귀속 + 라벨러가 빠졌다고
@@ -35,13 +37,21 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text("utf-8").splitlines() if line.strip()]
 
 
-def label_map(rows: list[dict[str, Any]]) -> dict[tuple[str, int], str]:
+def label_map(
+    rows: list[dict[str, Any]], items: dict[str, dict[str, Any]]
+) -> dict[tuple[str, str], str]:
+    """{(item_id, attribution_id): 라벨}. 항목의 `extracted_attributions`에 있는 id만 받는다(추출을
+    다시 해 id가 바뀐 라벨은 버린다). 배열 번호로는 잇지 않는다."""
+    known = {
+        iid: {a["attribution_id"] for a in item.get("extracted_attributions") or []}
+        for iid, item in items.items()
+    }
     out = {}
     for row in rows:
         for lab in row.get("labels") or []:
-            verdict = lab.get("verdict")
-            if verdict in LABELS:
-                out[(row["item_id"], int(lab["index"]))] = verdict
+            verdict, aid = lab.get("verdict"), lab.get("attribution_id")
+            if verdict in LABELS and aid in known.get(row["item_id"], set()):
+                out[(row["item_id"], aid)] = verdict
     return out
 
 
@@ -75,7 +85,9 @@ def confusion(a: dict, b: dict) -> dict[str, Any]:
         },
         "matrix": matrix,
         "disagreements": [
-            {"item_id": k[0], "index": k[1], "a": a[k], "b": b[k]} for k in keys if a[k] != b[k]
+            {"item_id": k[0], "attribution_id": k[1], "a": a[k], "b": b[k]}
+            for k in keys
+            if a[k] != b[k]
         ],
     }
 
@@ -147,7 +159,7 @@ def report(
     ids = {i["item_id"] for i in items}
     by_id = {i["item_id"]: i for i in items}
     maps = {
-        name: {k: v for k, v in label_map(rows).items() if k[0] in ids}
+        name: {k: v for k, v in label_map(rows, by_id).items() if k[0] in ids}
         for name, rows in labels.items()
     }
     pairs = {}

@@ -136,6 +136,7 @@ async def run_session(h, session: dict[str, Any], run: int = 0) -> tuple[list[di
         {
             "session": session["id"],
             "run": run,
+            "phase": phase,
             "kind": "phase_started",
             "posts": _ai_since(h, start),
         }
@@ -144,7 +145,13 @@ async def run_session(h, session: dict[str, Any], run: int = 0) -> tuple[list[di
         start = len(h.server.messages)
         if "card" in step:
             result = await h.run("card_due", card_id=step["card"])
-            event = {"session": session["id"], "run": run, "kind": "card", "card": step["card"]}
+            event = {
+                "session": session["id"],
+                "run": run,
+                "phase": phase,
+                "kind": "card",
+                "card": step["card"],
+            }
         else:
             mid = h.server.candidate_says(step["say"])
             found = await classify(h, mid)
@@ -156,6 +163,7 @@ async def run_session(h, session: dict[str, Any], run: int = 0) -> tuple[list[di
             event = {
                 "session": session["id"],
                 "run": run,
+                "phase": phase,
                 **step,
                 "intent": found,
                 "message_id": mid,
@@ -413,9 +421,9 @@ def score(
 
 def scene_counts(events: list[dict[str, Any]], rows: list[dict[str, Any]]) -> dict[str, Any]:
     """장면 유형(`scene`)별로 그 발언 뒤(다음 지원자 발언 전) 동료 발언의 귀속 판정을 묶는다.
-    rows는 judge_attributions의 행(post_id로 연결, id가 없는 예전 기록은 내용으로)."""
-    by_id = {r["post_id"]: r for r in rows}
-    by_text = {r["content"]: r for r in rows}
+    rows는 judge_attributions의 행이고 (실행, 세션, 순서)로 잇는다(내용으로 잇지 않는다)."""
+    by_key = {(tuple(r["unit"]), r["order"]): r for r in rows}
+    keys = attribution.post_keys(attribution.transcript_from_events(events))
     out: dict[str, dict[str, int]] = {}
     for i, event in enumerate(events):
         scene = event.get("scene")
@@ -426,7 +434,7 @@ def scene_counts(events: list[dict[str, Any]], rows: list[dict[str, Any]]) -> di
         )
         bucket["scenes"] += 1
         for post in following(events, i, 3):
-            row = by_id.get(post.get("id")) or by_text.get(post["content"])
+            row = by_key.get(keys.get(id(post)))
             if row is None:
                 continue
             bucket["posts"] += 1
@@ -456,20 +464,20 @@ def _rate(hit: int, n: int) -> float | None:
 
 
 def transcript_md(events: list[dict[str, Any]], names: dict[str, str]) -> str:
+    """대화 기록 md. attribution.transcript_from_markdown이 되읽는 형식이다: 세션 제목에 단계,
+    발언은 한 줄(줄바꿈은 `\\n`), 동료 발언 끝에 검사 기록 전부(pass·none 포함)를 백틱 JSON으로."""
     lines = []
     for event in events:
         if event["kind"] == "phase_started":
-            lines.append(f"\n### {event['session']}\n\n- (단계 시작)")
+            phase = event.get("phase") or attribution._phase_of(event["session"])
+            lines.append(f"\n### {event['session']} ({phase})\n\n- (단계 시작)")
         elif event["kind"] == "card":
             lines.append(f"- (카드 {event['card']})")
         else:
-            lines.append(f"- **지원자**({event['kind']}): {event['say']}")
+            lines.append(f"- **지원자**({event['kind']}): {attribution.md_escape(event['say'])}")
         for post in event["posts"]:
-            flags = [
-                f"{k}={post['meta'][k]}"
-                for k in ("guard", "stance_check", "quote_check")
-                if post["meta"].get(k) not in (None, "pass", "none")
-            ]
-            tail = f" `{' '.join(flags)}`" if flags else ""
-            lines.append(f"  - {names.get(post['seat'], post['seat'])}: {post['content']}{tail}")
+            flags = attribution.md_flags(post["meta"])
+            tail = f" `{flags}`" if flags else ""
+            text = attribution.md_escape(post["content"])
+            lines.append(f"  - {names.get(post['seat'], post['seat'])}: {text}{tail}")
     return "\n".join(lines)

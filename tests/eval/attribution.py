@@ -109,17 +109,20 @@ def _rate(hit: int, n: int) -> float | None:
 
 
 def _phase_of(session_id: str) -> str:
-    return next((p for p in ("keyword", "problem", "solution") if session_id.startswith(p)), "")
+    """세션 id 어디에든 든 단계 이름(`problem_scenes`·`attribution_keyword` 모두). 없으면 빈 문자열."""  # noqa: E501
+    return next((p for p in ("keyword", "problem", "solution") if p in session_id), "")
 
 
 def transcript_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """persona_eval 사건 목록(run_session 결과)에서. 사건마다 지원자 발언(say) 뒤 AI 발언(posts)
-    순이고 단계 시작·카드 자극은 메시지가 아니다. 예전 기록은 발언 id가 없어 자리에 맞춰 만든다."""
+    순이고 단계 시작·카드 자극은 메시지가 아니다. 예전 기록은 발언 id가 없어 자리에 맞춰 만든다.
+    단계는 사건의 `phase`(실행기가 시드 단계를 적는다)가 우선이고 없으면 세션 id에서 읽는다.
+    게시물 줄에는 원래 post 객체(`_post`)를 붙여 호출자가 (unit, order)로 되찾게 한다."""
     out: list[dict[str, Any]] = []
     counters: Counter = Counter()
     for event in events:
         unit = (event.get("run", 0), event["session"])
-        phase = _phase_of(event["session"])
+        phase = event.get("phase") or _phase_of(event["session"])
         if "say" in event:
             counters[unit] += 1
             out.append(
@@ -146,9 +149,16 @@ def transcript_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]
                     "content": post["content"],
                     "meta": post.get("meta") or {},
                     "is_post": bool(post["content"].strip()),
+                    "_post": post,
                 }
             )
     return out
+
+
+def post_keys(transcript: list[dict[str, Any]]) -> dict[int, tuple[tuple, int]]:
+    """transcript_from_events 결과에서 {id(post 객체): (unit, order)}. 내용이 같은 발언이 다른
+    실행·세션에 있어도 섞이지 않게 내용이 아니라 자리로 잇는다."""
+    return {id(m["_post"]): (m["unit"], m["order"]) for m in transcript if "_post" in m}
 
 
 def transcript_from_session(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -182,28 +192,50 @@ def transcript_from_session(data: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-MD_SESSION = re.compile(r"^### (\S+)")
+MD_SESSION = re.compile(r"^### (\S+)(?: \((\w+)\))?")
 MD_CANDIDATE = re.compile(r"^- \*\*지원자\*\*\((\w+)\): (.*)$")
 MD_POST = re.compile(r"^  - ([^:]+): (.*?)(?: `([^`]*)`)?$")
+MD_SKIP = re.compile(r"^- \((단계 시작|카드) ?.*\)$")
+MD_FLAG_KEYS = ("guard", "stance_check", "quote_check", "quote_violation", "stance_violation")
+
+
+def md_escape(text: str) -> str:
+    """md 한 줄에 발언 하나: 줄바꿈은 `\\n`으로 적는다(되읽을 때 복원)."""
+    return text.replace("\\", "\\\\").replace("\n", "\\n")
+
+
+def md_unescape(text: str) -> str:
+    return re.sub(r"\\(\\|n)", lambda m: "\n" if m.group(1) == "n" else "\\", text)
+
+
+def md_flags(meta: dict[str, Any]) -> str:
+    """게시물 줄 끝의 검사 기록(JSON). 값이 pass·none이어도 전부 적어 되읽을 때 linkage가 남는다."""
+    kept = {k: meta[k] for k in MD_FLAG_KEYS if meta.get(k) is not None}
+    return json.dumps(kept, ensure_ascii=False) if kept else ""
 
 
 def transcript_from_markdown(
     text: str, names: dict[str, str] | None = None
 ) -> list[dict[str, Any]]:
     """eval-live 페르소나 md의 "## 대화" 절(persona_eval.transcript_md 형식)에서. 반복 실행이 섞인
-    md는 세션 제목이 반복되므로 같은 제목이 다시 나오면 다음 실행으로 센다."""
+    md는 세션 제목이 반복되므로 같은 제목이 다시 나오면 다음 실행으로 센다. 세션 제목의 `(단계)`가
+    있으면 그 단계, 없으면 세션 id에서 읽는다. 발언 줄 끝의 백틱 JSON이 검사 기록이고, 예전 형식
+    (`k=v`, pass·none 생략)이나 기록 없음은 `linkage: unavailable`로 표시해 absent와 구분한다.
+    패턴에 맞지 않는 줄은 바로 앞 발언의 이어지는 줄로 붙인다(예전 md의 여러 줄 발언)."""
     seats = {v: k for k, v in (names or NAMES).items()}
     body = text.split("## 대화", 1)[-1]
     out: list[dict[str, Any]] = []
     seen: Counter = Counter()
     unit: tuple[int, str] | None = None
+    phase = ""
     order = 0
     for line in body.splitlines():
         if found := MD_SESSION.match(line):
             unit, order = (seen[found.group(1)], found.group(1)), 0
+            phase = found.group(2) or _phase_of(found.group(1))
             seen[found.group(1)] += 1
             continue
-        if unit is None:
+        if unit is None or not line.strip() or MD_SKIP.match(line):
             continue
         if found := MD_CANDIDATE.match(line):
             order += 1
@@ -212,28 +244,38 @@ def transcript_from_markdown(
                     "unit": unit,
                     "id": f"{unit[0]}-{unit[1]}-m{order}",
                     "sender": "candidate",
-                    "phase": _phase_of(unit[1]),
+                    "phase": phase,
                     "order": order,
-                    "content": found.group(2).strip(),
+                    "content": md_unescape(found.group(2).strip()),
                     "meta": {"kind": found.group(1)},
                     "is_post": False,
                 }
             )
         elif (found := MD_POST.match(line)) and found.group(1).strip() in seats:
             order += 1
-            flags = dict(f.split("=", 1) for f in (found.group(3) or "").split() if "=" in f)
+            raw = found.group(3) or ""
+            if raw.startswith("{"):
+                try:
+                    meta = json.loads(raw)
+                except json.JSONDecodeError:
+                    meta = {"linkage": "unavailable"}
+            else:  # 예전 형식: pass·none이 생략돼 있어 검사 기록을 복원할 수 없다
+                meta = {"linkage": "unavailable"}
+                meta.update(f.split("=", 1) for f in raw.split() if "=" in f)
             out.append(
                 {
                     "unit": unit,
                     "id": f"{unit[0]}-{unit[1]}-m{order}",
                     "sender": seats[found.group(1).strip()],
-                    "phase": _phase_of(unit[1]),
+                    "phase": phase,
                     "order": order,
-                    "content": found.group(2).strip(),
-                    "meta": flags,
+                    "content": md_unescape(found.group(2).strip()),
+                    "meta": meta,
                     "is_post": True,
                 }
             )
+        elif out and out[-1]["unit"] == unit:
+            out[-1]["content"] += "\n" + line.strip()
     return out
 
 
@@ -282,13 +324,15 @@ def rejected_claim(meta: dict[str, Any]) -> dict[str, str] | None:
 
 
 def draft_checks(meta: dict[str, Any]) -> dict[str, Any]:
-    """게시물 meta의 검사 결과·재생성 이유. 키가 없으면 "absent"(PR 10 이전 기록·main)."""
+    """게시물 meta의 검사 결과·재생성 이유. 키가 없으면 "absent"(PR 10 이전 기록·main). 검사 기록을
+    복원할 수 없는 기록(예전 md)은 "unknown"으로 두고 linkage 분모에서 뺀다."""
+    missing = "unknown" if meta.get("linkage") == "unavailable" else "absent"
     return {
-        "quote_check": meta.get("quote_check", "absent"),
+        "quote_check": meta.get("quote_check", missing),
         "quote_violation": meta.get("quote_violation"),
-        "stance_check": meta.get("stance_check", "absent"),
+        "stance_check": meta.get("stance_check", missing),
         "stance_violation": meta.get("stance_violation"),
-        "guard": meta.get("guard", "absent"),
+        "guard": meta.get("guard", missing),
         "repeat": meta.get("repeat"),
     }
 
@@ -587,7 +631,7 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     quote = Counter(r["draft"]["quote_check"] for r in rows)
     stance = Counter(r["draft"]["stance_check"] for r in rows)
     guard = Counter(r["draft"]["guard"] for r in rows)
-    checked = posts - quote.get("absent", 0)
+    checked = posts - quote.get("absent", 0) - quote.get("unknown", 0)
     rejected = [c for r in rows for c in r["rejected_claims"]]
     rejected_by = Counter(c["verdict"] for c in rejected)
     determined = len(rejected) - rejected_by.get("undeterminable", 0)
@@ -598,6 +642,7 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "stance_check": dict(stance),
         "guard": dict(guard),
         "quote_checked_posts": checked,
+        "linkage_unavailable_posts": quote.get("unknown", 0),
         "skip_rate": {
             "n": quote.get("skipped", 0),
             "of": checked,
@@ -667,36 +712,60 @@ async def _judge_files(paths: list[Path], judge: AttributionJudge) -> dict[str, 
     }
 
 
-async def _extract(items_path: Path, labels_path: Path | None, judge: AttributionJudge) -> None:
-    """보정 세트 항목마다 귀속을 뽑아 `extracted_attributions`(verdict 없이)를 채우고, 판정 모델의
-    verdict는 라벨 파일(calibration_agreement.py 형식)로 따로 쓴다."""
-    items = [json.loads(line) for line in items_path.read_text("utf-8").splitlines() if line]
+def attribution_id(item_id: str, n: int) -> str:
+    return f"{item_id}#a{n}"
+
+
+async def extract_items(
+    items: list[dict[str, Any]], judge: AttributionJudge, force: bool = False
+) -> list[dict[str, Any]]:
+    """항목마다 귀속을 뽑아 `extracted_attributions`(안정 id `attribution_id`, verdict 없음)를
+    채운다. 이미 채워진 항목은 건드리지 않는다(`force`가 아니면). 라벨은 그 id로 붙이므로 추출을
+    다시 하면 기존 라벨과 어긋난다. 돌려주는 값은 판정 모델의 라벨 행(판정한 항목만)."""
     labels = []
     for item in items:
+        if item.get("extracted_attributions") and not force:
+            continue
         payload = {
             "participants": {k: NAMES[k] for k in TARGETS},
             "post": item["post"],
             "sources": [
                 {**m, "speaker_name": NAMES.get(m["sender"], m["sender"])} for m in item["sources"]
             ],
-            "sources_truncated": False,
+            "sources_truncated": bool(item.get("sources_truncated", False)),
             "draft_rejected_claims": [],
         }
         verdict = await judge.ask(payload)
         item["extracted_attributions"] = [
-            {k: a[k] for k in ("quote", "target", "claim", "form")} for a in verdict["attributions"]
+            {
+                "attribution_id": attribution_id(item["item_id"], n),
+                **{k: a[k] for k in ("quote", "target", "claim", "form")},
+            }
+            for n, a in enumerate(verdict["attributions"], 1)
         ]
         item["extraction"] = {"model": judge.model, "date": date.today().isoformat()}
         labels.append(
             {
                 "item_id": item["item_id"],
                 "labels": [
-                    {"index": i, "verdict": a["verdict"], "reason": a["reason"]}
-                    for i, a in enumerate(verdict["attributions"])
+                    {
+                        "attribution_id": attribution_id(item["item_id"], n),
+                        "verdict": a["verdict"],
+                        "reason": a["reason"],
+                    }
+                    for n, a in enumerate(verdict["attributions"], 1)
                 ],
                 "missed_attributions": [],
             }
         )
+    return labels
+
+
+async def _extract(
+    items_path: Path, labels_path: Path | None, judge: AttributionJudge, force: bool
+) -> None:
+    items = [json.loads(line) for line in items_path.read_text("utf-8").splitlines() if line]
+    labels = await extract_items(items, judge, force)
     items_path.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), "utf-8")
     labels_path = labels_path or items_path.with_name(items_path.stem + "-judge-labels.jsonl")
     labels_path.write_text(
@@ -718,6 +787,9 @@ async def _main() -> None:
     e = sub.add_parser("extract", help="보정 세트 항목의 귀속 추출(+판정 라벨 파일)")
     e.add_argument("items", type=Path)
     e.add_argument("--labels", type=Path, default=None)
+    e.add_argument(
+        "--force", action="store_true", help="이미 추출된 항목도 다시 뽑는다(라벨과 어긋남)"
+    )
     args = parser.parse_args()
     sys.path[:0] = [str(HERE.parents[1] / "tests")]
     from e2e.client import env
@@ -737,7 +809,7 @@ async def _main() -> None:
                 )
             )
         else:
-            await _extract(args.items, args.labels, judge)
+            await _extract(args.items, args.labels, judge, args.force)
     finally:
         await judge.aclose()
 

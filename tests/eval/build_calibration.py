@@ -12,7 +12,7 @@ eval-live 페르소나 md)에서 AI 동료 게시물을 뽑고, 유형별 고정
 
 항목: {item_id, split, kind(recorded|handwritten), type(고정 초안의 유형, 기록 항목은 type_hint),
 source(파일 이름만), post{id, speaker, phase, order, content},
-sources[{id, sender, phase, order, content}],
+sources[{id, sender, phase, order, content}], sources_truncated(원문 상한으로 앞이 잘렸는지),
 draft_checks, extracted_attributions[], gold_attributions[](고정 초안만: 기대 귀속과 verdict)}.
 """
 
@@ -101,6 +101,7 @@ def handwritten() -> list[dict[str, Any]]:
                 "content": content,
             },
             "sources": sources,
+            "sources_truncated": False,
             "draft_checks": {},
             "extracted_attributions": [],
             "gold_attributions": gold,
@@ -265,7 +266,7 @@ def recorded(data_dir: Path) -> list[dict[str, Any]]:
         for index, m in enumerate(transcript):
             if not m["is_post"] or m["phase"] not in ("keyword", "problem", "solution"):
                 continue
-            sources, _ = attribution.sources_before(transcript, index)
+            sources, truncated = attribution.sources_before(transcript, index)
             if not sources:
                 continue
             key = hashlib.sha1(f"{path.name}|{m['unit']}|{m['order']}".encode()).hexdigest()[:10]
@@ -284,6 +285,7 @@ def recorded(data_dir: Path) -> list[dict[str, Any]]:
                         "content": m["content"],
                     },
                     "sources": sources,
+                    "sources_truncated": truncated,
                     "draft_checks": {
                         k: v
                         for k, v in attribution.draft_checks(m["meta"]).items()
