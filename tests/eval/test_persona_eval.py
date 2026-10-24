@@ -165,7 +165,7 @@ async def test_persona_quality_live():
     if os.environ.get("PERSONA_EVAL_DUMP"):  # 원자료(다시 채점·귀속 판정용). 판정 전에 먼저 남긴다
         Path(os.environ["PERSONA_EVAL_DUMP"]).write_text(json.dumps(events, ensure_ascii=False))
     judged = None
-    if os.environ.get("PERSONA_EVAL_JUDGE", "1") != "0":  # 귀속 판정(별도 판정 모델, 끄려면 0)
+    if os.environ.get("PERSONA_EVAL_JUDGE") == "1":  # 귀속 판정(기본 끔. 켜면 VC_JUDGE_MODEL 필수)
         sys.path[:0] = [str(pe.ROOT / "tests")]
         from e2e.client import env
 

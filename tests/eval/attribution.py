@@ -16,9 +16,9 @@ persona_eval(대본 실행 사건 목록)과 virtual_candidate(세션 내보내�
 eval-live 페르소나 md)을 다시 판정해 요약을 낸다. `extract`는 보정 세트의 항목마다 귀속을 뽑아
 `extracted_attributions`를 채우고 판정 모델의 라벨을 따로 쓴다(build_calibration.py 참고).
 
-판정 모델은 `VC_JUDGE_MODEL`(없으면 gpt-4o), temperature 0, 구조화 출력(JSON Schema). 실제로 응답한
-모델 id를 결과에 남긴다. 키는 모델 id 규칙(gpt-4o-mini → OPENAI_API_KEY, 그 외 →
-OPENAI_API_KEY_PERSONAL).
+판정 모델은 `VC_JUDGE_MODEL`(기본값 없음, 비면 오류), temperature 0, 구조화 출력(JSON Schema).
+실제로 응답한 모델 id를 결과에 남긴다. 키는 `llm_access.py`의 허용 목록 규칙(제한 키 모델만
+OPENAI_API_KEY, 그 밖 gpt-*는 오류). 실제 호출 진입점은 `ALLOW_API=1`이 있어야 돈다.
 """
 
 from __future__ import annotations
@@ -39,6 +39,9 @@ from typing import Any
 import yaml
 
 HERE = Path(__file__).resolve().parent
+sys.path[:0] = [str(HERE)]
+import llm_access  # noqa: E402  키 규칙 사본·판정 모델·ALLOW_API 게이트
+
 LABELS = ("supported", "overstated", "unsupported", "undeterminable")
 NOT_ATTRIBUTION = "not_attribution"  # 추출됐지만 귀속이 아닌 구절(화자 자신의 의견·호칭 등)
 VERDICTS = (*LABELS, NOT_ATTRIBUTION)
@@ -46,7 +49,6 @@ ERRORS = ("overstated", "unsupported")
 FORMS = ("statement", "presupposing_question", "elliptical")
 PEERS = ("p1", "p2", "p3")
 TARGETS = ("candidate", *PEERS)
-DEFAULT_MODEL = "gpt-4o"
 SOURCE_LIMIT = 60  # 판정 입력 원문 상한(넘으면 앞을 자르고 sources_truncated 표시)
 FILL_KINDS = {"consensus_fill", "timeout_fill"}
 NAMES = {"candidate": "지원자", "p1": "강한결", "p2": "윤하람", "p3": "서지안"}
@@ -146,11 +148,11 @@ def load_prompts() -> dict[str, Any]:
 
 
 def judge_model(values: dict[str, str]) -> str:
-    return values.get("VC_JUDGE_MODEL") or DEFAULT_MODEL
+    return llm_access.judge_model(values)
 
 
 def api_key_name(model: str) -> str:
-    return "OPENAI_API_KEY" if model == "gpt-4o-mini" else "OPENAI_API_KEY_PERSONAL"
+    return llm_access.key_name_for(model)[0]
 
 
 def _rate(hit: int, n: int) -> float | None:
@@ -458,13 +460,9 @@ class AttributionJudge:
         if ask is None:
             import httpx
 
-            key = values.get(api_key_name(self.model), "")
-            if not key:
-                raise RuntimeError(
-                    f"{api_key_name(self.model)}가 비어 있다(판정 모델 {self.model})"
-                )
+            key, base_url = llm_access.api_key_for(self.model, values)
             self.http = httpx.AsyncClient(
-                base_url="https://api.openai.com/v1",
+                base_url=base_url,
                 headers={"Authorization": f"Bearer {key}"},
                 timeout=90,
             )
@@ -1177,6 +1175,7 @@ async def _main() -> None:
     r.add_argument("items", type=Path)
     r.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
+    llm_access.require_allow_api(f"attribution {args.command}")
     sys.path[:0] = [str(HERE.parents[1] / "tests")]
     from e2e.client import env
 

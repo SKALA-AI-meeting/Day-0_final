@@ -3,10 +3,12 @@
 규칙은 여기 한 곳이다.
 
 - 역할 5개는 env `MODEL_INTENT`·`MODEL_TURN`·`MODEL_PERSONA`·`MODEL_ASSISTANT`·`MODEL_EVALUATOR`를
-  읽고 비어 있으면 `OPENAI_MODEL`(기본 gpt-4o-mini)을 쓴다. 옛 `MODEL_COLLEAGUE`·`MODEL_MANAGER`·
-  `MODEL_OBSERVE`·`MODEL_REPORT`는 읽지 않는다.
-- 키는 모델 id로 고른다: gpt-4o-mini → OPENAI_API_KEY(제한 키), 그 외 gpt-* →
-  OPENAI_API_KEY_PERSONAL, gemini-* → GEMINI_API_KEY(OpenAI 호환 엔드포인트). 대체 모델 없음.
+  읽고 비어 있으면 `OPENAI_MODEL`(기본 gpt-4o-mini)을 쓴다. 다른 이름의 역할 env는 읽지 않는다.
+- 키는 모델 id로 고른다: 제한 키 허용 목록(`RESTRICTED_MODELS`)의 gpt-* → OPENAI_API_KEY,
+  gemini-* → GEMINI_API_KEY(OpenAI 호환 엔드포인트). 목록 밖 gpt-*는 설정 오류로 즉시 멈추고
+  다른 키로 바꾸지 않는다(개인 키 경로 없음). 대체 모델 없음.
+  이 규칙의 정본은 이 파일이고 report-worker `config.py`, `tests/eval/llm_access.py`,
+  `scripts/profile.py`가 같은 목록·규칙의 사본을 둔다(네 곳을 함께 고친다).
 - 재시도는 역할 표의 횟수(기본 2회, 의도 분류는 0회) 뒤 LLMUnavailable → 호출한 노드의 규칙 폴백.
   report-worker는 같은 규칙의 사본을 쓴다(평가 역할 `evaluator`).
 - env `LLM_FAKE=1`이면 키·모델을 고르지 않고 역할별 DeterministicLLM을 준다(결정적 LLM 모드).
@@ -22,6 +24,10 @@ from app.agent.llm.openai import OpenAILLM
 from app.config import get_settings
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+# 제한 키(OPENAI_API_KEY)로 부를 수 있는 모델. 여기 없는 gpt-*는 쓰지 않는다
+RESTRICTED_MODELS = frozenset(
+    {"gpt-4o-mini", "gpt-4.1-mini", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5-nano"}
+)
 
 
 @dataclass(frozen=True)
@@ -54,17 +60,22 @@ def model_for(role: str, env: Mapping[str, str] | None = None) -> str:
     return env.get(config.env) or env.get("OPENAI_MODEL") or MODEL
 
 
+def key_name_for(model: str) -> tuple[str, str | None]:
+    """(env 이름, base_url). 허용 목록 밖 모델은 설정 오류(키 유무와 무관)."""
+    if model in RESTRICTED_MODELS:
+        return "OPENAI_API_KEY", None
+    if model.startswith("gemini-"):
+        return "GEMINI_API_KEY", GEMINI_BASE_URL
+    if model.startswith("gpt-"):
+        allowed = ", ".join(sorted(RESTRICTED_MODELS))
+        raise ValueError(f"model {model} is not in the restricted-key allowlist ({allowed})")
+    raise ValueError(f"no key rule for model: {model}")
+
+
 def key_for(model: str, env: Mapping[str, str] | None = None) -> tuple[str, str | None]:
     """(api_key, base_url). 키가 비어 있으면 설정 오류로 멈춘다(다른 키로 몰래 바꾸지 않는다)."""
     env = _env(env)
-    if model == MODEL:
-        name, base_url = "OPENAI_API_KEY", None
-    elif model.startswith("gpt-"):
-        name, base_url = "OPENAI_API_KEY_PERSONAL", None
-    elif model.startswith("gemini-"):
-        name, base_url = "GEMINI_API_KEY", GEMINI_BASE_URL
-    else:
-        raise ValueError(f"no key rule for model: {model}")
+    name, base_url = key_name_for(model)
     key = env.get(name, "")
     if not key:
         raise ValueError(f"{name} is required for model {model}")

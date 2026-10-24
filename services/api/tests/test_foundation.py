@@ -48,8 +48,8 @@ async def test_intent_stub_returns_contract_fallback():
 
 def test_role_models_use_new_env_names():
     assert ROLES == ("intent", "turn", "persona", "assistant", "evaluator")
-    env = {"OPENAI_MODEL": "gpt-4o-mini", "MODEL_PERSONA": "gpt-5-mini", "MODEL_COLLEAGUE": "x"}
-    assert model_for("persona", env) == "gpt-5-mini"
+    env = {"OPENAI_MODEL": "gpt-4o-mini", "MODEL_PERSONA": "gpt-5.4-mini"}
+    assert model_for("persona", env) == "gpt-5.4-mini"
     assert model_for("intent", env) == "gpt-4o-mini"
     with pytest.raises(ValueError):
         model_for("colleague", env)

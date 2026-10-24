@@ -25,7 +25,7 @@ from typing import Any
 import yaml
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[2])]
-from eval import attribution  # noqa: E402  귀속 추출·판정(persona_eval과 공용)
+from eval import attribution, llm_access  # noqa: E402  귀속 판정(공용)·키 규칙·ALLOW_API
 from eval.assistant_eval import (  # noqa: E402  같은 채점 규칙(숫자·출처 줄·잘림)
     SOURCE_LINE,
     max_chars,
@@ -532,11 +532,11 @@ class Judge:
     def __init__(self, values: dict[str, str]) -> None:
         import httpx
 
-        self.model = values.get("VC_JUDGE_MODEL") or "gpt-4o-mini"
-        name = "OPENAI_API_KEY" if self.model == "gpt-4o-mini" else "OPENAI_API_KEY_PERSONAL"
+        self.model = llm_access.judge_model(values)
+        key, base_url = llm_access.api_key_for(self.model, values)
         self.http = httpx.AsyncClient(
-            base_url="https://api.openai.com/v1",
-            headers={"Authorization": f"Bearer {values.get(name, '')}"},
+            base_url=base_url,
+            headers={"Authorization": f"Bearer {key}"},
             timeout=60,
         )
         self.prompts = load_judge_prompts()
@@ -679,6 +679,8 @@ async def _main() -> None:
     from e2e.client import env
 
     values = env()
+    if args.judge:
+        llm_access.require_allow_api("metrics --judge", values)
     j = Judge(values) if args.judge else None
     aj = attribution.AttributionJudge(values) if args.judge else None
     results = []
