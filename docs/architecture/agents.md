@@ -28,12 +28,12 @@ class AgentRunner(Protocol):
 MVP 구조는 **진행 매니저 + 토론 동료(페르소나 에이전트) 3**(D10). 그래프는 체크포인터 없이 컴파일한다(`app/agent/factory.py` `build_debate_runner(..., checkpointer=None)`). 실행 기록은 `agent_runs`, 토론 상태는 DB가 원천이고 매 실행의 `load`가 다시 읽으므로 재시작 복구는 같은 자극을 처음부터 다시 실행하는 방식이다.
 
 ```
-load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → stance_check → quote_check → wait_typing → apply ─┬─ 다음 화자 → respond
+load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → stance_check → wait_typing → apply ─┬─ 다음 화자 → respond
        └ skipped·failed → END                                            └ 미게시·generation 변경 → END ┘   └─▶ fill ─▶ END
                        └─ 화자 0명 ────────────────────────────────────────────────────────────────────────▶ fill ─▶ END
 ```
 
-등록된 노드는 10개다(`load`·`cards`·`turn`·`respond`·`guard`·`stance_check`·`quote_check`·`wait_typing`·`apply`·`fill`, `graph.py` `build_graph`). typing 표시는 노드가 아니라 `respond`가 시작할 때 `start`, 게시·버림 때 `stop`을 SessionPorts로 보내는 부수 동작이다.
+등록된 노드는 9개다(`load`·`cards`·`turn`·`respond`·`guard`·`stance_check`·`wait_typing`·`apply`·`fill`, `graph.py` `build_graph`). typing 표시는 노드가 아니라 `respond`가 시작할 때 `start`, 게시·버림 때 `stop`을 SessionPorts로 보내는 부수 동작이다.
 
 ### State
 
@@ -55,7 +55,6 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 | respond | LLM(`MODEL_PERSONA`) + 도구 | 자리의 페르소나 에이전트가 발언을 만든다(아래). 구조화 출력 |
 | guard | 결정적 | 금지 문구 검사 → 재생성 1회 → 자리별 안전 문구(아래) |
 | stance_check | 결정적 | 게시 문장과 입장이 `stance_plan`과 맞는지 검증. 실제 지지 이동(다른 안 지지·자기 안 철회)이면 응답 전체 1회 재생성 → 그래도 밖이면 계획과 맞는 고정 문구로 교체(R5-8, 아래) |
-| quote_check | 코드 출처 + LLM 판단 | 초안이 다른 참여자의 말·입장을 그 사람 것으로 돌렸으면 코드가 모은 출처(그 사람의 이 단계 전체 발언·입장 기록)로 의도 분류 모델이 맞는지 판단. 어긋나면 재생성 1회(guard → 입장 판정 → 인용 판정 순으로 다시) → 자리별 안전 문구(아래 "인용 대조") |
 | wait_typing | 결정적 | 지원자 입력 중이면 최대 10초 기다린다. 그래도 입력 중이면 **게시하지 않고** 이 자극을 SessionPorts로 다시 enqueue하고 남은 화자를 끝낸다(R5-9). generation이 바뀌었으면 남은 화자를 버린다(R5-1) |
 | apply | 결정적 | `post_message`(카드 발언이면 `card_ids` 포함, 두 카드를 겸하면 둘 다 → api가 카드마다 그 화자 `delivered` 기록) → (안을 처음 밀면) `propose_option` → (입장 표현) `set_stance`. 카드의 첫 발언이 게시된 직후 카드마다 assessment-mcp `record_observation{card_id, phase, trigger_message_id, run_id}` |
 | fill | 결정적 | load 때 이미 합의가 있어 turn이 정한 `decision.fill`만 채운다. 이번 run의 AI 발언(비판형 이동 등)으로 지지가 바뀌어도 같은 run에서 다시 판정하지 않는다(B2, 이후 run이 지원자의 최신 발언과 함께 다시 본다). 이 노드 전용 분기가 `decision.fill = {option_id, seat}`로 공지 고정 문장을 만들고 `fill_slot{session_id, option_id, seat, content, run_id}` 한 번에 넘긴다(respond·apply를 거치지 않음). api가 한 트랜잭션에서 합의 재검사 → 칸 confirmed → 공지 메시지 저장(seq 5, `meta.kind=consensus_fill`) → generation +1을 하고 WS는 `message.new`(공지) → `slot.confirmed` → `phase.changed` → `timer` 순서로 보낸다. 별도 `post_message`는 없다. 409 `no_consensus`·`slot_confirmed`·`phase_not_open`이면 아무것도 저장되지 않고 run을 끝낸다 |
@@ -112,13 +111,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 
 - 검사: 구조화 출력의 `stance`·`proposes`가 `stance_plan`이 허용하는 안·방향과 같은지, 그리고 `content`가 **실제 지지 이동**을 말하는지(의도 분류 모듈로 같은 형식의 판정을 받아 대조) 본다. 문장 판정으로 거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(`propose`·`agree`)와 자기 계획 안 철회(`oppose`·`withhold`)뿐이다(결정 C2). 구조화 stance가 자기 안 support인데 문장이 철회·다른 안 지지로 판정되면 문장과 기록이 갈라지는 충돌이라 재생성한다. 입장이 없는 상태(문제 상황 카드 전·기획안 단계)는 구조화 출력(`stance`·`proposes`)만 본다(안을 나열하는 중립 문장을 판정이 `propose`로 읽는 거짓 양성 때문). 유보가 든 동의("그 말도 맞지만…")·low·질문·되짚기는 통과한다. 구조화 stance가 자기 안 support여도 문장이 다른 안을 명시적으로 지지하면 게시 문장과 저장 입장이 갈라지므로 거부한다. 자기 계획 안에 `oppose`를 내는 구조화 출력도 계획 밖이다. 설득 가능 규칙으로 계획이 지원자 안으로 옮겨졌는데 그 자리의 현재 지지가 아직 계획 안이 아니면, 이번 발언은 그 안 지지를 밝혀야 하고(`stance` support·`proposes`·문장 판정 support 중 하나) 아니면 계획 밖이다(다른 안 `oppose`만 낸 경우 포함). 지지가 기록된 뒤에는 이 조건을 다시 걸지 않는다. 이 경우의 고정 문구는 이동을 드러내는 `stance_fallback.yaml`의 `moved`("듣고 보니 {option}이 더 낫겠네요. 저도 그쪽으로 옮길게요.", 설득 가능 자리만)다.
 - 처리: 응답 **전체**를 같은 입력에 위반 사유를 붙여 1회 재생성한다. 그래도 어긋나면 계획과 맞는 자리별 고정 문구(시나리오 카탈로그)로 교체하고 입장도 계획 값으로 둔다. 메타데이터만 버리고 문장을 게시하는 일은 없다. 결과는 `messages.meta.stance_check`에 기록.
-
-### 인용 대조 (quote_check)
-
-- 대상(결정적 게이트): 초안이 남의 말을 전하는 꼴(`QUOTE_MARKERS`: 말씀·하셨·하신·했다고·셨죠 같은 인용·전달 어미, 뜻이 아니라 문장 형태)일 때만, 이름(성 포함·제외, "님" 유무, 지원자는 "지원자" 호칭도)이 나온 다른 참여자와 답할 메시지가 지원자 메시지일 때의 지원자(이름 없는 귀속 "아까 그렇게 말씀하셨죠"). 아니면 호출 없이 `none`.
-- 출처(코드가 모은 사실): 대상마다 이 단계 **전체** 발언(debate-mcp `get_transcript(phase, limit 200)`, 대화 창 30개와 무관)과 기록된 입장(지원자는 `candidate_intents`의 propose·agree·oppose·withhold 행과 유보 표현, 동료는 `options`의 지지·반대). 조회가 실패하거나 상한(200)에 닿아 앞부분이 잘렸으면 출처가 불완전하므로 판단하지 않고 `skipped`로 게시한다(실제 발언이 `not_found`가 되거나 실패가 `pass`가 되지 않게).
-- 판단(LLM, 의도 분류 모델 `MODEL_INTENT`, temperature 0): 초안이 그 사람이 말했다·동의했다고 전하는 부분(귀속)마다 초안 원문 `span`과 `supported`·`contradicted`·`not_found`. 이것은 LLM 판단이고 코드는 결과만 정한다: `span`이 초안에 글자 그대로 있는 행만 세고(판정이 초안 자신의 주장을 귀속으로 읽은 행은 버림), `contradicted`·`not_found`가 하나라도 있으면 거부.
-- 처리: 사유를 붙여 재생성 1회 → 재생성 초안도 guard → 입장 판정 → 인용 판정 순으로 다시 → 그래도 거부면 자리별 안전 문구. 타임아웃·JSON 오류·모델 없음이면 게시하고 `skipped`로 남긴다(관측). 고정 문장·비용 상한 발언은 검사하지 않는다. 결과는 `messages.meta.quote_check`(`none`·`pass`·`regenerated`·`safe`·`skipped`).
+- 다른 참여자의 말을 옮기는 정확도는 게시 전에 검사하지 않는다(알려진 한계, [agents/persona.md](../agents/persona.md) "알려진 한계").
 
 ### 카드별 실행
 
@@ -145,7 +138,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 
 ### 끼어들기와 순서 (D17)
 
-- 화자가 정해지면 `typing start` → 생성 → guard → stance_check → quote_check → wait_typing → 게시 → `typing stop`. 둘째 화자는 1~3초 간격.
+- 화자가 정해지면 `typing start` → 생성 → guard → stance_check → wait_typing → 게시 → `typing stop`. 둘째 화자는 1~3초 간격.
 - **지원자가 입력 중이면 게시하지 않는다**(R5-9): typing은 클라이언트가 5초마다 갱신하고 hub가 6초 갱신이 없으면 만료한다. wait_typing은 최대 10초 기다리고, 그래도 입력 중이면 이번 자극을 다시 큐에 넣고 끝낸다(만든 문장은 버린다).
 - 게시 직전 generation이 실행 시작 때와 다르면(새 지원자 메시지) 아직 말하지 않은 화자는 `typing stop` 후 버리고, 새 메시지 자극이 다시 정한다.
 - 토큰 스트리밍 없음. 완성 문장 한 번에 게시.
@@ -261,7 +254,7 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 |---|---|---|
 | 토론 동료 | `MODEL_PERSONA` | respond |
 | 진행 매니저 | `MODEL_TURN` | turn 규칙 7(message 자극에서 그 메시지에 답할 화자가 규칙으로 정해지지 않았을 때만) |
-| 의도 분류 | `MODEL_INTENT` | intent, stance_check 문장 판정, quote_check 인용 판단 |
+| 의도 분류 | `MODEL_INTENT` | intent, stance_check 문장 판정 |
 | 어시스턴트 | `MODEL_ASSISTANT` | assistant tool-calling 루프 |
 | 평가자 | `MODEL_EVALUATOR` | report-worker 평가 에이전트(요소별 차원 수준·근거·요약). 카드 장면 `cards[].scene`은 고정 문장이라 LLM을 쓰지 않는다 |
 
@@ -273,7 +266,7 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 
 | 역할 | 고정 응답 |
 |---|---|
-| 페르소나 | `[내 입장]`의 내 안을 지지하는 고정 문장(안 라벨 치환), 안이 없으면 중립 문장. guard·stance_check를 통과하는 문장만 쓴다. 인용 판단 역할은 고정 응답이 없어 quote_check는 `skipped` |
+| 페르소나 | `[내 입장]`의 내 안을 지지하는 고정 문장(안 라벨 치환), 안이 없으면 중립 문장. guard·stance_check를 통과하는 문장만 쓴다 |
 | 턴 LLM | 답할 자리로 비판형 한 자리(`{"speakers": [{"seat": "p3"}]}`) |
 | 의도 분류 | 키워드 규칙: 카탈로그 안 라벨·키워드 라벨이 문장에 있으면 그 안, "좋아요·동의·찬성"이면 agree, "아니·반대·글쎄"면 oppose, 물음표면 question, 그 밖 other. confidence는 규칙이 맞으면 high, 아니면 low |
 | 어시스턴트 | 도구 1회(`search_materials` 질문 그대로) 뒤 첫 결과 제목을 인용한 고정 문장 |
@@ -299,8 +292,8 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 
 가짜 MCP·가짜 hub(SessionPorts 가짜 구현) 위 단위 테스트가 확인하는 항목이다. WS·재시작은 e2e와 단계별 화면 테스트가 확인한다.
 
-- 최소 흐름: 지원자 메시지 1개 → 의도 분류 → 토론 그래프(turn이 지명된 자리 선택) → respond → guard → stance_check → quote_check → apply(post_message·set_stance) → 가짜 hub에 `typing` start/stop(FakeAgentRunner 교체).
-- 토론 동료 프롬프트(C2): `[내 입장]`이 상태 사실, `[상황]`에 이름 없는 반박·다른 안·이동 미발언 사실, `[카드 차례]`가 사실과 `cards.yaml` 목적, 유보 든 동의는 통과하고 명시적 다른 안 지지·자기 안 철회는 재생성(재생성 뒤 게시 문장 판정과 저장 입장 일치), 인용 대조(실제 인용 통과·기록 없는 귀속 재생성→안전 문구·전체 기록 출처·이름 없는 귀속·실패 시 `skipped`·대상 없으면 호출 0), 소극형 전체 질문 상태 규칙.
+- 최소 흐름: 지원자 메시지 1개 → 의도 분류 → 토론 그래프(turn이 지명된 자리 선택) → respond → guard → stance_check → apply(post_message·set_stance) → 가짜 hub에 `typing` start/stop(FakeAgentRunner 교체).
+- 토론 동료 프롬프트(C2): `[내 입장]`이 상태 사실, `[상황]`에 이름 없는 반박·다른 안·이동 미발언 사실, `[카드 차례]`가 사실과 `cards.yaml` 목적, 유보 든 동의는 통과하고 명시적 다른 안 지지·자기 안 철회는 재생성(재생성 뒤 게시 문장 판정과 저장 입장 일치), 소극형 전체 질문 상태 규칙.
 - 15분 세션 대본(가짜 시계): 단계 시작마다 고정 입장 화자가 말함(문제 상황은 카드 전 입장 표명 없음), 합의 3/4 즉시 지지자 자리의 `fill_slot` 한 번으로 칸과 공지(seq 5)가 함께 저장, 이미 합의가 있는 자극에서 respond·apply 호출 0회·공지용 `post_message` 0건, 이번 AI 발언으로 3/4가 돼도 같은 run에서는 채우지 않고 지원자의 다음 명시적 동의에서 채움, `fill_slot` 409면 칸·공지 0건, 같은 run_id 재실행은 기존 결과, 합의 전에는 칸을 채우지 않음(409 `no_consensus` 흐름 포함), 그래프가 timeout 채우기를 하지 않음, 카드 6장이 `card_due`로 발동하고 `record_observation`이 첫 카드 발언 게시 뒤 1회씩.
 - 카드 전달: 카드 화자 중 일부가 generation 변경으로 버려지면 다음 run(새 run_id의 card_due 포함)에서 그 화자가 이어서 말하고 observation은 중복되지 않음, 강한결의 공동 발언이 `card_ids` 두 개로 두 카드를 함께 전달하고 관찰 2건, 기준안이 card_due 시점의 지원자 지지 안과 다르게 잠기고 이후 바뀌지 않음.
 - 턴 규칙: 한 실행 화자 ≤ 2, 지명 응답 우선, 상한을 넘은 지명은 다음 run(새 실행기·빈 의도 캐시에서도)이 그 메시지에 답함, 앞 메시지의 남은 지명과 새 메시지 응답자가 각자 다른 `reply_to`, 지원자 메시지(진행 발언 포함)에 최소 1명, 단계 시작 둘째 화자의 `reply_to`가 첫 화자 발언, `[상황]` 블록이 사실만 담음, `quiet`가 불리기 전 발언하지 않음(머뭇거림 카드 제외), 침묵 초대가 단계당 1회·서지안·`is_invite=true`, 턴 LLM이 message 자극에서 답할 화자가 없을 때만 호출됨.
