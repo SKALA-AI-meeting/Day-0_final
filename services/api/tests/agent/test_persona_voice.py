@@ -1,10 +1,8 @@
 """토론 동료 프롬프트(C2): 입장 상태 블록, 상황 사실, 카드 차례 목적, 실제 지지 이동만 거부,
-인용 대조(quote_check), 소극형 전체 질문 상태 규칙."""
+소극형 전체 질문 상태 규칙."""
 
 import re
 
-from app.agent.llm import LLMUnavailable
-from app.agent.llm.fake import FakeLLM
 from conftest import intent_of, model_reply, say
 
 SUPPORT_FIRE = {"option_id": "fire", "stance": "support"}
@@ -13,16 +11,6 @@ SUPPORT_FIRE = {"option_id": "fire", "stance": "support"}
 def block(text: str, name: str) -> str:
     found = re.search(rf"\[{name}\]\n(.*?)(?:\n\n\[|\Z)", text, re.S)
     return found.group(1) if found else ""
-
-
-def quote_llm(*verdicts: str, span: str = "김지원님") -> FakeLLM:
-    """판정 행의 span은 초안에 있어야 센다(없으면 코드가 버린다)."""
-    return FakeLLM(
-        [
-            {"attributions": [{"target": "candidate", "span": span, "claim": "x", "verdict": v}]}
-            for v in verdicts
-        ]
-    )
 
 
 def problem(harness, **scripts):
@@ -191,148 +179,6 @@ async def test_withdrawal_of_own_option_in_text_is_rejected_without_structured_s
     post = h.posted("p1")[0]
     assert post["meta"]["stance_check"] == "fallback"
     assert post["meta"]["stance_violation"] == "문장이 자기 계획 안을 철회함"
-
-
-# ---- 인용 대조 -----------------------------------------------------------------------------------
-
-
-async def test_quote_check_passes_a_real_quote(harness):
-    h = harness("keyword", persona=[say("김지원님이 침수를 말씀하셨죠. 그래도 불이에요.")])
-    h.runner.llms.quote = quote_llm("supported")
-    mid = h.candidate("한결님, 침수가 심해요.", intent_of("question", to=("p1",)))
-    await h.run("message", message_id=mid)
-    post = h.posted("p1")[0]
-    assert post["meta"]["quote_check"] == "pass"
-    user = str(h.runner.llms.quote.calls[0].messages[-1].content)
-    assert "한결님, 침수가 심해요." in user and '"target": "candidate"' in user
-
-
-async def test_quote_check_regenerates_then_safe_phrase(harness):
-    h = harness(
-        "keyword",
-        persona=[say("김지원님도 불에 동의하셨죠."), say("김지원님이 불이 좋다고 하셨잖아요.")],
-    )
-    h.runner.llms.quote = quote_llm("contradicted", "not_found")
-    mid = h.candidate("한결님, 저는 물이요.", intent_of("propose", key="water", to=("p1",)))
-    await h.run("message", message_id=mid)
-    post = h.posted("p1")[0]
-    assert post["content"] in h.server.catalog.safe_phrases("p1")
-    assert post["meta"]["quote_check"] == "safe" and "quote_violation" in post["meta"]
-    assert len(h.persona.calls) == 2
-    assert "인용 오류" in str(h.persona.calls[1].messages[-1].content)
-
-
-async def test_quote_check_regenerated_draft_is_rechecked_in_order(harness):
-    """재생성 초안도 guard → 입장 판정 → 인용 판정 순으로 검사하고 게시 문장과 저장 입장이 같다."""
-    h = harness(
-        "keyword",
-        persona=[
-            say("김지원님도 불에 동의하셨죠."),
-            say("김지원님이 물을 말씀하셨죠. 저는 불이에요.", SUPPORT_FIRE),
-        ],
-    )
-    h.runner.llms.quote = quote_llm("not_found", "supported")
-    h.intent.script = [
-        model_reply(intent_of("other")),
-        model_reply(intent_of("propose", key="fire")),
-    ]
-    mid = h.candidate("한결님, 저는 물이요.", intent_of("propose", key="water", to=("p1",)))
-    await h.run("message", message_id=mid)
-    post = h.posted("p1")[0]
-    assert post["content"].endswith("저는 불이에요.")
-    assert post["meta"]["quote_check"] == "regenerated"
-    assert len(h.runner.llms.quote.calls) == 2 and len(h.intent.calls) == 2
-    assert h.server.support["p1"] == next(
-        o["option_id"] for o in h.server.options if o["scenario_option_key"] == "fire"
-    )
-
-
-async def test_quote_check_uses_full_phase_history_not_the_window(harness):
-    h = harness("keyword", persona=[say("김지원님이 처음에 침수 얘기를 하셨죠.")])
-    h.runner.llms.quote = quote_llm("supported")
-    h.candidate("침수가 심해요.", intent_of("other", confidence="low"))
-    for n in range(35):
-        h.server.system_says(f"안내 {n}")  # 첫 메시지가 대화 창 30개 밖으로 밀린다
-    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
-    await h.run("message", message_id=mid)
-    user = str(h.runner.llms.quote.calls[0].messages[-1].content)
-    assert "침수가 심해요." in user
-    assert ("get_transcript", {"phase": "keyword", "limit": 200}) in h.server.calls
-
-
-async def test_quote_check_covers_unnamed_attribution_to_the_candidate(harness):
-    h = harness("keyword", persona=[say("아까 그렇게 말씀하셨죠. 그래도 불이에요.")])
-    h.runner.llms.quote = quote_llm("supported", span="아까 그렇게 말씀하셨죠")
-    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
-    await h.run("message", message_id=mid)
-    assert len(h.runner.llms.quote.calls) == 1  # 이름이 없어도 지원자에 답하는 발언은 검사
-
-
-async def test_quote_check_drops_rows_whose_span_is_not_in_the_draft(harness):
-    """판정이 초안 자신의 주장을 귀속으로 읽으면(span이 초안에 없음) 코드가 버리고 게시한다."""
-    h = harness("keyword", persona=[say("김지원님이 물이라고 하셨죠. 저는 그래도 불이에요.")])
-    h.runner.llms.quote = quote_llm("not_found", span="지원자가 불이 싫다고 했다")
-    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
-    await h.run("message", message_id=mid)
-    post = h.posted("p1")[0]
-    assert post["content"] == "김지원님이 물이라고 하셨죠. 저는 그래도 불이에요."
-    assert post["meta"]["quote_check"] == "pass" and len(h.persona.calls) == 1
-
-
-async def test_quote_check_covers_the_candidate_called_by_role(harness):
-    h = harness("keyword", persona=[say("지원자님은 침수를 강조하셨는데요. 그래도 불이에요.")])
-    h.runner.llms.quote = quote_llm("supported", span="지원자님은 침수를 강조하셨는데요")
-    await h.run("phase_started")  # 답할 메시지 없음: 역할 호칭만으로 대상이 된다
-    assert len(h.runner.llms.quote.calls) == 1
-
-
-async def test_quote_check_is_skipped_without_targets(harness):
-    h = harness("keyword", persona=[say("불이 맞아요.", SUPPORT_FIRE)])
-    h.runner.llms.quote = quote_llm("contradicted")
-    await h.run("phase_started")  # 답할 메시지 없음, 이름 없음
-    assert len(h.runner.llms.quote.calls) == 0
-    assert h.posted("p1")[0]["meta"]["quote_check"] == "none"
-
-
-async def test_quote_check_failure_posts_with_skipped_mark(harness):
-    h = harness("keyword", persona=[say("김지원님 말씀처럼 불이에요.")])
-    h.runner.llms.quote = FakeLLM([LLMUnavailable("timeout"), "not json"])
-    for text in ("한결님?", "한결님, 다시요?"):
-        mid = h.candidate(text, intent_of("question", to=("p1",)))
-        await h.run("message", message_id=mid)
-        h.persona.script = [say("아까 침수라고 하셨는데, 그래도 저는 불이 맞다고 봐요.")]
-    assert [p["meta"]["quote_check"] for p in h.posted("p1")] == ["skipped", "skipped"]
-
-
-async def test_quote_check_is_skipped_when_sources_are_incomplete(harness):
-    """출처 조회 실패나 상한(200)에 닿은 조회는 판단하지 않고 skipped로 게시한다."""
-    from app.agent.debate import graph
-
-    h = harness("keyword", persona=[say("김지원님 말씀처럼 불이에요.")])
-    h.runner.llms.quote = quote_llm("not_found")
-    original = h.server.t_get_transcript
-    h.server.t_get_transcript = lambda **_: {"ok": False, "error": {"code": "upstream"}}
-    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
-    await h.run("message", message_id=mid)
-    assert h.posted("p1")[0]["meta"]["quote_check"] == "skipped"
-    h.server.t_get_transcript = original
-    for n in range(graph.QUOTE_TRANSCRIPT_LIMIT):
-        h.server.system_says(f"안내 {n}")
-    h.persona.script = [say("김지원님 말씀처럼 불이에요. 네.")]
-    mid = h.candidate("한결님, 다시요?", intent_of("question", to=("p1",)))
-    await h.run("message", message_id=mid)
-    assert h.posted("p1")[1]["meta"]["quote_check"] == "skipped"
-    assert len(h.runner.llms.quote.calls) == 0
-
-
-async def test_quote_check_gate_needs_a_reporting_form(harness):
-    """이름이 있어도 남의 말을 전하는 꼴이 아니면(호칭·질문) 호출하지 않는다."""
-    h = harness("keyword", persona=[say("김지원님, 물은 왜 좋다고 보세요? 저는 불이에요.")])
-    h.runner.llms.quote = quote_llm("not_found")
-    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
-    await h.run("message", message_id=mid)
-    assert len(h.runner.llms.quote.calls) == 0
-    assert h.posted("p1")[0]["meta"]["quote_check"] == "none"
 
 
 # ---- 소극형 전체 질문 상태 규칙 ------------------------------------------------------------------

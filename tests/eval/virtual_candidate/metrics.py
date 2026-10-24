@@ -354,7 +354,6 @@ def _timeout_notices(s: Session, label: str) -> dict[str, str]:
 def persona_metrics(s: Session) -> dict[str, Any]:
     posts = [m for m in s.persona_room() if m["phase"] in DEBATE_PHASES]
     checks = Counter((m.get("meta") or {}).get("stance_check") or "none" for m in posts)
-    quote_checks = Counter((m.get("meta") or {}).get("quote_check", "absent") for m in posts)
     first_support: dict[tuple[str, str], str] = {}
     for st in sorted(s.data.get("stances") or [], key=lambda x: x["created_at"]):
         if st["participant"] in PEERS and st["stance"] == "support":
@@ -378,7 +377,6 @@ def persona_metrics(s: Session) -> dict[str, Any]:
         "persona_posts": len(posts),
         "stance_check": dict(checks),
         "stance_fallback_rate": _rate(checks.get("fallback", 0), len(posts)),
-        "quote_check": dict(quote_checks),  # 인용 검사가 없는 기록은 absent
         "own_option_push": {"n": pushed, "rate": _rate(pushed, len(posts))},
         "cards": {
             "reachable": len(configured),

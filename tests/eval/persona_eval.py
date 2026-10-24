@@ -19,14 +19,12 @@ debate·rag MCP와 가짜 hub)에 LLM만 갈아 끼운다. 지원자 발언은 �
   misquote는 보조 신호로 남긴다
 - 호응 뒤 자기 안 밀기(push_after_ack): 짧은 호응(kind ack) 뒤 다음 지원자 발언 전 동료 발언 중
   입장(`meta.stance`)을 다시 기록한 비율. 반대·다른 안 없이 자기 안을 되풀이하는 정도의 대리 지표
-- 인용 대조(quote_check): 발언의 `meta.quote_check` 분포(none·pass·regenerated·safe·skipped)
-- 지연: 자극 한 번의 그래프 실행 시간(ms) p95(인용 대조 추가 비용 관측)
+- 지연: 자극 한 번의 그래프 실행 시간(ms) p95
 """
 
 import importlib.util
 import re
 import sys
-from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -413,16 +411,6 @@ def push_after_ack(events: list[dict[str, Any]]) -> dict[str, Any]:
     return {"n": n, "pushed": pushed, "rate": _rate(pushed, n)}
 
 
-def quote_checks(events: list[dict[str, Any]]) -> dict[str, int]:
-    posts = [p for e in events for p in e["posts"]]
-    out = {k: 0 for k in ("none", "pass", "regenerated", "safe", "skipped")}
-    for post in posts:
-        mark = post["meta"].get("quote_check")
-        if mark in out:
-            out[mark] += 1
-    return out
-
-
 def latency(events: list[dict[str, Any]]) -> dict[str, Any]:
     values = sorted(int(e["latency_ms"]) for e in events if e.get("latency_ms") is not None)
     if not values:
@@ -443,7 +431,6 @@ def fallbacks(events: list[dict[str, Any]]) -> dict[str, int]:
         "guard_safe": sum(p["meta"].get("guard") == "safe" for p in posts),
         "stance_regenerated": sum(p["meta"].get("stance_check") == "regenerated" for p in posts),
         "stance_fallback": sum(p["meta"].get("stance_check") == "fallback" for p in posts),
-        "quote_check": dict(Counter(p["meta"].get("quote_check", "absent") for p in posts)),
         "repeat_regenerated": sum(p["meta"].get("repeat") == "regenerated" for p in posts),
         "repeat_kept": sum(p["meta"].get("repeat") == "kept" for p in posts),
         "no_reply_steps": sum(not e["posts"] for e in events if e["kind"] not in ("card",)),
@@ -465,7 +452,6 @@ def score(
         "safety": safety(events, prompts),
         "misquote": misquote(events),
         "push_after_ack": push_after_ack(events),
-        "quote_check": quote_checks(events),
         "latency": latency(events),
         "attribution": attribution_result,
         "fallbacks": fallbacks(events),

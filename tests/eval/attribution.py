@@ -50,12 +50,11 @@ DEFAULT_MODEL = "gpt-4o"
 SOURCE_LIMIT = 60  # 판정 입력 원문 상한(넘으면 앞을 자르고 sources_truncated 표시)
 FILL_KINDS = {"consensus_fill", "timeout_fill"}
 NAMES = {"candidate": "지원자", "p1": "강한결", "p2": "윤하람", "p3": "서지안"}
-REJECTED = re.compile(r"^(?P<who>[^\s:의]+)의?\s.*?:\s*(?P<claim>.+)$", re.S)
 
 SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["attributions", "rejected_claims"],
+    "required": ["attributions"],
     "properties": {
         "attributions": {
             "type": "array",
@@ -70,19 +69,6 @@ SCHEMA = {
                     "form": {"type": "string", "enum": list(FORMS)},
                     "verdict": {"type": "string", "enum": list(VERDICTS)},
                     "source_ids": {"type": "array", "items": {"type": "string"}},
-                    "reason": {"type": "string"},
-                },
-            },
-        },
-        "rejected_claims": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["claim", "verdict", "reason"],
-                "properties": {
-                    "claim": {"type": "string"},
-                    "verdict": {"type": "string", "enum": list(VERDICTS)},
                     "reason": {"type": "string"},
                 },
             },
@@ -269,10 +255,6 @@ MD_SKIP = re.compile(r"^- \((단계 시작|카드) ?.*\)$")
 MD_FLAG_KEYS = (
     "guard",
     "stance_check",
-    "quote_check",
-    "quote_violation",
-    "quote_span",
-    "quote_draft",
     "stance_violation",
 )
 
@@ -396,41 +378,14 @@ def sources_before(transcript: list[dict[str, Any]], index: int) -> tuple[list[d
     )
 
 
-# ---- 초안 ↔ 최종 연결(PR 10 meta, 없으면 absent) ----------------------------------------
-
-
-def rejected_claim(meta: dict[str, Any]) -> dict[str, Any] | None:
-    """`quote_violation`("candidate의 … 돌림: <주장>")에서 (대상, 거부된 주장)과, 기록돼 있으면
-    거부된 초안 구절 `quote_span`·초안 전문 `quote_draft`. 형식이 다르면 전체를 주장으로 둔다.
-    `recoverable`은 구절이 있어 판정에 보낼 수 있는지다(구절 없이 주장만으로는 화자 자신의 의견을
-    잘못 뽑은 거부인지 가릴 수 없어 판정하지 않는다)."""
-    text = meta.get("quote_violation")
-    if not text:
-        return None
-    found = REJECTED.match(text.strip())
-    span = str(meta.get("quote_span") or "").strip() or None
-    out = {
-        "target": "",
-        "claim": text.strip(),
-        "span": span,
-        "draft": str(meta.get("quote_draft") or "").strip() or None,
-        "recoverable": span is not None,
-    }
-    if found:
-        who = found.group("who")
-        seats = {v: k for k, v in NAMES.items()}
-        out["target"] = who if who in TARGETS else seats.get(who, "")
-        out["claim"] = found.group("claim")
-    return out
+# ---- 초안 검사 기록(meta, 없으면 absent) ------------------------------------------------
 
 
 def draft_checks(meta: dict[str, Any]) -> dict[str, Any]:
-    """게시물 meta의 검사 결과·재생성 이유. 키가 없으면 "absent"(PR 10 이전 기록·main). 검사 기록을
+    """게시물 meta의 검사 결과·재생성 이유. 키가 없으면 "absent"(검사 기록이 없는 기록). 검사 기록을
     복원할 수 없는 기록(예전 md)은 "unknown"으로 두고 linkage 분모에서 뺀다."""
     missing = "unknown" if meta.get("linkage") == "unavailable" else "absent"
     return {
-        "quote_check": meta.get("quote_check", missing),
-        "quote_violation": meta.get("quote_violation"),
         "stance_check": meta.get("stance_check", missing),
         "stance_violation": meta.get("stance_violation"),
         "guard": meta.get("guard", missing),
@@ -447,7 +402,6 @@ def payload_for(
     names = names or NAMES
     post = transcript[index]
     sources, truncated = sources_before(transcript, index)
-    rejected = rejected_claim(post["meta"])
     return {
         "participants": {k: names.get(k, k) for k in TARGETS},
         "post": {
@@ -459,12 +413,6 @@ def payload_for(
         },
         "sources": [{**m, "speaker_name": names.get(m["sender"], m["sender"])} for m in sources],
         "sources_truncated": truncated,
-        "draft_rejected_claims": (
-            [{k: rejected[k] for k in ("target", "claim", "span", "draft")}]
-            if rejected and rejected["recoverable"]
-            else []
-        ),
-        "rejected_unrecoverable": int(bool(rejected) and not rejected["recoverable"]),
     }
 
 
@@ -487,16 +435,7 @@ def parse_verdict(raw: Any) -> dict[str, Any]:
                 "reason": str(a.get("reason", "")).strip(),
             }
         )
-    rejected = [
-        {
-            "claim": str(r.get("claim", "")).strip(),
-            "verdict": r.get("verdict") if r.get("verdict") in VERDICTS else "undeterminable",
-            "reason": str(r.get("reason", "")).strip(),
-        }
-        for r in (raw or {}).get("rejected_claims") or []
-        if isinstance(r, dict)
-    ]
-    return {"attributions": attributions, "rejected_claims": rejected}
+    return {"attributions": attributions}
 
 
 Ask = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -812,11 +751,6 @@ async def judge_posts(
                 "sources_truncated": payload["sources_truncated"],
                 "draft": draft_checks(m["meta"]),
                 "attributions": verdict["attributions"],
-                # 보내지 않은 거부 주장을 판정이 지어내면 버린다
-                "rejected_claims": verdict["rejected_claims"][
-                    : len(payload["draft_rejected_claims"])
-                ],
-                "rejected_unrecoverable": payload["rejected_unrecoverable"],
             }
         )
     return rows
@@ -970,66 +904,41 @@ def verification_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """초안 검사 ↔ 최종 판정 연결(PR 10 meta가 있을 때. 없으면 quote_check가 absent로만 센다).
+    """초안 검사 ↔ 최종 판정 연결(게시물 meta에 검사 기록이 있을 때. 없으면 absent로만 센다).
 
-    - 정상 귀속 오탐 재생성: 검사기가 거부한 초안 주장(quote_violation) 중 판정이 supported이거나
-      not_attribution(귀속이 아닌 구절을 귀속 오류로 거부)인 것 = 잘못된 거부. 분모는 거부 주장 수
-      (undeterminable 제외 분모도 함께). 거부된 초안 구절(`quote_span`)이 기록에 없는 거부는
-      주장만으로 판정하지 않고 `rejected_unrecoverable`로 센다.
-    - 안전 문구 비율: quote_check=safe · guard=safe · stance_check=fallback 각각 / 게시물 수.
-    - 검사 생략 비율: quote_check=skipped / quote_check 키가 있는 게시물 수.
-    - 재생성 뒤 최종: 재생성·안전 문구로 끝난 게시물 중 최종 귀속에 오류가 남은 수.
+    - 검사 분포: guard·stance_check 값별 게시물 수.
+    - 안전 문구 비율: guard=safe · stance_check=fallback 각각 / 게시물 수.
+    - 재생성 뒤 최종: guard 또는 입장 판정의 재생성·안전 문구·폴백으로 끝난 게시물 중 최종 귀속에
+      오류가 남은 수.
 
     검사 기록을 복원할 수 없는 게시물(`unknown`, 예전 md)이 하나라도 있는 기록(실행·세션 단위)은
-    통째로 위 비율에서 뺀다. 그 기록은 생략된 게시물만 남고 통과한 게시물이 빠져 비율이 왜곡되기
-    때문이다. 뺀 기록 수와 게시물 수를 `linkage_unavailable_records`·`_posts`로 따로 센다.
+    통째로 위 비율에서 뺀다. 그 기록은 일부 게시물만 남아 비율이 왜곡되기 때문이다. 뺀 기록 수와
+    게시물 수를 `linkage_unavailable_records`·`_posts`로 따로 센다.
     """
-    unavailable = {record_key(r) for r in rows if r["draft"]["quote_check"] == "unknown"}
+    unavailable = {record_key(r) for r in rows if r["draft"]["stance_check"] == "unknown"}
     usable = [r for r in rows if record_key(r) not in unavailable]
     posts = len(usable)
-    quote = Counter(r["draft"]["quote_check"] for r in usable)
     stance = Counter(r["draft"]["stance_check"] for r in usable)
     guard = Counter(r["draft"]["guard"] for r in usable)
-    checked = posts - quote.get("absent", 0)
-    rejected = [c for r in usable for c in r["rejected_claims"]]
-    unrecoverable = sum(r.get("rejected_unrecoverable", 0) for r in usable)
-    rejected_by = Counter(c["verdict"] for c in rejected)
-    determined = len(rejected) - rejected_by.get("undeterminable", 0)
-    wrong = rejected_by.get("supported", 0) + rejected_by.get(NOT_ATTRIBUTION, 0)
-    regenerated = [r for r in usable if r["draft"]["quote_check"] in ("regenerated", "safe")]
+    regenerated = [
+        r
+        for r in usable
+        if r["draft"]["guard"] in ("regenerated", "safe")
+        or r["draft"]["stance_check"] in ("regenerated", "fallback")
+    ]
     still = sum(any(a["verdict"] in ERRORS for a in r["attributions"]) for r in regenerated)
     return {
-        "quote_check": dict(quote),
         "stance_check": dict(stance),
         "guard": dict(guard),
         "posts_with_linkage": posts,
-        "quote_checked_posts": checked,
         "linkage_unavailable_records": len(unavailable),
         "linkage_unavailable_posts": len(rows) - posts,
-        "skip_rate": {
-            "n": quote.get("skipped", 0),
-            "of": checked,
-            "rate": _rate(quote.get("skipped", 0), checked),
-        },
         "safe_rate": {
-            "quote_safe": {"n": quote.get("safe", 0), "rate": _rate(quote.get("safe", 0), posts)},
             "guard_safe": {"n": guard.get("safe", 0), "rate": _rate(guard.get("safe", 0), posts)},
             "stance_fallback": {
                 "n": stance.get("fallback", 0),
                 "rate": _rate(stance.get("fallback", 0), posts),
             },
-        },
-        "false_positive_regeneration": {
-            "rejected_claims": len(rejected),
-            "rejected_unrecoverable": unrecoverable,  # 거부 구절 기록이 없어 판정하지 않음
-            "judged_supported": rejected_by.get("supported", 0),
-            "judged_not_attribution": rejected_by.get(NOT_ATTRIBUTION, 0),
-            "judged_overstated": rejected_by.get("overstated", 0),
-            "judged_unsupported": rejected_by.get("unsupported", 0),
-            "undeterminable": rejected_by.get("undeterminable", 0),
-            "wrong_rejections": wrong,
-            "rate": _rate(wrong, len(rejected)),
-            "rate_of_determined": _rate(wrong, determined),
         },
         "after_regeneration": {
             "posts": len(regenerated),
@@ -1051,7 +960,6 @@ def compact_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "content": r["content"][:200],
             "draft": {k: v for k, v in r["draft"].items() if v not in (None, "absent")},
             "attributions": r["attributions"],
-            "rejected_claims": r["rejected_claims"],
         }
         for r in rows
     ]
@@ -1118,7 +1026,6 @@ async def extract_items(
                 {**m, "speaker_name": NAMES.get(m["sender"], m["sender"])} for m in item["sources"]
             ],
             "sources_truncated": bool(item.get("sources_truncated", False)),
-            "draft_rejected_claims": [],
         }
         verdict = await judge.ask(payload)
         mark_self_target(verdict["attributions"], (item.get("post") or {}).get("speaker"))

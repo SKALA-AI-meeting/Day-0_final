@@ -1,7 +1,7 @@
 """토론 그래프(docs/architecture/agents.md "토론 그래프"): 진행 매니저 + 페르소나 3.
 
 ```
-load → cards → turn ─┬─ (화자마다) respond → guard → stance_check → quote_check
+load → cards → turn ─┬─ (화자마다) respond → guard → stance_check
                      │                        → wait_typing → apply ─┐
                      │                                               ├→ fill → END
                      └─ 화자 0명 ────────────────────────────────────────┘
@@ -46,20 +46,17 @@ TYPING_WAIT_SECONDS = 10.0
 TYPING_POLL_SECONDS = 0.5
 SPEAKER_GAP_SECONDS = (1.0, 3.0)
 FILL_SEQ = 5
-QUOTE_TRANSCRIPT_LIMIT = 200  # 인용 대조 출처: 이 단계 전체 발언(debate-mcp get_transcript 상한)
 
 Sleep = Callable[[float], Awaitable[None]]
 
 
 @dataclass
 class DebateLLMs:
-    """역할별 래퍼(roles.py make_llm). intent는 stance_check 문장 판정·의도 재분류에, quote는
-    quote_check 인용 대조에 쓴다(실행 코드는 같은 의도 분류 모델 래퍼, 없으면 대조를 건너뛴다)."""
+    """역할별 래퍼(roles.py make_llm). intent는 stance_check 문장 판정·의도 재분류에 쓴다."""
 
     persona: BaseLLM
     turn: BaseLLM
     intent: BaseLLM | None = None
-    quote: BaseLLM | None = None
 
 
 @dataclass
@@ -736,80 +733,6 @@ async def stance_check(state: DebateState, runtime: Runtime[DebateDeps]) -> dict
     return {"draft": asdict(fixed)}
 
 
-async def _quote_violation(
-    state: DebateState, deps: DebateDeps, draft: persona.Draft
-) -> tuple[str | None, str]:
-    """(거부 사유, 결과 표식). 코드가 출처를 모으고 LLM이 판단한다(C2 인용 대조).
-
-    표식 `none`은 대상 없음(호출 0), `skipped`는 모델 없음·출처 불완전·타임아웃·JSON 오류(게시,
-    관측만).
-    """
-    seat = _current(state)["seat"]
-    targets = persona.quote_targets(draft.content, seat, state["names"], _situation(state, deps))
-    if not targets or deps.llms.quote is None:
-        return None, "none"
-    rows = await deps.tools.code.call(
-        "get_transcript", {"phase": state["phase"], "limit": QUOTE_TRANSCRIPT_LIMIT}
-    )
-    messages = _data(rows)
-    # 출처가 불완전하면(조회 실패, 상한에 닿아 앞부분이 잘림) 판단하지 않고 게시한다. 불완전한
-    # 출처로는 실제 발언이 not_found가 되거나 조회 실패가 pass로 둔갑한다
-    if not isinstance(messages, list) or len(messages) >= QUOTE_TRANSCRIPT_LIMIT:
-        log.warning("quote_check %s skipped: sources incomplete", seat)
-        return None, "skipped"
-    user = f"[초안]\n{draft.content}\n\n[출처]\n" + persona.quote_sources(
-        targets, phase_messages=messages, ds=state["ds"], names=state["names"]
-    )
-    try:
-        result = await deps.llms.quote.complete_json(
-            "quote",
-            persona.QUOTE_SYSTEM,
-            user,
-            persona.QUOTE_SCHEMA,
-            usage=deps.usage,
-            trace=deps.trace(state, f"quote_check:{seat}"),
-        )
-        reason = persona.quote_verdict(result, draft.content)
-    except (LLMUnavailable, ValueError) as exc:
-        log.warning("quote_check %s skipped: %s", seat, exc)
-        return None, "skipped"
-    return reason, "pass" if reason is None else "rejected"
-
-
-async def quote_check(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, Any]:
-    """인용 대조: 다른 참여자의 말·입장을 기록에 없이 돌렸으면 재생성 1회(guard → 입장 판정 → 인용
-    판정 순으로 다시) → 그래도 거부면 자리별 안전 문구. 고정 문장·비용 상한은 검사하지 않는다."""
-    if not state.get("draft"):
-        return {}
-    deps = runtime.context
-    draft, plan = _restore(state)
-    if draft.fixed or draft.meta.get("cost_cap"):
-        return {}
-    reason, mark = await _quote_violation(state, deps, draft)
-    if reason is None:
-        draft.meta = {**draft.meta, "quote_check": mark}
-        return {"draft": asdict(draft)}
-    spk = _current(state)
-    meta = {**draft.meta, "quote_check": "regenerated", "quote_violation": reason}
-    try:
-        again = await _generate(state, deps, spk, plan, f"인용 오류({reason})", _spent(draft))
-    except LLMUnavailable:
-        again = None
-    if again is not None and again.content and _guard_check(state, deps, again.content).ok:
-        found, judged = await _violation(state, deps, again, plan)
-        second, _ = (None, "") if found else await _quote_violation(state, deps, again)
-        if not found and second is None:
-            _settle_stance(again, judged, plan, state["ds"])
-            again.content = _guard_check(state, deps, again.content).text
-            again.meta = {**meta, "tools_used": _spent(again)}
-            return {"draft": asdict(again)}
-    safe = persona.safe_draft(
-        deps.catalog, spk["seat"], persona.my_lines(state["transcript"], spk["seat"])
-    )
-    safe.meta = {**meta, "quote_check": "safe"}
-    return {"draft": asdict(safe)}
-
-
 async def wait_typing(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, Any]:
     """게시 직전: generation이 바뀌었으면 남은 화자를 버린다. 지원자 입력 중이면 최대 10초 기다리고
     그래도 입력 중이면 게시하지 않고 같은 자극을 다시 넣는다(R5-9)."""
@@ -1078,7 +1001,6 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> CompiledStat
         ("respond", respond),
         ("guard", guard),
         ("stance_check", stance_check),
-        ("quote_check", quote_check),
         ("wait_typing", wait_typing),
         ("apply", apply),
         ("fill", fill),
@@ -1090,8 +1012,7 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> CompiledStat
     builder.add_conditional_edges("turn", after_turn, ["respond", "fill"])
     builder.add_edge("respond", "guard")
     builder.add_edge("guard", "stance_check")
-    builder.add_edge("stance_check", "quote_check")
-    builder.add_edge("quote_check", "wait_typing")
+    builder.add_edge("stance_check", "wait_typing")
     builder.add_conditional_edges("wait_typing", after_wait, ["apply", END])
     builder.add_conditional_edges("apply", after_apply, ["respond", "fill", END])
     builder.add_edge("fill", END)

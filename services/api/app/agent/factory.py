@@ -57,10 +57,7 @@ def build_debate_runner(
     ports_for: PortsFor,
     checkpointer: Any = None,
 ) -> DebateGraphRunner:
-    intent = make_llm("intent")
-    llms = DebateLLMs(
-        persona=make_llm("persona"), turn=make_llm("turn"), intent=intent, quote=intent
-    )
+    llms = DebateLLMs(persona=make_llm("persona"), turn=make_llm("turn"), intent=make_llm("intent"))
     return DebateGraphRunner(
         llms=llms,
         tools=mcp_tools(
