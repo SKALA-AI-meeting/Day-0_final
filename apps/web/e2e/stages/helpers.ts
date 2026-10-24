@@ -1,17 +1,21 @@
 // 단계별 화면 테스트 공용: 내부 테스트 API로 시드 세션 만들기·시간 당기기, 스크린샷·내부 조회.
-// 내부 토큰은 env(INTERNAL_TOKEN) 또는 infra/.env.e2e에서 읽고 출력하지 않는다.
+// 내부 토큰은 env(INTERNAL_TOKEN) 또는 infra/.env에서 읽고 출력하지 않는다.
 import { type Page, expect, request } from "@playwright/test";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO = join(import.meta.dirname, "..", "..", "..", "..");
+const RUN_ID = new Date().toISOString().replace(/[:.]/g, "-");
 export const RECORDS = join(REPO, "tests", "e2e", "records", "stages");
 export const INTERNAL = process.env.E2E_INTERNAL_URL ?? "http://localhost:8101";
 export const ADMIN = { email: "e2e@example.com", password: "e2e-password" };
+export const VOICE_ENABLED = !["0", "false"].includes(
+  (process.env.VOICE_ENABLED ?? "1").toLowerCase(),
+);
 
 function internalToken(): string {
   if (process.env.INTERNAL_TOKEN) return process.env.INTERNAL_TOKEN;
-  for (const name of [".env.e2e", ".env.local", ".env"]) {
+  for (const name of [".env.local", ".env"]) {
     try {
       const text = readFileSync(join(REPO, "infra", name), "utf8");
       const found = /^INTERNAL_TOKEN=(.+)$/m.exec(text)?.[1]?.trim();
@@ -20,7 +24,7 @@ function internalToken(): string {
       // 다음 파일
     }
   }
-  throw new Error("INTERNAL_TOKEN을 찾지 못했어요(env 또는 infra/.env.e2e)");
+  throw new Error("INTERNAL_TOKEN을 찾지 못했어요(env 또는 infra/.env)");
 }
 
 async function internal<T>(method: "GET" | "POST", path: string, data?: unknown): Promise<T> {
@@ -76,25 +80,81 @@ export function internalGet<T>(sessionId: string, path = ""): Promise<T> {
   return internal<T>("GET", `/internal/sessions/${sessionId}${path}`);
 }
 
+export async function setTranscript(content: string): Promise<void> {
+  await internal("POST", "/internal/test/voice-transcript", { content });
+}
+
 export async function shot(page: Page, stage: string, name: string): Promise<void> {
-  const dir = join(RECORDS, stage);
+  const dir = join(RECORDS, ".artifacts", "screenshots", RUN_ID, stage);
   mkdirSync(dir, { recursive: true });
   await page.screenshot({ path: join(dir, `${name}.png`) });
 }
 
-/** 토론방에 지원자 메시지를 보내고 내 말풍선이 나타날 때까지 기다린다 */
+/** 실제 녹음·완성 파일 업로드를 거치고 STT 결과만 FakeSpeech로 고정한다. */
 export async function say(page: Page, text: string): Promise<void> {
-  await page.getByLabel("메시지 입력").fill(text);
-  await page.getByRole("button", { name: "보내기" }).click();
-  await expect(page.getByRole("log").getByText(text)).toBeVisible();
+  if (!VOICE_ENABLED) {
+    const input = page.getByLabel("메시지 입력");
+    await expect(input).toBeVisible();
+    await input.fill(text);
+    await input.press("Enter");
+    return;
+  }
+  await internal("POST", "/internal/test/voice-transcript", { content: text });
+  const entry = await page.request.get(
+    `${process.env.E2E_API_URL ?? "http://localhost:8100"}${new URL(page.url()).pathname}`,
+  );
+  const sessionId = (await entry.json()).session_id;
+  const enable = page.getByRole("button", { name: "음성 참여 시작" });
+  if (await enable.isVisible()) await enable.click();
+  // 일반 차례는 지원자가 [발언하기]를 눌러야 녹음이 시작된다(손들기·강제 차례는 자동)
+  const start = page.getByRole("button", { name: /발언하기/ });
+  const done = page.getByRole("button", { name: "발언 완료" });
+  await expect(start.or(done)).toBeVisible({ timeout: 45000 });
+  if (await start.isVisible()) await start.click();
+  await expect(done).toBeVisible({ timeout: 45000 });
+  await page.waitForTimeout(350);
+  await page.getByRole("button", { name: "발언 완료" }).click();
+  await expect
+    .poll(
+      async () =>
+        (await internalGet<{ sender: string; content: string }[]>(sessionId, "/messages")).some(
+          (m) => m.sender === "candidate" && m.content === text,
+        ),
+      { timeout: 45000 },
+    )
+    .toBeTruthy();
 }
 
+/** 인사 화면(프로필 카드만 크게)이면 [바로 대화하기]로 토론방을 연다 */
+export async function enterRoom(page: Page): Promise<void> {
+  const skip = page.getByRole("button", { name: "바로 대화하기" });
+  if (await skip.isVisible()) await skip.click();
+  await expect(room(page)).toBeVisible();
+}
+
+const LIBRARY = "자료·AI 어시스턴트";
+
+/**
+ * 오른쪽 영역(결정 사항·기획안, 자료·AI 어시스턴트 묶음)이 숨어 있으면 상단 바에서 켜고,
+ * 제목(묶음은 그 탭)을 눌러 안 읽음 배지를 지운다
+ */
 export async function tab(page: Page, label: string): Promise<void> {
-  await page.getByRole("tab", { name: new RegExp(label) }).click();
+  const inLibrary = label === "자료" || label === "AI 어시스턴트";
+  const area = inLibrary ? LIBRARY : label;
+  const region = page.getByRole("region", { name: area, exact: true });
+  if (!(await region.isVisible())) {
+    await page
+      .getByRole("group", { name: "영역 보이기" })
+      .getByRole("button", { name: area })
+      .click();
+  }
+  if (inLibrary) await region.getByRole("tab", { name: label }).click();
+  else await region.getByRole("heading", { name: label }).click();
 }
 
 /** 토론방(말풍선 영역) */
-export const room = (page: Page) => page.getByRole("log");
+export const room = (page: Page) =>
+  page.getByRole("region", { name: VOICE_ENABLED ? "음성 회의" : "토론방" });
 
 /** AI 동료 응답이 가라앉을 때까지(메시지 수가 2.4초 동안 그대로). 연속 전송은 앞 응답을 버리게 하므로 사이에 쓴다 */
 export async function settle(sessionId: string): Promise<void> {

@@ -1,5 +1,7 @@
 # 내부 계약 (포트 8001, 평가 저장, 에이전트 스키마)
 
+음성 턴·최종 파일·재생 확인·message.send 확장은 [음성 계약](voice.md)을 따른다.
+
 MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저장 형식, 에이전트 내부 스키마다. 공통 규칙은 [계약 README](README.md).
 
 ## 내부 REST (`/internal`, 포트 8001, X-Internal-Token)

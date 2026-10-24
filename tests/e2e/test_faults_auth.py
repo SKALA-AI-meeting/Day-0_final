@@ -1,9 +1,16 @@
 """장애 주입 2종(단언 10)과 인증 경계(단언 8)를 가짜 api 위에서 돌린다."""
 
 import httpx
+import pytest
 
 from e2e import auth, faults
 from e2e.faults import Proxy
+
+
+@pytest.fixture(autouse=True)
+def text_mode(monkeypatch):
+    """가짜 api는 텍스트 모드라 러너도 텍스트로 맞춘다(러너 기본은 api와 같은 음성 켬)."""
+    monkeypatch.setenv("VOICE_ENABLED", "0")
 
 
 def wire(fake):

@@ -41,6 +41,8 @@ ROLE_ENVS = {
 # 셸과 프로필이 다르면 오류로 보는 모드 변수
 MODE_KEYS = (
     "LLM_FAKE",
+    "VOICE_ENABLED",
+    "VOICE_PROVIDER",
     "ENABLE_TEST_API",
     "AGENT_RUNNER",
     "LANGCHAIN_TRACING_V2",
@@ -62,6 +64,8 @@ DEFAULTS = {
     "PROFILE_COMPOSE_PROJECT": "infra",
     "PROFILE_COMPOSE_OVERRIDE": "none",
     "LLM_FAKE": "1",
+    "VOICE_ENABLED": "1",
+    "VOICE_PROVIDER": "azure",
     "ENABLE_TEST_API": "1",
     "AGENT_RUNNER": "session",
     "LANGCHAIN_TRACING_V2": "false",
@@ -145,6 +149,14 @@ class Profile:
     def llm_mode(self) -> str:
         return "fake" if self.llm_fake else "live"
 
+    @property
+    def voice_mode(self) -> str:
+        return (
+            "off"
+            if self.get("VOICE_ENABLED").lower() in ("0", "false")
+            else self.get("VOICE_PROVIDER")
+        )
+
     def role_models(self) -> dict[str, str]:
         base = self.get("OPENAI_MODEL") or DEFAULTS["OPENAI_MODEL"]
         return {role: self.get(env) or base for role, env in ROLE_ENVS.items()}
@@ -180,6 +192,12 @@ class Profile:
             out.append(f"PROFILE_PURPOSE={self.purpose!r}: {'/'.join(PURPOSES)} 중 하나여야 한다")
         if self.get("LLM_FAKE") not in ("0", "1"):
             out.append(f"LLM_FAKE={self.get('LLM_FAKE')!r}: 0 또는 1")
+        if self.get("VOICE_ENABLED").lower() not in ("0", "1", "false", "true"):
+            out.append("VOICE_ENABLED는 true 또는 false(1 또는 0)")
+        if self.get("VOICE_PROVIDER") not in ("azure", "fake"):
+            out.append("VOICE_PROVIDER는 azure 또는 fake")
+        if self.voice_mode == "off" and self.get("ENABLE_TEST_API") != "1":
+            out.append("VOICE_ENABLED=0에는 ENABLE_TEST_API=1이 필요하다")
         if self.get("ENABLE_TEST_API") not in ("", "0", "1"):
             out.append(f"ENABLE_TEST_API={self.get('ENABLE_TEST_API')!r}: 비움·0·1")
         if self.get("PROFILE_COMPOSE_OVERRIDE") not in ("none", "e2e"):
@@ -193,6 +211,8 @@ class Profile:
                     f"셸의 {key}={self.shell[key]!r}가 프로필 호스트 주소 {value!r}와 다르다"
                 )
         if self.purpose == "deploy":
+            if self.voice_mode != "azure":
+                out.append("deploy에는 VOICE_ENABLED=1·VOICE_PROVIDER=azure가 필요하다")
             if self.llm_fake:
                 out.append("deploy 프로필에 LLM_FAKE=1은 금지")
             if self.get("ENABLE_TEST_API") == "1":
@@ -240,6 +260,8 @@ class Profile:
             f"  목적          {self.purpose}",
             f"  LLM           {self.llm_mode} (LLM_FAKE={self.get('LLM_FAKE')})"
             + ("" if self.llm_fake else "  ← 제한키·과금, ALLOW_API=1 필요"),
+            f"  음성          {self.voice_mode} (VOICE_ENABLED={self.get('VOICE_ENABLED')}, "
+            f"VOICE_PROVIDER={self.get('VOICE_PROVIDER')})",
             f"  테스트 API    ENABLE_TEST_API={self.get('ENABLE_TEST_API') or '(비움)'}",
             f"  AGENT_RUNNER  {self.get('AGENT_RUNNER')}",
             f"  LangSmith     LANGCHAIN_TRACING_V2={self.get('LANGCHAIN_TRACING_V2')}, "
@@ -268,6 +290,22 @@ class Profile:
             )
             + " (판정 모델은 기본값 없음)"
         )
+        if self.voice_mode == "azure":
+            lines.append(
+                "  Azure 음성 키 "
+                + ", ".join(
+                    f"{key} {'있음' if self.has(key) else '없음'}"
+                    for key in (
+                        "AZURE_SPEECH_KEY",
+                        "AZURE_SPEECH_REGION",
+                        "AZURE_SPEECH_RESOURCE_ID",
+                        "AZURE_TENANT_ID",
+                        "AZURE_CLIENT_ID",
+                        "AZURE_CLIENT_SECRET",
+                        "VOICE_QUOTA_PERIOD",
+                    )
+                )
+            )
         lines.append(
             f"  .env 파일     {'있음' if self.env_path.is_file() else '없음'} "
             f"({self.env_path.relative_to(self.root)})"

@@ -9,7 +9,13 @@ import { api, ApiError, MOCK } from "@/lib/api";
 
 import { DebateView } from "./debate-view";
 import { DebriefScreen } from "./debrief-screen";
-import { ConsentScreen, EntryScreen, LinkNotice, WaitingScreen } from "./link-screens";
+import {
+  ConsentScreen,
+  EntryScreen,
+  LinkNotice,
+  VOICE_ENABLED,
+  WaitingScreen,
+} from "./link-screens";
 import { MockControls } from "./mock-controls";
 import type { Debrief, EndReason, Entry, StateSnapshot, TokenResponse } from "./types";
 
@@ -191,6 +197,13 @@ export function CandidateFlow({ token }: { token: string }) {
           onStart={async () => {
             setStage({ ...stage, pending: true, error: null });
             try {
+              if (!MOCK && VOICE_ENABLED) {
+                const microphone = await navigator.mediaDevices.getUserMedia({
+                  audio: true,
+                  video: false,
+                });
+                microphone.getTracks().forEach((track) => track.stop());
+              }
               await api(`/s/${token}/start`, { method: "POST", token: sessionToken.current });
               setStage({
                 kind: "session",

@@ -31,3 +31,4 @@ output/
 
 # 가상 지원자 원자료(세션 export·transcript). 요약만 기준선 기록으로 옮긴다
 tests/e2e/records/virtual/
+.tools/

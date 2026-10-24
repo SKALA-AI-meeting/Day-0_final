@@ -1,7 +1,7 @@
 // entry: 입장 → 동의(표시 이름) → 대기 화면 참여자 이름·아바타 → 시작
 import { expect, test } from "@playwright/test";
 
-import { type Seed, internalGet, room, seed, shot } from "./helpers";
+import { type Seed, enterRoom, internalGet, seed, shot } from "./helpers";
 
 let s: Seed;
 test.beforeAll(async () => {
@@ -29,8 +29,9 @@ test("입장 → 동의 → 대기(참여자) → 시작", async ({ page }) => {
   await shot(page, "entry", "03-대기");
   await page.getByRole("button", { name: "시작하기" }).click();
 
-  await expect(room(page)).toBeVisible();
-  await expect(page.getByRole("tab", { name: /결정 사항/ })).toBeVisible();
+  // 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 토론방이 열린다
+  await expect(page.getByRole("region", { name: "참여자" })).toBeVisible();
+  await enterRoom(page);
   await shot(page, "entry", "04-시작");
   const session = await internalGet<{ status: string; display_name: string; phase: string }>(
     s.sessionId,

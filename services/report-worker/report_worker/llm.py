@@ -130,7 +130,8 @@ class FakeEvaluatorLLM:
     """`LLM_FAKE=1`: 호출 없이 요소 척도의 차원마다 고정 출력(비용 0, 키 불필요).
 
     `[사실]`의 그 차원 핵심 장면에 지원자 메시지가 있으면 첫 메시지를 근거(장면 `core`)로 수준
-    3·medium, 핵심 장면이 없으면 event_not_fired, 있는데 지원자 메시지가 없으면 no_activity.
+    3·medium. hon_credit_record에 기획안 idea_credit이 있으면 그 필드를 근거로 쓴다.
+    핵심 장면이 없으면 event_not_fired, 있는데 지원자 메시지가 없으면 no_activity.
     워커 검증(근거 형식·개수·금지어·사실 모순)을 그대로 통과하고, 같은 입력에는 같은 출력을 낸다.
     """
 
@@ -139,10 +140,35 @@ class FakeEvaluatorLLM:
 
     async def complete(self, system: str, user: str) -> Completion:
         facts = json.loads(user.split("\n\n[사실]\n", 1)[1].split("\n\n[세션 기록]", 1)[0])
+        record = json.loads(user.split("\n\n[세션 기록]\n", 1)[1])
         dimensions = []
         for dimension in facts["dimensions"]:
             core = dimension["scenes"][0]
-            if core["candidate_messages"]:
+            credit_scene = next(
+                (
+                    scene
+                    for scene in dimension["scenes"]
+                    if "idea_credit" in scene.get("proposal_fields", [])
+                ),
+                None,
+            )
+            credit = dimension["dimension_id"] == "hon_credit_record" and (
+                (record.get("proposal") or {}).get("sections") or {}
+            ).get("idea_credit")
+            if credit:
+                row = {
+                    "level": 3,
+                    "evidence": [
+                        {
+                            "ref": "proposal:idea_credit",
+                            "scene": credit_scene["id"] if credit_scene else "core",
+                        }
+                    ],
+                    "rationale": "고정 출력: 제출한 기여 기록을 근거로 중간 수준.",
+                    "summary_line": "고정 출력: 제출한 기여 기록으로 판단함",
+                    "confidence": "medium",
+                }
+            elif core["candidate_messages"]:
                 row = {
                     "level": 3,
                     "evidence": [{"ref": core["candidate_messages"][0], "scene": "core"}],

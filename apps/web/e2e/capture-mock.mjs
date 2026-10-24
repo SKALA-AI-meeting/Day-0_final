@@ -1,6 +1,6 @@
 // 목업 캡처(G-M): NEXT_PUBLIC_MOCK=1로 띄운 web에서 15분 데모 세션(/s/demo)을 한 번 돌리며 화면을 남긴다.
 // 데모 시계는 ?speed=20으로 빠르게 돌리고, 입력 중 장면만 실제 속도로 늦춰 찍는다.
-// 저장 위치: 저장소 루트의 tests/e2e/records/mock-ui-<YYYYMMDD-HHMM>/ (라이트 8장 + 다크 1장)
+// 저장 위치: 저장소 루트의 tests/e2e/records/mock-ui-<YYYYMMDD-HHMM>/ (라이트 9장 + 다크 1장)
 //
 //   NEXT_PUBLIC_MOCK=1 pnpm dev            (다른 터미널, 기본 3000)
 //   node e2e/capture-mock.mjs              (환경변수: WEB_URL, OUT_DIR, HEADED=1)
@@ -64,7 +64,21 @@ async function waitFor(check, label, timeout = 60_000) {
   throw new Error(`시간 초과: ${label}`);
 }
 
-const tab = (name) => page.getByRole("tab", { name, exact: false }).click();
+// 오른쪽 영역이 숨어 있으면 상단 바에서 켠 뒤 제목(묶음은 탭)을 누른다(e2e/stages/helpers.ts tab과 같음)
+const LIBRARY = "자료·AI 어시스턴트";
+const tab = async (name) => {
+  const inLibrary = name === "자료" || name === "AI 어시스턴트";
+  const area = inLibrary ? LIBRARY : name;
+  const region = page.getByRole("region", { name: area, exact: true });
+  if (!(await region.isVisible())) {
+    await page
+      .getByRole("group", { name: "영역 보이기" })
+      .getByRole("button", { name: area })
+      .click();
+  }
+  if (inLibrary) await region.getByRole("tab", { name }).click();
+  else await region.getByRole("heading", { name }).click();
+};
 
 try {
   console.log(`캡처 → ${OUT}`);
@@ -86,7 +100,11 @@ try {
   await page.getByRole("button", { name: "시작하기" }).waitFor();
   await shot("03-waiting", { fullPage: true });
   await page.getByRole("button", { name: "시작하기" }).click();
-  await page.getByLabel("토론방").waitFor();
+  // 인사 화면(프로필 카드)을 찍고 바로 토론방을 연다
+  await page.getByRole("region", { name: "참여자" }).waitFor();
+  await shot("03b-intro");
+  await page.getByRole("button", { name: "바로 대화하기" }).click();
+  await page.getByRole("region", { name: "토론방" }).waitFor();
 
   // 4. 해결책 단계 시작까지 대본 재생(키워드 지원자 확정 → 자료 열림 → 문제 상황 합의 채우기)
   await waitFor(async () => (await phase()) === "solution", "해결책 단계");

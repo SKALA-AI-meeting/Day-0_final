@@ -2,14 +2,16 @@
 
 // 토론방: iMessage식 말풍선(지원자 오른쪽 강조색, AI 동료 왼쪽 자리별 틴트 + 이름 + 프로필 이미지),
 // 가운데 회색 시스템 안내, 입력 중 표시, 입력창. 오피스 시각은 메시지 타임스탬프에만 쓴다(R7).
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2, Mic, Square, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { Avatar, AvatarGroup, cn } from "@/components/ui";
+import { Avatar, AvatarGroup, cn, toast } from "@/components/ui";
 
 import type { Pending } from "./reducer";
 import { nameOf, officeTime, roughDuration } from "./state";
 import type { Message, Seat, StateSnapshot } from "./types";
+import type { VoiceInput } from "./voice";
+import { Elapsed, LevelBars, LevelGlow, useVoiceState, voiceErrorText } from "./voice-ui";
 
 const BUBBLE: Record<Seat, string> = {
   p1: "bg-bubble-p1",
@@ -145,6 +147,7 @@ function MessageGroup({
               key={m.id}
               title={officeTime(m.t_min, minutes, snap.session.office_start)}
               data-sender={m.sender}
+              data-message-id={m.id}
               className={cn(
                 "rounded-bubble px-3.5 py-2 text-body break-words whitespace-pre-wrap",
                 mine
@@ -204,15 +207,21 @@ export function ChatRoom({
   pending,
   typing,
   locked,
+  readOnly = false,
   onSend,
   onTyping,
+  voice = null,
 }: {
   snap: StateSnapshot;
   pending: Pending[];
   typing: Seat[];
   locked: boolean;
+  /** 음성 세션의 대화 기록처럼 입력창 없이 보기만 할 때 */
+  readOnly?: boolean;
   onSend: (content: string) => void;
   onTyping: (state: "start" | "stop") => void;
+  /** 말하기(음성 입력). 없으면 마이크 버튼을 숨긴다 */
+  voice?: VoiceInput | null;
 }) {
   const lines = useMemo(() => buildLines(snap, pending), [snap, pending]);
   const groups = useMemo(() => groupLines(lines), [lines]);
@@ -223,6 +232,8 @@ export function ChatRoom({
   const [seen] = useState(() => new Set(snap.messages.map((m) => m.id)));
   const count = snap.messages.length + pending.length;
   const lastCount = useRef(count);
+  // 음성 회의에서는 말풍선이 한 문장씩 길어지므로 마지막 글 길이가 바뀌어도 맨 아래를 따라간다
+  const tailLength = snap.messages.at(-1)?.content.length ?? 0;
 
   const fresh = useMemo(() => {
     const set = new Set<string>();
@@ -239,7 +250,7 @@ export function ChatRoom({
     // 맨 아래를 보고 있을 때만 따라간다. 위를 보고 있으면 "새 메시지 n개"
     if (atBottom.current) el.scrollTop = el.scrollHeight;
     else if (added > 0) setUnread((n) => n + added);
-  }, [count, typing.length]);
+  }, [count, typing.length, tailLength]);
 
   const onScroll = () => {
     const el = scroller.current;
@@ -318,7 +329,7 @@ export function ChatRoom({
           </button>
         )}
       </div>
-      <Composer locked={locked} onSend={onSend} onTyping={onTyping} />
+      {!readOnly && <Composer locked={locked} onSend={onSend} onTyping={onTyping} voice={voice} />}
     </section>
   );
 }
@@ -327,16 +338,26 @@ export function Composer({
   locked,
   onSend,
   onTyping,
+  voice = null,
 }: {
   locked: boolean;
   onSend: (content: string) => void;
   onTyping: (state: "start" | "stop") => void;
+  voice?: VoiceInput | null;
 }) {
   const [text, setText] = useState("");
   const lastStart = useRef(0);
+  const input = useRef<HTMLTextAreaElement>(null);
+  const voiceState = useVoiceState(voice);
+  // 녹음 중·글자로 바꾸는 중에는 입력창 자리에 녹음 표시를 둔다
+  const talking =
+    voiceState.status === "starting" ||
+    voiceState.status === "recording" ||
+    voiceState.status === "transcribing";
 
   useEffect(() => {
-    // 글자가 있는 동안 5초마다 typing start를 다시 보낸다(서버는 6초 뒤 만료)
+    // 글자가 있는 동안 5초마다 typing start를 다시 보낸다(서버는 6초 뒤 만료).
+    // 말하기(녹음) 중에는 보내지 않는다: 글자로 바뀌어 입력창에 들어간 뒤부터 입력 중이다(docs/contracts/ws.md typing)
     if (!text.trim() || locked) return;
     const timer = setInterval(() => {
       lastStart.current = Date.now();
@@ -344,6 +365,33 @@ export function Composer({
     }, TYPING_REFRESH_MS);
     return () => clearInterval(timer);
   }, [text, locked, onTyping]);
+
+  useEffect(() => {
+    const message = voiceErrorText(voiceState.error);
+    if (!message || !voice) return;
+    toast.error(message);
+    voice.clearError();
+  }, [voiceState.error, voice]);
+
+  useEffect(() => {
+    // 세션이 끝나면 듣던 마이크를 끈다
+    if (locked && voice && voiceState.status !== "idle") voice.cancel();
+  }, [locked, voice, voiceState.status]);
+
+  const talk = async () => {
+    if (!voice || locked) return;
+    await voice.start("record");
+  };
+
+  const finishTalk = async () => {
+    if (!voice) return;
+    const said = await voice.stop();
+    // 받은 글자는 바로 보내지 않고 입력창에 넣어 지원자가 고쳐서 보낸다
+    if (said) change(text.trim() ? `${text.trimEnd()} ${said}` : said);
+    requestAnimationFrame(() => input.current?.focus());
+  };
+
+  const cancelTalk = () => voice?.cancel();
 
   const change = (value: string) => {
     const had = text.trim().length > 0;
@@ -371,29 +419,98 @@ export function Composer({
         send();
       }}
     >
-      <textarea
-        rows={1}
-        value={text}
-        disabled={locked}
-        aria-label="메시지 입력"
-        placeholder={locked ? "세션이 끝났어요" : "메시지 입력"}
-        onChange={(event) => change(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-            event.preventDefault();
-            send();
-          }
-        }}
-        className="max-h-32 min-h-10 flex-1 resize-none rounded-[20px] border border-line bg-surface px-4 py-2 text-body outline-none field-sizing-content focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 disabled:bg-surface-sunken"
-      />
-      <button
-        type="submit"
-        aria-label="보내기"
-        disabled={locked || !text.trim()}
-        className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-fill text-on-accent not-disabled:hover:bg-accent-fill-hover disabled:bg-surface-sunken disabled:text-subtle"
-      >
-        <ArrowUp size={20} />
-      </button>
+      {talking ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex h-10 min-w-0 flex-1 items-center gap-3 rounded-[20px] border border-danger/30 bg-danger-soft px-4"
+        >
+          {voiceState.status === "transcribing" ? (
+            <>
+              <Loader2
+                size={14}
+                className="animate-spin text-danger motion-reduce:animate-none"
+                aria-hidden
+              />
+              <span className="text-footnote font-medium text-danger">글자로 바꾸는 중…</span>
+            </>
+          ) : (
+            <>
+              <span aria-hidden className="rec-dot size-2.5 shrink-0 rounded-full bg-danger" />
+              <span className="shrink-0 text-footnote font-medium text-danger">
+                {voiceState.status === "starting" ? "마이크를 켜는 중…" : "듣는 중"}
+              </span>
+              <Elapsed
+                startedAt={voiceState.startedAt}
+                className="shrink-0 text-footnote text-danger"
+              />
+              <LevelBars voice={voice} className="h-5 min-w-0 flex-1" />
+            </>
+          )}
+        </div>
+      ) : (
+        <textarea
+          ref={input}
+          rows={1}
+          value={text}
+          disabled={locked}
+          aria-label="메시지 입력"
+          placeholder={locked ? "세션이 끝났어요" : "메시지 입력"}
+          onChange={(event) => change(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              send();
+            }
+          }}
+          className="max-h-32 min-h-10 flex-1 resize-none rounded-[20px] border border-line bg-surface px-4 py-2 text-body outline-none field-sizing-content focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 disabled:bg-surface-sunken"
+        />
+      )}
+      {voice && talking && (
+        <>
+          <button
+            type="button"
+            aria-label="녹음 취소"
+            disabled={voiceState.status === "transcribing"}
+            onClick={cancelTalk}
+            className="press flex size-10 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-sunken disabled:opacity-40"
+          >
+            <X size={18} />
+          </button>
+          <button
+            type="button"
+            aria-label="말하기 끝내기"
+            disabled={voiceState.status !== "recording"}
+            onClick={finishTalk}
+            className="press relative flex size-10 shrink-0 items-center justify-center rounded-full bg-danger-fill text-on-accent disabled:opacity-60"
+          >
+            {voiceState.status === "recording" && <LevelGlow voice={voice} />}
+            <Square size={14} fill="currentColor" />
+          </button>
+        </>
+      )}
+      {voice && !voiceState.disabled && !talking && (
+        <button
+          type="button"
+          aria-label="말하기"
+          title="말하기"
+          disabled={locked}
+          onClick={talk}
+          className="press flex size-10 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-sunken hover:text-danger disabled:text-subtle"
+        >
+          <Mic size={20} />
+        </button>
+      )}
+      {!talking && (
+        <button
+          type="submit"
+          aria-label="보내기"
+          disabled={locked || !text.trim()}
+          className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-fill text-on-accent not-disabled:hover:bg-accent-fill-hover disabled:bg-surface-sunken disabled:text-subtle"
+        >
+          <ArrowUp size={20} />
+        </button>
+      )}
     </form>
   );
 }

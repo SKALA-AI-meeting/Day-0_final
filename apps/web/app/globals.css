@@ -266,6 +266,95 @@
   }
 }
 
+/*
+  토론 화면 배경 레이어(블록 그리드 뒤). 강조색을 옅게 섞은 번짐 두 개로, 토큰만 써서 다크 모드도 따라간다.
+  블록 구분은 여전히 얇은 선과 여백이고 배경은 장식이다.
+*/
+.debate-backdrop {
+  background:
+    radial-gradient(
+      60% 50% at 0% 0%,
+      color-mix(in srgb, var(--color-accent) 10%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 45% at 100% 100%,
+      color-mix(in srgb, var(--color-accent) 7%, transparent),
+      transparent 70%
+    ),
+    var(--color-canvas);
+}
+
+/*
+  분할 레이아웃(components/ui/split-layout.tsx). 칸이 생기고 사라지고 비율이 바뀔 때 flex-grow로 부드럽게 늘고 준다.
+  경계를 끄는 동안(data-split-dragging)은 손을 바로 따라오도록 전환을 끈다.
+*/
+.split-item {
+  /* fit·square 칸이 auto 크기로 바뀔 때도 늘고 줄게 한다(지원 브라우저만, 나머지는 바로 바뀜) */
+  interpolate-size: allow-keywords;
+  transition:
+    flex-grow 520ms var(--ease-out),
+    flex-basis 520ms var(--ease-out),
+    opacity 320ms ease;
+}
+.split-gutter {
+  transition:
+    width 520ms var(--ease-out),
+    height 520ms var(--ease-out);
+}
+[data-split-dragging] .split-item,
+[data-split-dragging] .split-gutter {
+  transition: none;
+}
+[data-split-dragging] {
+  user-select: none;
+}
+[data-split-dragging="row"] * {
+  cursor: col-resize !important;
+}
+[data-split-dragging="col"] * {
+  cursor: row-resize !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .split-item,
+  .split-gutter {
+    transition: none;
+  }
+}
+
+/* 녹음 중 빨간 점: 천천히 깜빡인다. 움직임 줄이기를 켜면 멈춘다 */
+.rec-dot {
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+/* 프로필에서 고른 메시지로 옮겨 갔을 때 그 말풍선을 잠깐 강조한다 */
+.message-flash {
+  animation: message-flash 1.6s var(--ease-out);
+}
+@keyframes message-flash {
+  0%,
+  40% {
+    box-shadow: 0 0 0 3px var(--color-accent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rec-dot,
+  .message-flash {
+    animation: none;
+  }
+}
+
 /* 버튼 누름 피드백(design-system.md 모션): 속성 지정, scale 0.98 */
 .press {
   transition:

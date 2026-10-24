@@ -24,7 +24,9 @@
 
 ### 격리 스택 env
 
-따로 만드는 env 파일은 없다. `test-text`·`eval-text` 프로필이 포트(web 3100·api 8100·내부 8101·postgres 5442·rag 9112)·`WEB_ORIGIN`·`WEB_BASE_URL`·`NEXT_PUBLIC_*`(web 빌드 인자)·`ENABLE_TEST_API=1`·`AGENT_RUNNER=session`·추적 끔을 정하고 비밀값(`JWT_SECRET`·`INTERNAL_TOKEN`·`ASSESSMENT_MCP_TOKEN`, 실제 LLM이면 `OPENAI_API_KEY`)은 `infra/.env`에서 가져온다. 두 프로필의 차이는 `LLM_FAKE`뿐이고, 바꿀 때는 그 프로필로 `make up`을 다시 해 api·report-worker를 새 env로 띄운다. 모델 캐시는 외부 볼륨 `infra_hfcache`를 쓴다(로컬 개발 모드에서 rag-mcp를 한 번 띄웠으면 이미 있다). 실행 모드별 포트·DB·env는 [configuration.md](configuration.md).
+따로 만드는 env 파일은 없다. `test-text`·`test-voice`·`eval-text`·`eval-voice` 프로필이 포트(web 3100·api 8100·내부 8101·postgres 5442·rag 9112)·`WEB_ORIGIN`·`WEB_BASE_URL`·`NEXT_PUBLIC_*`(web 빌드 인자)·`ENABLE_TEST_API=1`·`AGENT_RUNNER=session`·추적 끔을 정하고 비밀값(`JWT_SECRET`·`INTERNAL_TOKEN`·`ASSESSMENT_MCP_TOKEN`, 실제 LLM이면 `OPENAI_API_KEY`)은 `infra/.env`에서 가져온다. 프로필은 `LLM_FAKE`와 `VOICE_ENABLED`·`VOICE_PROVIDER`를 함께 정하고, 바꿀 때는 그 프로필로 `make up`을 다시 해 api·report-worker를 새 env로 띄운다. 모델 캐시는 외부 볼륨 `infra_hfcache`를 쓴다(로컬 개발 모드에서 rag-mcp를 한 번 띄웠으면 이미 있다). 실행 모드별 포트·DB·env는 [configuration.md](configuration.md).
+
+격리 프로필의 FakeSpeech는 `VOICE_QUOTA_PERIOD=isolated-fake`로 테스트 원장을 구분한다. `test-text`·`eval-text`도 같은 값을 두지만 음성은 꺼져 있다. Azure 프로필은 이 값을 사용하지 않고 실제 Azure 자원의 할당량 초기화 기간을 확인해 `infra/.env`에 `VOICE_QUOTA_PERIOD`를 설정해야 한다. Compose는 프로필의 `VOICE_ENABLED`를 웹 빌드 인자 `NEXT_PUBLIC_VOICE_ENABLED`로 전달하므로 텍스트·음성 프로필을 바꾸면 웹을 다시 빌드한다.
 
 ## 단위
 
@@ -204,7 +206,7 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 | debrief | R1 첫 문장, 내 발언 ≤ 3, 설문 제출 |
 | admin-report | `ended` 시드의 리포트 → 차원 1개 조정(메모) → 검토 완료 → 수준 재계산 표시 |
 
-- 기록: 핵심 시점 스크린샷과 `summary.md`는 `tests/e2e/records/stages/<단계>/`(커밋), 테스트마다 영상(webm)·trace는 `tests/e2e/records/stages/.artifacts/<테스트>/`, 전체 HTML 리포트는 `tests/e2e/records/stages/html-report/`(둘 다 git 무시)에 남긴다. 스크린샷은 `docs/share/` 보고서 캡처의 원본이다.
+- 기록: 핵심 시점 스크린샷은 `tests/e2e/records/stages/.artifacts/screenshots/<실행 ID>/<단계>/`에 격리하고, 기존 기준 캡처·`summary.md`는 `tests/e2e/records/stages/<단계>/`에서 유지한다. 테스트마다 영상(webm)·trace는 `tests/e2e/records/stages/.artifacts/<테스트>/`, 전체 HTML 리포트는 `tests/e2e/records/stages/html-report/`(둘 다 git 무시)에 남긴다. 스크린샷은 `docs/share/` 보고서 캡처의 원본이다.
 - 실행: `make e2e SUITE=stages PROFILE=test-text [STAGE=<단계>]`. 화면·api 흐름을 바꾸는 PR은 전 단계가 `test-text`(가짜 LLM)로 통과해야 한다.
 
 ### 단계별 화면 테스트의 주의점
@@ -226,3 +228,20 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 - 조작: Playwright 드라이버 `tests/playtest/driver.py`(같은 브라우저를 여러 명령에 걸쳐 유지, 화면은 `shot`으로 PNG를 보고 판단). 브라우저 대화상자는 드라이버가 자동으로 닫고 기록한다(앱 안 확인 창은 정상). Claude in Chrome은 이 환경에서 테스트 스택(3100)을 열지 못해 쓰지 않는다.
 - 기록: `tests/playtest/records/<단계>/<페르소나>/`에 조작 영상(`<단계>-<페르소나>.webm`)·핵심 시점 스크린샷와 불편 로그(`log.md`: 시각 · 화면 · 기대 · 실제 · 심각도 상/중/하), 개선 제안. 끝나면 단계 × 페르소나 요약 표 `tests/playtest/records/summary.md`.
 - 순서: keyword 단계 정석형 1회로 조작·녹화가 되는지 먼저 확인한 뒤 나머지로 넓힌다. 반영 여부는 사람이 정한다.
+
+
+## 음성 검증
+
+`services/api/tests/test_voice.py`는 순차 재생 장벽·빈 AI 턴·최종 STT 메시지 1회 저장·마감 fence·파일 형식/길이·quota 차단을 FakeSpeech와 격리 DB로 검증한다. `apps/web/components/debate/voice/recorder.test.ts`는 버튼/타이머 중복 종료와 최종 PCM 변환을 검증한다. Playwright는 Chromium의 fake microphone과 실제 MediaRecorder·WAV 업로드·ended 이벤트를 사용하고, STT 결과만 내부 테스트 API로 고정한다.
+
+음성 테스트에서 텍스트 입력창·말풍선을 찾지 않는다. 합의·카드의 최종 저장 내용은 내부 API로 확인하고 음성 회의와 마이크 상태는 화면에서 확인한다. 실 Azure 계정 없이 FakeSpeech 통과를 한국어 음질·실 인식 검증으로 표현하지 않는다.
+
+전체 대본 CLI의 음성 경로는 FakeSpeech 전사를 설정한 뒤 발언권·WAV 업로드·기존 WS 제출을 거친다. API 러너는 합성 WAV 길이만큼 기다려 재생 확인을 보내며 브라우저 실제 재생 검증을 대체하지 않는다. `all_five`는 실제 15분 시계로 단계·합의·기획안·평가까지 확인한다. 실제 마이크와 `ended` 이벤트는 별도의 Playwright `voice.spec.ts`가 검증한다. 이 대본 음성 경로에는 테스트 API가 활성화된 격리 스택이 필요하다.
+
+### 음성·텍스트 프로필 확인
+
+- `make up PROFILE=test-text` → `make seed PROFILE=test-text` → `make e2e SUITE=stages PROFILE=test-text`: 채팅 입력과 기존 텍스트 WS 흐름. 음성 전용 Playwright 사례는 건너뛴다.
+- `make up PROFILE=test-voice` → `make seed PROFILE=test-voice` → `make e2e SUITE=stages PROFILE=test-voice`: FakeSpeech와 실제 브라우저 녹음·재생 흐름. `tests/e2e/run.py` 대본도 이 프로필에서는 전사 API를 사용한다.
+- `eval-text`·`eval-voice`는 실제 LLM을 호출하므로 실행 시 `ALLOW_API=1`이 필요하다. `report-worker`도 같은 프로필의 `LLM_FAKE`를 받는다.
+
+Docker가 없으면 API 단위 테스트와 `tests/test_profile.py`만 로컬에서 실행할 수 있다. DB fixture는 DB 연결이 없으면 skip된다.

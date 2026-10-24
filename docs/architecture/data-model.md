@@ -89,3 +89,10 @@ LangSmith는 프로젝트 보존 기간을 90일로 둔다.
 ## 기업 간 격리와 스키마 변경
 
 기업 간 격리 규칙은 [security.md](security.md). 새 DB 초기화와 스키마를 바꾼 뒤 로컬 DB를 다시 만드는 절차는 [guides/database.md](../guides/database.md).
+
+
+## 음성 상태·작업·사용량
+
+`voice_states(session_id PK/FK CASCADE, data jsonb)`는 턴·generation·epoch·발언권·마감의 원천이다. `speech_jobs(id PK,session_id FK CASCADE,kind,data jsonb,audio bytea,created_at,expires_at)`는 최종 본문 해시·voice·작업 상태·시도별 사용량·전사·재생 확인을 보존한다. PCM 원음/TTS bytes는 임시이고 성공 전사·세션 종료·24시간 만료 정책으로 비운다. `speech_quotas(scope PK,data jsonb)`는 자원/기간별 월 사용량·세션 예약·호출 속도를 행 잠금으로 직렬화한다. scope는 세션 삭제에 종속되지 않는다.
+
+모델과 DDL은 일치해야 한다. 로컬 볼륨은 DB 가이드에 따라 별도 재생성하며 공유 개발 스택을 자동 초기화하지 않는다.

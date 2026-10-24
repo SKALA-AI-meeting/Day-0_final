@@ -1,7 +1,7 @@
 // keyword: 후보 버튼 확정 → 결정 사항 칸 → 단계 전환 → 자료 탭 열림
 import { expect, test } from "@playwright/test";
 
-import { type Seed, internalGet, seed, shot, tab } from "./helpers";
+import { type Seed, enterRoom, internalGet, seed, shot, tab } from "./helpers";
 
 let s: Seed;
 test.beforeAll(async () => {
@@ -10,6 +10,8 @@ test.beforeAll(async () => {
 
 test("후보 확정 → 결정 사항 → 문제 상황 단계 → 자료 열림", async ({ page }) => {
   await page.goto(s.link);
+  await enterRoom(page);
+  await tab(page, "결정 사항");
   const keywords = page.getByRole("radiogroup", { name: "키워드 후보" });
   await expect(keywords.getByRole("radio")).toHaveCount(4);
   await tab(page, "자료");

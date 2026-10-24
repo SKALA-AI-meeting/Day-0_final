@@ -1,5 +1,7 @@
 # web (Next.js)
 
+음성 토론의 상태·전사·오류·비용은 [음성 구현](../architecture/voice.md)을 따른다.
+
 지원자·관리자 화면의 구현 구조다. 화면 흐름과 화면 규칙은 [product/user-flows.md](../product/user-flows.md), 토큰·컴포넌트·라이브러리·모션은 [architecture/design-system.md](../architecture/design-system.md), 실행 명령은 `apps/web/README.md`. Next.js App Router + Tailwind. 상태 관리는 React 상태와 fetch로 충분하다. UI 라이브러리는 [architecture/design-system.md](../architecture/design-system.md)의 "라이브러리" 표에 있는 것만 쓴다.
 
 ## 구조

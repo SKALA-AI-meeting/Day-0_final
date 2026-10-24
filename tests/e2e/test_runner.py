@@ -15,6 +15,18 @@ from e2e import script as scripts
 from e2e.run import Runner
 
 
+@pytest.fixture(autouse=True)
+def text_mode(monkeypatch):
+    """가짜 API 대본은 텍스트 모드이며, 실 러너의 기본 음성 모드는 별도로 확인한다."""
+    monkeypatch.setenv("VOICE_ENABLED", "0")
+
+
+def test_voice_defaults_to_api_mode(fake, target, monkeypatch):
+    monkeypatch.delenv("VOICE_ENABLED")
+    runner = Runner(scripts.load("all_five"), target, db=fake.db())
+    assert runner.voice_mode
+
+
 async def run_script(fake, target, name: str, **kwargs):
     runner = Runner(
         scripts.load(name),

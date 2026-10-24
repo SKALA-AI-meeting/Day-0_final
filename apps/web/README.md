@@ -1,5 +1,7 @@
 # web
 
+현재 음성 회의·Azure F0 설정·오류 복구는 [음성 구현](../../docs/architecture/voice.md), 공개 인터페이스는 [음성 계약](../../docs/contracts/voice.md)을 따른다. 기본 음성 모드는 회의 UI를 쓰고, `NEXT_PUBLIC_VOICE_ENABLED=0`으로 빌드한 테스트 텍스트 모드는 채팅 입력창을 쓴다. 내부 메시지 기록과 기존 합의·평가 경로는 유지한다.
+
 지원자 토론방·기획안·디브리핑 화면과 담당자 관리자 화면(채용 건·지원자 목록·리포트·전체 기록)을 내는 Next.js 앱.
 
 ## 한눈에
@@ -9,10 +11,10 @@
 | 역할 | 지원자: 초대 링크 입장 → 동의 → 토론방(채팅·결정 사항·참고 자료·어시스턴트·기획안) → 디브리핑. 담당자: 가입·로그인, 채용 건 생성, 초대, 리포트 검토, 전체 기록 |
 | 사용 기술 | Next.js App Router(standalone 빌드), React, Tailwind v4, base-ui + cva + clsx, vitest, Playwright, pnpm, Node 22 |
 | 포트 | 3000 (헬스 `/api/health`) |
-| 필요한 env | `NEXT_PUBLIC_API_URL`(기본 `http://localhost:8000`) `NEXT_PUBLIC_WS_URL`(기본 `ws://localhost:8000`) `NEXT_PUBLIC_MOCK`(`1`이면 api 없이 mock). 테스트용: `WEB_URL` `E2E_INTERNAL_URL` `INTERNAL_TOKEN` |
+| 필요한 env | `NEXT_PUBLIC_API_URL`(기본 `http://localhost:8000`) `NEXT_PUBLIC_WS_URL`(기본 `ws://localhost:8000`) `NEXT_PUBLIC_MOCK`(`1`이면 api 없이 mock) `NEXT_PUBLIC_VOICE_ENABLED`(기본 1, 0은 테스트 텍스트 모드). 테스트용: `WEB_URL` `E2E_INTERNAL_URL` `INTERNAL_TOKEN` |
 | 의존 서비스 | api 공개 앱(8000, REST + WebSocket). mock 모드에서는 없음 |
 
-`NEXT_PUBLIC_*`는 **빌드 시점**에 번들에 들어간다. `pnpm dev`는 셸 환경변수나 `apps/web/.env.local`을 읽고(Python 서비스와 달리 `infra/.env`를 읽지 않는다), compose 빌드는 `apps/web/Dockerfile`의 `ARG`로 받으므로 컨테이너 실행 중에 바꿔도 반영되지 않는다. 단계별 화면 테스트의 `INTERNAL_TOKEN`은 환경변수 또는 `infra/.env.e2e`에서 읽는다.
+`NEXT_PUBLIC_*`는 **빌드 시점**에 번들에 들어간다. `pnpm dev`는 셸 환경변수나 `apps/web/.env.local`을 읽고(Python 서비스와 달리 `infra/.env`를 읽지 않는다), compose 빌드는 `apps/web/Dockerfile`의 `ARG`로 받으므로 컨테이너 실행 중에 바꿔도 반영되지 않는다. 단계별 화면 테스트의 `INTERNAL_TOKEN`은 환경변수 또는 `infra/.env`에서 읽는다.
 
 ## 구현된 기능
 
@@ -77,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 67개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 90개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -197,6 +199,64 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
+<details><summary><code>components/debate/speech.test.ts</code> (1)</summary>
+
+- 음성을 ${FAIL_LIMIT}번 연달아 받지 못하면 AI 동료 음성을 끄고 더 요청하지 않는다
+
+</details>
+
+<details><summary><code>components/debate/stage-layout.test.ts</code> (4)</summary>
+
+- 세션 첫 화면은 프로필 카드만 크게 보이고, 지원자 차례가 오면 토론방이 결정 사항과 함께 열린다
+- 자료가 열리면 결정 사항 아래에 자료·AI 어시스턴트 묶음이 생긴다
+- 기획안 단계는 오른쪽 위가 기획안으로 바뀌고 단계 안내가 왼쪽 아래에 남는다
+- 상단 바에서 직접 켜거나 끈 영역은 자동 판단보다 앞서고, 인사 화면에서는 무시된다
+
+</details>
+
+<details><summary><code>components/debate/voice/caption.test.ts</code> (2)</summary>
+
+- 문장 끝 뒤 공백에서 나누고 빈 문장은 버린다
+- 재생 위치까지 말한 문장 수를 센다(글자 수 비율)
+
+</details>
+
+<details><summary><code>components/debate/voice/memo-pad.dom.test.tsx</code> (3)</summary>
+
+- 입력하면 세션별로 저장되고 다시 열면 이어진다
+- 저장소가 막혀도 입력은 되고 저장 안 됨을 알린다
+- 세션이 끝나면 읽기 전용이다
+
+</details>
+
+<details><summary><code>components/debate/voice/recorder.test.ts</code> (4)</summary>
+
+- 버튼과 타이머가 겹쳐도 녹음 종료는 한 번만 실행한다
+- 완성 오디오를 mono 16kHz PCM WAV로 만들고 클리핑을 제한한다
+- 48kHz를 16kHz로 줄이면 길이가 3분의 1이고 구간 평균을 쓴다
+- PCM16 리틀 엔디언 원본으로 바꾸고 범위를 넘는 값은 자른다
+
+</details>
+
+<details><summary><code>components/debate/voice/streamer.test.ts</code> (1)</summary>
+
+- 정리를 두 번 불러도 예외 없이 끝난다(녹음 종료 뒤 메시지 제출 때 다시 불림)
+
+</details>
+
+<details><summary><code>components/debate/voice-fallback.test.ts</code> (2)</summary>
+
+- 글자 변환은 앞이 실패하면 다음으로 넘어가고, 모두 실패하면 오류를 낸다
+- 글자 변환이 ${FAIL_LIMIT}번 연달아 실패하면 말하기를 끄고 다시 시작하지 않는다
+
+</details>
+
+<details><summary><code>components/debate/voice.test.ts</code> (1)</summary>
+
+- 마이크 소리 크기: 무음은 0, 큰 소리는 1로 자르고, 빠르게 오르고 천천히 내려온다
+
+</details>
+
 <details><summary><code>components/debate/wording.test.ts</code> (3)</summary>
 
 - 디브리핑 전 지원자 화면·mock에 페르소나 유형 이름이 없다
@@ -210,6 +270,14 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - 계산식 확인: 흰색·검정 21:1, 다크 accent(#2997FF) 위 흰 글자는 AA 미달
 - 인쇄 블록은 다크 테마에서도 라이트 글자색(ink)을 흰 종이 위에 둔다
 - 시스템 다크(:root:not(.light))와 강제 다크(:root.dark) 값이 같다
+
+</details>
+
+<details><summary><code>components/ui/split-layout.test.ts</code> (3)</summary>
+
+- 사용자 비율은 보이는 칸 구성과 구간(epoch)이 같을 때만 기본 비율을 덮는다
+- 경계를 끌면 두 칸의 합은 그대로이고 최소 크기 밑으로 줄지 않는다
+- 사용자가 끈 분할의 칸은 fit·square 대신 비율로 나뉜다
 
 </details>
 
@@ -249,6 +317,13 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
+<details><summary><code>lib/voice-server.test.ts</code> (2)</summary>
+
+- 음성 모델 키 규칙: 음성 두 모델과 gpt-4o-mini는 제한 키, 그 밖의 gpt-*는 개인 키, 비면 멈춘다
+- VOICE_API=1이 아니면 음성 라우트는 닫혀 있다
+
+</details>
+
 <details><summary><code>lib/ws.test.ts</code> (2)</summary>
 
 - 재연결: 3초 뒤 다시 붙어 onOpen(reconnected)을 알리고, 4401은 재발급, 4000은 멈춘다
@@ -256,7 +331,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-**단계별 화면 테스트(Playwright, `make e2e SUITE=stages PROFILE=test-text`)**: 테스트 제목 9개(정적 파싱)
+**단계별 화면 테스트(Playwright, `make e2e SUITE=stages PROFILE=test-text`)**: 테스트 제목 10개(정적 파싱)
 
 <details><summary><code>e2e/admin-capture.spec.ts</code> (0)</summary>
 
@@ -306,6 +381,12 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - solo_confirm: 반대가 남아도 지원자가 혼자 확정하면 칸이 확정된다
 
 </details>
+
+<details><summary><code>e2e/stages/voice.spec.ts</code> (1)</summary>
+
+- 음성 회의: 채팅 UI 없음·AI 종료 뒤 녹음·60초 자동 제출 1회
+
+</details>
 <!-- /gen:tests -->
 
 ## 관련 문서
@@ -315,3 +396,14 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - [`docs/product/user-flows.md`](../../docs/product/user-flows.md): 화면 흐름
 - [`docs/contracts/ws.md`](../../docs/contracts/ws.md): WebSocket 계약
 - [`docs/guides/testing.md`](../../docs/guides/testing.md): 테스트 종류와 실행법
+
+## 토론 화면 배치와 음성 입출력(시험)
+
+토론 화면(`components/debate/debate-view.tsx`)은 크기를 바꿀 수 있는 분할 레이아웃이다. 위 문서들의 "우측 탭" 설명은 이 배치로 바뀌는 중이며, 바뀐 결정과 남은 문서 정리는 PR에서 다룬다.
+
+- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 토론방이 가운데에 열린다. 왼쪽은 프로필(누르면 이름과 이번 단계에서 한 말)·음성 패널·단계 안내, 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
+- 크기 조절: 영역 사이 경계를 끌거나 화살표 키로 바꾸고, 두 번 누르면 원래대로 돌아간다. 엔진은 `components/ui/split-layout.tsx`, 단계별 규칙은 `components/debate/stage-layout.ts`.
+- 말하기(STT): 입력창 옆 마이크로 녹음하면 글자로 바뀌어 입력창에 들어가고, 지원자가 고쳐서 보낸다. 녹음은 저장하지 않는다. 녹음 중에는 typing을 보내지 않는다(계약 그대로).
+- AI 동료 음성(TTS): 음성 패널에서 켜면 새로 온 AI 동료 메시지를 읽고, 읽는 동료를 프로필에서 강조한다. 목소리는 자리별로 고정하고 말투 지시는 세 명 모두 같다.
+- 대체 순서: 글자 변환은 웹 서버 라우트 → mock 예시 문장 → 없음 순서로 쓴다. 서버 음성 기능이 없거나(`/api/voice/status`) 2번 연달아 실패하면 그 화면에서 말하기·AI 동료 음성을 끄고 글자로만 진행한다. 플래그가 없으면 음성 UI는 보이지 않고 기존 화면과 같게 동작한다.
+- 켜는 법(개발용): `NEXT_PUBLIC_VOICE_API=1`(화면), `VOICE_API=1`(서버 라우트 `/api/voice/transcribe`·`/api/voice/speech`). 모델은 `MODEL_STT`(기본 `gpt-4o-mini-transcribe`)·`MODEL_TTS`(기본 `gpt-4o-mini-tts`), 키 선택은 `lib/voice-server.ts`의 `voiceKey`.

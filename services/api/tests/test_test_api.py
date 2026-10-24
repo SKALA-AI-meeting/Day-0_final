@@ -45,12 +45,20 @@ def seeded(ctx, tmp_path):
     import yaml
 
     real = get_settings().scenarios_dir
-    (tmp_path / "missions").symlink_to(real / "missions")
-    (tmp_path / "version.py").symlink_to(real / "version.py")
+    import shutil
+
+    try:
+        (tmp_path / "missions").symlink_to(real / "missions", target_is_directory=True)
+        (tmp_path / "version.py").symlink_to(real / "version.py")
+    except OSError:
+        shutil.copytree(real / "missions", tmp_path / "missions", dirs_exist_ok=True)
+        shutil.copy2(real / "version.py", tmp_path / "version.py")
     stages = tmp_path / "e2e" / "stages"
     stages.mkdir(parents=True)
     for name, steps in STEPS.items():
-        (stages / f"{name}.yaml").write_text(yaml.safe_dump({"steps": steps}, allow_unicode=True))
+        (stages / f"{name}.yaml").write_text(
+            yaml.safe_dump({"steps": steps}, allow_unicode=True), encoding="utf-8"
+        )
     ctx.settings = replace(ctx.settings, scenarios_dir=tmp_path)
     return ctx
 

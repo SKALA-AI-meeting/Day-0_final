@@ -22,7 +22,7 @@ import logging
 import uuid
 from datetime import timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app import queue
 from app.agent.runner import Stimulus
@@ -51,6 +51,20 @@ async def tick(ctx: AppContext) -> None:
         except Exception:
             log.exception("scheduler tick failed for %s", session_id)
     await ctx.mailboxes.recover(stale_before=ctx.clock.now() - RUN_TIMEOUT)
+    from app.models import SpeechJob
+
+    async with ctx.session_factory() as db:
+        await db.execute(
+            update(SpeechJob)
+            .where(
+                (SpeechJob.expires_at <= ctx.clock.now())
+                | SpeechJob.session_id.in_(
+                    select(Session.id).where(Session.status != "in_progress")
+                )
+            )
+            .values(audio=None)
+        )
+        await db.commit()
     async with ctx.session_factory() as db:
         await queue.republish_pending(db, ctx.publisher, ctx.clock.now())
     async with ctx.session_factory() as db:

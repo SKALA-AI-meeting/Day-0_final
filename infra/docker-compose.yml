@@ -144,6 +144,7 @@ services:
       args:   # 빌드 시점 값. 프로필(--env-file)이 정하고 바꾸면 다시 빌드한다
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
         NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
+        NEXT_PUBLIC_VOICE_ENABLED: ${VOICE_ENABLED:-1}
     env_file: ${DAYZERO_ENV_FILE:-.env}
     ports:
       - "${WEB_PORT:-3000}:3000"

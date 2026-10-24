@@ -42,6 +42,14 @@ REQUIRED_BLOCKS = {
 
 # 라우터 함수에 docstring이 없어 요약은 여기서 관리한다. 빠진 경로가 있으면 생성이 실패한다.
 SUMMARIES = {
+    "GET /sessions/{session_id}/voice": "음성 턴·재생·전사 상태 복구",
+    "POST /sessions/{session_id}/voice/capture": "AI 완료 장벽 뒤 사용자 발언권 발급",
+    "POST /sessions/{session_id}/voice/abort": "장치·파일 오류 발언권 복구",
+    "POST /sessions/{session_id}/voice/playback": "실제 재생 결과 확인·재시도",
+    "POST /sessions/{session_id}/voice/audio": "최종 PCM WAV 접수·STT 작업 예약",
+    "POST /sessions/{session_id}/voice/retry": "동일 완성 파일 STT 제한 재시도",
+    "GET /sessions/{session_id}/voice/assets/{job_id}": "세션 전용 TTS WAV 조회",
+    "POST /internal/test/voice-transcript": "FakeSpeech 전사 대본 설정(테스트 전용)",
     "POST /admin/auth/signup": "담당자 가입(회사 생성)",
     "POST /admin/auth/login": "담당자 로그인(JWT 발급)",
     "GET /admin/catalog": "채용 건 생성 화면에 보일 요소 안내와 샘플 리포트",
@@ -179,7 +187,7 @@ def gen_mcp_tools(service: str) -> str:
 
 
 def _pytest(cwd: Path, extra: list[str], env: dict[str, str] | None = None) -> list[str]:
-    cmd = ["uv", "run", *extra]
+    cmd = _pytest_cmd(cwd, extra)
     proc = subprocess.run(
         cmd, cwd=cwd, capture_output=True, text=True, env={**os.environ, **(env or {})}
     )
@@ -189,6 +197,19 @@ def _pytest(cwd: Path, extra: list[str], env: dict[str, str] | None = None) -> l
     return ids
 
 
+def _pytest_cmd(cwd: Path, extra: list[str]) -> list[str]:
+    """이미 설치된 서비스 환경이 있으면 오프라인 문서 생성에 재사용한다."""
+    args = list(extra)
+    if args[:2] == ["--project", "services/api"]:
+        args = args[2:]
+        python = ROOT / "services/api/.venv/bin/python"
+    else:
+        python = cwd / ".venv/bin/python" if cwd != ROOT else ROOT / "services/api/.venv/bin/python"
+    if python.is_file():
+        return [str(python), "-m", *args]
+    return ["uv", "run", *extra]
+
+
 @cache
 def collect_service(service: str) -> tuple[tuple[str, ...], frozenset[str]]:
     """(전체 node id, live node id). node id는 서비스 폴더 기준이다."""
@@ -196,7 +217,7 @@ def collect_service(service: str) -> tuple[tuple[str, ...], frozenset[str]]:
     base = ["pytest", "--collect-only", "-q", "-p", "no:cacheprovider"]
     every = _pytest(cwd, base + ["-m", "live or not live"])
     live = subprocess.run(
-        ["uv", "run", *base, "-m", "live"], cwd=cwd, capture_output=True, text=True
+        _pytest_cmd(cwd, base + ["-m", "live"]), cwd=cwd, capture_output=True, text=True
     )
     return tuple(every), frozenset(x for x in live.stdout.splitlines() if "::" in x)
 

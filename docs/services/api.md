@@ -1,5 +1,7 @@
 # api (FastAPI)
 
+음성 토론의 상태·전사·오류·비용은 [음성 구현](../architecture/voice.md)을 따른다.
+
 인증·REST·WebSocket·세션 시계·메일박스·DB 쓰기를 맡는 한 프로세스다(공개 8000 + 내부 8001). 실행·테스트 명령은 `services/api/README.md`, 결정 근거(R1~R7 등)는 [decisions.md](../decisions.md). 경로·필드·오류 코드는 [contracts/README.md](../contracts/README.md), 테이블은 [architecture/data-model.md](../architecture/data-model.md), 단계·칸·카드 규칙은 [product/scenario.md](../product/scenario.md), 차원 id·수준 앵커·기록 없음 사유·사실 지표는 [product/rubric.md](../product/rubric.md)(BARS)가 정본이다. 칸 결과는 `resolution: consensus | timeout`, 채운 사람은 자리 id `filled_by: candidate | p1 | p2 | p3`으로 쓴다(시간 초과도 공지한 자리 id, `system` 값은 없다).
 
 ## 구조

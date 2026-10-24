@@ -14,7 +14,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from app.auth import decode_token
-from app.models import ConnectionGap
+from app.masking import mask
+from app.models import ConnectionGap, Message
 from app.services import debate
 from app.services.common import ServiceError, load_session, serialize_message
 from app.services.context import AppContext
@@ -32,14 +33,38 @@ async def handle_send(ctx: AppContext, session_id: uuid.UUID, payload: dict[str,
         try:
             async with ctx.session_factory() as db:
                 session = await load_session(db, session_id, lock=True)
+                voice_job = None
+                if ctx.settings.voice_enabled:
+                    from app.voice.controller import submit
+
+                    existing = await db.scalar(
+                        select(Message).where(
+                            Message.session_id == session_id, Message.client_msg_id == client_msg_id
+                        )
+                    )
+                    if existing is None:
+                        voice_job = await submit(db, session, payload, ctx.clock.now())
+                    elif existing.content != mask(content.strip()):
+                        raise ServiceError(409, "voice_payload_mismatch")
                 message, run_id, stimulus = await debate.save_candidate_message(
                     db, session, client_msg_id, content, ctx.clock
                 )
+                if voice_job:
+                    voice_job.data = {**voice_job.data, "message_id": str(message.id)}
+                    message.meta = {
+                        **message.meta,
+                        "source": "voice",
+                        "utterance_id": str(voice_job.id),
+                    }
                 await db.commit()
                 serialized = serialize_message(session, message)
                 generation = session.generation
         except ServiceError as exc:
-            code = exc.code if exc.code in ("session_ending", "invalid_input") else "conflict"
+            code = (
+                exc.code
+                if exc.code.startswith("voice_") or exc.code in ("session_ending", "invalid_input")
+                else "conflict"
+            )
             await ctx.hub.send(session_id, "error", {"code": code, "message": exc.message})
             return
         ack = {
@@ -66,15 +91,29 @@ async def socket(websocket: WebSocket, session_id: uuid.UUID) -> None:
         await websocket.close(code=reject)
         return
     await ctx.hub.connect(session_id, websocket)
+    if ctx.settings.voice_enabled:
+        from app.voice.controller import row
+
+        async with ctx.ordered(session_id):
+            async with ctx.session_factory() as db:
+                voice = await row(db, session_id)
+                data = {**voice.data, "epoch": str(uuid.uuid4())}
+                if data.get("state") == "USER_SPEAKING":
+                    data.update(state="USER_READY", blocked_reason="voice_interrupted")
+                voice.data = data
+                await db.commit()
     await _mark_reconnected(ctx, session_id)
     try:
         while True:
             frame = await websocket.receive_json()
+            if not ctx.hub.is_current(session_id, websocket):
+                break
             kind, payload = frame.get("type"), frame.get("payload") or {}
             if kind == "message.send":
                 await handle_send(ctx, session_id, payload)
             elif kind == "typing":
-                ctx.hub.candidate_typing(session_id, payload.get("state", "stop"))
+                if not ctx.settings.voice_enabled:
+                    ctx.hub.candidate_typing(session_id, payload.get("state", "stop"))
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
