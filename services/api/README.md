@@ -146,7 +146,7 @@ make eval PROFILE=eval-text SUITE=api ALLOW_API=1      # live 테스트(제한 �
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 297개(live 3개 포함, `make test`는 live를 뺀다).
+총 298개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
