@@ -9,6 +9,8 @@ persona_eval(대본 실행 사건 목록)과 virtual_candidate(세션 내보내�
         judge <events.json|session.json|eval-live.md>... [--out X]
     uv run --project services/api python tests/eval/attribution.py \\
         extract <calibration.jsonl> [--labels OUT]
+    uv run --project services/api python tests/eval/attribution.py \\
+        relabel <calibration.jsonl> [--out OUT]
 
 `judge`는 기록된 실행(persona_eval `PERSONA_EVAL_DUMP` 사건 목록, 가상 세션 `session.json`,
 eval-live 페르소나 md)을 다시 판정해 요약을 낸다. `extract`는 보정 세트의 항목마다 귀속을 뽑아
@@ -37,6 +39,8 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 LABELS = ("supported", "overstated", "unsupported", "undeterminable")
+NOT_ATTRIBUTION = "not_attribution"  # 추출됐지만 귀속이 아닌 구절(화자 자신의 의견·호칭 등)
+VERDICTS = (*LABELS, NOT_ATTRIBUTION)
 ERRORS = ("overstated", "unsupported")
 FORMS = ("statement", "presupposing_question", "elliptical")
 PEERS = ("p1", "p2", "p3")
@@ -63,7 +67,7 @@ SCHEMA = {
                     "target": {"type": "string", "enum": list(TARGETS)},
                     "claim": {"type": "string"},
                     "form": {"type": "string", "enum": list(FORMS)},
-                    "verdict": {"type": "string", "enum": list(LABELS)},
+                    "verdict": {"type": "string", "enum": list(VERDICTS)},
                     "source_ids": {"type": "array", "items": {"type": "string"}},
                     "reason": {"type": "string"},
                 },
@@ -77,13 +81,53 @@ SCHEMA = {
                 "required": ["claim", "verdict", "reason"],
                 "properties": {
                     "claim": {"type": "string"},
-                    "verdict": {"type": "string", "enum": list(LABELS)},
+                    "verdict": {"type": "string", "enum": list(VERDICTS)},
                     "reason": {"type": "string"},
                 },
             },
         },
     },
 }
+
+RELABEL_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["labels"],
+    "properties": {
+        "labels": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["attribution_id", "owner", "verdict", "reason"],
+                "properties": {
+                    "attribution_id": {"type": "string"},
+                    "owner": {"type": "string", "enum": ["speaker", "target", "unclear"]},
+                    "verdict": {"type": "string", "enum": list(VERDICTS)},
+                    "reason": {"type": "string"},
+                },
+            },
+        }
+    },
+}
+
+
+SELF_TARGET_REASON = "화자 자신에 대한 말(target == speaker)"
+
+
+def self_target(attribution: dict[str, Any], speaker: str | None) -> bool:
+    """추출된 귀속의 target이 post 화자 자신이면 정의상 귀속이 아니다(코드 규칙, 호출 없음)."""
+    return bool(speaker) and attribution.get("target") == speaker
+
+
+def mark_self_target(attributions: list[dict[str, Any]], speaker: str | None) -> int:
+    """target == speaker인 귀속의 verdict를 not_attribution으로 바꾼다(모든 경로 공용). 바꾼 수."""
+    n = 0
+    for a in attributions:
+        if self_target(a, speaker):
+            a["verdict"], a["reason"], a["owner"] = NOT_ATTRIBUTION, SELF_TARGET_REASON, "speaker"
+            n += 1
+    return n
 
 
 def load_prompts() -> dict[str, Any]:
@@ -197,7 +241,15 @@ MD_SESSION = re.compile(r"^### (\S+)(?: \((\w+)\))?")
 MD_CANDIDATE = re.compile(r"^- \*\*지원자\*\*\((\w+)\): (.*)$")
 MD_POST = re.compile(r"^  - ([^:]+): (.*?)(?: `([^`]*)`)?$")
 MD_SKIP = re.compile(r"^- \((단계 시작|카드) ?.*\)$")
-MD_FLAG_KEYS = ("guard", "stance_check", "quote_check", "quote_violation", "stance_violation")
+MD_FLAG_KEYS = (
+    "guard",
+    "stance_check",
+    "quote_check",
+    "quote_violation",
+    "quote_span",
+    "quote_draft",
+    "stance_violation",
+)
 
 
 def md_escape(text: str) -> str:
@@ -322,18 +374,29 @@ def sources_before(transcript: list[dict[str, Any]], index: int) -> tuple[list[d
 # ---- 초안 ↔ 최종 연결(PR 10 meta, 없으면 absent) ----------------------------------------
 
 
-def rejected_claim(meta: dict[str, Any]) -> dict[str, str] | None:
-    """`quote_violation`("candidate의 … 돌림: <주장>")에서 (대상, 거부된 주장). 형식이 다르면 전체를
-    주장으로 둔다."""
+def rejected_claim(meta: dict[str, Any]) -> dict[str, Any] | None:
+    """`quote_violation`("candidate의 … 돌림: <주장>")에서 (대상, 거부된 주장)과, 기록돼 있으면
+    거부된 초안 구절 `quote_span`·초안 전문 `quote_draft`. 형식이 다르면 전체를 주장으로 둔다.
+    `recoverable`은 구절이 있어 판정에 보낼 수 있는지다(구절 없이 주장만으로는 화자 자신의 의견을
+    잘못 뽑은 거부인지 가릴 수 없어 판정하지 않는다)."""
     text = meta.get("quote_violation")
     if not text:
         return None
     found = REJECTED.match(text.strip())
-    if not found:
-        return {"target": "", "claim": text.strip()}
-    who = found.group("who")
-    seats = {v: k for k, v in NAMES.items()}
-    return {"target": who if who in TARGETS else seats.get(who, ""), "claim": found.group("claim")}
+    span = str(meta.get("quote_span") or "").strip() or None
+    out = {
+        "target": "",
+        "claim": text.strip(),
+        "span": span,
+        "draft": str(meta.get("quote_draft") or "").strip() or None,
+        "recoverable": span is not None,
+    }
+    if found:
+        who = found.group("who")
+        seats = {v: k for k, v in NAMES.items()}
+        out["target"] = who if who in TARGETS else seats.get(who, "")
+        out["claim"] = found.group("claim")
+    return out
 
 
 def draft_checks(meta: dict[str, Any]) -> dict[str, Any]:
@@ -371,7 +434,12 @@ def payload_for(
         },
         "sources": [{**m, "speaker_name": names.get(m["sender"], m["sender"])} for m in sources],
         "sources_truncated": truncated,
-        "draft_rejected_claims": [rejected] if rejected else [],
+        "draft_rejected_claims": (
+            [{k: rejected[k] for k in ("target", "claim", "span", "draft")}]
+            if rejected and rejected["recoverable"]
+            else []
+        ),
+        "rejected_unrecoverable": int(bool(rejected) and not rejected["recoverable"]),
     }
 
 
@@ -389,7 +457,7 @@ def parse_verdict(raw: Any) -> dict[str, Any]:
                 "target": target if target in TARGETS else seats.get(target, target),
                 "claim": str(a.get("claim", "")).strip(),
                 "form": a.get("form") if a.get("form") in FORMS else "statement",
-                "verdict": a.get("verdict") if a.get("verdict") in LABELS else "undeterminable",
+                "verdict": a.get("verdict") if a.get("verdict") in VERDICTS else "undeterminable",
                 "source_ids": [str(x) for x in a.get("source_ids") or []],
                 "reason": str(a.get("reason", "")).strip(),
             }
@@ -397,7 +465,7 @@ def parse_verdict(raw: Any) -> dict[str, Any]:
     rejected = [
         {
             "claim": str(r.get("claim", "")).strip(),
-            "verdict": r.get("verdict") if r.get("verdict") in LABELS else "undeterminable",
+            "verdict": r.get("verdict") if r.get("verdict") in VERDICTS else "undeterminable",
             "reason": str(r.get("reason", "")).strip(),
         }
         for r in (raw or {}).get("rejected_claims") or []
@@ -434,21 +502,24 @@ class AttributionJudge:
                 timeout=90,
             )
 
-    async def ask(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def system(self, key: str) -> str:
+        """역할별 system 프롬프트. 공용 기준(criteria)을 `{criteria}` 자리에 넣는다."""
+        return self.prompts[key]["system"].replace("{criteria}", self.prompts.get("criteria", ""))
+
+    async def _complete(self, key: str, schema: dict[str, Any], payload: dict[str, Any]) -> Any:
         self.calls += 1
         if self._ask is not None:
-            raw = await self._ask(payload)
             self.used_models[self.model] += 1
-            return parse_verdict(raw)
+            return await self._ask({**payload, "_prompt": key})
         body = {
             "model": self.model,
             "temperature": 0,
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {"name": "attributions", "strict": True, "schema": SCHEMA},
+                "json_schema": {"name": key, "strict": True, "schema": schema},
             },
             "messages": [
-                {"role": "system", "content": self.prompts["attribution"]["system"]},
+                {"role": "system", "content": self.system(key)},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
             ],
         }
@@ -456,7 +527,35 @@ class AttributionJudge:
         response.raise_for_status()
         data = response.json()
         self.used_models[data.get("model", self.model)] += 1
-        return parse_verdict(json.loads(data["choices"][0]["message"]["content"]))
+        return json.loads(data["choices"][0]["message"]["content"])
+
+    async def ask(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """추출 + 판정(attribution 프롬프트)."""
+        return parse_verdict(await self._complete("attribution", SCHEMA, payload))
+
+    async def relabel(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        """고정된 귀속 목록(payload["attributions"])만 다시 판정(relabel 프롬프트). 목록에 있는
+        id만 돌려주고 빠진 id는 undeterminable로 채운다."""
+        raw = await self._complete("relabel", RELABEL_SCHEMA, payload)
+        wanted = [a["attribution_id"] for a in payload["attributions"]]
+        got = {
+            str(x.get("attribution_id")): x
+            for x in (raw or {}).get("labels") or []
+            if isinstance(x, dict)
+        }
+        return [
+            {
+                "attribution_id": aid,
+                "verdict": (
+                    got[aid].get("verdict")
+                    if aid in got and got[aid].get("verdict") in VERDICTS
+                    else "undeterminable"
+                ),
+                "owner": got.get(aid, {}).get("owner", "unclear"),
+                "reason": str(got.get(aid, {}).get("reason", "")).strip(),
+            }
+            for aid in wanted
+        ]
 
     def info(self) -> dict[str, Any]:
         return {
@@ -484,6 +583,7 @@ async def judge_posts(
             continue
         payload = payload_for(transcript, index, names)
         verdict = await judge.ask(payload)
+        mark_self_target(verdict["attributions"], m["sender"])
         rows.append(
             {
                 "run": m["unit"][0],
@@ -498,7 +598,11 @@ async def judge_posts(
                 "sources_truncated": payload["sources_truncated"],
                 "draft": draft_checks(m["meta"]),
                 "attributions": verdict["attributions"],
-                "rejected_claims": verdict["rejected_claims"],
+                # 보내지 않은 거부 주장을 판정이 지어내면 버린다
+                "rejected_claims": verdict["rejected_claims"][
+                    : len(payload["draft_rejected_claims"])
+                ],
+                "rejected_unrecoverable": payload["rejected_unrecoverable"],
             }
         )
     return rows
@@ -507,16 +611,23 @@ async def judge_posts(
 # ---- 요약 ------------------------------------------------------------
 
 
+def real_attributions(row: dict[str, Any]) -> list[dict[str, Any]]:
+    """귀속으로 세는 것만(not_attribution 제외)."""
+    return [a for a in row["attributions"] if a["verdict"] != NOT_ATTRIBUTION]
+
+
 def _attr_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    attrs = [a for r in rows for a in r["attributions"]]
+    attrs = [a for r in rows for a in real_attributions(r)]
+    noise = sum(a["verdict"] == NOT_ATTRIBUTION for r in rows for a in r["attributions"])
     by = Counter(a["verdict"] for a in attrs)
     posts = len(rows)
-    with_attr = [r for r in rows if r["attributions"]]
+    with_attr = [r for r in rows if real_attributions(r)]
     errored = [r for r in rows if any(a["verdict"] in ERRORS for a in r["attributions"])]
-    hist = Counter(min(len(r["attributions"]), 3) for r in rows)
+    hist = Counter(min(len(real_attributions(r)), 3) for r in rows)
     return {
         "posts": posts,
         "attributions": len(attrs),
+        "extraction_noise": noise,  # 추출됐지만 귀속이 아니라고 판정된 구절(비율 분모·분자 밖)
         "per_attribution": {
             **{
                 label: {"n": by.get(label, 0), "rate": _rate(by.get(label, 0), len(attrs))}
@@ -564,7 +675,7 @@ def _attr_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """건수와 분모를 함께 낸다. 귀속별 비율(분모 귀속 수)과 게시물별 비율(분모 게시물 수·귀속 있는
     게시물 수)을 따로 두고, 과장과 근거 없음을 합치지 않는다. 오류 0은 효과 입증이 아니다."""
-    attrs = [a for r in rows for a in r["attributions"]]
+    attrs = [a for r in rows for a in real_attributions(r)]
     total = _attr_counts(rows)
     by_target = {}
     for target in ("candidate", "peer"):
@@ -635,8 +746,10 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """초안 검사 ↔ 최종 판정 연결(PR 10 meta가 있을 때. 없으면 quote_check가 absent로만 센다).
 
-    - 정상 귀속 오탐 재생성: 검사기가 거부한 초안 주장(quote_violation) 중 판정이 supported인 것.
-      분모는 판정된 거부 주장 수(undeterminable 제외 분모도 함께).
+    - 정상 귀속 오탐 재생성: 검사기가 거부한 초안 주장(quote_violation) 중 판정이 supported이거나
+      not_attribution(귀속이 아닌 구절을 귀속 오류로 거부)인 것 = 잘못된 거부. 분모는 거부 주장 수
+      (undeterminable 제외 분모도 함께). 거부된 초안 구절(`quote_span`)이 기록에 없는 거부는
+      주장만으로 판정하지 않고 `rejected_unrecoverable`로 센다.
     - 안전 문구 비율: quote_check=safe · guard=safe · stance_check=fallback 각각 / 게시물 수.
     - 검사 생략 비율: quote_check=skipped / quote_check 키가 있는 게시물 수.
     - 재생성 뒤 최종: 재생성·안전 문구로 끝난 게시물 중 최종 귀속에 오류가 남은 수.
@@ -653,8 +766,10 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     guard = Counter(r["draft"]["guard"] for r in usable)
     checked = posts - quote.get("absent", 0)
     rejected = [c for r in usable for c in r["rejected_claims"]]
+    unrecoverable = sum(r.get("rejected_unrecoverable", 0) for r in usable)
     rejected_by = Counter(c["verdict"] for c in rejected)
     determined = len(rejected) - rejected_by.get("undeterminable", 0)
+    wrong = rejected_by.get("supported", 0) + rejected_by.get(NOT_ATTRIBUTION, 0)
     regenerated = [r for r in usable if r["draft"]["quote_check"] in ("regenerated", "safe")]
     still = sum(any(a["verdict"] in ERRORS for a in r["attributions"]) for r in regenerated)
     return {
@@ -680,12 +795,15 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "false_positive_regeneration": {
             "rejected_claims": len(rejected),
+            "rejected_unrecoverable": unrecoverable,  # 거부 구절 기록이 없어 판정하지 않음
             "judged_supported": rejected_by.get("supported", 0),
+            "judged_not_attribution": rejected_by.get(NOT_ATTRIBUTION, 0),
             "judged_overstated": rejected_by.get("overstated", 0),
             "judged_unsupported": rejected_by.get("unsupported", 0),
             "undeterminable": rejected_by.get("undeterminable", 0),
-            "rate": _rate(rejected_by.get("supported", 0), len(rejected)),
-            "rate_of_determined": _rate(rejected_by.get("supported", 0), determined),
+            "wrong_rejections": wrong,
+            "rate": _rate(wrong, len(rejected)),
+            "rate_of_determined": _rate(wrong, determined),
         },
         "after_regeneration": {
             "posts": len(regenerated),
@@ -777,6 +895,7 @@ async def extract_items(
             "draft_rejected_claims": [],
         }
         verdict = await judge.ask(payload)
+        mark_self_target(verdict["attributions"], (item.get("post") or {}).get("speaker"))
         item["extracted_attributions"] = [
             {
                 "attribution_id": attribution_id(item["item_id"], n),
@@ -841,6 +960,67 @@ async def _extract(
     )
 
 
+async def relabel_items(
+    items: list[dict[str, Any]], judge: AttributionJudge
+) -> list[dict[str, Any]]:
+    """고정된 `extracted_attributions`만 다시 판정한다(재추출 없음, id 유지). 라벨 파일 행을
+    돌려준다. 화자가 자기 자신에 대해 한 말(target == speaker)은 정의상 귀속이 아니라 판정 호출
+    없이 not_attribution으로 두고, 물을 귀속이 없는 항목은 호출 없이 끝낸다."""
+    rows = []
+    for item in items:
+        attrs = item.get("extracted_attributions") or []
+        speaker = (item.get("post") or {}).get("speaker")
+        fixed = {
+            a["attribution_id"]: {
+                "attribution_id": a["attribution_id"],
+                "verdict": NOT_ATTRIBUTION,
+                "owner": "speaker",
+                "reason": SELF_TARGET_REASON,
+            }
+            for a in attrs
+            if self_target(a, speaker)
+        }
+        asked = [a for a in attrs if a["attribution_id"] not in fixed]
+        labels: list[dict[str, Any]] = []
+        if asked:
+            payload = {
+                "participants": {k: NAMES[k] for k in TARGETS},
+                "post": item["post"],
+                "sources": [
+                    {**m, "speaker_name": NAMES.get(m["sender"], m["sender"])}
+                    for m in item["sources"]
+                ],
+                "sources_truncated": bool(item.get("sources_truncated", False)),
+                "attributions": [
+                    {k: a[k] for k in ("attribution_id", "quote", "target", "claim")} for a in asked
+                ],
+            }
+            labels = await judge.relabel(payload)
+        judged = {x["attribution_id"]: x for x in labels} | fixed
+        rows.append(
+            {
+                "item_id": item["item_id"],
+                "labels": [judged[a["attribution_id"]] for a in attrs],  # 원래 순서 유지
+                "missed_attributions": [],
+            }
+        )
+    return rows
+
+
+async def _relabel(items_path: Path, out_path: Path | None, judge: AttributionJudge) -> None:
+    items = [json.loads(line) for line in items_path.read_text("utf-8").splitlines() if line]
+    rows = await relabel_items(items, judge)
+    out_path = out_path or items_path.with_name(
+        f"{items_path.stem}-judge-v{judge.prompts.get('version')}-labels.jsonl"
+    )
+    out_path.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in rows), "utf-8")
+    print(
+        json.dumps(
+            {"items": len(items), "labels": str(out_path), **judge.info()}, ensure_ascii=False
+        )
+    )
+
+
 async def _main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -853,6 +1033,9 @@ async def _main() -> None:
     e.add_argument(
         "--force", action="store_true", help="이미 추출된 항목도 다시 뽑는다(라벨과 어긋남)"
     )
+    r = sub.add_parser("relabel", help="보정 세트의 고정 귀속만 다시 판정(재추출 없음)")
+    r.add_argument("items", type=Path)
+    r.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
     sys.path[:0] = [str(HERE.parents[1] / "tests")]
     from e2e.client import env
@@ -871,8 +1054,10 @@ async def _main() -> None:
                     indent=2,
                 )
             )
-        else:
+        elif args.command == "extract":
             await _extract(args.items, args.labels, judge, args.force)
+        else:
+            await _relabel(args.items, args.out, judge)
     finally:
         await judge.aclose()
 

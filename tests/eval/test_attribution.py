@@ -36,6 +36,7 @@ def _events():
                         "quote_check": "regenerated",
                         "quote_violation": "candidate의 이 단계 발언·입장 기록에 없는 말을 "
                         "그 사람 것으로 돌림: 지원자가 가뭄에 동의했다",
+                        "quote_span": "지원자님이 가뭄에 동의하셨죠",
                         "stance_check": "pass",
                         "guard": "pass",
                     },
@@ -67,8 +68,19 @@ def test_transcript_from_events_keeps_order_and_only_past_sources():
     payload = at.payload_for(t, 2)
     assert payload["post"]["id"] == "a2" and payload["sources"][1]["speaker_name"] == "지원자"
     assert payload["draft_rejected_claims"] == [
-        {"target": "candidate", "claim": "지원자가 가뭄에 동의했다"}
+        {
+            "target": "candidate",
+            "claim": "지원자가 가뭄에 동의했다",
+            "span": "지원자님이 가뭄에 동의하셨죠",
+            "draft": None,
+        }
     ]
+    assert payload["rejected_unrecoverable"] == 0
+    # 거부 구절 기록이 없으면(PR 10 빌드) 주장만으로 판정하지 않고 복구 불가로 센다
+    blind = [dict(m, meta={k: v for k, v in m["meta"].items() if k != "quote_span"}) for m in t]
+    payload = at.payload_for(blind, 2)
+    assert payload["draft_rejected_claims"] == [] and payload["rejected_unrecoverable"] == 1
+    assert at.rejected_claim(blind[2]["meta"])["recoverable"] is False
 
 
 def test_transcript_from_session_and_markdown():
@@ -166,6 +178,7 @@ def test_markdown_round_trip_keeps_multiline_phase_and_all_flags():
                         "stance_check": "regenerated",
                         "quote_check": "regenerated",
                         "quote_violation": "candidate의 기록에 없는 말: 지원자가 가뭄에 동의했다",
+                        "quote_span": "지원자님이 가뭄에 동의하셨죠",
                         "model": "x",
                     },
                 }
@@ -181,9 +194,12 @@ def test_markdown_round_trip_keeps_multiline_phase_and_all_flags():
     assert back[0]["phase"] == "problem"  # 세션 id 접두가 아니어도 단계가 남는다
     assert at.draft_checks(back[0]["meta"]) == at.draft_checks(original[0]["meta"])
     assert at.draft_checks(back[2]["meta"]) == at.draft_checks(original[2]["meta"])
-    assert at.rejected_claim(back[2]["meta"]) == {
+    assert at.rejected_claim(back[2]["meta"]) == {  # 거부 구절도 md를 거쳐 남는다
         "target": "candidate",
         "claim": "지원자가 가뭄에 동의했다",
+        "span": "지원자님이 가뭄에 동의하셨죠",
+        "draft": None,
+        "recoverable": True,
     }
     # 예전 md의 여러 줄 발언(이어지는 줄)은 앞 발언에 붙는다
     legacy = "## 대화\n\n### problem\n\n- (단계 시작)\n  - 강한결: 첫 줄\n둘째 줄\n- (카드 x)\n"
@@ -224,7 +240,9 @@ def test_scene_counts_keys_by_unit_and_order_not_content():
             "unit": list(m["unit"]),
             "order": m["order"],
             "content": m["content"],
-            "attributions": [{"verdict": "overstated"}] if m["unit"][0] == 0 else [],
+            "attributions": [{"verdict": "overstated"}]
+            if m["unit"][0] == 0
+            else [{"verdict": "not_attribution"}],
         }
         for m in transcript
         if m["is_post"]
@@ -234,6 +252,7 @@ def test_scene_counts_keys_by_unit_and_order_not_content():
             "scenes": 2,
             "posts": 5,
             "attributions": 1,
+            "noise": 4,  # not_attribution은 귀속 수에 넣지 않고 따로 센다
             "overstated": 1,
             "unsupported": 0,
         }
@@ -280,7 +299,15 @@ async def test_extract_freezes_attributions_and_passes_truncation():
                     "form": "statement",
                     "verdict": "supported",
                     "source_ids": [],
-                }
+                },
+                {  # 화자(p1) 자신에 대한 말: 추출 경로에서도 코드 규칙으로 not_attribution
+                    "quote": "me",
+                    "target": "p1",
+                    "claim": "self",
+                    "form": "statement",
+                    "verdict": "supported",
+                    "source_ids": [],
+                },
             ],
             "rejected_claims": [],
         }
@@ -294,10 +321,18 @@ async def test_extract_freezes_attributions_and_passes_truncation():
     assert labels == [
         {
             "item_id": "i1",
-            "labels": [{"attribution_id": "i1#a1", "verdict": "supported", "reason": ""}],
+            "labels": [
+                {"attribution_id": "i1#a1", "verdict": "supported", "reason": ""},
+                {
+                    "attribution_id": "i1#a2",
+                    "verdict": "not_attribution",
+                    "reason": at.SELF_TARGET_REASON,
+                },
+            ],
             "missed_attributions": [],
         }
     ]
+    assert len(items[0]["extracted_attributions"]) == 2  # 추출 목록 자체는 그대로(id 유지)
     again = await at.extract_items(items, judge, force=True)
     assert judge.calls == 4 and items[1]["extracted_attributions"][0]["quote"] == "q"
     # 라벨 병합: 다시 추출한 항목은 새 행으로 바뀌고(옛 라벨 폐기), 건너뛴 항목 행은 남는다
@@ -331,7 +366,10 @@ def test_parse_verdict_normalizes_unknown_values():
                     "verdict": "supported",
                 },
             ],
-            "rejected_claims": [{"claim": "y", "verdict": "supported"}],
+            "rejected_claims": [
+                {"claim": "y", "verdict": "supported"},
+                {"claim": "z", "verdict": "not_attribution"},
+            ],
         }
     )
     assert got["attributions"] == [
@@ -345,11 +383,17 @@ def test_parse_verdict_normalizes_unknown_values():
             "reason": "",
         }
     ]
-    assert got["rejected_claims"] == [{"claim": "y", "verdict": "supported", "reason": ""}]
+    assert got["rejected_claims"] == [
+        {"claim": "y", "verdict": "supported", "reason": ""},
+        {"claim": "z", "verdict": "not_attribution", "reason": ""},  # 귀속 아닌 구절의 거부 = 오탐
+    ]
     assert at.rejected_claim({}) is None
     assert at.rejected_claim({"quote_violation": "형식이 다른 사유"}) == {
         "target": "",
         "claim": "형식이 다른 사유",
+        "span": None,
+        "draft": None,
+        "recoverable": False,
     }
 
 
@@ -432,6 +476,25 @@ async def test_judge_posts_and_summary_math():
     assert link["skip_rate"] == {"n": 0, "of": 2, "rate": 0.0}
     assert link["false_positive_regeneration"]["rejected_claims"] == 1
     assert link["false_positive_regeneration"]["rate_of_determined"] == 1.0
+    assert link["false_positive_regeneration"]["rejected_unrecoverable"] == 0
+    blind_rows = await at.judge_posts(
+        at.transcript_from_events(
+            [
+                dict(
+                    e,
+                    posts=[
+                        dict(p, meta={k: v for k, v in p["meta"].items() if k != "quote_span"})
+                        for p in e["posts"]
+                    ],
+                )
+                for e in events
+            ]
+        ),
+        judge,
+    )
+    fp = at.linkage(blind_rows)["false_positive_regeneration"]
+    # 판정이 거부 주장을 돌려줘도(가짜 판정기) 보내지 않았으니 버리고 복구 불가로만 센다
+    assert (fp["rejected_claims"], fp["rejected_unrecoverable"]) == (0, 1)
     assert link["after_regeneration"] == {"posts": 1, "final_still_error": 1, "final_clean": 0}
     assert link["linkage_unavailable_records"] == 0 and link["posts_with_linkage"] == 4
     # 복원 불가 게시물이 하나라도 있는 기록은 통째로 비율에서 뺀다(skipped만 남아 100%가 되지 않게)
@@ -457,6 +520,7 @@ async def test_judge_posts_and_summary_math():
             "scenes": 1,
             "posts": 2,
             "attributions": 1,
+            "noise": 0,
             "overstated": 1,
             "unsupported": 0,
         }
@@ -620,3 +684,149 @@ async def test_judge_files_keeps_same_named_files_apart(tmp_path):
     assert got["files"] == ["a/session.json", "b/session.json"] == list(got["per_file"])
     assert got["combined"]["posts"] == 2 and [r["source"] for r in got["rows"]] == got["files"]
     assert at.source_labels([paths[0], paths[0]]) == ["session.json", "session.json#2"]
+
+
+async def test_relabel_keeps_ids_and_not_attribution_is_noise_not_error():
+    items = [
+        {
+            "item_id": "i1",
+            "post": {"id": "p", "speaker": "p1", "phase": "problem", "order": 2, "content": "x"},
+            "sources": [
+                {"id": "s", "sender": "candidate", "phase": "problem", "order": 1, "content": "y"}
+            ],
+            "extracted_attributions": [
+                {"attribution_id": "i1#a1", "quote": "q1", "target": "candidate", "claim": "c1"},
+                {"attribution_id": "i1#a2", "quote": "q2", "target": "p1", "claim": "c2"},
+            ],
+        },
+        {"item_id": "i2", "post": {}, "sources": [], "extracted_attributions": []},
+    ]
+    seen = []
+
+    async def ask(payload):
+        seen.append((payload["_prompt"], [a["attribution_id"] for a in payload["attributions"]]))
+        return {
+            "labels": [{"attribution_id": "i1#a9", "verdict": "supported", "reason": "없는 id"}]
+        }
+
+    judge = at.AttributionJudge({"VC_JUDGE_MODEL": "t"}, ask=ask)
+    assert "[귀속의 정의]" in judge.system("relabel") and "{criteria}" not in judge.system(
+        "relabel"
+    )
+    rows = await at.relabel_items(items, judge)
+    # target이 화자 자신(i1#a2)은 호출 없이 not_attribution, 귀속 0개 항목(i2)은 호출 없음
+    assert seen == [("relabel", ["i1#a1"])] and judge.calls == 1
+    assert rows[0]["labels"] == [  # 목록의 id만·원래 순서, 빠진 id는 undeterminable
+        {"attribution_id": "i1#a1", "verdict": "undeterminable", "owner": "unclear", "reason": ""},
+        {
+            "attribution_id": "i1#a2",
+            "verdict": "not_attribution",
+            "owner": "speaker",
+            "reason": "화자 자신에 대한 말(target == speaker)",
+        },
+    ]
+    assert rows[1] == {"item_id": "i2", "labels": [], "missed_attributions": []}
+
+    def row(order, seat, verdicts):
+        return {
+            "run": 0,
+            "unit": [0, "s"],
+            "order": order,
+            "seat": seat,
+            "phase": "problem",
+            "content": "",
+            "sources_truncated": False,
+            "draft": at.draft_checks({}),
+            "rejected_claims": [],
+            "attributions": [
+                {
+                    "quote": "q",
+                    "target": "candidate",
+                    "claim": "",
+                    "form": "statement",
+                    "verdict": v,
+                    "source_ids": [],
+                    "reason": "",
+                }
+                for v in verdicts
+            ],
+        }
+
+    # 요약: not_attribution은 귀속 수·비율 밖이고 extraction_noise로 따로 센다
+    s = at.summarize(
+        [row(1, "p1", ["not_attribution", "overstated"]), row(2, "p3", ["not_attribution"])]
+    )
+    assert (s["attributions"], s["extraction_noise"]) == (1, 2)
+    assert s["per_attribution"]["overstated"] == {"n": 1, "rate": 1.0}
+    assert s["per_post"]["with_attribution"] == {"n": 1, "rate": 0.5}
+    assert s["frequency"]["histogram"] == {"0": 1, "1": 1, "2": 0, "3+": 0}
+    parsed = at.parse_verdict(
+        {
+            "attributions": [
+                {
+                    "quote": "q",
+                    "target": "p1",
+                    "claim": "",
+                    "form": "statement",
+                    "verdict": "not_attribution",
+                }
+            ]
+        }
+    )
+    assert parsed["attributions"][0]["verdict"] == "not_attribution"
+
+
+def test_agreement_normalizes_labeler_not_attribution_reason():
+    items = [
+        {
+            "item_id": "i1",
+            "split": "calib",
+            "type": "normal",
+            "extracted_attributions": [
+                {"attribution_id": "i1#a1", "target": "p1", "claim": "x"},
+                {"attribution_id": "i1#a2", "target": "candidate", "claim": "y"},
+            ],
+            "gold_attributions": [],
+        }
+    ]
+    human = [
+        {
+            "item_id": "i1",
+            "labels": [
+                {
+                    "attribution_id": "i1#a1",
+                    "verdict": "supported",
+                    "reason": "귀속 아님: 자기 의견",
+                },
+                {"attribution_id": "i1#a2", "verdict": "supported", "reason": "원문과 같다"},
+            ],
+        }
+    ]
+    judge = [
+        {
+            "item_id": "i1",
+            "labels": [
+                {"attribution_id": "i1#a1", "verdict": "not_attribution", "reason": ""},
+                {"attribution_id": "i1#a2", "verdict": "supported", "reason": ""},
+            ],
+        }
+    ]
+    got = ca.report(items, {"A": human, "judge": judge}, None)
+    assert got["pairs"]["A~judge"]["agree"] == 2 and got["pairs"]["A~judge"]["kappa"] == 1.0
+    assert got["distribution"]["A"] == {"not_attribution": 1, "supported": 1}
+    assert got["pairs_without_not_attribution_class"]["A~judge"]["agree"] == 2
+    recall = got["extraction"]["recall_vs_labeler"]["A"]  # "귀속 아님"은 추출 성공이 아니라 noise
+    assert (recall["extracted_in_reviewed"], recall["noise_in_reviewed"]) == (1, 1)
+    assert recall["recall"] == 1.0
+    old_judge = [  # v1 판정은 그런 구절을 unsupported로 냈다
+        {
+            "item_id": "i1",
+            "labels": [
+                {"attribution_id": "i1#a1", "verdict": "unsupported", "reason": ""},
+                {"attribution_id": "i1#a2", "verdict": "supported", "reason": ""},
+            ],
+        }
+    ]
+    got = ca.report(items, {"A": human, "judge": old_judge}, None)
+    assert got["pairs"]["A~judge"]["matrix"]["not_attribution"]["unsupported"] == 1
+    assert got["pairs_without_not_attribution_class"]["A~judge"]["agree"] == 1
