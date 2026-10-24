@@ -1,6 +1,7 @@
 """C2 AI 합의 채우기(내부 POST /slots/fill): 칸 확정과 공지가 한 트랜잭션, 합의 전 409."""
 
 import uuid
+from datetime import datetime, timedelta
 
 from app.agent.runner import Stimulus
 from app.models import AgentRun, Message
@@ -22,9 +23,18 @@ async def _fill(api, sess, option_id, run_id, seat="p3"):
     )
 
 
+async def _deliver_problem_cards(api, sess):
+    """문제 상황 카드 두 장을 담당 전원이 전달한 상태(전달 전 AI 채움은 409 `card_pending`, C3)."""
+    await api.post_ai(
+        sess, "p1", "침수가 핵심이에요", card_ids=["flexibility_majority", "listening_pressure"]
+    )
+    await api.post_ai(sess, "p3", "저도 침수요", card_ids=["flexibility_majority"])
+
+
 async def test_fill_in_same_run_after_candidate_agrees(api, ctx, runner, classifier):
     sess = await api.new_session()
     await to_phase(api, sess, "problem")
+    await _deliver_problem_cards(api, sess)
     option_id = await api.ai_support(sess, "p1", "problem", *P2)
     await api.ai_support(sess, "p3", "problem", *P2)
     classifier.rules["저도 침수 문제가 맞다고 봐요"] = high("agree", P2[0])
@@ -77,6 +87,7 @@ async def test_fill_accepts_ai_support_added_after_candidate_agreed(api, classif
     그래프 몫이다(B2)."""
     sess = await api.new_session()
     await to_phase(api, sess, "problem")
+    await _deliver_problem_cards(api, sess)
     option_id = await api.ai_support(sess, "p1", "problem", *P2)
     classifier.rules["침수 피해가 더 급해요"] = high("agree", P2[0])
     await api.say(sess, "침수 피해가 더 급해요")
@@ -127,6 +138,7 @@ async def test_fill_needs_latest_candidate_message_to_agree(api, ctx, classifier
     """지지 3/4여도 지원자의 그 단계 최신 발언이 그 안의 명시적 동의가 아니면 합의가 아니다(B2)."""
     sess = await api.new_session()
     await to_phase(api, sess, "problem")
+    await _deliver_problem_cards(api, sess)
     option_id = await api.ai_support(sess, "p1", "problem", *P2)
     await api.ai_support(sess, "p3", "problem", *P2)
     classifier.rules["침수가 좋아요"] = high("agree", P2[0])
@@ -245,3 +257,57 @@ async def test_low_confidence_withhold_withdraws_support_then_timeout_follows_ma
         "timeout",
         "most_support",
     )
+
+
+async def test_fill_is_rejected_while_a_phase_card_is_pending_and_timeout_still_fills(
+    api, ctx, clock, classifier
+):
+    """카드 전달 전에는 합의가 있어도 AI 채움은 409 `card_pending`이고(C3), 담당이 전달하면 채울 수
+    있다. 카드가 끝내 전달되지 않아도 시간 초과 채우기는 그대로 칸을 채운다."""
+    from app.scheduler import tick
+
+    sess = await api.new_session(minutes=60)
+    await to_phase(api, sess, "problem")
+    option_id = await api.ai_support(sess, "p1", "problem", *P2)
+    await api.ai_support(sess, "p3", "problem", *P2)
+    classifier.rules["저도 침수가 맞다고 봐요"] = high("agree", P2[0])
+    await api.say(sess, "저도 침수가 맞다고 봐요")
+    state = await _debate_state(api, sess)
+    assert state["consensus_option_id"] == option_id
+    assert state["pending_cards"] == ["flexibility_majority", "listening_pressure"]
+
+    r = await _fill(api, sess, option_id, uuid.uuid4())
+    assert r.status_code == 409 and r.json()["error"]["code"] == "card_pending"
+    slots = (await api.internal.get(f"/internal/sessions/{sess.id}/slots")).json()
+    assert next(slot for slot in slots if slot["phase"] == "problem")["status"] == "empty"
+
+    # 공동 담당 카드는 전원이 전달할 때까지 남는다
+    await api.post_ai(
+        sess, "p1", "침수가 핵심이에요", card_ids=["flexibility_majority", "listening_pressure"]
+    )
+    assert (await _debate_state(api, sess))["pending_cards"] == ["flexibility_majority"]
+    assert (await _fill(api, sess, option_id, uuid.uuid4())).status_code == 409
+
+    # 시간 초과는 카드와 상관없이 칸을 채운다(지원자 지지 안)
+    session = (await api.internal.get(f"/internal/sessions/{sess.id}")).json()
+    clock.set(datetime.fromisoformat(session["phase_deadline_at"]) + timedelta(seconds=1))
+    await tick(ctx)
+    slots = (await api.internal.get(f"/internal/sessions/{sess.id}/slots")).json()
+    problem = next(slot for slot in slots if slot["phase"] == "problem")
+    assert (problem["resolution"], problem["timeout_rule"]) == ("timeout", "candidate_support")
+
+
+async def test_fill_is_allowed_once_the_phase_cards_are_delivered(api, classifier):
+    sess = await api.new_session(minutes=60)
+    await to_phase(api, sess, "problem")
+    option_id = await api.ai_support(sess, "p1", "problem", *P2)
+    await api.ai_support(sess, "p3", "problem", *P2)
+    await api.post_ai(
+        sess, "p1", "침수가 핵심이에요", card_ids=["flexibility_majority", "listening_pressure"]
+    )
+    await api.post_ai(sess, "p3", "저도 침수요", card_ids=["flexibility_majority"])
+    classifier.rules["네 침수로 가요"] = high("agree", P2[0])
+    await api.say(sess, "네 침수로 가요")
+    assert (await _debate_state(api, sess))["pending_cards"] == []
+    r = await _fill(api, sess, option_id, uuid.uuid4())
+    assert r.status_code == 200, r.text

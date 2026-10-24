@@ -817,6 +817,10 @@ async def fill_slot(
     result, options = await judge_phase(db, session, position.scenario, option.phase)
     if result["consensus_option_id"] != option.id:
         raise conflict("no_consensus", "option is not the consensus")
+    if await pending_cards(db, session, position.scenario, option.phase):
+        # 카드 전달 전에는 AI 동료가 칸을 채우지 않는다(C3). 지원자 확정·시간 초과는 이 검사를
+        # 거치지 않는다
+        raise conflict("card_pending", "a card of this phase is not delivered yet")
     seat = body["seat"]
     slot = await confirm(
         db,
@@ -851,6 +855,14 @@ async def fill_slot(
 
 
 # ---- DebateState ---------------------------------------------------------------------------------
+
+
+async def pending_cards(
+    db: AsyncSession, session: Session, scenario: dict[str, Any], phase: str
+) -> list[str]:
+    """그 단계에서 담당 전원이 아직 전달하지 않은 시각 카드(`sc.pending_cards`, C3)."""
+    rows = (await db.scalars(select(SessionCard).where(SessionCard.session_id == session.id))).all()
+    return sc.pending_cards(scenario, phase, {c.card_id: list(c.delivered_seats) for c in rows})
 
 
 async def debate_state(
@@ -941,6 +953,21 @@ async def debate_state(
             )
         ).all()
     )
+    # AI 자리별 이 단계 토론방 발언 수(전체 기록. 진행 매니저의 카드 이끎 차례, 대화 창과 무관)
+    phase_counts = dict(
+        (
+            await db.execute(
+                select(Message.sender, func.count())
+                .where(
+                    Message.session_id == session.id,
+                    Message.phase == phase,
+                    Message.channel == "room",
+                    Message.sender.in_(SEATS),
+                )
+                .group_by(Message.sender)
+            )
+        ).all()
+    )
     # AI 자리별 이 단계 첫 지지 입장 기록 시각(입장을 밝힌 뒤 반응을 세는 기준)
     first_stated = dict(
         (
@@ -1008,6 +1035,12 @@ async def debate_state(
             }
             for c in cards
         ],
+        # 이 단계에서 전달이 끝나지 않은 시각 카드(진행 매니저의 합의 채움 보류, C3)
+        "pending_cards": sc.pending_cards(
+            scenario, phase, {c.card_id: list(c.delivered_seats) for c in cards}
+        )
+        if debate_phase
+        else [],
         "cost_left": budget.cost_left(session),
         "candidate_intents": [
             {
@@ -1026,6 +1059,9 @@ async def debate_state(
         ],
         "first_spoke_at": {seat: iso(first_spoke.get(seat)) for seat in SEATS},
         "first_stated_at": {seat: iso(first_stated.get(seat)) for seat in SEATS},
+        "phase_message_counts": {seat: int(phase_counts.get(seat) or 0) for seat in SEATS},
+        # 스케줄러가 카드 시각을 재는 것과 같은 단계 시작 기준 경과 초(카드 이끎 허용 구간 판정)
+        "phase_elapsed_seconds": max(int((now - session.phase_started_at).total_seconds()), 0),
         "open_mentions": open_mentions,
     }
 

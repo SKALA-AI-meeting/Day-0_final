@@ -160,3 +160,21 @@ async def test_card_due_retries_are_spaced_and_capped(api, ctx, clock, runner):
     await scheduler.tick(ctx)  # 3회를 넘으면 더 넣지 않는다
     await ctx.mailboxes.drain()
     assert runner.types().count("card_due") == 3
+
+
+async def test_candidate_confirm_before_card_time_preempts_the_card(api, ctx, clock, runner):
+    """지원자가 카드 예정 시각 전에 칸을 직접 확정하면 확정은 막히지 않고, 그 카드는 이후 발동하지
+    않으며 사실 지표에 선결정(`preempted_cards`)으로 남는다(C3·A3)."""
+    sess = await api.new_session(minutes=60)
+    clock.advance(minutes=1)
+    r = await api.confirm(sess, "keyword", value="물", option_key="water")
+    assert r.status_code == 200, r.text
+    clock.advance(minutes=2, seconds=30)  # 키워드 카드 예정 시각(3분)을 지남
+    await scheduler.tick(ctx)
+    await ctx.mailboxes.drain()
+    assert [s.card_id for _, s, _ in runner.calls if s.type == "card_due"] == []
+    assert await _card(ctx, sess, "persuasion_keyword") is None
+    facts = (await api.internal.get(f"/internal/sessions/{sess.id}/facts")).json()
+    keyword = next(d for d in facts["decisions"] if d["phase"] == "keyword")
+    assert keyword["path"] == "candidate_confirm"
+    assert keyword["preempted_cards"] == ["persuasion_keyword"]

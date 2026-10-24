@@ -86,6 +86,7 @@ async def test_card_speakers_leave_named_seat_for_the_next_run(harness):
 async def test_procedural_message_gets_at_least_one_responder(harness):
     """부른 자리 없는 진행 발언에도 한 명이 답한다(턴 LLM이 0명을 골라도)."""
     h = harness("keyword", turn=['{"speakers": [], "reason": "혼잣말"}'])
+    h.server.deliver("persuasion_keyword", "p3")  # 카드 뒤(카드 전이면 이끎 차례 담당이 답한다, C3)
     h.server.messages.append(
         {
             "id": "ai-1",

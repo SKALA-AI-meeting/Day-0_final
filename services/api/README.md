@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 304개(live 3개 포함, `make test`는 live를 뺀다).
+총 314개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -183,7 +183,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_cards.py</code> (17)</summary>
+<details><summary><code>tests/agent/test_cards.py</code> (24)</summary>
 
 - `test_c5_lead_lock_joint_delivery_and_observations`
 - `test_c5_api_lock_is_used`
@@ -201,6 +201,13 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_pressure_counts_from_the_card_message_up_to_three`
 - `test_pressure_count_is_not_limited_to_the_recent_window`
 - `test_critic_count_survives_restart`
+- `test_manager_leads_card_seed_bridge_execute_in_order`
+- `test_steering_skips_cards_without_steer_data_and_quiet`
+- `test_ai_fill_is_held_until_the_phase_cards_are_delivered`
+- `test_partially_delivered_joint_card_still_holds_fill`
+- `test_steering_counts_full_phase_posts_not_the_recent_window`
+- `test_steering_stops_at_the_card_time_even_if_delivery_is_pending`
+- `test_steering_follows_the_current_assignee_with_its_own_stage`
 
 </details>
 
@@ -381,7 +388,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_c02_consensus_fill.py</code> (9)</summary>
+<details><summary><code>tests/test_c02_consensus_fill.py</code> (11)</summary>
 
 - `test_fill_in_same_run_after_candidate_agrees`
 - `test_fill_accepts_ai_support_added_after_candidate_agreed`
@@ -392,6 +399,8 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_withhold_withdraws_support_and_is_not_opposition`
 - `test_withhold_without_target_withdraws_current_support`
 - `test_low_confidence_withhold_withdraws_support_then_timeout_follows_majority`
+- `test_fill_is_rejected_while_a_phase_card_is_pending_and_timeout_still_fills`
+- `test_fill_is_allowed_once_the_phase_cards_are_delivered`
 
 </details>
 
@@ -542,7 +551,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_scheduler.py</code> (6)</summary>
+<details><summary><code>tests/test_scheduler.py</code> (7)</summary>
 
 - `test_time_warning_once_before_deadline`
 - `test_card_due_reenqueued_with_new_run_until_delivered`
@@ -550,6 +559,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_problem_cards_lock_lead_and_joint_message_delivers_both`
 - `test_recover_fills_missed_deadline_and_republishes`
 - `test_card_due_retries_are_spaced_and_capped`
+- `test_candidate_confirm_before_card_time_preempts_the_card`
 
 </details>
 

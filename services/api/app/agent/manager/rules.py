@@ -327,6 +327,115 @@ def first_delivery(card_id: str, ds: dict[str, Any]) -> bool:
     return not ((card_progress(ds).get(card_id) or {}).get("delivered"))
 
 
+def required_count(card: dict[str, Any]) -> int:
+    """delivered가 되는 담당 수(joint면 전원, 아니면 1명, 담당 없으면 0)."""
+    actor = card.get("actor")
+    if not actor:
+        return 0
+    return len(actor) if card.get("actor_mode") == "joint" and isinstance(actor, list) else 1
+
+
+def pending_cards(phase: str, ds: dict[str, Any], catalog: Catalog) -> list[str]:
+    """그 단계에서 담당 동료의 전달이 아직 끝나지 않은 카드(C3 "카드 전달 전 합의 채움 보류").
+
+    api가 DebateState `pending_cards`로 주면 그 값을 쓰고, 없으면(이전 api) 카탈로그와
+    `card_progress`로 같은 규칙을 계산한다: 시각 카드(`offset_min`)이고 담당이 있는데 담당 전원이
+    전달하지 않은 카드. 카드 시각 전이든 뒤든 전달될 때까지 보류 대상이고, 단계가 끝나면(시간
+    초과·지원자 확정) 자연히 풀린다.
+    """
+    if "pending_cards" in ds:
+        return [str(c) for c in ds.get("pending_cards") or []]
+    progress = card_progress(ds)
+    found: list[str] = []
+    for card in catalog.cards_in(phase):
+        need = required_count(card)
+        if card.get("offset_min") is None or need == 0:
+            continue
+        delivered = (progress.get(card["card_id"]) or {}).get("delivered") or []
+        if len(delivered) < need:
+            found.append(card["card_id"])
+    return found
+
+
+STEER_STAGES = ("seed", "bridge")
+
+
+def phase_posts(seat: str, ds: dict[str, Any], transcript: list[dict[str, Any]]) -> int:
+    """이 자리가 이 단계에서 게시한 토론방 발언 수. api가 전체 기록으로 센 DebateState
+    `phase_message_counts`를 쓰고, 없으면(이전 api) 대화 창에서 센다."""
+    counts = ds.get("phase_message_counts")
+    if isinstance(counts, dict):
+        return int(counts.get(seat) or 0)
+    return sum(1 for m in transcript if m.get("sender") == seat)
+
+
+def steer_window_open(card: dict[str, Any], ds: dict[str, Any]) -> bool:
+    """카드 이끎 허용 구간(단계 시작 ~ 카드 예정 시각) 안인지. 스케줄러와 같은 기준(단계 시작 +
+    `offset_min`)을 DebateState `phase_elapsed_seconds`로 잰다. 값이 없으면(이전 api) 이끌지
+    않는다. 예정 시각이 지난 카드는 전달 재시도 중이어도 더 이끌지 않는다."""
+    elapsed = ds.get("phase_elapsed_seconds")
+    offset = card.get("offset_min")
+    if not isinstance(elapsed, int | float) or offset is None:
+        return False
+    return float(elapsed) < float(offset) * 60
+
+
+def steer_stage(
+    seat: str,
+    phase: str,
+    ds: dict[str, Any],
+    catalog: Catalog,
+    transcript: list[dict[str, Any]],
+) -> tuple[str, list[str]] | None:
+    """카드 전 이 자리의 이끎 차례(C3 복선 → 연결 → 실행 중 앞 둘)와 보일 내용(`steer`).
+
+    대상은 그 단계에서 허용 구간(`steer_window_open`) 안이고 아직 시작되지 않은(첫 카드 발언
+    없음) 카드 중 `steer` 데이터가 있고 이 자리가 **지금** 담당(`card_actors`, 지원자 지지에 따라
+    바뀔 수 있음)인 카드다. 차례는 이 자리의 이 단계 전체 발언 수(`phase_posts`)로 정한다: 0번 →
+    `seed`(복선), 1번 → `bridge`(연결), 그 뒤는 이끌지 않는다(실행은 `card_due`의 카드 차례).
+    담당이 바뀌면 새 담당은 자기 발언 수의 차례부터 간다(카드마다 차례를 저장하지 않는다).
+    카드 시각·담당은 바꾸지 않고 말은 동료가 만든다.
+    """
+    spoken = phase_posts(seat, ds, transcript)
+    if spoken >= len(STEER_STAGES):
+        return None
+    stage = STEER_STAGES[spoken]
+    lines: list[str] = []
+    for card in catalog.cards_in(phase):
+        steer = card.get("steer") or {}
+        if not steer.get(stage) or not first_delivery(card["card_id"], ds):
+            continue
+        if not steer_window_open(card, ds):
+            continue
+        if seat in card_actors(card, ds, catalog):
+            lines.append(str(steer[stage]))
+    return (stage, lines) if lines else None
+
+
+def steer_responder(
+    phase: str,
+    ds: dict[str, Any],
+    catalog: Catalog,
+    transcript: list[dict[str, Any]],
+    skip: set[str],
+) -> str | None:
+    """지원자 메시지에 답할 자리가 규칙으로 정해지지 않았을 때, 카드 전 이끎 차례가 남은 카드
+    담당(C3). 카드 순서대로 담당 순서의 첫 자리이고 소극형·연속 3회 자리·`skip`은 고르지 않는다.
+    """
+    blocked = set(skip) | {catalog.seat_of("quiet"), recent_streak_seat(transcript)}
+    for card in catalog.cards_in(phase):
+        if not card.get("steer") or not first_delivery(card["card_id"], ds):
+            continue
+        if not steer_window_open(card, ds):
+            continue
+        for seat in card_actors(card, ds, catalog):
+            if seat in blocked:
+                continue
+            if steer_stage(seat, phase, ds, catalog, transcript):
+                return seat
+    return None
+
+
 def preempt_bans(
     seat: str, phase: str, ds: dict[str, Any], catalog: Catalog, brief: list[CardSpeaker]
 ) -> list[str]:
@@ -762,12 +871,17 @@ def rule_decision(
         "queued": [],
         "dropped_seats": [],
         "reason": "",
+        "fill_held": [],
     }
-    # 1. 이미 합의가 있으면 채우기만(화자 0명)
+    # 1. 이미 합의가 있으면 채우기만(화자 0명). 그 단계 카드가 아직 전달되지 않았으면 보류하고
+    #    화자를 정한다(C3. 지원자 확정은 api가 막지 않고, 시간 초과는 api가 따로 채운다)
     consensus = ds.get("consensus_option_id")
     if consensus and slot_empty(ds) and phase in DEBATE_PHASES:
+        pending = pending_cards(phase, ds, catalog)
         seat = fill_seat(ds, consensus, catalog)
-        if seat:
+        if pending:
+            decision["fill_held"] = pending
+        elif seat:
             decision["fill"] = {"option_id": consensus, "seat": seat}
             decision["reason"] = "합의 성립(지원자 포함 3/4), 채우기만"
             return decision

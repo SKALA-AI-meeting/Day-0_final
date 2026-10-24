@@ -58,6 +58,7 @@ class FakeServer:
         self.cost_left = 2.0
         self.candidate_name = "김지원"
         self.remaining = 600
+        self.elapsed = 0  # 단계 시작 기준 경과 초(카드 이끎 허용 구간: 카드 offset_min 전)
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.fail_tools: set[str] = set()
         self.materials = {
@@ -201,6 +202,7 @@ class FakeServer:
             "last_room_message_t_min": 1.0,
             "confirmed": [s for s in self.slots.values() if s["status"] == "confirmed"],
             "card_progress": [self.card_row(c) for c in self.cards.values()],
+            "pending_cards": self.pending_cards(),
             "cost_left": self.cost_left,
             "candidate_intents": [
                 {"message_id": m["id"], "created_at": at, **self.intents[m["id"]]}
@@ -212,6 +214,11 @@ class FakeServer:
                 for seat in SEATS
             },
             "first_stated_at": {seat: self.stated.get(seat) for seat in SEATS},
+            # api처럼 그 단계 전체 기록에서 센 자리별 발언 수와 단계 시작 기준 경과 초
+            "phase_message_counts": {
+                seat: sum(1 for m, _ in self.timed() if m["sender"] == seat) for seat in SEATS
+            },
+            "phase_elapsed_seconds": self.elapsed,
             # api처럼 그 단계 전체 기록(대화 창 30개와 무관)에서 계산한 열린 지명
             "open_mentions": self.open_mentions(),
             "seats": [{"seat": "candidate", "display_name": self.candidate_name}]
@@ -230,6 +237,26 @@ class FakeServer:
             if m.get("phase") == self.phase
         ]
         return rules.open_mentions(rows, self.intents, self.catalog)
+
+    def pending_cards(self) -> list[str]:
+        """api처럼 이 단계에서 담당 전원이 전달하지 않은 시각 카드(C3)."""
+        from app.agent.manager import rules
+
+        found = []
+        for card in self.catalog.cards_in(self.phase):
+            need = rules.required_count(card)
+            if card.get("offset_min") is None or need == 0:
+                continue
+            if len((self.cards.get(card["card_id"]) or {}).get("delivered") or []) < need:
+                found.append(card["card_id"])
+        return found
+
+    def deliver(self, card_id: str, *seats: str) -> None:
+        """테스트 준비: 카드를 담당 자리들이 이미 전달한 상태로 둔다."""
+        row = self.cards.setdefault(
+            card_id, {"card_id": card_id, "locked_option_id": None, "delivered": []}
+        )
+        row["delivered"] = list(dict.fromkeys([*row["delivered"], *seats]))
 
     def card_row(self, card: dict[str, Any]) -> dict[str, Any]:
         """api처럼 카드 첫 발언과 그 뒤 AI 자리별 발언 수(전체 기록 기준)를 붙인다."""
@@ -380,6 +407,8 @@ class FakeServer:
             return fail("conflict", "slot_confirmed")
         if self.consensus() != option_id:
             return fail("conflict", "no_consensus")
+        if self.pending_cards():
+            return fail("conflict", "card_pending")
         message = {
             "id": str(uuid.uuid4()),
             "sender": seat,

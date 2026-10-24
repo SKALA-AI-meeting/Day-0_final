@@ -70,7 +70,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 | 사건 | 처리 |
 |---|---|
 | 지원자 확정 | `POST /sessions/{id}/slots/{phase}/confirm` → api가 칸을 `confirmed`(filled_by=candidate, resolution=consensus, 그 시점 지지 현황 스냅샷)로 바꾸고 다음 단계로 전환. 키워드는 버튼의 후보 키, 문제·해결책은 옵션 키·정규화 라벨 일치로만 안에 연결(LLM 없음) |
-| AI 합의 채우기 | 진행 매니저 `fill`의 `announce_fill` 분기 → `fill_slot{option_id, seat, content, run_id}`. api가 한 트랜잭션에서 `consensus.judge`(지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언, 대기 시간 없음)를 다시 검사하고 아니면 409 `no_consensus`(AI는 합의 전에 칸을 채울 수 없다, 아무것도 저장 안 함). 성공하면 칸 확정·공지 메시지(seq 5)·전환이 함께 커밋되므로 공지가 빠진 확정은 없다. 같은 run_id 재호출은 기존 결과 |
+| AI 합의 채우기 | 진행 매니저 `fill`의 `announce_fill` 분기 → `fill_slot{option_id, seat, content, run_id}`. api가 한 트랜잭션에서 `consensus.judge`(지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언, 대기 시간 없음)를 다시 검사하고 아니면 409 `no_consensus`(AI는 합의 전에 칸을 채울 수 없다, 아무것도 저장 안 함), 그 단계 카드가 아직 전달되지 않았으면 409 `card_pending`(결정 C3). 성공하면 칸 확정·공지 메시지(seq 5)·전환이 함께 커밋되므로 공지가 빠진 확정은 없다. 같은 run_id 재호출은 기존 결과 |
 | 단계 마감 | 스케줄러가 `now ≥ phase_deadline_at`이고 칸이 empty이면 **api `services/timeout.py`가 직접**: 시간 초과 선택 규칙으로 안을 고르고 적용된 규칙의 시나리오 고정 문장을 시스템 메시지로 저장, 칸 `confirmed{resolution: timeout, filled_by: system, timeout_rule}` → 전환. 그래프·LLM·MCP를 거치지 않는다 |
 | 전환 공통 | api `SessionService.advance_phase`: `phase`·`phase_started_at`·`phase_deadline_at` 갱신, `generation += 1`, 시스템 안내 메시지("지금 할 일"과 남은 시간, 시나리오 고정 문구) 저장, WS `slot.confirmed`·`phase.changed`·`timer`. keyword 확정이면 그 키워드 자료를 열고 WS `materials.opened`. proposal 시작이면 기획안 초안의 빈 칸(키워드·문제 상황·해결책)을 확정 칸 값으로 채운다. 이어서 `phase_started`를 메일박스에 넣기만 한다(기획안 단계 `phase_started` 실행이 `honesty_credit` 관찰을 남긴다) |
 | 마감 임박 | 단계 마감 `L/30` 전(60분 기준 2분, 압축 비율)에 시스템 안내 메시지 1건. 시점은 시나리오 데이터 |
@@ -116,7 +116,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 
 ### 합의 채우기 (그래프 `fill` → `fill_slot`, 한 트랜잭션)
 
-그래프 `fill` 노드의 `announce_fill` 분기가 지지자 중 우선순위 자리([product/scenario.md](../product/scenario.md))와 시나리오 고정 문장("그럼 X로 정리할게요.", 이름만 치환)을 정해 `fill_slot{session_id, option_id, seat, content, run_id}`를 한 번 부른다. 이 분기는 일반 발언 루프(`respond → guard → stance_check → apply(post_message)`)를 거치지 않고 LLM도 부르지 않는다. api는 한 트랜잭션으로: `consensus.judge` 재검사(이 option_id가 합의 안이 아니면 409 `no_consensus`) → 칸 confirmed(`resolution: consensus`, `filled_by` = seat) → 공지 메시지 저장(sender = seat, run_id, seq 5, `meta.kind = "consensus_fill"`) → `advance_phase`(generation +1). 커밋 뒤 WS로 `message.new`(공지)와 `slot.confirmed`를 보내고 이어서 전환 공통 프레임(`phase.changed`·`timer`, keyword면 `materials.opened`)을 보낸다. 409면 칸·공지·단계 어느 것도 저장하지 않는다. 칸 확정과 공지가 함께 커밋되므로 "칸은 확정됐는데 공지가 없는" 상태가 생기지 않고, 재실행이 낡은 자극으로 `skipped`돼도 보충할 공지가 남지 않는다.
+그래프 `fill` 노드의 `announce_fill` 분기가 지지자 중 우선순위 자리([product/scenario.md](../product/scenario.md))와 시나리오 고정 문장("그럼 X로 정리할게요.", 이름만 치환)을 정해 `fill_slot{session_id, option_id, seat, content, run_id}`를 한 번 부른다. 이 분기는 일반 발언 루프(`respond → guard → stance_check → apply(post_message)`)를 거치지 않고 LLM도 부르지 않는다. api는 한 트랜잭션으로: `consensus.judge` 재검사(이 option_id가 합의 안이 아니면 409 `no_consensus`, 그 단계 카드가 전달되지 않았으면 409 `card_pending`) → 칸 confirmed(`resolution: consensus`, `filled_by` = seat) → 공지 메시지 저장(sender = seat, run_id, seq 5, `meta.kind = "consensus_fill"`) → `advance_phase`(generation +1). 커밋 뒤 WS로 `message.new`(공지)와 `slot.confirmed`를 보내고 이어서 전환 공통 프레임(`phase.changed`·`timer`, keyword면 `materials.opened`)을 보낸다. 409면 칸·공지·단계 어느 것도 저장하지 않는다. 칸 확정과 공지가 함께 커밋되므로 "칸은 확정됐는데 공지가 없는" 상태가 생기지 않고, 재실행이 낡은 자극으로 `skipped`돼도 보충할 공지가 남지 않는다.
 
 ## 그래프 자극 (stimulus)
 

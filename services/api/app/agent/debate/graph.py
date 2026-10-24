@@ -216,13 +216,25 @@ def _card_info(
     state: DebateState, deps: DebateDeps, seat: str, card_ids: list[str]
 ) -> dict[str, Any] | None:
     """카드 차례의 사실과 설계된 장면 목적(cards.yaml `purpose`, 데이터). 카드 시각·담당은 바꾸지
-    않는다. 압박 카드는 첫 발언 뒤에도 최대 MAX_PRESSURE회까지 `followup_purpose`로 이어진다."""
+    않는다. 압박 카드는 첫 발언 뒤에도 최대 MAX_PRESSURE회까지 `followup_purpose`로 이어진다.
+    카드 전에는 이끎 차례(`stage`: 복선 `seed` → 연결 `bridge`, cards.yaml `steer`)가 보인다(C3)."""
     purposes = [
         str((deps.catalog.card(c) or {}).get("purpose") or "")
         for c in card_ids
         if (deps.catalog.card(c) or {}).get("purpose")
     ]
-    info: dict[str, Any] = {"turn": bool(card_ids), "purposes": purposes, "pressure": None}
+    info: dict[str, Any] = {
+        "turn": bool(card_ids),
+        "stage": "execute" if card_ids else None,
+        "purposes": purposes,
+        "pressure": None,
+    }
+    if not card_ids:
+        steer = rules.steer_stage(
+            seat, state["phase"], state["ds"], deps.catalog, state["transcript"]
+        )
+        if steer:
+            info["stage"], info["purposes"] = steer[0], list(steer[1])
     if state["phase"] == "problem" and seat == deps.catalog.seat_of("stubborn"):
         card = rules.card_progress(state["ds"]).get("listening_pressure") or {}
         count = rules.pressure_count(card, seat)
@@ -233,7 +245,7 @@ def _card_info(
                 followup = (deps.catalog.card("listening_pressure") or {}).get("followup_purpose")
                 if followup:
                     info["purposes"].append(str(followup))
-    if not info["turn"] and not info["purposes"]:
+    if not info["turn"] and not info["purposes"] and info["stage"] is None:
         return None
     return info
 
@@ -425,7 +437,14 @@ async def turn(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, An
             )
         ) | {s["seat"] for s in decision["speakers"]}
         chosen: list[str] = []
-        if _cost_left(state) > 0:
+        # 카드 전 이끎 차례(복선·연결)가 남은 카드 담당이 있으면 결정적으로 그 자리(C3)
+        steer = rules.steer_responder(
+            state["phase"], state["ds"], deps.catalog, state["transcript"], skip
+        )
+        if steer:
+            chosen = [steer]
+            decision["reason"] = decision.get("reason") or "카드 전 이끎 차례(복선·연결)"
+        elif _cost_left(state) > 0:
             decision["llm_used"] = True
             chosen = [s for s in await _turn_llm(state, deps, brief) if s not in skip]
             decision["reason"] = decision.get("reason") or "턴 LLM 화자 선택"

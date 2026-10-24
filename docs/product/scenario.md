@@ -21,7 +21,7 @@
 | `materials/<keyword>/*.md` | 키워드별 참고 자료 본문. 조립 때 `catalog_version`별로 DB에 시드되어 목록·검색·본문이 같은 버전을 쓴다(R5-18) |
 | `personas.yaml` | 세션 페르소나 3명: `id`, `seat`, `name`, `avatar`(프로필 이미지 경로, `assets/avatars/` 기준), `tone`, `rules`, `must_not`, `stances`(단계·키워드별 고정 입장), `persona_description`(디브리핑용) |
 | `assets/avatars/*` | 페르소나 프로필 이미지(D13-3). 실존 인물이 아닌 일관된 스타일의 일러스트, 유형을 암시하지 않는 중립 표정·파일 이름(`avatar-01.png` 등). **지금 이미지는 임시**이고 교체는 파일과 `avatar` 경로만 바꾼다. api 공개 앱이 `/assets/missions/<mission_id>/avatars/<file>`로 서빙 |
-| `cards.yaml` | 카드 6장: `card_id`, `element`, `stage_id`, `offset_min`(단계 시작 기준 시각, 유일한 트리거), `actor`, `content`, `window`, `preempt_ban`, `debrief`, `report_template`(리포트 요소 섹션의 "관련 카드 장면"에 "설계된 장면" 표시와 함께 보이는 고정 설명 문장. 평가 판단이 아님). 흐름 이벤트 문구 |
+| `cards.yaml` | 카드 6장: `card_id`, `element`, `stage_id`, `offset_min`(단계 시작 기준 시각, 유일한 트리거), `actor`, `content`, `window`, `preempt_ban`, `debrief`, `purpose`(카드 차례에 담당에게 보이는 장면 목적), `steer`(카드 전 복선·연결 내용, 4.2 "카드 이끎"), `report_template`(리포트 요소 섹션의 "관련 카드 장면"에 "설계된 장면" 표시와 함께 보이는 고정 설명 문장. 평가 판단이 아님). 흐름 이벤트 문구 |
 | `rubric.yaml` | BARS 척도: `rubric_version`, 요소별 차원(`dimension_id`·이름·정의·핵심 카드), 차원별 수준 1~5 앵커와 담당자 참고 문구, 기록 없음 사유. 내용과 id는 [product/rubric.md](rubric.md)가 정본 |
 | `prompts/<역할>/` | 역할 폴더(`manager`·`persona`·`intent`·`assistant`·`evaluator`, 공용 `shared`, 픽스처 `fixtures`)별 프롬프트([architecture/agents.md](../architecture/agents.md) "프롬프트와 카탈로그"). 페르소나 system prompt, 진행 매니저 prompt, 시간 초과 고정 문장, 디브리핑 문장, 평가 에이전트 프롬프트 `evaluator/common.md`(공통 지침: 판단 순서·근거 규칙·출력 형식, [product/rubric.md](rubric.md) 2장) + `evaluator/<element>.md`(요소별 특수 지침). `prompt_versions` = 공통 파일과 요소 파일 5개 각각의 해시 맵(파일별 개별 해시, 형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave, R5-14) |
 
@@ -73,7 +73,7 @@
 
 1. 칸이 `empty`다.
 2. 한 안의 현재 지지자가 4명 중 3명 이상이고, **지원자의 현재 지지가 그 안**이며, **그 단계 지원자의 최신 발언이 그 안을 지지로 세는 발언**(`confidence = high`인 `propose` 또는 `agree`이고 유보 표현 없음)이다(B2). 지원자 동의 없이 AI 동료가 결론을 내지 않는다.
-   - **[구현 전] (C3, [decisions.md](../decisions.md) "2026-10-23 AI 고도화")**: 그 단계의 카드가 아직 전달되지 않았으면 채우지 않는다.
+   - 그 단계의 시각 카드 중 담당 전원이 아직 전달하지 않은 카드가 있으면 채우지 않고 보류한다(C3). 보류는 그래프(진행 매니저 결정 `fill_held`)와 api(`fill_slot` 409 `card_pending`)가 같은 규칙으로 검사한다. 카드가 전달되면 이후 실행에서 2를 다시 확인해 채운다. 지원자의 직접 확정은 보류하지 않고(카드 전 확정은 선결정, 4.2), 시간 초과 채우기는 카드와 상관없이 마감에 칸을 채운다(카드가 끝내 전달되지 않아도 같다).
 3. 대기 시간은 없다. 2가 성립하는 즉시 채운다(R4).
 4. 채우는 페르소나는 그 안의 지지자 중 우선순위 `critic > quiet > stubborn`의 첫 번째다. 문구 골격: "그럼 X로 정리할게요."
 5. AI 발언으로 지지가 바뀐 경우(서지안 이동 등)는 같은 실행 안에서 다시 판정하지 않는다(B2). 이후 실행(지원자 메시지·침묵·카드)에서 2를 다시 확인해 지원자의 최신 발언이 그 안의 명시적 동의일 때 채운다.
@@ -233,7 +233,7 @@ AI 동료는 주장할 때 확정 키워드의 자료를 근거로 인용한다(
 
 **전달과 기록**: 카드는 담당 화자가 실제로 게시했을 때 `delivered`다. 카드 발생 기록(`observations`)은 첫 카드 발언이 게시된 뒤 남기고, 그 메시지가 관찰 창의 시작이다. 담당이 둘 이상인데 일부만 게시됐으면(새 지원자 메시지로 남은 화자가 버려진 경우 등) 남은 화자는 다음 run에서 이어서 말하고, 전원이 게시하면 `delivered`. `flexibility_majority`와 `listening_pressure`는 같은 `card_due` 시각에 함께 처리하며 강한결의 첫 기준안 발언이 두 카드의 첫 발언이다. 이 공동 전달 메시지는 `card_ids`에 두 카드를 함께 담고, 두 카드의 전달 자리에 강한결이 더해지며 관찰은 카드마다 1건씩 남는다.
 
-트리거 전에도 페르소나는 토론에 참여하지만 카드가 정한 입장 표명(기준안 지지, 압박, 반론)은 카드 뒤에 한다. 단계가 `card_due` 전에 끝나면 그 카드는 미발생(`event_not_fired`)이다. 지원자가 카드 예정 시각 전에 그 단계 칸을 직접 확정해 단계가 끝난 경우는 미발생과 구분해 **선결정**(`preempted`)이다(결정 A3·C3). 별도 행으로 저장하지 않고 api가 사실 지표 `decisions[].preempted_cards`(칸 확정 시각과 카드 예정 시각 = 스케줄러가 읽는 단계 시작(`phase_started_at`, 지나간 단계는 앞 칸 확정 시각) + `offset_min`, 관찰 기록 없음)로 계산하며, 평가는 그 카드가 핵심 장면인 차원을 `preempted`로, 리포트는 카드를 "선결정"으로 보인다([product/rubric.md](rubric.md) 2.3·5장). **[구현 전] (C3, [decisions.md](../decisions.md) "2026-10-23 AI 고도화")**: 진행 매니저가 카드 허용 구간 안에서 복선 → 연결 → 실행 순서로 카드를 이끈다(대사는 동료가 만든다).
+트리거 전에도 페르소나는 토론에 참여하지만 카드가 정한 입장 표명(기준안 지지, 압박, 반론)은 카드 뒤에 한다. 단계가 `card_due` 전에 끝나면 그 카드는 미발생(`event_not_fired`)이다. 지원자가 카드 예정 시각 전에 그 단계 칸을 직접 확정해 단계가 끝난 경우는 미발생과 구분해 **선결정**(`preempted`)이다(결정 A3·C3). 별도 행으로 저장하지 않고 api가 사실 지표 `decisions[].preempted_cards`(칸 확정 시각과 카드 예정 시각 = 스케줄러가 읽는 단계 시작(`phase_started_at`, 지나간 단계는 앞 칸 확정 시각) + `offset_min`, 관찰 기록 없음)로 계산하며, 평가는 그 카드가 핵심 장면인 차원을 `preempted`로, 리포트는 카드를 "선결정"으로 보인다([product/rubric.md](rubric.md) 2.3·5장). **카드 이끎(C3)**: 카드의 허용 구간은 그 단계 시작부터 `card_due`까지이고, 진행 매니저는 그 안에서 담당 동료가 복선 → 연결 → 실행 순서로 말하게 한다. 복선은 담당의 그 단계 첫 발언(보통 단계 시작), 연결은 둘째 발언(지원자 메시지에 답할 자리가 규칙으로 정해지지 않으면 담당을 고른다), 실행은 `card_due`의 카드 발언이다. 발언 수는 그 단계 전체 기록으로 세고, 카드 예정 시각이 지나면 전달 전이어도 더 이끌지 않는다. 이끎 대상은 그 순간의 담당이며 담당이 바뀌면 새 담당이 자기 발언 수의 차례부터 간다. 복선·연결에 보이는 내용은 `cards.yaml` `steer.seed`·`steer.bridge`(데이터, 같은 채용 건 모두 같음)이고 대사는 동료가 만든다. 카드 시각·담당·장면·관찰 기록은 바꾸지 않으며, `steer`가 없는 카드(머뭇거림 고정 한 줄)는 이끌지 않는다. 카드 전달 전에는 AI 동료 합의 채움을 보류한다(1.4).
 
 **설계된 장면(R1)**: 리포트의 카드 장면에는 담당자용으로 "설계된 장면"이라고 표시한다. 모든 지원자가 같은 장면을 겪고 정답 없이 반응을 본다는 뜻이다.
 

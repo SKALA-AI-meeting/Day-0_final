@@ -759,6 +759,9 @@ DEBATE_STATE = {
     ],
     "first_spoke_at": {k: Opt(TS) for k in ("p1", "p2", "p3")},
     "first_stated_at": {k: Opt(TS) for k in ("p1", "p2", "p3")},
+    "pending_cards": [str],
+    "phase_message_counts": {k: int for k in ("p1", "p2", "p3")},
+    "phase_elapsed_seconds": int,
     "open_mentions": [
         {"seat": SEAT, "message_id": str, "since": str, "sender": str, "content": str}
     ],
