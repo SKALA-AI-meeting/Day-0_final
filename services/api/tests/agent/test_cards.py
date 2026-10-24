@@ -3,7 +3,7 @@
 import re
 
 import pytest
-from conftest import intent_of, say
+from conftest import intent_of, say, stance_reply
 
 FLEX, PRESSURE = "flexibility_majority", "listening_pressure"
 
@@ -281,7 +281,7 @@ async def test_moved_critic_support_overrides_structured_oppose(harness, via):
     """문장 판정이나 proposes는 지원자 안 지지인데 구조화 stance가 옛 안 oppose면 저장 입장을
     계획 안 지지로 정정한다."""
     s3 = "opt-water_s3"
-    judged = intent_of("agree", option_id=s3) if via == "sentence" else "not json"
+    judged = stance_reply("keep", s3) if via == "sentence" else "not json"
     h = harness(
         "solution",
         persona=[

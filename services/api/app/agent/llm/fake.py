@@ -142,10 +142,29 @@ def _last_human(messages: list[BaseMessage]) -> str:
     return next((str(m.content) for m in reversed(messages) if isinstance(m, HumanMessage)), "")
 
 
+def _stance(data: dict[str, Any]) -> str:
+    """입장 판정(가짜 모델, persona.STANCE_SCHEMA): 초안에 보류어 → withdraw, 다른 안 라벨 → move,
+    내 안 라벨 → keep, 아니면 none. 의도 분류 역할 모델이 `[초안]` 입력을 받으면 이 규칙을 쓴다."""
+    text = str(data.get("초안") or "")
+    mine = data.get("내 안") or {}
+    others = [o for o in data.get("다른 안") or [] if o.get("label") and o["label"] in text]
+    if any(w in text for w in _WITHHOLD):
+        out = {"verdict": "withdraw", "target": mine.get("id"), "confidence": "high"}
+    elif others:
+        out = {"verdict": "move", "target": others[0]["id"], "confidence": "high"}
+    elif mine.get("label") and mine["label"] in text:
+        out = {"verdict": "keep", "target": mine.get("id"), "confidence": "high"}
+    else:
+        out = {"verdict": "none", "target": None, "confidence": "high"}
+    return json.dumps(out, ensure_ascii=False)
+
+
 def _intent(messages: list[BaseMessage], _tools: Any) -> str:
     """키워드 규칙(가짜 모델): 보류 → withhold, 반대어 → oppose, 동의어 → agree, 안 라벨 → propose,
     물음표 → question."""
     data = json.loads(_last_human(messages))
+    if "초안" in data:
+        return _stance(data)
     text = str(data.get("메시지") or "")
     labels: list[tuple[str, str, str]] = [
         (o["label"], "target_option_id", o["option_id"]) for o in data.get("나온 안") or []

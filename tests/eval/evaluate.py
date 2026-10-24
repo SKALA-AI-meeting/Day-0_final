@@ -30,6 +30,15 @@ def load_intent() -> dict[str, Any]:
     return _load("intent_cases.yaml")
 
 
+def load_intent_holdout() -> dict[str, Any]:
+    """프롬프트 예시·기존 평가셋과 겹치지 않는 보류 세트(양보·보류·지지·질문). 카탈로그·자리는
+    intent_cases.yaml 것을 쓴다."""
+    return {
+        **{k: v for k, v in load_intent().items() if k in ("seats", "catalog")},
+        **_load("intent_holdout_cases.yaml"),
+    }
+
+
 def load_bars() -> dict[str, Any]:
     return _load("bars_sessions.yaml")
 

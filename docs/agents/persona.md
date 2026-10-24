@@ -21,6 +21,7 @@
 | `prompts/persona/common_rules.md` (키 `common_rules.md`) | 모든 자리 공통 규칙과 코드가 붙이는 블록 순서 |
 | `prompts/persona/safe_<type>.md` (키 `safe_<type>.md`) | guard 2회 실패·비용 상한 때 쓰는 자리별 안전 문구(한 줄에 하나, 직전에 쓴 줄은 건너뜀) |
 | `prompts/persona/stance_fallback.yaml` (키 `stance_fallback.yaml`) | 계획 밖 입장 2회 때 쓰는 자리·상황별 고정 문구(`text`·`alternatives`, 직전에 쓴 문구는 건너뜀) |
+| `prompts/persona/stance_check.md` (키 `stance_check.md`) | 입장 판정 지침: 초안이 `[내 안]`에 대해 `keep`(계속 지지)·`move`(다른 안으로)·`withdraw`(거둠·보류)·`none`(입장 없음) 중 무엇인지만 묻는다. 지원자 의도 분류 프롬프트와 따로 둔다 |
 | `prompts/shared/guard_patterns.yaml` (키 `guard_patterns.yaml`) | 금지 패턴·`max_chars` |
 | `prompts/shared/fixed_phrases.yaml` (키 `fixed_phrases.yaml`) | 정해진 안내문(`notices`) |
 | `personas.yaml` | 이름·성향 설명·고정 입장 |
@@ -29,14 +30,18 @@
 
 ## 코드 입구
 
-- `services/api/app/agent/persona/__init__.py`: 컨텍스트 조립 `build_messages`(`stance_text`·`situation_text`·`card_text`), 도구 루프 `generate`, 계획 판정 `plan_violation`·`sentence_violation`, 고정 문구 `stance_fallback`·`safe_draft`
+- `services/api/app/agent/persona/__init__.py`: 컨텍스트 조립 `build_messages`(`stance_text`·`situation_text`·`card_text`), 도구 루프 `generate`, 계획 판정 `plan_violation`·입장 판정 `judge_stance`·`sentence_violation`, 고정 문구 `stance_fallback`·`safe_draft`
 - `services/api/app/agent/debate/graph.py`: 노드 `respond`·`guard`·`stance_check`·`wait_typing`·`apply`
 - `services/api/app/agent/guard/`: 금지 문구 검사(어시스턴트와 공용)
 - 모델 역할 키 `persona`, env `MODEL_PERSONA`
 
+## 입장 판정
+
+`stance_check`는 구조화 출력(`stance`·`proposes`)을 코드로 대조한 뒤, 초안 글이 기록될 입장과 갈라지는지를 LLM에 한 번 묻는다(`judge_stance`). 질문은 지원자 메시지 분류가 아니라 "이 동료가 자기 안에 대해 `keep`·`move`·`withdraw`·`none` 중 무엇을 말하는가"이고, 입력은 `[내 안]`·`[다른 안]`·`[직전 메시지]`·`[초안]`, 출력은 `{verdict, target, confidence}`다. 거부하는 것은 high인 `move`(고른 안이 내 안이 아닐 때)와 `withdraw`뿐이고, 양보·비교 뒤 자기 안에 서는 `keep`("A도 좋지만 저는 B")·`none`·low는 통과한다. 입장이 없어야 하는 상태(`plan.declared` False)는 내 안이 없어 묻지 않고 구조화 출력만 본다. 모델은 의도 분류 역할(`MODEL_INTENT`, temperature 0, 타임아웃 10초, 재시도 없음)을 그대로 쓰고 지시만 `stance_check.md`다. 실패·스키마 위반이면 판정 없이 구조화 출력만으로 정한다.
+
 ## 검증
 
-- 단위(LLM mock): `services/api/tests/agent/test_persona.py`(계획 밖 입장·판정 유도·비용 상한·컨텍스트 경계), `test_persona_voice.py`(입장 상태 블록·상황 사실·카드 차례 목적·실제 지지 이동만 거부·소극형 전체 질문 규칙), `test_cards.py`
+- 단위(LLM mock): `services/api/tests/agent/test_persona.py`(계획 밖 입장·판정 유도·비용 상한·컨텍스트 경계), `test_persona_voice.py`(입장 상태 블록·상황 사실·카드 차례 목적·입장 판정 전용 질문·실제 지지 이동만 거부·소극형 전체 질문 규칙), `test_cards.py`
 - 픽스처: `prompts/fixtures/stance_offplan.yaml`·`verdict.yaml`·`leak.yaml`·`preemption.yaml`(채용 건에 복사하지 않음)
 - 평가셋: `tests/eval/persona_scripts.yaml`(지명 무응답·질문 무시·오인용·카드), `tests/eval/leak_cases.yaml`(유출·유도 질문). `make eval PROFILE=eval-text ALLOW_API=1`
 
