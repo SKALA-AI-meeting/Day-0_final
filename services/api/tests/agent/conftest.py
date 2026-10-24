@@ -566,6 +566,11 @@ def model_reply(result: Any) -> Any:
     return out
 
 
+def stance_reply(verdict: str, target: str | None = None, confidence: str = "high") -> dict:
+    """stance_check 입장 판정 모델 응답(persona.STANCE_SCHEMA). 의도 분류 FakeLLM 스크립트용."""
+    return {"verdict": verdict, "target": target, "confidence": confidence}
+
+
 def say(content: str, stance: dict | None = None, proposes: dict | None = None) -> dict:
     return {"content": content, "proposes": proposes, "stance": stance}
 

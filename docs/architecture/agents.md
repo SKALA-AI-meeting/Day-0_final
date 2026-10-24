@@ -109,7 +109,7 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 
 ### 계획 밖 입장 (stance_check, R5-8)
 
-- 검사: 구조화 출력의 `stance`·`proposes`가 `stance_plan`이 허용하는 안·방향과 같은지, 그리고 `content`가 **실제 지지 이동**을 말하는지(의도 분류 모듈로 같은 형식의 판정을 받아 대조) 본다. 문장 판정으로 거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(`propose`·`agree`)와 자기 계획 안 철회(`oppose`·`withhold`)뿐이다(결정 C2). 구조화 stance가 자기 안 support인데 문장이 철회·다른 안 지지로 판정되면 문장과 기록이 갈라지는 충돌이라 재생성한다. 입장이 없는 상태(문제 상황 카드 전·기획안 단계)는 구조화 출력(`stance`·`proposes`)만 본다(안을 나열하는 중립 문장을 판정이 `propose`로 읽는 거짓 양성 때문). 유보가 든 동의("그 말도 맞지만…")·low·질문·되짚기는 통과한다. 구조화 stance가 자기 안 support여도 문장이 다른 안을 명시적으로 지지하면 게시 문장과 저장 입장이 갈라지므로 거부한다. 자기 계획 안에 `oppose`를 내는 구조화 출력도 계획 밖이다. 설득 가능 규칙으로 계획이 지원자 안으로 옮겨졌는데 그 자리의 현재 지지가 아직 계획 안이 아니면, 이번 발언은 그 안 지지를 밝혀야 하고(`stance` support·`proposes`·문장 판정 support 중 하나) 아니면 계획 밖이다(다른 안 `oppose`만 낸 경우 포함). 지지가 기록된 뒤에는 이 조건을 다시 걸지 않는다. 이 경우의 고정 문구는 이동을 드러내는 `stance_fallback.yaml`의 `moved`("듣고 보니 {option}이 더 낫겠네요. 저도 그쪽으로 옮길게요.", 설득 가능 자리만)다.
+- 검사: 구조화 출력의 `stance`·`proposes`가 `stance_plan`이 허용하는 안·방향과 같은지, 그리고 `content`가 **실제 지지 이동**을 말하는지 본다. 문장 판정은 지원자 의도 분류와 다른 전용 질문이다(`persona.judge_stance`, 프롬프트 `persona/stance_check.md`, 모델은 의도 분류 역할 `MODEL_INTENT`): 입력 `[내 안]`·`[다른 안]`·`[직전 메시지]`·`[초안]`, 출력 `{verdict: keep|move|withdraw|none, target, confidence}`. 거부하는 것은 high인 `move`(다른 안·새 안을 자기 선택으로 밝힘, 고른 안이 내 안이면 앞뒤가 맞지 않는 판정이라 쓰지 않음)와 `withdraw`(자기 안을 거둠·보류)뿐이다(결정 C2). 양보·비교 뒤 자기 안에 서는 문장("A도 좋지만 저는 B")은 `keep`이고, `none`·low·질문·되짚기와 함께 통과한다. 구조화 stance가 자기 안 support인데 판정이 `move`·`withdraw`면 문장과 기록이 갈라지는 충돌이라 재생성한다. 입장이 없는 상태(문제 상황 카드 전·기획안 단계)는 내 안이 없어 판정을 묻지 않고 구조화 출력(`stance`·`proposes`)만 본다. 자기 계획 안에 `oppose`를 내는 구조화 출력도 계획 밖이다. 설득 가능 규칙으로 계획이 지원자 안으로 옮겨졌는데 그 자리의 현재 지지가 아직 계획 안이 아니면, 이번 발언은 그 안 지지를 밝혀야 하고(`stance` support·`proposes`·문장 판정 `keep` 중 하나) 아니면 계획 밖이다(다른 안 `oppose`만 낸 경우 포함). 지지가 기록된 뒤에는 이 조건을 다시 걸지 않는다. 이 경우의 고정 문구는 이동을 드러내는 `stance_fallback.yaml`의 `moved`("듣고 보니 {option}이 더 낫겠네요. 저도 그쪽으로 옮길게요.", 설득 가능 자리만)다.
 - 처리: 응답 **전체**를 같은 입력에 위반 사유를 붙여 1회 재생성한다. 그래도 어긋나면 계획과 맞는 자리별 고정 문구(시나리오 카탈로그)로 교체하고 입장도 계획 값으로 둔다. 메타데이터만 버리고 문장을 게시하는 일은 없다. 결과는 `messages.meta.stance_check`에 기록.
 - 다른 참여자의 말을 옮기는 정확도는 게시 전에 검사하지 않는다(알려진 한계, [agents/persona.md](../agents/persona.md) "알려진 한계").
 
@@ -158,9 +158,9 @@ D16·R4·R5-6. api 메일박스가 `message` 자극마다 들어온 순서대로
 - 입력: 메시지, **저장된 `messages.phase`**(현재 단계가 아님), 그 단계의 **카탈로그 안 전체**(아직 발언되지 않은 것 포함, `scenario_option_key`·라벨), 이미 생긴 안 목록 `[{option_id, label}]`, 직전 메시지 5개, 자리 이름 목록.
 - 메일박스가 밀린 사이 단계가 바뀌어도 분류와 안·입장 반영은 메시지의 단계에 한다. 현재 단계와 다른지는 턴 선택·발언 생성을 생략할지 판단하는 데만 쓴다.
 - 출력: 계약의 의도 분류 스키마(`intent`(보류·기권 `withhold` 포함), 대상 안(생긴 안이면 option_id, 아직 안 생긴 카탈로그 안이면 `scenario_option_key`), `new_option_label`(핵심이 같은 안이 없을 때만), `confidence: high|low`, `reservation`(대상 안에 대한 보류·반대·조건 표현), `addressed_to`, `excluded`(지원자가 뺀 자리)). 허용 값 밖·없는 option_id·스키마 위반은 폴백 `{intent: other, ...}`, `fallback=true`.
-- 쓰임: 안별 지지자 누적(high이고 유보 표현이 없는 agree·propose만 지지, withhold는 그 안 지지 철회), 카탈로그 안의 최초 제안자 귀속, 진행 매니저 규칙 3, 합의 판정, 침묵 초대 조건, 설득 가능 규칙, stance_check의 문장 판정. **평가 수준에 직접 쓰지 않는다.** 평가 에이전트에는 참고 입력(사실 지표 `intent_counts`, 메시지별 의도)으로만 가고, 원문과 다르면 원문을 따른다([product/rubric.md](../product/rubric.md) 1.2).
+- 쓰임: 안별 지지자 누적(high이고 유보 표현이 없는 agree·propose만 지지, withhold는 그 안 지지 철회), 카탈로그 안의 최초 제안자 귀속, 진행 매니저 규칙 3, 합의 판정, 침묵 초대 조건, 설득 가능 규칙. stance_check의 문장 판정은 같은 모델 역할을 쓰지만 별도 프롬프트·스키마다("계획 밖 입장"). **평가 수준에 직접 쓰지 않는다.** 평가 에이전트에는 참고 입력(사실 지표 `intent_counts`, 메시지별 의도)으로만 가고, 원문과 다르면 원문을 따른다([product/rubric.md](../product/rubric.md) 1.2).
 - 지원자 칸 확정 값의 안 연결에는 쓰지 않는다. 확정 경로에는 LLM이 없다(R5-5, [services/api.md](../services/api.md)).
-- 실 모델 정확도 목표는 픽스처 20문장에서 0.85이고 최근 측정은 0.95다(2026-10-23, gpt-4o-mini, [harness.md](harness.md) "실측 기준선"). MVP 통과 조건은 아니다.
+- 실 모델 정확도 목표는 픽스처 20문장에서 0.85이고 최근 측정은 0.85, 프롬프트 예시와 겹치지 않는 보류 세트에서는 0.78이다(2026-10-24, gpt-4o-mini, [harness.md](harness.md) "실측 기준선"). 양보 뒤 결론을 말한 문장("~는 알겠는데, 그래도 침수가 핵심")을 반대로 읽는 경우가 남아 있다. MVP 통과 조건은 아니다.
 
 ## 어시스턴트 (`app/agent/assistant/`)
 
@@ -197,7 +197,8 @@ agent(LLM, 도구 바인딩) ⇄ tools(search_materials·get_material) … 최�
 | `persona/common_rules.md` | 모든 자리 공통: 동등한 팀원, 짧게 말하기, 시간은 남은 시간으로 말하기, 금지 목록, 기능 설명만 하고 평가 대상 행동을 유도하지 않음, 평가 질문 안내문 |
 | `persona/persona_<type>.md` | 성향·말투·행동 규칙·must_not([product/scenario.md](../product/scenario.md) 2.1). MVP에서 쓰는 것은 `stubborn`·`quiet`·`critic` 3개 |
 | `persona/safe_<type>.md`, `persona/stance_fallback.yaml` | 자리별 안전 문구, 계획 밖 입장 교체 문구(자리·단계별 계획 일치 고정 문구) |
-| `intent/intent.md` | 의도 분류 지침과 예시(`confidence` 기준 포함) |
+| `persona/stance_check.md` | 동료 초안의 입장 판정 지침(`keep`·`move`·`withdraw`·`none`). 지원자 의도 분류와 질문이 다르므로 따로 둔다 |
+| `intent/intent.md` | 의도 분류 지침과 예시(`confidence` 기준 포함). 예시는 가상의 카탈로그·이름으로 쓰고 평가셋 문장·실제 안 라벨을 넣지 않는다(카탈로그 테스트가 검사) |
 | `assistant/assistant.md` | 어시스턴트 지침(도구 선택·인용 규칙) |
 | `evaluator/common.md`, `evaluator/<element>.md` ×5 | 평가자 공통 지침(판단 순서·근거·출력 형식)과 요소별 특수 지침. 척도·앵커 본문은 [product/rubric.md](../product/rubric.md) 복사본을 `get_rubric`으로 주입 |
 | `shared/fixed_phrases.yaml`, `shared/guard_patterns.yaml` | 여러 역할이 함께 쓰는 고정 문장·안내문과 금지 패턴(동료 guard·어시스턴트 안내 교체·평가 금지어) |
@@ -254,7 +255,7 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 |---|---|---|
 | 토론 동료 | `MODEL_PERSONA` | respond |
 | 진행 매니저 | `MODEL_TURN` | turn 규칙 7(message 자극에서 그 메시지에 답할 화자가 규칙으로 정해지지 않았을 때만) |
-| 의도 분류 | `MODEL_INTENT` | intent, stance_check 문장 판정 |
+| 의도 분류 | `MODEL_INTENT` | intent, stance_check 입장 판정(별도 프롬프트 `stance_check.md`, 같은 타임아웃·temperature) |
 | 어시스턴트 | `MODEL_ASSISTANT` | assistant tool-calling 루프 |
 | 평가자 | `MODEL_EVALUATOR` | report-worker 평가 에이전트(요소별 차원 수준·근거·요약). 카드 장면 `cards[].scene`은 고정 문장이라 LLM을 쓰지 않는다 |
 

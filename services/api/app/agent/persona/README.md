@@ -6,5 +6,6 @@
 
 - `prompts/persona/persona_<type>.md`, `prompts/persona/safe_<type>.md` (키 `persona_<type>.md`, `safe_<type>.md`)
 - `prompts/persona/common_rules.md`, `prompts/persona/stance_fallback.yaml` (키 `common_rules.md`, `stance_fallback.yaml`)
+- `prompts/persona/stance_check.md` (키 `stance_check.md`, 초안 입장 판정 `judge_stance`의 지시. 모델은 의도 분류 역할 `MODEL_INTENT`)
 - `prompts/shared/guard_patterns.yaml`, `prompts/shared/fixed_phrases.yaml` (키 `guard_patterns.yaml`, `fixed_phrases.yaml`)
 - `personas.yaml`, `cards.yaml`(`purpose`·`followup_purpose`), 자료 `materials/<keyword>/*.md`(rag-mcp 도구로만)

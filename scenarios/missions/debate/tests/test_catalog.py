@@ -463,6 +463,7 @@ PROMPT_FILES = [
     "prompts/persona/common_rules.md",
     "prompts/manager/turn_manager.md",
     "prompts/intent/intent.md",
+    "prompts/persona/stance_check.md",
     "prompts/assistant/assistant.md",
     "prompts/evaluator/common.md",
     "prompts/persona/stance_fallback.yaml",
@@ -650,6 +651,7 @@ PROMPT_KEYS = {
     "stance_fallback.yaml",
     *(f"persona_{t}.md" for t in ("stubborn", "quiet", "critic")),
     *(f"safe_{t}.md" for t in ("stubborn", "quiet", "critic")),
+    "stance_check.md",
     "intent.md",
     "assistant.md",
     "evaluator/common.md",
@@ -671,3 +673,43 @@ def test_prompt_keys_stay_stable_across_role_folders():
     assert set(every) - set(copied) == {
         f"fixtures/{n}.yaml" for n in ("leak", "preemption", "stance_offplan", "verdict")
     }
+
+
+# ---------- 의도 분류 프롬프트 ↔ 평가셋 분리 ----------
+
+
+def _plain(text: str) -> str:
+    """문장부호·공백 차이를 없앤 비교용 문자열."""
+    return re.sub(r"[^\w]", "", text)
+
+
+def test_intent_prompt_examples_do_not_leak_eval_sentences_or_catalog_labels(keywords):
+    """intent.md 예시에 평가셋 문장이나 카탈로그 안 라벨이 들어가면 평가 점수가 부풀므로 막는다.
+
+    예시는 가상의 안(placeholder)으로 쓴다. 한 글자 키워드 라벨(물·불 등)은 보통 낱말에 들어가
+    부분 문자열 검사가 뜻이 없으므로 안 이름으로 홀로 쓰인 꼴만 본다.
+    """
+    prompt = _plain((MISSION / "prompts/intent/intent.md").read_text(encoding="utf-8"))
+    eval_dir = REPO / "tests" / "eval"
+    sentences: list[tuple[str, str]] = []
+    for name in ("intent_cases.yaml", "intent_holdout_cases.yaml"):
+        data = yaml.safe_load((eval_dir / name).read_text(encoding="utf-8"))
+        for group in ("cases", "decided_cases"):
+            sentences += [(f"{name}:{c['id']}", c["text"]) for c in data.get(group) or []]
+    assert len(sentences) >= 36
+    leaked = [ref for ref, text in sentences if _plain(text) in prompt]
+    assert leaked == [], f"평가셋 문장이 프롬프트에 있음: {leaked}"
+    labels = [k["label"] for k in keywords["keywords"]]
+    for k in keywords["keywords"]:
+        labels += [p["label"] for p in k["problems"]] + [s["label"] for s in k["solutions"]]
+    found = [label for label in labels if len(label) >= 2 and _plain(label) in prompt]
+    assert found == [], f"카탈로그 라벨이 프롬프트에 있음: {found}"
+    # 한 글자 라벨은 안 이름으로 홀로 쓰인 꼴(앞은 경계, 뒤는 조사·경계)만 본다
+    raw = (MISSION / "prompts/intent/intent.md").read_text(encoding="utf-8")
+    edge = "\\s\"'“”‘’()\\[\\],.!?…`:/→"
+    for label in (label for label in labels if len(label) == 1):
+        josa = "은|는|이|가|을|를|도|로|으로|안|이요|요"
+        pattern = rf"(?:^|[{edge}]){label}(?:{josa})?(?=[{edge}]|$)"
+        assert not re.search(pattern, raw, re.M), f"한 글자 라벨 {label}이 안 이름으로 쓰임"
+    for key in ("water", "fire", "tree", "wind"):  # 시나리오 안 키도 쓰지 않는다
+        assert not re.search(rf"\b{key}(_[ps]\d)?\b", prompt)

@@ -358,23 +358,111 @@ def plan_violation(draft: Draft, plan: StancePlan, ds: dict[str, Any]) -> str | 
     return None
 
 
-def sentence_violation(judged: dict[str, Any] | None, plan: StancePlan) -> str | None:
-    """문장 판정(의도 분류 형식)이 기록될 입장과 다른 **명시적 지지 이동**을 말하는지(C2).
+# ---- 입장 판정(stance_check 문장 판정) -----------------------------------------------------------
+# 지원자 의도 분류와 질문이 다르다: 동료의 초안이 **자기 안**을 keep(계속 지지)·move(다른
+# 안으로)·withdraw(거둠·보류)·none(입장 없음) 중 무엇으로 말하는지만 묻는다. 지시 프롬프트는 채용 건
+# 복사본의 `stance_check.md`(카탈로그 `prompts/persona/stance_check.md`), 모델은 의도 분류 역할
+# (`MODEL_INTENT`, temperature 0, 타임아웃 10초, 재시도 없음). 실패·스키마 위반이면 None(판정 없이
+# 구조화 출력만 본다).
+STANCE_VERDICTS = ("keep", "move", "withdraw", "none")
+STANCE_TIMEOUT_SECONDS = 10.0
+STANCE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["verdict", "target", "confidence"],
+    "properties": {
+        "verdict": {"type": "string", "enum": list(STANCE_VERDICTS)},
+        "target": {"type": ["string", "null"]},
+        "confidence": {"type": "string", "enum": ["high", "low"]},
+    },
+}
+# 카탈로그 stance_check.md가 없을 때만 쓰는 최소 지침
+STANCE_DEFAULT_INSTRUCTIONS = """토론 동료의 발언 초안이 [내 안]에 대해 어떤 입장을 말하는지
+JSON 하나로 판정한다.
+verdict: keep(내 안을 고르거나 지지한다고 밝힘. 다른 안을 인정·비교해도 결국 내 안에 섬) |
+move(다른 안이나 새 안을 자기 선택으로 밝힘) | withdraw(내 안 지지를 거두거나 보류하고 다른 안도
+고르지 않음) | none(입장 표현 없음: 질문·호응·사실 설명).
+양보 표현("A도 좋지만")은 입장을 정하지 않고 초안이 끝내 어디에 서는지로 정한다.
+target: move면 고른 안의 id(새 안이면 짧은 라벨), keep·withdraw면 내 안의 id, none이면 null.
+confidence: 어디에 서는지 분명하면 high, 아니면 low."""
 
-    거부하는 것은 high이고 유보 표현이 없는 다른 안 지지(propose·agree)와 자기 안 철회(oppose·
-    withhold)뿐이다. 유보가 든 동의("그 말도 맞지만…")·low·질문·되짚기는 통과한다. 게시 문장과
-    저장 입장이 갈라지지 않게 구조화 stance가 자기 안 support여도 문장이 다른 안을 지지하거나 자기
-    안을 철회하면 거부한다(충돌이면 재생성). 입장이 없는 상태(카드 전·기획안 단계)는 구조화 출력만
-    본다(`plan_violation`): 안을 나열하는 중립 문장을 판정이 propose로 읽는 경우가 많다.
+
+def build_stance_user(
+    content: str, plan: StancePlan, ds: dict[str, Any], recent: list[dict[str, Any]]
+) -> str:
+    mine = plan.option_id or plan.key
+    others = [
+        {"id": o["option_id"], "label": o["label"]}
+        for o in ds.get("options") or []
+        if not ({o["option_id"], o.get("scenario_option_key")} & plan.targets)
+    ]
+    seen = {o.get("scenario_option_key") for o in ds.get("options") or []}
+    others += [
+        {"id": c["scenario_option_key"], "label": c["label"]}
+        for c in ds.get("catalog_options") or []
+        if c["scenario_option_key"] not in seen and c["scenario_option_key"] not in plan.targets
+    ]
+    body = {
+        "내 안": {"id": mine, "label": plan.label or mine},
+        "다른 안": others,
+        "직전 메시지": [
+            {"sender": m.get("sender"), "content": m.get("content")} for m in recent[-5:]
+        ],
+        "초안": content,
+    }
+    return json.dumps(body, ensure_ascii=False)
+
+
+async def judge_stance(
+    llm: Any,
+    content: str,
+    plan: StancePlan,
+    ds: dict[str, Any],
+    recent: list[dict[str, Any]],
+    *,
+    instructions: str | None = None,
+) -> dict[str, Any] | None:
+    """초안의 입장 판정 `{verdict, targets, confidence}`. 입장이 없어야 하는 상태(`plan.declared`
+    False)는 내 안이 없어 물을 것이 없으므로 부르지 않는다. 실패·스키마 위반은 None."""
+    if llm is None or not content or not plan.declared:
+        return None
+    try:
+        out = await llm.complete_json(
+            "stance_check",
+            instructions or STANCE_DEFAULT_INSTRUCTIONS,
+            build_stance_user(content, plan, ds, recent),
+            STANCE_SCHEMA,
+            timeout=STANCE_TIMEOUT_SECONDS,
+            temperature=0.0,
+        )
+    except Exception as exc:  # 전송·타임아웃·파싱 실패 모두 판정 없음
+        log.warning("stance judge failed: %r", exc)
+        return None
+    if not isinstance(out, dict) or set(out) != set(STANCE_SCHEMA["properties"]):
+        return None
+    if out["verdict"] not in STANCE_VERDICTS or out["confidence"] not in ("high", "low"):
+        return None
+    return {
+        "verdict": out["verdict"],
+        "targets": resolve_target(ds, out["target"]),
+        "confidence": out["confidence"],
+    }
+
+
+def sentence_violation(judged: dict[str, Any] | None, plan: StancePlan) -> str | None:
+    """입장 판정(`judge_stance`)이 기록될 입장과 다른 **명시적 지지 이동**을 말하는지(C2).
+
+    거부하는 것은 high인 `move`(다른 안·새 안을 자기 선택으로 밝힘)와 `withdraw`(자기 안을 거둠·
+    보류)뿐이다. `keep`(양보·비교 뒤에도 자기 안에 섬)·`none`·low는 통과한다. 게시 문장과 저장
+    입장이 갈라지지 않게 구조화 stance가 자기 안 support여도 판정이 move·withdraw면 거부한다(충돌
+    이면 재생성). `move`인데 고른 안이 자기 안이면 앞뒤가 맞지 않는 판정이라 쓰지 않는다.
     """
     if not judged or judged.get("confidence") != "high" or not plan.declared:
         return None
-    intent = judged.get("intent")
-    target = {v for v in (judged.get("target_option_id"), judged.get("scenario_option_key")) if v}
-    moves = intent in ("propose", "agree") and not judged.get("reservation")
-    if moves and (judged.get("new_option_label") or (target and not target & plan.targets)):
+    verdict, targets = judged.get("verdict"), judged.get("targets") or set()
+    if verdict == "move" and not targets & plan.targets:
         return "문장이 계획과 다른 안을 지지함"
-    if intent in ("oppose", "withhold") and target & plan.targets:
+    if verdict == "withdraw":
         return "문장이 자기 계획 안을 철회함"
     return None
 
@@ -406,10 +494,10 @@ def move_unstated(
 
 
 def sentence_supports_plan(judged: dict[str, Any] | None, plan: StancePlan) -> bool:
+    """판정이 high `keep`(자기 안 지지를 밝힘)인지."""
     if not judged or judged.get("confidence") != "high" or not plan.declared:
         return False
-    target = {v for v in (judged.get("target_option_id"), judged.get("scenario_option_key")) if v}
-    return judged.get("intent") in ("propose", "agree") and bool(target & plan.targets)
+    return judged.get("verdict") == "keep"
 
 
 def pick_fixed(lines: list[str], mine: list[str]) -> str:

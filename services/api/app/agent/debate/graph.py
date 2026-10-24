@@ -52,7 +52,8 @@ Sleep = Callable[[float], Awaitable[None]]
 
 @dataclass
 class DebateLLMs:
-    """역할별 래퍼(roles.py make_llm). intent는 stance_check 문장 판정·의도 재분류에 쓴다."""
+    """역할별 래퍼(roles.py make_llm). intent는 의도 재분류와 stance_check 입장 판정(전용 프롬프트
+    `stance_check.md`, persona.judge_stance)에 쓴다."""
 
     persona: BaseLLM
     turn: BaseLLM
@@ -644,33 +645,18 @@ async def guard(state: DebateState, runtime: Runtime[DebateDeps]) -> dict[str, A
 
 
 async def _judge_sentence(
-    state: DebateState, deps: DebateDeps, content: str
+    state: DebateState, deps: DebateDeps, content: str, plan: StancePlan
 ) -> dict[str, Any] | None:
-    """게시 문장의 입장 판정(의도 분류 모듈, 같은 형식). 분류 LLM이 없으면 생략."""
-    if deps.llms.intent is None or not content:
-        return None
-    ds = state["ds"]
-    result, used_fallback = await intent_mod.classify(
+    """게시 문장의 입장 판정(persona.judge_stance: 전용 프롬프트 `stance_check.md`, 의도 분류 역할
+    모델). 분류 LLM이 없거나 입장이 없어야 하는 상태면 생략."""
+    return await persona.judge_stance(
         deps.llms.intent,
         content,
-        phase=state["phase"],
-        catalog=[
-            {"scenario_option_key": c["scenario_option_key"], "label": c["label"]}
-            for c in ds.get("catalog_options") or []
-        ],
-        options=[
-            {
-                "option_id": o["option_id"],
-                "label": o["label"],
-                "scenario_option_key": o.get("scenario_option_key"),
-            }
-            for o in ds.get("options") or []
-        ],
-        recent=state["transcript"][-5:],
-        seats={k: v for k, v in state["names"].items() if k != "candidate"},
-        instructions=deps.catalog.prompts.get("intent.md"),
+        plan,
+        state["ds"],
+        state["transcript"][-5:],
+        instructions=deps.catalog.prompts.get("stance_check.md"),
     )
-    return None if used_fallback else dict(result)
 
 
 async def _violation(
@@ -679,7 +665,7 @@ async def _violation(
     found = persona.plan_violation(draft, plan, state["ds"])
     if found:
         return found, None
-    judged = await _judge_sentence(state, deps, draft.content)
+    judged = await _judge_sentence(state, deps, draft.content, plan)
     found = persona.sentence_violation(judged, plan) or persona.move_unstated(
         draft, plan, state["ds"], judged
     )

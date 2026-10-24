@@ -99,6 +99,30 @@ def test_perfect_intent_output_scores_one():
     assert score["violations"] == 0 and score["all"] == 1.0
 
 
+def test_intent_holdout_is_separate_and_covers_concession_groups():
+    """보류 세트는 프롬프트 예시·기존 평가셋과 문장이 겹치지 않고, 양보·보류·지지·질문을 덮는다."""
+    base = evaluate.load_intent()
+    data = evaluate.load_intent_holdout()
+    cases = data["cases"]
+    assert 12 <= len(cases) <= 20
+    known = {c["text"] for c in base["cases"] + base["decided_cases"]}
+    prompt = (MISSION / "prompts" / "intent" / "intent.md").read_text("utf-8")
+    ids = [c["id"] for c in cases] + [c["id"] for c in base["cases"] + base["decided_cases"]]
+    assert len(ids) == len(set(ids))
+    keys = {p: {o["scenario_option_key"] for o in opts} for p, opts in data["catalog"].items()}
+    for case in cases:
+        assert case["text"] not in known and case["text"] not in prompt, case["id"]
+        want = case["expected"]
+        assert want["intent"] in evaluate.INTENTS and want["confidence"] in ("high", "low")
+        assert set(want["addressed_to"]) <= set(data["seats"])
+        assert set(case["existing"]) <= keys[case["phase"]]
+        if want["intent"] in evaluate.STANCE_INTENTS:
+            assert want.get("new_label") or want["target"] in keys[case["phase"]]
+    groups = {c["group"] for c in cases}
+    assert groups >= {"concession", "withhold", "support", "question"}
+    assert {c["expected"]["intent"] for c in cases} >= {"propose", "agree", "withhold", "question"}
+
+
 def test_decided_intent_cases_cover_b1():
     data = evaluate.load_intent()
     cases = data["decided_cases"]
@@ -362,7 +386,7 @@ async def test_save_eval_fixture_writes_session_record(tmp_path):
         await script.save("sess-2", broken, tmp_path)
 
 
-# ---- live (make eval-live) --------------------------------------------------------------------
+# ---- live (make eval SUITE=fixtures) -------------------------------------------------------
 
 
 @pytest.mark.live
@@ -384,6 +408,40 @@ async def test_intent_live(live_report):
         f"```json\n{json.dumps(score, ensure_ascii=False, indent=2)}\n```\n\n"
         "## 의도 분류 결정 사례(B1: 보류·새 안·A 말고 B·정정)\n\n"
         f"```json\n{json.dumps(decided_score, ensure_ascii=False, indent=2)}\n```"
+    )
+    assert score["violations"] == 0
+
+
+@pytest.mark.live
+async def test_intent_holdout_live(live_report):
+    """보류 세트(intent_holdout_cases.yaml)를 운영과 같은 입력으로 1회 분류한다. 프롬프트 예시를
+    바꾼 뒤 20문장 점수가 예시 암기로 부풀지 않았는지 보는 용도다. 실행:
+    `make eval PROFILE=eval-text SUITE=fixtures ALLOW_API=1`(tests/eval live 전체) 또는 같은 env로
+    `pytest -m live tests/eval/test_eval.py -k holdout`."""
+    from app.agent.intent import classify
+    from app.agent.llm import make_llm
+
+    data = evaluate.load_intent_holdout()
+    llm = make_llm("intent")
+    instructions = (MISSION / "prompts" / "intent" / "intent.md").read_text("utf-8")
+    outputs = await _classify_all(classify, llm, data, data["cases"], instructions)
+    score = evaluate.score_intent(data["cases"], outputs)
+    reservation = [
+        (c["id"], c["expected"]["reservation"], o.get("reservation"))
+        for c, o in zip(data["cases"], outputs, strict=True)
+        if "reservation" in c["expected"]
+    ]
+    score["reservation"] = (
+        sum(want == got for _, want, got in reservation) / len(reservation) if reservation else None
+    )
+    misses = {
+        c["id"]: {"intent": o["intent"], "want": c["expected"]["intent"]}
+        for c, o in zip(data["cases"], outputs, strict=True)
+        if o["intent"] != c["expected"]["intent"]
+    }
+    live_report.append(
+        "## 의도 분류 보류 세트(프롬프트 예시·기존 평가셋과 분리)\n\n"
+        f"```json\n{json.dumps({**score, 'misses': misses}, ensure_ascii=False, indent=2)}\n```"
     )
     assert score["violations"] == 0
 

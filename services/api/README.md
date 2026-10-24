@@ -9,7 +9,7 @@
 | 역할 | 인증, 세션 수명주기(초대~제출), 단계·칸·합의 판정, 토론 그래프 실행, 실시간 의도 분류, 어시스턴트, 리포트 저장·검토 |
 | 사용 기술 | Python 3.12, FastAPI + uvicorn, SQLAlchemy(asyncpg), LangGraph·langchain-openai, aio-pika, fastmcp(MCP 클라이언트) |
 | 포트 | 공개 8000(`/admin`·`/s`·`/sessions`·`/ws`·`/assets`), 내부 8001(`/internal`, `X-Internal-Token`) |
-| 필요한 env | `DATABASE_URL` `RABBITMQ_URL` `JWT_SECRET` `INTERNAL_TOKEN` `ASSESSMENT_MCP_TOKEN` `DEBATE_MCP_URL` `RAG_MCP_URL` `ASSESSMENT_MCP_URL` `SCENARIOS_DIR` `OPENAI_API_KEY` `OPENAI_MODEL` `MODEL_INTENT` `MODEL_TURN` `MODEL_PERSONA` `MODEL_ASSISTANT` `MODEL_EVALUATOR` `GEMINI_API_KEY` `WEB_ORIGIN` `WEB_BASE_URL` `CONTACT_EMAIL` `SESSION_COST_HARD_USD` `AGENT_RUNNER` `LLM_FAKE` `LLM_FAULT` `ENABLE_TEST_API` |
+| 필요한 env | `DATABASE_URL` `RABBITMQ_URL` `JWT_SECRET` `INTERNAL_TOKEN` `ASSESSMENT_MCP_TOKEN` `DEBATE_MCP_URL` `RAG_MCP_URL` `ASSESSMENT_MCP_URL` `SCENARIOS_DIR` `OPENAI_API_KEY` `OPENAI_MODEL` `MODEL_INTENT` `MODEL_TURN` `MODEL_PERSONA` `MODEL_ASSISTANT` `MODEL_EVALUATOR` `OPENAI_API_KEY_PERSONAL` `GEMINI_API_KEY` `WEB_ORIGIN` `WEB_BASE_URL` `CONTACT_EMAIL` `SESSION_COST_HARD_USD` `AGENT_RUNNER` `LLM_FAKE` `LLM_FAULT` `ENABLE_TEST_API` |
 | 의존 서비스 | postgres(필수), rabbitmq(큐 발행), debate-mcp·rag-mcp·assessment-mcp(토론 그래프·결정적 노드의 도구 호출) |
 
 env의 의미·기본값은 `config.py`(`get_settings`)와 `agent/llm/roles.py`, 예시는 `infra/.env.example`이다. 로컬 실행은 `infra/.env.local` → `infra/.env` 순으로 읽고 이미 있는 환경변수를 덮어쓰지 않는다. `LLM_FAKE=1`은 LLM 호출만 결정적 고정 응답으로 바꾸고, `ENABLE_TEST_API=1`이면 `/internal/test/*`가 열린다(운영은 비움). `LLM_FAULT`는 e2e 장애 주입 전용이다.
@@ -135,18 +135,18 @@ debate-mcp·assessment-mcp도 떠 있어야 토론 그래프와 리포트 평가
 
 ## 테스트
 
-pytest 단위·통합 테스트다. LLM·MCP·RabbitMQ는 mock이고, DB 테스트는 `make up SCOPE=infra`의 postgres에 실행마다 임시 DB(`dayzero_test_<랜덤>`)를 만들어 쓴다(postgres가 없으면 DB 테스트만 건너뛴다). `live` 표시는 실제 LLM을 부르는 테스트로 `make test`에서 빠지고(`ALLOW_API=1`이 없으면 skip) `make eval PROFILE=eval-text SUITE=api ALLOW_API=1`로 따로 돈다.
+pytest 단위·통합 테스트다. LLM·MCP·RabbitMQ는 mock이고, DB 테스트는 `make infra-up`의 postgres에 실행마다 임시 DB(`dayzero_test_<랜덤>`)를 만들어 쓴다(postgres가 없으면 DB 테스트만 건너뛴다). `live` 표시는 실제 LLM을 부르는 테스트로 `make test`에서 빠지고 `make test-live`로 따로 돈다.
 
 ```
 make test                                              # 전체 서비스 단위 테스트
 uv run --directory services/api pytest -q -m "not live"   # 이 서비스만
-make eval PROFILE=eval-text SUITE=api ALLOW_API=1      # live 테스트(제한 키 OPENAI_API_KEY 필요, 비용 발생)
+make test-live                                         # live 테스트(OPENAI_API_KEY 필요, 비용 발생)
 ```
 
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 298개(live 3개 포함, `make test`는 live를 뺀다).
+총 304개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -228,7 +228,7 @@ make eval PROFILE=eval-text SUITE=api ALLOW_API=1      # live 테스트(제한 �
 
 </details>
 
-<details><summary><code>tests/agent/test_llm.py</code> (8)</summary>
+<details><summary><code>tests/agent/test_llm.py</code> (9)</summary>
 
 - `test_role_models_and_temperature`
 - `test_missing_key_is_config_error`
@@ -237,6 +237,7 @@ make eval PROFILE=eval-text SUITE=api ALLOW_API=1      # live 테스트(제한 �
 - `test_llm_fake_needs_no_key`
 - `test_agent_runner_default_is_session`
 - `test_fake_intent_rules`
+- `test_fake_stance_judge_follows_where_the_draft_ends`
 - `test_llm_fake_mode_is_deterministic`
 
 </details>
@@ -302,15 +303,20 @@ make eval PROFILE=eval-text SUITE=api ALLOW_API=1      # live 테스트(제한 �
 
 </details>
 
-<details><summary><code>tests/agent/test_persona_voice.py</code> (11)</summary>
+<details><summary><code>tests/agent/test_persona_voice.py</code> (16)</summary>
 
 - `test_stance_block_is_state_not_instruction`
 - `test_undeclared_stance_is_a_fact_and_only_structured_output_counts`
 - `test_unnamed_objection_counts_from_stored_intents`
 - `test_moved_stance_is_shown_as_a_fact`
 - `test_card_turn_shows_facts_and_scene_purpose_from_data`
+- `test_stance_judge_gets_its_own_question_not_the_intent_prompt`
 - `test_agreeable_phrasing_with_reservation_passes`
+- `test_concession_to_other_option_keeps_support_when_assigned_that_option`
+- `test_concession_to_own_option_then_other_is_a_move`
 - `test_explicit_support_move_in_text_is_rejected_even_with_own_stance`
+- `test_move_verdict_naming_own_option_is_not_trusted`
+- `test_low_confidence_or_none_verdict_passes`
 - `test_withdrawal_in_text_conflicting_with_structured_support_is_regenerated`
 - `test_withdrawal_of_own_option_in_text_is_rejected_without_structured_stance`
 - `test_quiet_skips_a_second_open_question_until_spoken_again`

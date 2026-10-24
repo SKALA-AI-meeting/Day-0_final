@@ -3,7 +3,7 @@
 
 import re
 
-from conftest import intent_of, model_reply, say
+from conftest import intent_of, say, stance_reply
 
 SUPPORT_FIRE = {"option_id": "fire", "stance": "support"}
 
@@ -39,13 +39,14 @@ async def test_stance_block_is_state_not_instruction(harness):
 
 
 async def test_undeclared_stance_is_a_fact_and_only_structured_output_counts(harness):
-    """입장이 없는 상태는 구조화 출력만 본다: 안을 나열하는 문장을 판정이 propose로 읽어도 통과."""
+    """입장이 없는 상태는 구조화 출력만 본다: 내 안이 없어 입장 판정을 묻지 않는다."""
     h = problem(harness, persona=[say("가뭄, 침수, 수돗물 불신 중 어디서 제일 자주 겪나요?")])
-    h.intent.script = [model_reply(intent_of("propose", key="water_p1"))]
+    h.intent.script = [stance_reply("move", "water_p1")]
     await h.run("phase_started")
     assert "- 이 단계의 내 안: 아직 없음" in block(h.snapshots[0]["text"], "내 입장")
     post = h.posted("p1")[0]
     assert post["meta"]["stance_check"] == "pass" and h.server.support["p1"] is None
+    assert h.intent.calls == []  # 판정 호출 없음
     h.persona.script = [
         say("가뭄이죠.", {"option_id": "water_p1", "stance": "support"}),
         say("음."),
@@ -116,16 +117,67 @@ async def test_card_turn_shows_facts_and_scene_purpose_from_data(harness):
 # ---- 실제 지지 이동만 거부 ---------------------------------------------------------------
 
 
-async def test_agreeable_phrasing_with_reservation_passes(harness):
+def fire_id(h) -> str:
+    return next(o["option_id"] for o in h.server.options if o["scenario_option_key"] == "fire")
+
+
+async def test_stance_judge_gets_its_own_question_not_the_intent_prompt(harness):
+    """입장 판정은 지원자 의도 분류 프롬프트가 아니라 stance_check.md와 [내 안]·[초안]을 쓴다."""
     h = harness("keyword", persona=[say("물도 일리는 있는데, 그래도 불이에요.", SUPPORT_FIRE)])
-    h.intent.script = [model_reply(intent_of("agree", key="water", reservation=True))]
+    h.intent.script = [stance_reply("keep", "fire")]
+    mid = h.candidate("한결님, 물은요?", intent_of("question", to=("p1",)))
+    await h.run("message", message_id=mid)
+    call = h.intent.calls[0]
+    assert call.schema is not None and set(call.schema["properties"]) == {
+        "verdict",
+        "target",
+        "confidence",
+    }
+    system, user = (str(m.content) for m in call.messages)
+    assert system == h.server.catalog.prompts["stance_check.md"]
+    assert '"내 안": {"id": "fire", "label": "불"}' in user and '"초안": "물도' in user
+    assert '"메시지"' not in user and "카탈로그 안" not in user and "wanted" not in user
+
+
+async def test_agreeable_phrasing_with_reservation_passes(harness):
+    """양보 뒤 자기 안에 서는 문장은 keep → 통과(유보 예외 코드 없이 질문 자체가 거른다)."""
+    h = harness("keyword", persona=[say("물도 일리는 있는데, 그래도 불이에요.", SUPPORT_FIRE)])
+    h.intent.script = [stance_reply("keep", "fire")]
     mid = h.candidate("한결님, 물은요?", intent_of("question", to=("p1",)))
     await h.run("message", message_id=mid)
     post = h.posted("p1")[0]
     assert post["meta"]["stance_check"] == "pass" and len(h.persona.calls) == 1
-    assert h.server.support["p1"] == next(
-        o["option_id"] for o in h.server.options if o["scenario_option_key"] == "fire"
+    assert h.server.support["p1"] == fire_id(h)
+
+
+async def test_concession_to_other_option_keeps_support_when_assigned_that_option(harness):
+    """ "A도 좋지만 저는 B가 낫다"를 B 담당 자리가 말하면 keep: 구조화 stance 없이도 지지 기록."""
+    h = harness("keyword", persona=[say("물도 좋지만 저는 불이 낫다고 봐요.")])
+    h.intent.script = [stance_reply("keep", "fire")]
+    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
+    await h.run("message", message_id=mid)
+    post = h.posted("p1")[0]
+    assert post["meta"]["stance_check"] == "pass" and len(h.intent.calls) == 1
+    assert h.server.support["p1"] == fire_id(h)
+
+
+async def test_concession_to_own_option_then_other_is_a_move(harness):
+    """같은 문장을 A(불) 담당이 "불도 좋지만 저는 물"로 말하면 move → 재생성."""
+    h = harness(
+        "keyword",
+        persona=[
+            say("불도 좋지만 저는 물이 낫다고 봐요.", SUPPORT_FIRE),
+            say("저는 그래도 불이에요.", SUPPORT_FIRE),
+        ],
     )
+    h.intent.script = [stance_reply("move", "water"), stance_reply("keep", "fire")]
+    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
+    await h.run("message", message_id=mid)
+    post = h.posted("p1")[0]
+    assert post["content"] == "저는 그래도 불이에요."
+    assert post["meta"]["stance_check"] == "regenerated"
+    assert post["meta"]["stance_violation"] == "문장이 계획과 다른 안을 지지함"
+    assert h.server.support["p1"] == fire_id(h)
 
 
 async def test_explicit_support_move_in_text_is_rejected_even_with_own_stance(harness):
@@ -133,19 +185,34 @@ async def test_explicit_support_move_in_text_is_rejected_even_with_own_stance(ha
         "keyword",
         persona=[say("물로 가요.", SUPPORT_FIRE), say("저는 그래도 불이에요.", SUPPORT_FIRE)],
     )
-    h.intent.script = [
-        model_reply(intent_of("agree", key="water")),
-        model_reply(intent_of("propose", key="fire")),
-    ]
+    h.intent.script = [stance_reply("move", "water"), stance_reply("keep", "fire")]
     mid = h.candidate("한결님, 물은요?", intent_of("question", to=("p1",)))
     await h.run("message", message_id=mid)
     post = h.posted("p1")[0]
     assert post["content"] == "저는 그래도 불이에요."
     assert post["meta"]["stance_check"] == "regenerated"
     # 재생성 뒤 게시 문장의 판정(불 지지)과 저장 입장이 같다
-    assert h.server.support["p1"] == next(
-        o["option_id"] for o in h.server.options if o["scenario_option_key"] == "fire"
-    )
+    assert h.server.support["p1"] == fire_id(h)
+
+
+async def test_move_verdict_naming_own_option_is_not_trusted(harness):
+    """move인데 고른 안이 내 안이면 앞뒤가 맞지 않는 판정이라 쓰지 않는다(통과)."""
+    h = harness("keyword", persona=[say("저는 불이요.", SUPPORT_FIRE)])
+    h.intent.script = [stance_reply("move", "fire")]
+    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
+    await h.run("message", message_id=mid)
+    assert h.posted("p1")[0]["meta"]["stance_check"] == "pass"
+
+
+async def test_low_confidence_or_none_verdict_passes(harness):
+    h = harness("keyword", persona=[say("물로 가요.", SUPPORT_FIRE), say("왜요?")])
+    h.intent.script = [stance_reply("move", "water", confidence="low"), stance_reply("none")]
+    mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
+    await h.run("message", message_id=mid)
+    assert [p["meta"]["stance_check"] for p in h.posted("p1")] == ["pass"]
+    mid = h.candidate("한결님, 이유는요?", intent_of("question", to=("p1",)))
+    await h.run("message", message_id=mid)
+    assert [p["meta"]["stance_check"] for p in h.posted("p1")] == ["pass", "pass"]
 
 
 async def test_withdrawal_in_text_conflicting_with_structured_support_is_regenerated(harness):
@@ -154,26 +221,18 @@ async def test_withdrawal_in_text_conflicting_with_structured_support_is_regener
         "keyword",
         persona=[say("불은 보류할게요.", SUPPORT_FIRE), say("저는 그래도 불이에요.", SUPPORT_FIRE)],
     )
-    h.intent.script = [
-        model_reply(intent_of("withhold", key="fire")),
-        model_reply(intent_of("propose", key="fire")),
-    ]
+    h.intent.script = [stance_reply("withdraw", "fire"), stance_reply("keep", "fire")]
     mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
     await h.run("message", message_id=mid)
     post = h.posted("p1")[0]
     assert post["content"] == "저는 그래도 불이에요."
     assert post["meta"]["stance_check"] == "regenerated"
-    assert h.server.support["p1"] == next(
-        o["option_id"] for o in h.server.options if o["scenario_option_key"] == "fire"
-    )
+    assert h.server.support["p1"] == fire_id(h)
 
 
 async def test_withdrawal_of_own_option_in_text_is_rejected_without_structured_stance(harness):
     h = harness("keyword", persona=[say("불은 보류할게요."), say("불은 보류할게요.")])
-    h.intent.script = [
-        model_reply(intent_of("withhold", key="fire")),
-        model_reply(intent_of("withhold", key="fire")),
-    ]
+    h.intent.script = [stance_reply("withdraw", "fire"), stance_reply("withdraw", "fire")]
     mid = h.candidate("한결님?", intent_of("question", to=("p1",)))
     await h.run("message", message_id=mid)
     post = h.posted("p1")[0]

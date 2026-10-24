@@ -142,10 +142,42 @@ def _last_human(messages: list[BaseMessage]) -> str:
     return next((str(m.content) for m in reversed(messages) if isinstance(m, HumanMessage)), "")
 
 
+def _stance(data: dict[str, Any]) -> str:
+    """입장 판정(가짜 모델, persona.STANCE_SCHEMA). 프롬프트와 같은 원리로 초안이 **끝내 어디에
+    서는지**로 정한다: 가장 뒤에 나온 안 라벨이 내 안이면 keep, 다른 안이면 move("물도 좋지만 저는
+    불"은 keep). 보류어가 마지막 안 언급보다 뒤에 있으면(또는 안 언급이 없으면) withdraw, 아무 안도
+    없으면 none. 의도 분류 역할 모델이 `[초안]` 입력을 받으면 이 규칙을 쓴다. 결정적 테스트용 근사라
+    마지막 언급이 질문·보류 대상인 문장("저는 불이 좋아요. 물은 어떤가요?")은
+    실제 모델과 다르게 판정한다."""
+    text = str(data.get("초안") or "")
+    mine = data.get("내 안") or {}
+    named = [(mine.get("label"), mine.get("id"), True)] + [
+        (o.get("label"), o.get("id"), False) for o in data.get("다른 안") or []
+    ]
+    mentions = [
+        (text.rfind(label), oid, is_mine)
+        for label, oid, is_mine in named
+        if label and label in text
+    ]
+    last = max(mentions, default=None)
+    withhold_at = max((text.rfind(w) for w in _WITHHOLD if w in text), default=-1)
+    if withhold_at >= 0 and (last is None or withhold_at > last[0]):
+        out = {"verdict": "withdraw", "target": mine.get("id"), "confidence": "high"}
+    elif last is None:
+        out = {"verdict": "none", "target": None, "confidence": "high"}
+    elif last[2]:
+        out = {"verdict": "keep", "target": last[1], "confidence": "high"}
+    else:
+        out = {"verdict": "move", "target": last[1], "confidence": "high"}
+    return json.dumps(out, ensure_ascii=False)
+
+
 def _intent(messages: list[BaseMessage], _tools: Any) -> str:
     """키워드 규칙(가짜 모델): 보류 → withhold, 반대어 → oppose, 동의어 → agree, 안 라벨 → propose,
     물음표 → question."""
     data = json.loads(_last_human(messages))
+    if "초안" in data:
+        return _stance(data)
     text = str(data.get("메시지") or "")
     labels: list[tuple[str, str, str]] = [
         (o["label"], "target_option_id", o["option_id"]) for o in data.get("나온 안") or []

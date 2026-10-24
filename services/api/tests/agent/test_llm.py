@@ -103,6 +103,29 @@ async def test_fake_intent_rules(catalog):
     assert (await classify("음 잘 모르겠네요"))["confidence"] == "low"
 
 
+async def test_fake_stance_judge_follows_where_the_draft_ends(catalog):
+    """결정적 입장 판정도 양보 원리를 따른다: 마지막에 선 안이 내 안이면 keep."""
+    from app.agent import persona
+    from app.agent.manager.rules import StancePlan
+
+    llm = make_llm("intent", FAKE_ENV)
+    ds = {
+        "options": [{"option_id": "opt-fire", "label": "불", "scenario_option_key": "fire"}],
+        "catalog_options": catalog.catalog_options("keyword", None),
+    }
+    plan = StancePlan(seat="p1", phase="keyword", key="fire", option_id="opt-fire", label="불")
+
+    async def judge(text):
+        return await persona.judge_stance(llm, text, plan, ds, [])
+
+    assert (await judge("물도 좋지만 저는 불이 낫다고 봐요."))["verdict"] == "keep"
+    moved = await judge("불도 좋지만 저는 물이 낫다고 봐요.")
+    assert moved["verdict"] == "move" and moved["targets"] == {"water"}
+    assert (await judge("불은 보류할게요."))["verdict"] == "withdraw"
+    assert (await judge("보류는 아니고, 그래도 불이에요."))["verdict"] == "keep"
+    assert (await judge("왜 그렇게 보세요?"))["verdict"] == "none"
+
+
 async def _scripted_session(h) -> dict:
     """같은 단계 시드·같은 지원자 입력: 단계 시작 → 지원자 제안(메일박스 분류) → 지명 질문."""
     await h.run("phase_started")
