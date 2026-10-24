@@ -620,3 +620,146 @@ async def test_judge_files_keeps_same_named_files_apart(tmp_path):
     assert got["files"] == ["a/session.json", "b/session.json"] == list(got["per_file"])
     assert got["combined"]["posts"] == 2 and [r["source"] for r in got["rows"]] == got["files"]
     assert at.source_labels([paths[0], paths[0]]) == ["session.json", "session.json#2"]
+
+
+async def test_relabel_keeps_ids_and_not_attribution_is_noise_not_error():
+    items = [
+        {
+            "item_id": "i1",
+            "post": {"id": "p", "speaker": "p1", "phase": "problem", "order": 2, "content": "x"},
+            "sources": [
+                {"id": "s", "sender": "candidate", "phase": "problem", "order": 1, "content": "y"}
+            ],
+            "extracted_attributions": [
+                {"attribution_id": "i1#a1", "quote": "q1", "target": "candidate", "claim": "c1"},
+                {"attribution_id": "i1#a2", "quote": "q2", "target": "p1", "claim": "c2"},
+            ],
+        },
+        {"item_id": "i2", "post": {}, "sources": [], "extracted_attributions": []},
+    ]
+    seen = []
+
+    async def ask(payload):
+        seen.append((payload["_prompt"], [a["attribution_id"] for a in payload["attributions"]]))
+        return {
+            "labels": [{"attribution_id": "i1#a9", "verdict": "supported", "reason": "없는 id"}]
+        }
+
+    judge = at.AttributionJudge({"VC_JUDGE_MODEL": "t"}, ask=ask)
+    assert "[귀속의 정의]" in judge.system("relabel") and "{criteria}" not in judge.system(
+        "relabel"
+    )
+    rows = await at.relabel_items(items, judge)
+    # target이 화자 자신(i1#a2)은 호출 없이 not_attribution, 귀속 0개 항목(i2)은 호출 없음
+    assert seen == [("relabel", ["i1#a1"])] and judge.calls == 1
+    assert rows[0]["labels"] == [  # 목록의 id만·원래 순서, 빠진 id는 undeterminable
+        {"attribution_id": "i1#a1", "verdict": "undeterminable", "owner": "unclear", "reason": ""},
+        {
+            "attribution_id": "i1#a2",
+            "verdict": "not_attribution",
+            "owner": "speaker",
+            "reason": "화자 자신에 대한 말(target == speaker)",
+        },
+    ]
+    assert rows[1] == {"item_id": "i2", "labels": [], "missed_attributions": []}
+
+    def row(order, seat, verdicts):
+        return {
+            "run": 0,
+            "unit": [0, "s"],
+            "order": order,
+            "seat": seat,
+            "phase": "problem",
+            "content": "",
+            "sources_truncated": False,
+            "draft": at.draft_checks({}),
+            "rejected_claims": [],
+            "attributions": [
+                {
+                    "quote": "q",
+                    "target": "candidate",
+                    "claim": "",
+                    "form": "statement",
+                    "verdict": v,
+                    "source_ids": [],
+                    "reason": "",
+                }
+                for v in verdicts
+            ],
+        }
+
+    # 요약: not_attribution은 귀속 수·비율 밖이고 extraction_noise로 따로 센다
+    s = at.summarize(
+        [row(1, "p1", ["not_attribution", "overstated"]), row(2, "p3", ["not_attribution"])]
+    )
+    assert (s["attributions"], s["extraction_noise"]) == (1, 2)
+    assert s["per_attribution"]["overstated"] == {"n": 1, "rate": 1.0}
+    assert s["per_post"]["with_attribution"] == {"n": 1, "rate": 0.5}
+    assert s["frequency"]["histogram"] == {"0": 1, "1": 1, "2": 0, "3+": 0}
+    parsed = at.parse_verdict(
+        {
+            "attributions": [
+                {
+                    "quote": "q",
+                    "target": "p1",
+                    "claim": "",
+                    "form": "statement",
+                    "verdict": "not_attribution",
+                }
+            ]
+        }
+    )
+    assert parsed["attributions"][0]["verdict"] == "not_attribution"
+
+
+def test_agreement_normalizes_labeler_not_attribution_reason():
+    items = [
+        {
+            "item_id": "i1",
+            "split": "calib",
+            "type": "normal",
+            "extracted_attributions": [
+                {"attribution_id": "i1#a1", "target": "p1", "claim": "x"},
+                {"attribution_id": "i1#a2", "target": "candidate", "claim": "y"},
+            ],
+            "gold_attributions": [],
+        }
+    ]
+    human = [
+        {
+            "item_id": "i1",
+            "labels": [
+                {
+                    "attribution_id": "i1#a1",
+                    "verdict": "supported",
+                    "reason": "귀속 아님: 자기 의견",
+                },
+                {"attribution_id": "i1#a2", "verdict": "supported", "reason": "원문과 같다"},
+            ],
+        }
+    ]
+    judge = [
+        {
+            "item_id": "i1",
+            "labels": [
+                {"attribution_id": "i1#a1", "verdict": "not_attribution", "reason": ""},
+                {"attribution_id": "i1#a2", "verdict": "supported", "reason": ""},
+            ],
+        }
+    ]
+    got = ca.report(items, {"A": human, "judge": judge}, None)
+    assert got["pairs"]["A~judge"]["agree"] == 2 and got["pairs"]["A~judge"]["kappa"] == 1.0
+    assert got["distribution"]["A"] == {"not_attribution": 1, "supported": 1}
+    assert got["pairs_without_not_attribution_class"]["A~judge"]["agree"] == 2
+    old_judge = [  # v1 판정은 그런 구절을 unsupported로 냈다
+        {
+            "item_id": "i1",
+            "labels": [
+                {"attribution_id": "i1#a1", "verdict": "unsupported", "reason": ""},
+                {"attribution_id": "i1#a2", "verdict": "supported", "reason": ""},
+            ],
+        }
+    ]
+    got = ca.report(items, {"A": human, "judge": old_judge}, None)
+    assert got["pairs"]["A~judge"]["matrix"]["not_attribution"]["unsupported"] == 1
+    assert got["pairs_without_not_attribution_class"]["A~judge"]["agree"] == 1

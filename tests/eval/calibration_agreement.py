@@ -10,6 +10,10 @@
 (item_id, attribution_id)에 두 라벨러가 모두 라벨을 냈을 때만 일치도에 들고, 항목에 없는 id의
 라벨은 버린다(배열 번호로 잇지 않는다).
 
+라벨러가 "귀속 아님"으로 시작하는 이유를 단 supported와 판정 모델의 not_attribution은 같은
+`not_attribution` 클래스로 정규화한다(`pairs`, 5클래스). 그 클래스를 supported로 접은 4클래스 결과는
+`pairs_without_not_attribution_class`에 함께 둔다.
+
 출력: 라벨러 쌍마다 일치율·Cohen's kappa·혼동행렬(행 = 첫째, 열 = 둘째), 항목 유형별 일치율,
 불일치 항목 목록(팀이 확인할 것), 귀속 추출 재현율 = 추출 귀속 / (추출 귀속 + 라벨러가 빠졌다고
 적은 귀속) 과 고정 초안의 gold 대비 재현율(문구 유사도로 짝지음). 사람 정답이 아니라 모델 두 개의
@@ -28,7 +32,9 @@ from pathlib import Path
 from typing import Any
 
 sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
-from eval.attribution import LABELS  # noqa: E402
+from eval.attribution import LABELS, NOT_ATTRIBUTION, VERDICTS  # noqa: E402
+
+NOT_ATTRIBUTION_PREFIX = "귀속 아님"  # 라벨러 지침: 귀속이 아니면 supported + 이 접두의 이유
 
 MATCH = 0.45  # gold 귀속과 추출 귀속을 같은 것으로 보는 claim 유사도
 
@@ -37,11 +43,21 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text("utf-8").splitlines() if line.strip()]
 
 
+def normalize(verdict: str, reason: str, with_class: bool) -> str | None:
+    """라벨 정규화. with_class면 라벨러의 "귀속 아님" supported와 판정 모델의 not_attribution을 같은
+    not_attribution 클래스로 두고, 아니면 둘 다 supported로 접는다(4라벨)."""
+    if verdict == NOT_ATTRIBUTION or (
+        verdict == "supported" and reason.strip().startswith(NOT_ATTRIBUTION_PREFIX)
+    ):
+        return NOT_ATTRIBUTION if with_class else "supported"
+    return verdict if verdict in LABELS else None
+
+
 def label_map(
-    rows: list[dict[str, Any]], items: dict[str, dict[str, Any]]
+    rows: list[dict[str, Any]], items: dict[str, dict[str, Any]], with_class: bool = True
 ) -> dict[tuple[str, str], str]:
     """{(item_id, attribution_id): 라벨}. 항목의 `extracted_attributions`에 있는 id만 받는다(추출을
-    다시 해 id가 바뀐 라벨은 버린다). 배열 번호로는 잇지 않는다."""
+    다시 해 id가 바뀐 라벨은 버린다). 배열 번호로는 잇지 않는다. 라벨은 normalize를 거친다."""
     known = {
         iid: {a["attribution_id"] for a in item.get("extracted_attributions") or []}
         for iid, item in items.items()
@@ -49,8 +65,9 @@ def label_map(
     out = {}
     for row in rows:
         for lab in row.get("labels") or []:
-            verdict, aid = lab.get("verdict"), lab.get("attribution_id")
-            if verdict in LABELS and aid in known.get(row["item_id"], set()):
+            aid = lab.get("attribution_id")
+            verdict = normalize(str(lab.get("verdict")), str(lab.get("reason", "")), with_class)
+            if verdict and aid in known.get(row["item_id"], set()):
                 out[(row["item_id"], aid)] = verdict
     return out
 
@@ -58,14 +75,17 @@ def label_map(
 def confusion(a: dict, b: dict) -> dict[str, Any]:
     """같은 키에 둘 다 라벨이 있는 것만. 행 a, 열 b."""
     keys = sorted(set(a) & set(b))
-    matrix = {x: {y: 0 for y in LABELS} for x in LABELS}
+    matrix = {x: {y: 0 for y in VERDICTS} for x in VERDICTS}
     for k in keys:
         matrix[a[k]][b[k]] += 1
     n = len(keys)
-    agree = sum(matrix[x][x] for x in LABELS)
+    agree = sum(matrix[x][x] for x in VERDICTS)
     pa = agree / n if n else None
     pe = (
-        sum((sum(matrix[x].values()) / n) * (sum(matrix[y][x] for y in LABELS) / n) for x in LABELS)
+        sum(
+            (sum(matrix[x].values()) / n) * (sum(matrix[y][x] for y in VERDICTS) / n)
+            for x in VERDICTS
+        )
         if n
         else None
     )
@@ -173,16 +193,22 @@ def report(
         items = [i for i in items if i.get("split") == split]
     ids = {i["item_id"] for i in items}
     by_id = {i["item_id"]: i for i in items}
-    maps = {
-        name: {k: v for k, v in label_map(rows, by_id).items() if k[0] in ids}
-        for name, rows in labels.items()
-    }
-    pairs = {}
-    for a, b in combinations(sorted(maps), 2):
-        pairs[f"{a}~{b}"] = {
-            **confusion(maps[a], maps[b]),
-            "by_type": by_type(by_id, maps[a], maps[b]),
+
+    def pairs_for(with_class: bool) -> tuple[dict, dict]:
+        maps = {
+            name: {k: v for k, v in label_map(rows, by_id, with_class).items() if k[0] in ids}
+            for name, rows in labels.items()
         }
+        out = {}
+        for a, b in combinations(sorted(maps), 2):
+            out[f"{a}~{b}"] = {
+                **confusion(maps[a], maps[b]),
+                "by_type": by_type(by_id, maps[a], maps[b]),
+            }
+        return maps, out
+
+    maps, pairs = pairs_for(True)  # 5클래스: "귀속 아님"·not_attribution을 한 클래스로
+    _, pairs_4 = pairs_for(False)  # 4클래스: 둘 다 supported로 접음(이전 보고와 비교용)
     distribution = {name: dict(Counter(m.values())) for name, m in maps.items()}
     return {
         "split": split or "all",
@@ -191,6 +217,9 @@ def report(
         "labels": {name: len(m) for name, m in maps.items()},
         "distribution": distribution,
         "pairs": pairs,
+        "pairs_without_not_attribution_class": {
+            k: {x: v[x] for x in ("n", "agree", "rate", "kappa")} for k, v in pairs_4.items()
+        },
         "extraction": extraction_recall(items, labels),
         "note": "두 모델의 라벨이지 사람 정답이 아니다. 불일치 항목만 팀이 확인한다.",
     }

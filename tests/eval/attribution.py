@@ -9,6 +9,8 @@ persona_eval(대본 실행 사건 목록)과 virtual_candidate(세션 내보내�
         judge <events.json|session.json|eval-live.md>... [--out X]
     uv run --project services/api python tests/eval/attribution.py \\
         extract <calibration.jsonl> [--labels OUT]
+    uv run --project services/api python tests/eval/attribution.py \\
+        relabel <calibration.jsonl> [--out OUT]
 
 `judge`는 기록된 실행(persona_eval `PERSONA_EVAL_DUMP` 사건 목록, 가상 세션 `session.json`,
 eval-live 페르소나 md)을 다시 판정해 요약을 낸다. `extract`는 보정 세트의 항목마다 귀속을 뽑아
@@ -37,6 +39,8 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 LABELS = ("supported", "overstated", "unsupported", "undeterminable")
+NOT_ATTRIBUTION = "not_attribution"  # 추출됐지만 귀속이 아닌 구절(화자 자신의 의견·호칭 등)
+VERDICTS = (*LABELS, NOT_ATTRIBUTION)
 ERRORS = ("overstated", "unsupported")
 FORMS = ("statement", "presupposing_question", "elliptical")
 PEERS = ("p1", "p2", "p3")
@@ -63,7 +67,7 @@ SCHEMA = {
                     "target": {"type": "string", "enum": list(TARGETS)},
                     "claim": {"type": "string"},
                     "form": {"type": "string", "enum": list(FORMS)},
-                    "verdict": {"type": "string", "enum": list(LABELS)},
+                    "verdict": {"type": "string", "enum": list(VERDICTS)},
                     "source_ids": {"type": "array", "items": {"type": "string"}},
                     "reason": {"type": "string"},
                 },
@@ -82,6 +86,28 @@ SCHEMA = {
                 },
             },
         },
+    },
+}
+
+RELABEL_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["labels"],
+    "properties": {
+        "labels": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["attribution_id", "owner", "verdict", "reason"],
+                "properties": {
+                    "attribution_id": {"type": "string"},
+                    "owner": {"type": "string", "enum": ["speaker", "target", "unclear"]},
+                    "verdict": {"type": "string", "enum": list(VERDICTS)},
+                    "reason": {"type": "string"},
+                },
+            },
+        }
     },
 }
 
@@ -389,7 +415,7 @@ def parse_verdict(raw: Any) -> dict[str, Any]:
                 "target": target if target in TARGETS else seats.get(target, target),
                 "claim": str(a.get("claim", "")).strip(),
                 "form": a.get("form") if a.get("form") in FORMS else "statement",
-                "verdict": a.get("verdict") if a.get("verdict") in LABELS else "undeterminable",
+                "verdict": a.get("verdict") if a.get("verdict") in VERDICTS else "undeterminable",
                 "source_ids": [str(x) for x in a.get("source_ids") or []],
                 "reason": str(a.get("reason", "")).strip(),
             }
@@ -434,21 +460,24 @@ class AttributionJudge:
                 timeout=90,
             )
 
-    async def ask(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def system(self, key: str) -> str:
+        """역할별 system 프롬프트. 공용 기준(criteria)을 `{criteria}` 자리에 넣는다."""
+        return self.prompts[key]["system"].replace("{criteria}", self.prompts.get("criteria", ""))
+
+    async def _complete(self, key: str, schema: dict[str, Any], payload: dict[str, Any]) -> Any:
         self.calls += 1
         if self._ask is not None:
-            raw = await self._ask(payload)
             self.used_models[self.model] += 1
-            return parse_verdict(raw)
+            return await self._ask({**payload, "_prompt": key})
         body = {
             "model": self.model,
             "temperature": 0,
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {"name": "attributions", "strict": True, "schema": SCHEMA},
+                "json_schema": {"name": key, "strict": True, "schema": schema},
             },
             "messages": [
-                {"role": "system", "content": self.prompts["attribution"]["system"]},
+                {"role": "system", "content": self.system(key)},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
             ],
         }
@@ -456,7 +485,35 @@ class AttributionJudge:
         response.raise_for_status()
         data = response.json()
         self.used_models[data.get("model", self.model)] += 1
-        return parse_verdict(json.loads(data["choices"][0]["message"]["content"]))
+        return json.loads(data["choices"][0]["message"]["content"])
+
+    async def ask(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """추출 + 판정(attribution 프롬프트)."""
+        return parse_verdict(await self._complete("attribution", SCHEMA, payload))
+
+    async def relabel(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        """고정된 귀속 목록(payload["attributions"])만 다시 판정(relabel 프롬프트). 목록에 있는
+        id만 돌려주고 빠진 id는 undeterminable로 채운다."""
+        raw = await self._complete("relabel", RELABEL_SCHEMA, payload)
+        wanted = [a["attribution_id"] for a in payload["attributions"]]
+        got = {
+            str(x.get("attribution_id")): x
+            for x in (raw or {}).get("labels") or []
+            if isinstance(x, dict)
+        }
+        return [
+            {
+                "attribution_id": aid,
+                "verdict": (
+                    got[aid].get("verdict")
+                    if aid in got and got[aid].get("verdict") in VERDICTS
+                    else "undeterminable"
+                ),
+                "owner": got.get(aid, {}).get("owner", "unclear"),
+                "reason": str(got.get(aid, {}).get("reason", "")).strip(),
+            }
+            for aid in wanted
+        ]
 
     def info(self) -> dict[str, Any]:
         return {
@@ -484,6 +541,9 @@ async def judge_posts(
             continue
         payload = payload_for(transcript, index, names)
         verdict = await judge.ask(payload)
+        for a in verdict["attributions"]:  # 화자가 자기 자신에 대해 한 말은 정의상 귀속이 아니다
+            if a["target"] == m["sender"]:
+                a["verdict"], a["reason"] = NOT_ATTRIBUTION, "화자 자신에 대한 말"
         rows.append(
             {
                 "run": m["unit"][0],
@@ -507,16 +567,23 @@ async def judge_posts(
 # ---- 요약 ------------------------------------------------------------
 
 
+def real_attributions(row: dict[str, Any]) -> list[dict[str, Any]]:
+    """귀속으로 세는 것만(not_attribution 제외)."""
+    return [a for a in row["attributions"] if a["verdict"] != NOT_ATTRIBUTION]
+
+
 def _attr_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    attrs = [a for r in rows for a in r["attributions"]]
+    attrs = [a for r in rows for a in real_attributions(r)]
+    noise = sum(a["verdict"] == NOT_ATTRIBUTION for r in rows for a in r["attributions"])
     by = Counter(a["verdict"] for a in attrs)
     posts = len(rows)
-    with_attr = [r for r in rows if r["attributions"]]
+    with_attr = [r for r in rows if real_attributions(r)]
     errored = [r for r in rows if any(a["verdict"] in ERRORS for a in r["attributions"])]
-    hist = Counter(min(len(r["attributions"]), 3) for r in rows)
+    hist = Counter(min(len(real_attributions(r)), 3) for r in rows)
     return {
         "posts": posts,
         "attributions": len(attrs),
+        "extraction_noise": noise,  # 추출됐지만 귀속이 아니라고 판정된 구절(비율 분모·분자 밖)
         "per_attribution": {
             **{
                 label: {"n": by.get(label, 0), "rate": _rate(by.get(label, 0), len(attrs))}
@@ -564,7 +631,7 @@ def _attr_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """건수와 분모를 함께 낸다. 귀속별 비율(분모 귀속 수)과 게시물별 비율(분모 게시물 수·귀속 있는
     게시물 수)을 따로 두고, 과장과 근거 없음을 합치지 않는다. 오류 0은 효과 입증이 아니다."""
-    attrs = [a for r in rows for a in r["attributions"]]
+    attrs = [a for r in rows for a in real_attributions(r)]
     total = _attr_counts(rows)
     by_target = {}
     for target in ("candidate", "peer"):
@@ -841,6 +908,67 @@ async def _extract(
     )
 
 
+async def relabel_items(
+    items: list[dict[str, Any]], judge: AttributionJudge
+) -> list[dict[str, Any]]:
+    """고정된 `extracted_attributions`만 다시 판정한다(재추출 없음, id 유지). 라벨 파일 행을
+    돌려준다. 화자가 자기 자신에 대해 한 말(target == speaker)은 정의상 귀속이 아니라 판정 호출
+    없이 not_attribution으로 두고, 물을 귀속이 없는 항목은 호출 없이 끝낸다."""
+    rows = []
+    for item in items:
+        attrs = item.get("extracted_attributions") or []
+        speaker = (item.get("post") or {}).get("speaker")
+        fixed = {
+            a["attribution_id"]: {
+                "attribution_id": a["attribution_id"],
+                "verdict": NOT_ATTRIBUTION,
+                "owner": "speaker",
+                "reason": "화자 자신에 대한 말(target == speaker)",
+            }
+            for a in attrs
+            if a.get("target") == speaker
+        }
+        asked = [a for a in attrs if a["attribution_id"] not in fixed]
+        labels: list[dict[str, Any]] = []
+        if asked:
+            payload = {
+                "participants": {k: NAMES[k] for k in TARGETS},
+                "post": item["post"],
+                "sources": [
+                    {**m, "speaker_name": NAMES.get(m["sender"], m["sender"])}
+                    for m in item["sources"]
+                ],
+                "sources_truncated": bool(item.get("sources_truncated", False)),
+                "attributions": [
+                    {k: a[k] for k in ("attribution_id", "quote", "target", "claim")} for a in asked
+                ],
+            }
+            labels = await judge.relabel(payload)
+        judged = {x["attribution_id"]: x for x in labels} | fixed
+        rows.append(
+            {
+                "item_id": item["item_id"],
+                "labels": [judged[a["attribution_id"]] for a in attrs],  # 원래 순서 유지
+                "missed_attributions": [],
+            }
+        )
+    return rows
+
+
+async def _relabel(items_path: Path, out_path: Path | None, judge: AttributionJudge) -> None:
+    items = [json.loads(line) for line in items_path.read_text("utf-8").splitlines() if line]
+    rows = await relabel_items(items, judge)
+    out_path = out_path or items_path.with_name(
+        f"{items_path.stem}-judge-v{judge.prompts.get('version')}-labels.jsonl"
+    )
+    out_path.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in rows), "utf-8")
+    print(
+        json.dumps(
+            {"items": len(items), "labels": str(out_path), **judge.info()}, ensure_ascii=False
+        )
+    )
+
+
 async def _main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -853,6 +981,9 @@ async def _main() -> None:
     e.add_argument(
         "--force", action="store_true", help="이미 추출된 항목도 다시 뽑는다(라벨과 어긋남)"
     )
+    r = sub.add_parser("relabel", help="보정 세트의 고정 귀속만 다시 판정(재추출 없음)")
+    r.add_argument("items", type=Path)
+    r.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
     sys.path[:0] = [str(HERE.parents[1] / "tests")]
     from e2e.client import env
@@ -871,8 +1002,10 @@ async def _main() -> None:
                     indent=2,
                 )
             )
-        else:
+        elif args.command == "extract":
             await _extract(args.items, args.labels, judge, args.force)
+        else:
+            await _relabel(args.items, args.out, judge)
     finally:
         await judge.aclose()
 
