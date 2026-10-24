@@ -127,14 +127,22 @@ def extraction_recall(
     items: list[dict[str, Any]], labels: dict[str, list[dict[str, Any]]]
 ) -> dict[str, Any]:
     """라벨러 대비 재현율은 그 라벨러가 본 항목(라벨 파일에 행이 있는 항목)만으로 분자·분모를
-    잡는다.
-    본 항목 비율(coverage)이 1 미만이면 경고를 붙인다."""
+    잡는다. 분자는 추출 귀속 중 그 라벨러가 "귀속 아님"(not_attribution으로 정규화)으로 보지 않은
+    것이고, 귀속 아님으로 본 것은 noise로 따로 센다. 본 항목 비율(coverage)이 1 미만이면 경고를
+    붙인다."""
     extracted = sum(len(i.get("extracted_attributions") or []) for i in items)
+    by_id = {i["item_id"]: i for i in items}
     by_labeler = {}
     for name, rows in labels.items():
         reviewed_ids = {r["item_id"] for r in rows}
         reviewed = [i for i in items if i["item_id"] in reviewed_ids]
-        got = sum(len(i.get("extracted_attributions") or []) for i in reviewed)
+        verdicts = label_map(rows, by_id, True)
+        noise = sum(
+            verdicts.get((i["item_id"], a.get("attribution_id"))) == NOT_ATTRIBUTION
+            for i in reviewed
+            for a in i.get("extracted_attributions") or []
+        )
+        got = sum(len(i.get("extracted_attributions") or []) for i in reviewed) - noise
         miss = sum(
             len(r.get("missed_attributions") or [])
             for r in rows
@@ -145,6 +153,7 @@ def extraction_recall(
             "reviewed_items": len(reviewed),
             "coverage": coverage,
             "extracted_in_reviewed": got,
+            "noise_in_reviewed": noise,
             "missed": miss,
             "recall": round(got / (got + miss), 3) if got + miss else None,
             **(

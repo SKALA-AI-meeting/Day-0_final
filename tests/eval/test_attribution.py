@@ -224,7 +224,9 @@ def test_scene_counts_keys_by_unit_and_order_not_content():
             "unit": list(m["unit"]),
             "order": m["order"],
             "content": m["content"],
-            "attributions": [{"verdict": "overstated"}] if m["unit"][0] == 0 else [],
+            "attributions": [{"verdict": "overstated"}]
+            if m["unit"][0] == 0
+            else [{"verdict": "not_attribution"}],
         }
         for m in transcript
         if m["is_post"]
@@ -234,6 +236,7 @@ def test_scene_counts_keys_by_unit_and_order_not_content():
             "scenes": 2,
             "posts": 5,
             "attributions": 1,
+            "noise": 4,  # not_attribution은 귀속 수에 넣지 않고 따로 센다
             "overstated": 1,
             "unsupported": 0,
         }
@@ -280,7 +283,15 @@ async def test_extract_freezes_attributions_and_passes_truncation():
                     "form": "statement",
                     "verdict": "supported",
                     "source_ids": [],
-                }
+                },
+                {  # 화자(p1) 자신에 대한 말: 추출 경로에서도 코드 규칙으로 not_attribution
+                    "quote": "me",
+                    "target": "p1",
+                    "claim": "self",
+                    "form": "statement",
+                    "verdict": "supported",
+                    "source_ids": [],
+                },
             ],
             "rejected_claims": [],
         }
@@ -294,10 +305,18 @@ async def test_extract_freezes_attributions_and_passes_truncation():
     assert labels == [
         {
             "item_id": "i1",
-            "labels": [{"attribution_id": "i1#a1", "verdict": "supported", "reason": ""}],
+            "labels": [
+                {"attribution_id": "i1#a1", "verdict": "supported", "reason": ""},
+                {
+                    "attribution_id": "i1#a2",
+                    "verdict": "not_attribution",
+                    "reason": at.SELF_TARGET_REASON,
+                },
+            ],
             "missed_attributions": [],
         }
     ]
+    assert len(items[0]["extracted_attributions"]) == 2  # 추출 목록 자체는 그대로(id 유지)
     again = await at.extract_items(items, judge, force=True)
     assert judge.calls == 4 and items[1]["extracted_attributions"][0]["quote"] == "q"
     # 라벨 병합: 다시 추출한 항목은 새 행으로 바뀌고(옛 라벨 폐기), 건너뛴 항목 행은 남는다
@@ -331,7 +350,10 @@ def test_parse_verdict_normalizes_unknown_values():
                     "verdict": "supported",
                 },
             ],
-            "rejected_claims": [{"claim": "y", "verdict": "supported"}],
+            "rejected_claims": [
+                {"claim": "y", "verdict": "supported"},
+                {"claim": "z", "verdict": "not_attribution"},
+            ],
         }
     )
     assert got["attributions"] == [
@@ -345,7 +367,10 @@ def test_parse_verdict_normalizes_unknown_values():
             "reason": "",
         }
     ]
-    assert got["rejected_claims"] == [{"claim": "y", "verdict": "supported", "reason": ""}]
+    assert got["rejected_claims"] == [
+        {"claim": "y", "verdict": "supported", "reason": ""},
+        {"claim": "z", "verdict": "not_attribution", "reason": ""},  # 귀속 아닌 구절의 거부 = 오탐
+    ]
     assert at.rejected_claim({}) is None
     assert at.rejected_claim({"quote_violation": "형식이 다른 사유"}) == {
         "target": "",
@@ -457,6 +482,7 @@ async def test_judge_posts_and_summary_math():
             "scenes": 1,
             "posts": 2,
             "attributions": 1,
+            "noise": 0,
             "overstated": 1,
             "unsupported": 0,
         }
@@ -751,6 +777,9 @@ def test_agreement_normalizes_labeler_not_attribution_reason():
     assert got["pairs"]["A~judge"]["agree"] == 2 and got["pairs"]["A~judge"]["kappa"] == 1.0
     assert got["distribution"]["A"] == {"not_attribution": 1, "supported": 1}
     assert got["pairs_without_not_attribution_class"]["A~judge"]["agree"] == 2
+    recall = got["extraction"]["recall_vs_labeler"]["A"]  # "귀속 아님"은 추출 성공이 아니라 noise
+    assert (recall["extracted_in_reviewed"], recall["noise_in_reviewed"]) == (1, 1)
+    assert recall["recall"] == 1.0
     old_judge = [  # v1 판정은 그런 구절을 unsupported로 냈다
         {
             "item_id": "i1",

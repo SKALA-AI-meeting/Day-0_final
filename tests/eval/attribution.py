@@ -81,7 +81,7 @@ SCHEMA = {
                 "required": ["claim", "verdict", "reason"],
                 "properties": {
                     "claim": {"type": "string"},
-                    "verdict": {"type": "string", "enum": list(LABELS)},
+                    "verdict": {"type": "string", "enum": list(VERDICTS)},
                     "reason": {"type": "string"},
                 },
             },
@@ -110,6 +110,24 @@ RELABEL_SCHEMA = {
         }
     },
 }
+
+
+SELF_TARGET_REASON = "화자 자신에 대한 말(target == speaker)"
+
+
+def self_target(attribution: dict[str, Any], speaker: str | None) -> bool:
+    """추출된 귀속의 target이 post 화자 자신이면 정의상 귀속이 아니다(코드 규칙, 호출 없음)."""
+    return bool(speaker) and attribution.get("target") == speaker
+
+
+def mark_self_target(attributions: list[dict[str, Any]], speaker: str | None) -> int:
+    """target == speaker인 귀속의 verdict를 not_attribution으로 바꾼다(모든 경로 공용). 바꾼 수."""
+    n = 0
+    for a in attributions:
+        if self_target(a, speaker):
+            a["verdict"], a["reason"], a["owner"] = NOT_ATTRIBUTION, SELF_TARGET_REASON, "speaker"
+            n += 1
+    return n
 
 
 def load_prompts() -> dict[str, Any]:
@@ -423,7 +441,7 @@ def parse_verdict(raw: Any) -> dict[str, Any]:
     rejected = [
         {
             "claim": str(r.get("claim", "")).strip(),
-            "verdict": r.get("verdict") if r.get("verdict") in LABELS else "undeterminable",
+            "verdict": r.get("verdict") if r.get("verdict") in VERDICTS else "undeterminable",
             "reason": str(r.get("reason", "")).strip(),
         }
         for r in (raw or {}).get("rejected_claims") or []
@@ -541,9 +559,7 @@ async def judge_posts(
             continue
         payload = payload_for(transcript, index, names)
         verdict = await judge.ask(payload)
-        for a in verdict["attributions"]:  # 화자가 자기 자신에 대해 한 말은 정의상 귀속이 아니다
-            if a["target"] == m["sender"]:
-                a["verdict"], a["reason"] = NOT_ATTRIBUTION, "화자 자신에 대한 말"
+        mark_self_target(verdict["attributions"], m["sender"])
         rows.append(
             {
                 "run": m["unit"][0],
@@ -702,8 +718,9 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """초안 검사 ↔ 최종 판정 연결(PR 10 meta가 있을 때. 없으면 quote_check가 absent로만 센다).
 
-    - 정상 귀속 오탐 재생성: 검사기가 거부한 초안 주장(quote_violation) 중 판정이 supported인 것.
-      분모는 판정된 거부 주장 수(undeterminable 제외 분모도 함께).
+    - 정상 귀속 오탐 재생성: 검사기가 거부한 초안 주장(quote_violation) 중 판정이 supported이거나
+      not_attribution(귀속이 아닌 구절을 귀속 오류로 거부)인 것 = 잘못된 거부. 분모는 거부 주장 수
+      (undeterminable 제외 분모도 함께).
     - 안전 문구 비율: quote_check=safe · guard=safe · stance_check=fallback 각각 / 게시물 수.
     - 검사 생략 비율: quote_check=skipped / quote_check 키가 있는 게시물 수.
     - 재생성 뒤 최종: 재생성·안전 문구로 끝난 게시물 중 최종 귀속에 오류가 남은 수.
@@ -722,6 +739,7 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
     rejected = [c for r in usable for c in r["rejected_claims"]]
     rejected_by = Counter(c["verdict"] for c in rejected)
     determined = len(rejected) - rejected_by.get("undeterminable", 0)
+    wrong = rejected_by.get("supported", 0) + rejected_by.get(NOT_ATTRIBUTION, 0)
     regenerated = [r for r in usable if r["draft"]["quote_check"] in ("regenerated", "safe")]
     still = sum(any(a["verdict"] in ERRORS for a in r["attributions"]) for r in regenerated)
     return {
@@ -748,11 +766,13 @@ def linkage(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "false_positive_regeneration": {
             "rejected_claims": len(rejected),
             "judged_supported": rejected_by.get("supported", 0),
+            "judged_not_attribution": rejected_by.get(NOT_ATTRIBUTION, 0),
             "judged_overstated": rejected_by.get("overstated", 0),
             "judged_unsupported": rejected_by.get("unsupported", 0),
             "undeterminable": rejected_by.get("undeterminable", 0),
-            "rate": _rate(rejected_by.get("supported", 0), len(rejected)),
-            "rate_of_determined": _rate(rejected_by.get("supported", 0), determined),
+            "wrong_rejections": wrong,
+            "rate": _rate(wrong, len(rejected)),
+            "rate_of_determined": _rate(wrong, determined),
         },
         "after_regeneration": {
             "posts": len(regenerated),
@@ -844,6 +864,7 @@ async def extract_items(
             "draft_rejected_claims": [],
         }
         verdict = await judge.ask(payload)
+        mark_self_target(verdict["attributions"], (item.get("post") or {}).get("speaker"))
         item["extracted_attributions"] = [
             {
                 "attribution_id": attribution_id(item["item_id"], n),
@@ -923,10 +944,10 @@ async def relabel_items(
                 "attribution_id": a["attribution_id"],
                 "verdict": NOT_ATTRIBUTION,
                 "owner": "speaker",
-                "reason": "화자 자신에 대한 말(target == speaker)",
+                "reason": SELF_TARGET_REASON,
             }
             for a in attrs
-            if a.get("target") == speaker
+            if self_target(a, speaker)
         }
         asked = [a for a in attrs if a["attribution_id"] not in fixed]
         labels: list[dict[str, Any]] = []

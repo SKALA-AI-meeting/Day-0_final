@@ -435,7 +435,15 @@ def scene_counts(events: list[dict[str, Any]], rows: list[dict[str, Any]]) -> di
         if not scene:
             continue
         bucket = out.setdefault(
-            scene, {"scenes": 0, "posts": 0, "attributions": 0, "overstated": 0, "unsupported": 0}
+            scene,
+            {
+                "scenes": 0,
+                "posts": 0,
+                "attributions": 0,
+                "noise": 0,
+                "overstated": 0,
+                "unsupported": 0,
+            },
         )
         bucket["scenes"] += 1
         for post in following_all(events, i):  # 규칙 misquote는 3개 상한을 그대로 둔다
@@ -443,8 +451,11 @@ def scene_counts(events: list[dict[str, Any]], rows: list[dict[str, Any]]) -> di
             if row is None:
                 continue
             bucket["posts"] += 1
-            bucket["attributions"] += len(row["attributions"])
             for a in row["attributions"]:
+                if a["verdict"] == attribution.NOT_ATTRIBUTION:
+                    bucket["noise"] += 1  # 추출됐지만 귀속이 아님: 귀속 수에 넣지 않는다
+                    continue
+                bucket["attributions"] += 1
                 if a["verdict"] in attribution.ERRORS:
                     bucket[a["verdict"]] += 1
     return out
