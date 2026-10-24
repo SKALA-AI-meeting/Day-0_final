@@ -4,41 +4,27 @@
 
 ## 실행 명령과 선행 조건
 
-모든 명령은 저장소 루트에서 실행한다(`Makefile`은 루트에 하나다).
+모든 명령은 저장소 루트에서 실행한다(`Makefile`은 루트에 하나다). 실행 모드는 `PROFILE`([configuration.md](configuration.md) "실행 프로필", 기본 `dev-fake`)이 정하고, 실제 모델을 부르는 명령은 `ALLOW_API=1`을 붙여야 돈다(`make help`의 `[제한키·과금]` 표시). 옛 타깃 이름은 별칭으로 남아 새 이름을 안내한다.
 
 | 명령 | 도는 것 | 선행 조건 | 통과의 뜻 |
 |---|---|---|---|
-| `make test` | 루트 검사(계약 픽스처 `tests/test_contract_fixtures.py`, 카탈로그 `scenarios/missions/debate/tests`) → 서비스 5개 pytest(`-m "not live"`) → `apps/web` vitest. `tests/expected-failures.txt`의 항목은 건너뛴다 | `uv`, `pnpm install`. api의 DB 테스트는 postgres(`make infra-up`, 접속 `TEST_DATABASE_URL`, 기본 `localhost:5432`)가 없으면 **skip**된다 | LLM mock 기준 단위·계약 테스트 통과. postgres 없이 돌렸으면 api DB 테스트는 확인되지 않은 것이다 |
+| `make test [SUITE=unit∣tools∣all]`(기본 all) | `unit`: 루트 검사(계약 픽스처 `tests/test_contract_fixtures.py`, 프로필 해석기 `tests/test_profile.py`, 카탈로그 `scenarios/missions/debate/tests`) → 서비스 5개 pytest(`-m "not live"`) → `apps/web` vitest. `tools`: `tests/e2e`(러너·단언·장애 주입·인증 경계)와 `tests/eval`의 형태 검사를 가짜 api(`tests/e2e/fake_stack.py`) 위에서. `tests/expected-failures.txt`의 항목은 건너뛴다 | `uv`, `pnpm install`. api의 DB 테스트는 postgres(`make up SCOPE=infra`, 접속 `TEST_DATABASE_URL`, 기본 `localhost:5432`)가 없으면 **skip**된다. 외부 API 없음 | LLM mock 기준 단위·계약 테스트와 러너·eval 픽스처 형태 통과. postgres 없이 돌렸으면 api DB 테스트는 확인되지 않은 것이다. `live` 마커 테스트는 `ALLOW_API=1`이 없으면 skip |
 | `make lint` | `ruff check`·`ruff format --check`, `apps/web`의 `pnpm lint` | 없음 | 형식·정적 검사 통과 |
-| `make test-live` | `services/api`의 `-m live` 테스트(실제 LLM 호출) | `infra/.env`에 실제 키 | api 쪽 실 모델 경로 확인. `tests/eval`은 돌지 않는다 |
-| `make test-e2e` | `tests/e2e`(러너·단언·장애 주입·인증 경계)와 `tests/eval`의 형태 검사. 가짜 api(`tests/e2e/fake_stack.py`) 위에서 돈다 | 없음(스택·DB·LLM 불필요) | 러너·단언 로직과 eval 픽스처 형태가 맞음. 실제 서비스 연결은 확인하지 않는다 |
-| `make eval-live` | `tests/eval`의 `-m live`: 의도 분류(20문장 + 결정 사례)·BARS 픽스처(+ 장면 세션)·유출 질문·페르소나 응답 품질(+ 귀속 판정)·어시스턴트 근거를 실제 모델로 1회 | 실제 키(귀속 판정 모델이 gpt-4o-mini가 아니면 `OPENAI_API_KEY_PERSONAL`도) | 결과를 `tests/e2e/records/eval-live-<일시>.md`로 남긴다. 페르소나 품질은 api 에이전트 테스트 Harness(가짜 MCP·가짜 hub)에 실제 LLM만 붙인 실행이라 실제 서비스 연결은 확인하지 않는다 |
-| `make virtual-candidate MODE=scripted∣autonomous` | 가상 지원자 한 명이 실 스택에서 15분 세션 하나를 API·WS로 끝까지 진행하고 리포트까지 기다려 세션을 내보낸 뒤 지표를 계산한다([virtual-candidate.md](virtual-candidate.md)) | 스택 기동·시드, 실제 키 | 기록 `tests/e2e/records/virtual/<일시>-<mode>/`(git 무시). 측정이지 통과 판정이 아니다 |
-| `make e2e [SCRIPT=all_five]` | 실 스택에서 대본 하나(기본 `all_five` 15분, 벽시계) | 스택 기동·시드 완료 | 세션 전체·리포트·검토가 실제 서비스로 통과 |
-| `make e2e-auth` | 단언 8(인증 경계) | 스택 기동 | |
-| `make e2e-faults` | 단언 10(장애 주입 2종). 러너가 앱 프로세스를 직접 띄운다 | `make infra-up`(postgres·rabbitmq·rag-mcp) | |
-| `make stage STAGE=<단계> [MIN=15] [LLM=fake\|live]` | 단계 시드 세션 생성, 초대 링크·세션 id 출력 | api 내부 8001이 열린 스택(`ENABLE_TEST_API=1`) | — |
-| `make stage-advance SID=<id> TO=<deadline\|idle\|card:<id>\|초>` | 세션 시간 당기기 | 위와 같음 | — |
-| `make e2e-stack-up` → `make e2e-stack-seed` → `make e2e-stages [STAGE=<단계>]` → `make e2e-stack-down` | 격리 스택(`dayzero-debate`)에서 Playwright 단계별 화면 테스트 | `infra/.env.e2e`, Playwright chromium(`cd apps/web && pnpm exec playwright install chromium`), `!override` 태그를 지원하는 Docker Compose v2(2.24.4 이상), 모델 캐시 볼륨 `infra_hfcache`(없으면 `infra/docker-compose.e2e.yml`의 `external`을 지우고 새로 받는다) | 단계별 화면이 `LLM_FAKE=1`에서 결정적으로 통과 |
+| `make eval PROFILE=eval-text SUITE=api ALLOW_API=1` | `services/api`의 `-m live` 테스트(실제 LLM 호출) | `infra/.env`에 제한 키 | api 쪽 실 모델 경로 확인. `tests/eval`은 돌지 않는다 |
+| `make eval PROFILE=eval-text [SUITE=fixtures] ALLOW_API=1` | `tests/eval`의 `-m live`: 의도 분류(20문장 + 결정 사례)·BARS 픽스처(+ 장면 세션)·유출 질문·페르소나 응답 품질·어시스턴트 근거를 실제 모델로 1회. 귀속 판정은 기본 끔(`PERSONA_EVAL_JUDGE=1 VC_JUDGE_MODEL=…`로 켬) | 제한 키 | 결과를 `tests/e2e/records/eval-live-<일시>.md`로 남긴다. 페르소나 품질은 api 에이전트 테스트 Harness(가짜 MCP·가짜 hub)에 실제 LLM만 붙인 실행이라 실제 서비스 연결은 확인하지 않는다 |
+| `make eval PROFILE=eval-text SUITE=persona ALLOW_API=1` | 위 중 페르소나 응답 품질만 | 제한 키 | 위와 같음 |
+| `make measure PROFILE=eval-text MODE=scripted∣autonomous ALLOW_API=1` | 가상 지원자 한 명이 실 스택(eval-text, api 8100)에서 15분 세션 하나를 API·WS로 끝까지 진행하고 리포트까지 기다려 세션을 내보낸 뒤 지표를 계산한다([virtual-candidate.md](virtual-candidate.md)) | `make up PROFILE=eval-text ALLOW_API=1`·`make seed PROFILE=eval-text` | 기록 `tests/e2e/records/virtual/<일시>-<mode>/`(git 무시). 측정이지 통과 판정이 아니다. LLM 판정은 별도 명령(아래 "귀속 판정") |
+| `make e2e [SUITE=flow] [SCRIPT=all_five] PROFILE=…` | 실 스택에서 대본 하나(기본 `all_five` 15분, 벽시계) | 그 프로필의 스택 기동·시드 완료 | 세션 전체·리포트·검토가 실제 서비스로 통과 |
+| `make e2e SUITE=auth PROFILE=…` | 단언 8(인증 경계) | 스택 기동 | |
+| `make e2e SUITE=faults` | 단언 10(장애 주입 2종). 러너가 앱 프로세스를 직접 띄운다. 가짜 LLM 프로필 전용 | `make up SCOPE=infra`(postgres·rabbitmq·rag-mcp) | |
+| `make stage STAGE=<단계> [MIN=15] PROFILE=…` | 단계 시드 세션 생성, 초대 링크·세션 id 출력. LLM 모드는 프로필이 정한다 | 그 프로필의 스택(`ENABLE_TEST_API=1`, 내부 API가 호스트에 열림) | — |
+| `make stage-advance SID=<id> TO=<deadline\|idle\|card:<id>\|초> PROFILE=…` | 세션 시간 당기기 | 위와 같음 | — |
+| `make up PROFILE=test-text` → `make seed PROFILE=test-text` → `make e2e SUITE=stages PROFILE=test-text [STAGE=<단계>]` → `make down PROFILE=test-text` | 격리 스택(`dayzero-debate`, 가짜 LLM)에서 Playwright 단계별 화면 테스트 | Playwright chromium(`cd apps/web && pnpm exec playwright install chromium`), `!override` 태그를 지원하는 Docker Compose v2(2.24.4 이상), 모델 캐시 볼륨 `infra_hfcache`(없으면 `infra/docker-compose.e2e.yml`의 `external`을 지우고 새로 받는다) | 단계별 화면이 `LLM_FAKE=1`에서 결정적으로 통과. 실제 LLM 프로필(`eval-text`)로 돌리면 문장 단언이 달라질 수 있다 |
 | playtest | `tests/playtest/driver.py`로 브라우저를 조작하는 블라인드 사용성 점검(Makefile 타깃 없음, 아래 "playtest") | 단계 시드 스택, `uv run --with playwright==1.63.0`이 쓸 chromium | 게이트 아님. 불편 로그와 개선 제안 |
 
-### 격리 e2e 스택 env (`infra/.env.e2e`)
+### 격리 스택 env
 
-`cp infra/.env.example infra/.env.e2e` 뒤 아래 이름의 값을 정한다(파일은 git 무시, 비밀값은 이 파일에만 둔다). 서비스 사이 주소(`API_INTERNAL_URL`·MCP URL 3개)는 `infra/docker-compose.yml`의 `environment:`가 덮어쓰고, web의 `NEXT_PUBLIC_API_URL`·`NEXT_PUBLIC_WS_URL`은 `infra/docker-compose.e2e.yml`의 build arg(`http://localhost:8100`·`ws://localhost:8100`)로 들어간다.
-
-| 이름 | 값의 뜻 |
-|---|---|
-| `WEB_ORIGIN`, `WEB_BASE_URL` | `http://localhost:3100`(CORS 허용 origin과 초대·리포트 링크 주소가 격리 스택 web을 가리키게) |
-| `ENABLE_TEST_API` | `1`(단계 시드·시간 당기기) |
-| `AGENT_RUNNER` | `session` |
-| `LLM_FAKE` | 단계 테스트는 `1`, 실제 모델로 볼 때(`make stage … LLM=live`, playtest)는 `0` |
-| `OPENAI_API_KEY` | `LLM_FAKE=0`일 때만 필요 |
-| `JWT_SECRET`, `INTERNAL_TOKEN`, `ASSESSMENT_MCP_TOKEN` | 임의 값(서비스끼리 같은 파일을 읽으므로 맞추기만 하면 된다) |
-| `DATABASE_URL`, `RABBITMQ_URL` | 예시 값 그대로(컨테이너 이름 `postgres`·`rabbitmq`) |
-
-모델 캐시는 외부 볼륨 `infra_hfcache`를 쓴다. 로컬 개발 모드에서 rag-mcp를 한 번 띄웠으면 이미 있다.
-
-`LLM=fake`·`live`는 스택 env `LLM_FAKE`가 정하므로 바꿀 때는 api·report-worker를 다시 띄운다. 실행 모드별 포트·DB·env는 [configuration.md](configuration.md).
+따로 만드는 env 파일은 없다. `test-text`·`eval-text` 프로필이 포트(web 3100·api 8100·내부 8101·postgres 5442·rag 9112)·`WEB_ORIGIN`·`WEB_BASE_URL`·`NEXT_PUBLIC_*`(web 빌드 인자)·`ENABLE_TEST_API=1`·`AGENT_RUNNER=session`·추적 끔을 정하고 비밀값(`JWT_SECRET`·`INTERNAL_TOKEN`·`ASSESSMENT_MCP_TOKEN`, 실제 LLM이면 `OPENAI_API_KEY`)은 `infra/.env`에서 가져온다. 두 프로필의 차이는 `LLM_FAKE`뿐이고, 바꿀 때는 그 프로필로 `make up`을 다시 해 api·report-worker를 새 env로 띄운다. 모델 캐시는 외부 볼륨 `infra_hfcache`를 쓴다(로컬 개발 모드에서 rag-mcp를 한 번 띄웠으면 이미 있다). 실행 모드별 포트·DB·env는 [configuration.md](configuration.md).
 
 ## 단위
 
@@ -153,13 +139,13 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 - 라벨: 귀속마다 `supported`(원문에 같은 뜻·같은 강도) / `overstated`(같은 방향이지만 강도·범위·역할을 올리거나 단서를 지움: 원문에 없는 시급함·우선순위 추가, 동의·호응을 제안·발안으로, 조건·유보 삭제, 가능→최선, 중요하다는 인정→지지, 질문→찬성) / `unsupported`(원문에 없음·방향 반대·화자 혼동, 상대 안의 내용을 다르게 바꿔 되짚음) / `undeterminable`. 제안자 혼동은 target이 그 안을 언급조차 안 했으면 `unsupported`, 동의·호응은 했지만 처음 낸 사람이 아닌데 "제안했다"고 하면 `overstated`로 일관되게 둔다. 귀속이 없는 발언은 "귀속 없음"이지 supported가 아니다.
 - `not_attribution`(프롬프트 v2): 추출됐지만 귀속이 아닌 구절(화자 자신의 의견·평가·걱정, 상대 안에 대한 화자 자신의 평가, 호칭·권유, 상대 입장을 전제하지 않은 질문). 판정은 구절의 의견 주인(owner: speaker/target/unclear)을 먼저 정하고 speaker면 이 라벨을 낸다. target이 화자 자신인 추출은 추출·재판정·기록 판정 모든 경로에서 호출 없이 코드가 이 라벨을 붙인다(`mark_self_target`). 귀속 수·비율 분모·분자에서 빼고 `extraction_noise`(장면별로는 `by_scene.*.noise`)로 따로 센다.
 - 입력: 그 발언이 게시되기 전 같은 실행·세션의 원문만(id·화자·단계·순서·내용, 상한 60개를 넘으면 앞을 자르고 `sources_truncated` 표시). 미래 발언은 넣지 않는다. 지원자 표시 이름은 "지원자"로 바꾼다.
-- 판정 모델: `VC_JUDGE_MODEL`(없으면 `gpt-4o`), temperature 0. 결과 `judge.models_used`에 응답이 보고한 모델 id, `prompt_version`에 프롬프트 버전(현재 3), `verify_calls`·`verify_forced`·`verify_failed`에 2차 확인 호출·강제·실패 수를 남긴다. 추출+판정(`attribution`)·고정 귀속 재판정(`relabel`)·2차 확인(`verify`)은 `criteria`(귀속의 정의·verdict 기준)를 공유한다. 키는 모델 id 규칙(gpt-4o-mini → `OPENAI_API_KEY`, 그 외 → `OPENAI_API_KEY_PERSONAL`).
+- 판정 모델: `VC_JUDGE_MODEL`(**기본값 없음**, 비면 오류), temperature 0. 결과 `judge.models_used`에 응답이 보고한 모델 id, `prompt_version`에 프롬프트 버전(현재 3), `verify_calls`·`verify_forced`·`verify_failed`에 2차 확인 호출·강제·실패 수를 남긴다. 추출+판정(`attribution`)·고정 귀속 재판정(`relabel`)·2차 확인(`verify`)은 `criteria`(귀속의 정의·verdict 기준)를 공유한다. 키는 모델 id 규칙(제한 키 허용 목록의 gpt-* → `OPENAI_API_KEY`, 그 밖 gpt-*는 오류. `tests/eval/llm_access.py`). **판정 모델 선택**: 기록된 기준선(`baseline-v1`·E2 보정)은 모두 gpt-4o 판정이다. 제한 키 모델은 같은 v3 프롬프트의 보정 세트 오류 여부 일치가 gpt-5.4-mini 0.93·gpt-4.1-mini 0.91로 gpt-4o(0.98)에 못 미쳐 통과하지 못했으므로, 작은 판정 모델로 낸 수치는 기록된 기준선과 비교하지 않고 같은 판정 모델끼리만 비교한다(결과의 `judge.models_used`로 확인). 지금 제한 키로 gpt-4o를 부를 수 없어 기존 기준선과 비교 가능한 재판정은 보류 상태다.
 - 2차 확인(프롬프트 v3, `verify_errors`): 1차 판정이 `overstated`·`unsupported`인 귀속마다 게시물·그 구절·대상·게시 전 원문을 주고 다시 묻는다. 게시물의 표현이 대상이 말했다·그런 입장이라고 단정·전제하는지 먼저 보고, 그 **귀속 표지(cue)** 를 게시물에서 글자 그대로 인용해야 한다(전하는 어미, "OO님이 말씀하신/제안한", 대상 입장을 전제한 질문, "다들/모두"처럼 대상을 포함한 집단 단정 등). 표지는 귀속 구절(`quote`)이 든 문장(`.?!…`·줄바꿈으로 나눔)과 **바로 앞 문장** 안에 있어야 하며(한국어는 "서지안님이 그러셨죠. 예산이 부족하다고."처럼 표지가 앞 문장에 온다. 구절이 여러 번 나오면 출현마다 범위를 잡아 하나라도 맞으면 인정. NFKC·공백·문장부호 무시, 정규화 뒤 2자 이상, `cue_kind: none`은 표지 없음), 아니면 코드가 `not_attribution`으로 강제한다(`forced_reason`: `no_cue`·`cue_too_short`·`cue_outside_quote_sentence`). 추출된 구절이 같은 정규화로도 게시물에 없으면 추출이 지어낸 것이라 호출 없이 `not_attribution`으로 강제하고 `quote_not_in_post`로 따로 센다. 강제할 때는 `reason`을 강제 사유로 바꾸고(모델의 이유는 `verification.model_reason`), `owner`가 있으면 speaker로, `source_ids`가 있으면 비운다(기록 판정·추출 결과에는 `owner`가 없다). 표지가 있으면 원문과 대조한 2차 verdict를 쓴다(supported로 되돌릴 수 있음). 기록 판정·추출(판정 라벨 행에도 남음)·재판정 세 경로에 적용되고, 귀속마다 `verification{before, raw_cue, cue, cue_kind, forced, forced_reason, failed}`가 남는다. 호출이 실패하거나 빈 응답이면 원래 판정을 유지하고 `failed`로 표시한다. supported·undeterminable은 대상이 아니다. 요약의 `verification{checked, forced_not_attribution, quote_not_in_post, failed}`에 집계된다. verify 프롬프트의 표지 예시는 일반 형태이지만 보정 세트의 고정 초안과 형태가 겹치므로 holdout 일치도는 낙관적일 수 있다.
 - 한쪽으로만 고치는 편향: 2차 확인은 오류 판정만 다시 보므로 1차에서 `supported`로 잘못 나온 노이즈는 남고 오류 쪽 노이즈만 줄어든다. v3 오류율은 낮아지는 방향으로만 움직이며 v2 수치와 직접 비교할 수 없다. 변형 간 비교는 같은 판정 버전끼리만 한다.
 - 보고(`summary`): 건수와 분모를 함께 둔다. 귀속별 비율(분모 귀속 수, 과장과 근거 없음 따로), 게시물별 비율(분모 게시물 수와 귀속 있는 게시물 수), 귀속 빈도(게시물당 귀속 수·히스토그램. 인용을 피해서 오류율이 낮아진 것이 아닌지 본다), 대상(지원자/동료)·형태(서술·전제 질문·생략형)별, 실행별 값과 범위(`by_run`·`ranges`). 오류 0건은 효과 입증으로 쓰지 않는다.
 - 초안 ↔ 최종 연결(`summary.linkage`, 발언 `meta`에 `stance_check`·`guard`가 있을 때. 없으면 `absent`): 검사 표식 분포(`stance_check`·`guard`), 안전 문구 비율(guard `safe`·입장 `fallback` 각각 / 발언 수), guard·입장 판정의 재생성·안전 문구·폴백으로 끝난 발언 중 최종 귀속에 오류가 남은 수(`after_regeneration`). 게시 전 인용 검사는 없으므로 오인용은 이 연결이 아니라 귀속 판정 자체로 잰다.
 - 다시 판정: `uv run --project services/api python tests/eval/attribution.py judge <기록>... [--out X]`. 기록은 `PERSONA_EVAL_DUMP` 사건 목록(json 배열), 가상 세션 `session.json`, eval-live 페르소나 md 어느 것이든 된다. 파일마다 요약과 전체 합산, 파일 간 범위를 낸다(파일 키는 공통 상위 폴더 기준 상대 경로라 다른 폴더의 같은 `session.json`도 구분되고, 기록 단위는 파일·실행·세션이다). 페르소나 md의 대화 절은 되읽을 수 있게 쓴다(세션 제목에 단계, 발언 한 줄에 줄바꿈은 `\n`, 동료 발언 끝에 검사 기록 전부를 백틱 JSON으로). 이 형식 이전의 md는 검사 기록을 복원할 수 없어(`unknown`) 그 게시물이 든 기록(실행·세션)을 통째로 검사 연결 비율(안전 문구·재생성 뒤 최종)에서 빼고 `linkage_unavailable_records`·`_posts`로 센다. 생략된 게시물만 남아 비율이 왜곡되는 것을 막기 위해서다(`absent`와 다르다).
-- 페르소나 품질 live는 기본으로 귀속 판정을 함께 돈다(`PERSONA_EVAL_JUDGE=0`이면 끔). 판정 호출은 동료 발언마다 1회에 오류 판정 귀속마다 2차 확인 1회가 더해진다(대본 8세션 1회 약 100~120회 + 오류 수만큼).
+- 페르소나 품질 live의 귀속 판정은 **기본 끔**이다. `PERSONA_EVAL_JUDGE=1`과 `VC_JUDGE_MODEL`을 함께 주면 켜진다(모델이 비면 오류). 판정 호출은 동료 발언마다 1회에 오류 판정 귀속마다 2차 확인 1회가 더해진다(대본 8세션 1회 약 100~120회 + 오류 수만큼). 판정 스크립트(`attribution.py judge|extract|relabel`, `metrics.py --judge`)와 가상 지원자(`drive.py`)는 직접 실행해도 `ALLOW_API=1`이 없으면 시작하지 않는다.
 
 판정 모델 보정(사람 정답이 아니라 모델 두 개의 라벨이라는 한계를 기록에 남긴다):
 
@@ -200,8 +186,8 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 | `proposal` | `{<칸 키>: 값}` | 기획안 칸 일부 덮어쓰기 |
 | `submit` | `true` | 제출 |
 
-- `make stage STAGE=<단계> [MIN=15] [LLM=fake|live]`: 시드 세션을 만들고 초대 링크·세션 id를 출력한다. 웹은 바꾸지 않으며 링크로 들어가면 그 단계 화면부터 보인다. `LLM=fake`(기본)는 `LLM_FAKE=1` 스택, `live`는 실제 모델 스택이다.
-- `make stage-advance SID=<id> TO=deadline|idle|card:<card_id>|<초>`: 시간을 앞당겨 시간 초과·침묵 초대·카드·자동 제출을 기다리지 않고 본다.
+- `make stage STAGE=<단계> [MIN=15] PROFILE=<프로필>`: 시드 세션을 만들고 초대 링크·세션 id를 출력한다. 웹은 바꾸지 않으며 링크로 들어가면 그 단계 화면부터 보인다. 가짜/실제 LLM은 프로필(`LLM_FAKE`)이 정하고 그 프로필로 띄운 스택의 내부 API 주소를 쓴다.
+- `make stage-advance SID=<id> TO=deadline|idle|card:<card_id>|<초> PROFILE=<프로필>`: 시간을 앞당겨 시간 초과·침묵 초대·카드·자동 제출을 기다리지 않고 본다.
 
 ### 단계별 화면 테스트 (Playwright)
 
@@ -219,7 +205,7 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 | admin-report | `ended` 시드의 리포트 → 차원 1개 조정(메모) → 검토 완료 → 수준 재계산 표시 |
 
 - 기록: 핵심 시점 스크린샷과 `summary.md`는 `tests/e2e/records/stages/<단계>/`(커밋), 테스트마다 영상(webm)·trace는 `tests/e2e/records/stages/.artifacts/<테스트>/`, 전체 HTML 리포트는 `tests/e2e/records/stages/html-report/`(둘 다 git 무시)에 남긴다. 스크린샷은 `docs/share/` 보고서 캡처의 원본이다.
-- 실행: `make e2e-stages [STAGE=<단계>] [LLM=fake|live]`. 화면·api 흐름을 바꾸는 PR은 전 단계가 `LLM=fake`로 통과해야 한다.
+- 실행: `make e2e SUITE=stages PROFILE=test-text [STAGE=<단계>]`. 화면·api 흐름을 바꾸는 PR은 전 단계가 `test-text`(가짜 LLM)로 통과해야 한다.
 
 ### 단계별 화면 테스트의 주의점
 
@@ -228,7 +214,7 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 - problem의 "입력 잠김"은 시간 초과 뒤 그 칸의 입력이 결과 줄로 바뀌고 다음 칸 입력이 열리는 것이다. 입력창 비활성은 세션이 끝난 proposal spec에서 확인한다.
 - 시드 세션의 표시 이름은 별칭(`지원자-xxxxxx`)이라 AI 동료가 그 이름으로 부른다.
 - `LLM_FAKE=1`에서는 같은 자리가 같은 입장 문장을 연달아 낼 수 있다(고정 문장 특성).
-- `LLM=live`의 문장 단언(기준안 고정 입장 문장, 합의 흐름)은 결정적 LLM 모드 기준이라 실제 모델에서는 달라질 수 있다.
+- 실제 LLM 프로필(`eval-text`)에서 문장 단언(기준안 고정 입장 문장, 합의 흐름)은 결정적 LLM 모드 기준이라 달라질 수 있다.
 - 시드 재생은 `card_due`를 거치지 않는다. problem 시드 직후에는 `session_cards.locked_option_id`가 비어 있고 첫 `card_due` 처리 때 잠긴다. solution·proposal·ended 시드의 리포트·디브리핑에는 문제 단계 카드 장면이 없다.
 
 ## playtest (게이트 아님)
@@ -236,7 +222,7 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 단계별로 그 화면을 쓰는 사람 역할의 에이전트가 브라우저를 직접 조작하며 쓰기 불편한 점을 찾는다.
 
 - 페르소나 4종: 지원자 정석형·서두르는 형·헤매는 형, 관리자(채용 담당자). **블라인드**: 화면과 목표 한 줄만 주고 설계 문서·평가 기준·시나리오 데이터는 주지 않는다.
-- 시작: `make stage STAGE=<단계> LLM=live`로 만든 링크(관리자는 `ended` 시드의 리포트 링크). 드라이버 명령은 `tests/playtest/README.md`.
+- 시작: `make stage STAGE=<단계> PROFILE=eval-text`로 만든 링크(관리자는 `ended` 시드의 리포트 링크). 드라이버 명령은 `tests/playtest/README.md`.
 - 조작: Playwright 드라이버 `tests/playtest/driver.py`(같은 브라우저를 여러 명령에 걸쳐 유지, 화면은 `shot`으로 PNG를 보고 판단). 브라우저 대화상자는 드라이버가 자동으로 닫고 기록한다(앱 안 확인 창은 정상). Claude in Chrome은 이 환경에서 테스트 스택(3100)을 열지 못해 쓰지 않는다.
 - 기록: `tests/playtest/records/<단계>/<페르소나>/`에 조작 영상(`<단계>-<페르소나>.webm`)·핵심 시점 스크린샷와 불편 로그(`log.md`: 시각 · 화면 · 기대 · 실제 · 심각도 상/중/하), 개선 제안. 끝나면 단계 × 페르소나 요약 표 `tests/playtest/records/summary.md`.
 - 순서: keyword 단계 정석형 1회로 조작·녹화가 되는지 먼저 확인한 뒤 나머지로 넓힌다. 반영 여부는 사람이 정한다.

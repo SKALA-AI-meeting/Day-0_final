@@ -20,7 +20,7 @@ for s in services/api services/debate-mcp services/rag-mcp services/assessment-m
 make test && make lint
 ```
 
-`make test`는 postgres가 없으면 api의 DB 테스트를 건너뛴다(skip). DB까지 확인하려면 아래 3의 `make infra-up` 뒤에 다시 돌린다.
+`make test`는 postgres가 없으면 api의 DB 테스트를 건너뛴다(skip). DB까지 확인하려면 아래 3의 `make up SCOPE=infra` 뒤에 다시 돌린다.
 
 ## 3. env 준비
 
@@ -37,13 +37,13 @@ cp infra/.env.example infra/.env
 앱을 고치면서 볼 때의 기본 방식이다. 인프라와 무거운 rag-mcp만 컨테이너로 띄우고 나머지는 로컬에서 띄운다.
 
 ```
-make infra-up                                                    # postgres 5432, rabbitmq 5672, rag-mcp 9102 (127.0.0.1)
+make up SCOPE=infra                                              # postgres 5432, rabbitmq 5672, rag-mcp 9102 (127.0.0.1). 프로필 dev-fake
 cd services/api && uv run python -m app.run --reload             # 공개 8000 + 내부 8001 + 스케줄러(한 프로세스)
 cd services/debate-mcp && uv run python -m debate_mcp            # 9101
 cd services/assessment-mcp && uv run python -m assessment_mcp    # 9103
 cd services/report-worker && uv run python -m report_worker
 cd apps/web && pnpm dev                                          # 3000
-make seed                                                        # 자료 원문 시드 → 관리자·채용 건 → rag 재색인
+make seed SCOPE=infra                                            # 자료 원문 시드 → 관리자·채용 건 → rag 재색인
 ```
 
 - rag-mcp는 첫 기동 때 BGE-M3 모델(약 2.3GB)을 받는다. healthy가 될 때까지 몇 분 걸릴 수 있다.
@@ -64,7 +64,7 @@ make stage STAGE=keyword MIN=15        # 단계 시드 세션을 만들고 초�
 
 - api `curl -fs http://localhost:8000/health`, web `http://localhost:3000/api/health`.
 - 세션이 끝나면(`make stage STAGE=ended` 또는 제출) report-worker가 리포트 초안을 만든다. 관리자 지원자 목록에서 상태가 "검토 필요"로 바뀌면 정상이다.
-- 끝낼 때는 로컬 앱을 멈추고 `make infra-down`. 볼륨(DB 데이터·모델 캐시)은 남는다.
+- 끝낼 때는 로컬 앱을 멈추고 `make down SCOPE=infra`. 볼륨(DB 데이터·모델 캐시)은 남는다.
 
 ## 7. 실제 LLM으로 돌고 있는지 확인하기
 
@@ -136,5 +136,5 @@ docker compose -f infra/docker-compose.yml --env-file infra/.env exec -T postgre
 
 ## 다른 실행 방식
 
-- 8개 서비스를 모두 컨테이너로: `make up` / `make down`. 이 모드는 postgres·rag-mcp를 호스트에 열지 않으므로 호스트의 `make seed`가 닿지 않는다. 전체 compose용 시드는 `make seed-compose [SEED_ARGS="--minutes 15"]`다([configuration.md](configuration.md) "실행 모드").
-- 단계별 화면 테스트용 격리 스택: `make e2e-stack-up` → `make e2e-stack-seed` → `make e2e-stages` → `make e2e-stack-down`([testing.md](testing.md)).
+- 8개 서비스를 모두 컨테이너로: `make up PROFILE=dev-fake` / `make down`(기본 프로필은 가짜 LLM·테스트 API. 실제 LLM은 `PROFILE=dev-real ALLOW_API=1`). 이 모드는 postgres·rag-mcp를 호스트에 열지 않으므로 `make seed PROFILE=dev-fake [SEED_ARGS="--minutes 15"]`가 compose 안 일회성 seed 서비스로 돈다([configuration.md](configuration.md) "실행 프로필"·"실행 모드").
+- 단계별 화면 테스트용 격리 스택: `make up PROFILE=test-text` → `make seed PROFILE=test-text` → `make e2e SUITE=stages PROFILE=test-text` → `make down PROFILE=test-text`([testing.md](testing.md)). 현재 모드 확인은 `make profile PROFILE=…`.

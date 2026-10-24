@@ -272,7 +272,7 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 | 어시스턴트 | 도구 1회(`search_materials` 질문 그대로) 뒤 첫 결과 제목을 인용한 고정 문장 |
 | 평가 에이전트 | 요소마다 형식 검증을 통과하는 고정 출력(차원마다 지원자 메시지 근거가 있으면 수준 3·confidence medium, 없으면 `no_activity`) |
 
-사용량은 0으로 기록하고 LLM 호출 trace는 남기지 않는다(`LANGCHAIN_TRACING_V2`가 켜져 있으면 그래프 실행 trace는 남는다). 운영 compose에서는 끈다. 실제 LLM 확인은 같은 실행을 `LLM_FAKE` 없이 다시 돌린다(`make stage … LLM=live`).
+사용량은 0으로 기록하고 LLM 호출 trace는 남기지 않는다(`LANGCHAIN_TRACING_V2`가 켜져 있으면 그래프 실행 trace는 남는다). 운영 compose에서는 끈다. 실제 LLM 확인은 같은 실행을 실제 LLM 프로필로 다시 돌린다(`make stage … PROFILE=eval-text`, 스택도 그 프로필).
 
 ### 측정 기준선
 

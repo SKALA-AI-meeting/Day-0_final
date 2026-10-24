@@ -34,15 +34,15 @@ web ──REST·WS──▶ api ◀──내부 API(8001)── debate-mcp · ra
 
 ```
 cp infra/.env.example infra/.env   # 비밀값을 채운다. LLM 없이 돌리려면 LLM_FAKE=1
-make infra-up                      # postgres·rabbitmq·rag-mcp
+make up SCOPE=infra                # postgres·rabbitmq·rag-mcp(프로필 dev-fake)
 # api·MCP 2개·report-worker·web을 로컬에서 띄운다(quickstart.md 4)
-make seed                          # 자료 원문 → 관리자·채용 건 → rag 재색인
+make seed SCOPE=infra              # 자료 원문 → 관리자·채용 건 → rag 재색인
 make stage STAGE=keyword MIN=15    # 단계 시드 세션의 초대 링크 출력
 ```
 
 지금 실제 LLM으로 돌고 있는지(`[fake]` 표시가 없어도 고정 응답일 수 있다)는 [quickstart.md](docs/guides/quickstart.md) "7. 실제 LLM으로 돌고 있는지 확인하기"로 확인한다.
 
-8개 서비스를 모두 컨테이너로 띄우려면 `make up`. 이 모드의 시드는 `make seed-compose`(compose 안의 일회성 seed 서비스, 포트를 열지 않음).
+8개 서비스를 모두 컨테이너로 띄우려면 `make up PROFILE=dev-fake`(가짜 LLM, 외부 호출 없음). 이 모드의 시드는 `make seed PROFILE=dev-fake`(compose 안의 일회성 seed 서비스, 포트를 열지 않음). 실행 프로필과 과금 동의(`ALLOW_API=1`)는 [docs/guides/configuration.md](docs/guides/configuration.md).
 
 ## 폴더
 
@@ -75,13 +75,12 @@ make stage STAGE=keyword MIN=15    # 단계 시드 세션의 초대 링크 출�
 
 | 명령 | 무엇을 보나 | 선행 조건 |
 |---|---|---|
-| `make test` | 계약 픽스처·카탈로그·서비스 5개 pytest·web vitest(LLM mock) | `uv`·`pnpm install`. api DB 테스트는 postgres가 없으면 skip |
+| `make test` | 계약 픽스처·프로필 해석기·카탈로그·서비스 5개 pytest·web vitest(LLM mock)와 e2e 러너·eval 픽스처 형태(가짜 api). `SUITE=unit∣tools`로 나눠 돌린다 | `uv`·`pnpm install`. api DB 테스트는 postgres가 없으면 skip |
 | `make lint` | ruff, web eslint·prettier | 없음 |
 | `make docs-check` | README 생성 블록과 features.md 테스트 참조가 코드와 같은지 | 없음 |
-| `make test-e2e` | e2e 러너·단언·장애 주입·인증 경계와 eval 픽스처 형태(가짜 api) | 없음 |
-| `make e2e-stages` | 단계별 화면(Playwright) | 격리 스택(`make e2e-stack-up`·`make e2e-stack-seed`), `infra/.env.e2e` |
+| `make e2e SUITE=stages PROFILE=test-text` | 단계별 화면(Playwright) | 격리 스택(`make up PROFILE=test-text`·`make seed PROFILE=test-text`) |
 | `make e2e` | 실 스택 15분 세션 전체·리포트·검토 | 스택 기동·시드 |
-| `make test-live`, `make eval-live` | 실제 LLM 호출(의도 분류·평가 BARS·유출 질문·페르소나 품질) | 실제 API 키 |
+| `make eval PROFILE=eval-text SUITE=api∣fixtures ALLOW_API=1` | 실제 LLM 호출(의도 분류·평가 BARS·유출 질문·페르소나 품질) | 제한 API 키, `ALLOW_API=1` |
 
 범위와 단언 목록은 [docs/guides/testing.md](docs/guides/testing.md).
 
@@ -97,9 +96,9 @@ PRD의 지원자 흐름(입장·동의·토론 4단계·참고 자료·어시스
 
 | 항목 | 결과 | 기록 |
 |---|---|---|
-| 단계별 화면 테스트(`make e2e-stages`) | 9/9 통과 | [stages/summary.md](tests/e2e/records/stages/summary.md) |
+| 단계별 화면 테스트(`make e2e SUITE=stages`) | 9/9 통과 | [stages/summary.md](tests/e2e/records/stages/summary.md) |
 | 15분 실제 LLM 세션 단언 | 8/8 통과 | [all_five-live-summary.md](tests/e2e/records/final-20261022/all_five-live-summary.md) |
-| 의도 분류 정확도(`make eval-live`, 목표 0.85) | 0.90 | [eval-live.md](tests/e2e/records/final-20261022/eval-live.md) |
+| 의도 분류 정확도(`make eval`, 목표 0.85) | 0.90 | [eval-live.md](tests/e2e/records/final-20261022/eval-live.md) |
 | 평가 BARS ±1 일치율 | 1.0 | [eval-live.md](tests/e2e/records/final-20261022/eval-live.md) |
 
 시각 보고서는 [docs/share/visual-report/index.html](docs/share/visual-report/index.html), 기능별 상태와 알려진 제한은 [docs/features.md](docs/features.md).

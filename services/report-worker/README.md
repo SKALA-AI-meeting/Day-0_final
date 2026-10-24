@@ -67,7 +67,13 @@ make test                                               # 전체
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 82개(live 2개 포함, `make test`는 live를 뺀다).
+총 83개(live 2개 포함, `make test`는 live를 뺀다).
+
+<details><summary><code>tests/test_config.py</code> (1)</summary>
+
+- `test_restricted_allowlist_matches_api_rule`
+
+</details>
 
 <details><summary><code>tests/test_evaluate.py</code> (29)</summary>
 

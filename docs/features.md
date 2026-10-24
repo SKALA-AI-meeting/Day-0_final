@@ -9,8 +9,8 @@ PRD 기능 ID([`PRD.md`](../PRD.md) 8장)별로 사용자 동작, 구현 위치,
 - **상태**: 구현 = MVP 범위에서 동작, 부분 = 일부만 구현·검증, MVP 이후 = 아직 만들지 않음.
 - **검증 범위**:
   - `mock`: 단위·통합 테스트. LLM·MCP·큐는 가짜이고 `make test`로 돈다.
-  - `live`: 실제 LLM을 부르는 테스트(`make test-live`, `make eval-live`). 비용이 들어 기본 테스트에서 빠진다.
-  - `실 스택`: 서비스를 실제로 띄워 도는 e2e 러너(`make e2e`)와 단계별 화면 테스트(`make e2e-stages`).
+  - `live`: 실제 LLM을 부르는 테스트(`make eval PROFILE=eval-text SUITE=api∣fixtures ALLOW_API=1`). 비용이 들어 기본 테스트에서 빠진다.
+  - `실 스택`: 서비스를 실제로 띄워 도는 e2e 러너(`make e2e`)와 단계별 화면 테스트(`make e2e SUITE=stages PROFILE=test-text`).
 - 테스트 참조 형식: pytest는 저장소 루트 기준 파일 경로 뒤에 `::`과 테스트 이름을 붙이고, Playwright·vitest는 `apps/web/` 기준 파일 경로 뒤에 `::`과 제목을 붙인다. e2e 대본은 `scenarios/e2e/` 아래 yaml 경로다.
 - 실제 LLM으로 사람처럼 조작한 playtest 기록은 [`tests/playtest/records/summary.md`](../tests/playtest/records/summary.md)와 [`tests/playtest/records/rerun-20261022/summary.md`](../tests/playtest/records/rerun-20261022/summary.md)에 있다.
 

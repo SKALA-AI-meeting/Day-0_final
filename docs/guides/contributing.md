@@ -23,9 +23,9 @@
 | 바뀐 것 | 돌릴 것 |
 |---|---|
 | 모든 PR | `make test`, `make lint`(postgres를 띄운 상태에서. 없으면 api DB 테스트가 skip된다) |
-| 계약·러너·eval 픽스처 | `make test-e2e` |
-| 화면·api 흐름 | `make e2e-stages`(격리 스택, `LLM_FAKE=1`) |
-| 프롬프트·모델·평가 규칙 | `make eval-live` 1회, 결과 파일을 PR에 링크 |
+| 계약·러너·eval 픽스처 | `make test SUITE=tools`(`make test`에 포함) |
+| 화면·api 흐름 | `make e2e SUITE=stages PROFILE=test-text`(격리 스택, 가짜 LLM) |
+| 프롬프트·모델·평가 규칙 | `make eval PROFILE=eval-text ALLOW_API=1` 1회, 결과 파일을 PR에 링크 |
 | 세션 전체 흐름·시간 로직 | 실 스택 `make e2e`(`all_five` 15분) 1회 |
 
 PR 설명에는 실행한 명령과 검증 방식(mock / 격리 DB / 실 API / 실 LLM)을 적는다. test·lint 통과만으로 실제 서비스 연결을 확인했다고 보지 않는다. `tests/expected-failures.txt`는 비어 있어야 하며, 항목을 더하려면 PR에서 이유와 해소 계획을 적고 리뷰어 동의를 받는다.
