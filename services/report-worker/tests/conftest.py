@@ -10,6 +10,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 import re
 from typing import Any
 
@@ -277,3 +278,13 @@ def merged_report(draft: dict[str, Any], record: dict[str, Any]) -> dict[str, An
         purge_at=None,
     )
     return report
+
+
+def pytest_collection_modifyitems(config, items):
+    """`live` 테스트(실제 API·과금)는 `ALLOW_API=1`일 때만 돈다. -m 마커 선택은 그대로다."""
+    if os.environ.get("ALLOW_API") == "1":
+        return
+    skip = pytest.mark.skip(reason="실제 API 호출(과금). ALLOW_API=1을 명시해야 돈다")
+    for item in items:
+        if "live" in item.keywords:
+            item.add_marker(skip)

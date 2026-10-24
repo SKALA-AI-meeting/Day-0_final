@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -26,3 +27,13 @@ def contract():
 @pytest.fixture(scope="session")
 def scenarios_dir() -> Path:
     return REPO_ROOT / "scenarios"
+
+
+def pytest_collection_modifyitems(config, items):
+    """`live` 테스트(실제 API·과금)는 `ALLOW_API=1`일 때만 돈다. -m 마커 선택은 그대로다."""
+    if os.environ.get("ALLOW_API") == "1":
+        return
+    skip = pytest.mark.skip(reason="실제 API 호출(과금). ALLOW_API=1을 명시해야 돈다")
+    for item in items:
+        if "live" in item.keywords:
+            item.add_marker(skip)
