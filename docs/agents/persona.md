@@ -4,7 +4,7 @@
 
 ## 입력
 
-- 자기 성향 프롬프트, 공통 규칙, 상황 정보(`[상황]` 블록, 사실만), 자기 입장의 상태(`[내 입장]`: `stance_plan`과 기록된 지지에서 계산), 카드 차례(`[카드 차례]`: 사실 + `cards.yaml` `purpose`, 자기 자리만)
+- 자기 성향 프롬프트, 공통 규칙, 상황 정보(`[상황]` 블록, 사실만), 자기 입장의 상태(`[내 입장]`: `stance_plan`과 기록된 지지에서 계산), 카드 차례(`[카드 차례]`: 사실 + `cards.yaml` `purpose`, 카드 전이면 복선·연결 차례와 `steer` 내용, 자기 자리만)
 - 자리 기억(자기 최근 발언 3개), 걸러 낸 DebateState(지지 현황·확정 칸·남은 시간), 최근 대화 30개, 지원자 표시 이름
 - 도구(허용 목록, 응답당 3회): debate-mcp `get_transcript`·`get_draft`, rag-mcp `search_materials`·`get_material`. assessment-mcp는 주지 않는다
 
@@ -25,7 +25,7 @@
 | `prompts/shared/guard_patterns.yaml` (키 `guard_patterns.yaml`) | 금지 패턴·`max_chars` |
 | `prompts/shared/fixed_phrases.yaml` (키 `fixed_phrases.yaml`) | 정해진 안내문(`notices`) |
 | `personas.yaml` | 이름·성향 설명·고정 입장 |
-| `cards.yaml` `purpose`·`followup_purpose` | 카드 차례에 그대로 보이는 설계된 장면의 목적(데이터, 같은 채용 건 모두 같음) |
+| `cards.yaml` `purpose`·`followup_purpose`·`steer` | 카드 차례에 그대로 보이는 설계된 장면의 목적과 카드 전 복선·연결에 담을 내용(데이터, 같은 채용 건 모두 같음) |
 | `materials/<keyword>/*.md` | 확정 키워드 자료(rag-mcp 도구로만 읽음) |
 
 ## 코드 입구

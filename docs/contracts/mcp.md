@@ -11,7 +11,7 @@
 {"ok": false, "error": {"code": "not_found", "message": "session not found", "retryable": false}}
 ```
 
-코드: `invalid_input`, `not_found`, `forbidden`, `conflict`, `not_released`, `upstream_unavailable`(retryable), `internal`. api 매핑: 404 not_found, 403 forbidden, 409 conflict, 422 invalid_input, 423 not_released, 5xx·연결 실패 upstream_unavailable(1회 재시도, 타임아웃 10초). **409의 api 오류 코드(`no_consensus`·`stale_generation`·`slot_confirmed`·`phase_not_open`)는 MCP `message`에 그대로 담는다**(예: `{"code": "conflict", "message": "no_consensus"}`). 결정적 노드는 이 message로 분기한다.
+코드: `invalid_input`, `not_found`, `forbidden`, `conflict`, `not_released`, `upstream_unavailable`(retryable), `internal`. api 매핑: 404 not_found, 403 forbidden, 409 conflict, 422 invalid_input, 423 not_released, 5xx·연결 실패 upstream_unavailable(1회 재시도, 타임아웃 10초). **409의 api 오류 코드(`no_consensus`·`card_pending`·`stale_generation`·`slot_confirmed`·`phase_not_open`)는 MCP `message`에 그대로 담는다**(예: `{"code": "conflict", "message": "no_consensus"}`). 결정적 노드는 이 message로 분기한다.
 
 ### debate-mcp (`http://debate-mcp:9101/mcp`)
 
@@ -26,7 +26,7 @@
 | fill_slot | {session_id, option_id, seat: p1∣p2∣p3, content, run_id} | {slot, message, phase}. 합의 채우기 전용. 칸 확정·공지 메시지 저장(seq 5)·단계 전환을 api가 한 트랜잭션으로 한다. `resolution`은 api가 consensus로 정하고 인자로 받지 않는다. 같은 run_id 재호출은 기존 결과 | POST /slots/fill | 변경 |
 
 - 지원자의 안·입장은 api 메일박스가 의도 분류로 직접 저장하므로 MCP 도구의 proposer·participant에 `candidate`는 없다.
-- 그래프의 페르소나 게시는 항상 `expected_generation`(실행 시작 때 값)을 넣는다. 합의 채우기 공지는 `post_message`로 따로 게시하지 않는다. `fill` 노드의 `announce_fill` 분기가 공지 문장을 `fill_slot`의 `content`로 넘기고, api가 칸 확정과 같은 트랜잭션에서 저장한다. `fill_slot`이 409(`no_consensus`·`slot_confirmed`·`phase_not_open`)면 칸도 공지도 없이 run을 끝낸다.
+- 그래프의 페르소나 게시는 항상 `expected_generation`(실행 시작 때 값)을 넣는다. 합의 채우기 공지는 `post_message`로 따로 게시하지 않는다. `fill` 노드의 `announce_fill` 분기가 공지 문장을 `fill_slot`의 `content`로 넘기고, api가 칸 확정과 같은 트랜잭션에서 저장한다. `fill_slot`이 409(`no_consensus`·`card_pending`·`slot_confirmed`·`phase_not_open`)면 칸도 공지도 없이 run을 끝낸다.
 
 ### rag-mcp (`http://rag-mcp:9102/mcp`)
 
