@@ -26,7 +26,7 @@ XFAIL_ARGS = awk -F'|' -v p="$$p" -v fn="$$fn" -v fp="$$fp" '!/^[[:space:]]*(\#|
 	gsub(/[[:space:]]+/, "", $$1); if (index($$1, p) != 1) next; x = substr($$1, length(p) + 1); \
 	if (index(x, "::")) { if (fn != "") print fn " " x } else print fp " " x }' $(XFAIL)
 
-E2E_PYTEST = PYTHONPATH=services/api:. uv run --project services/api pytest -q -p no:cacheprovider \
+E2E_PYTEST = env PYTHONPATH=services/api:. uv run --project services/api pytest -q -p no:cacheprovider \
 	-o asyncio_mode=auto -o asyncio_default_fixture_loop_scope=session \
 	-o asyncio_default_test_loop_scope=session -o markers="live: 실제 LLM 호출"
 

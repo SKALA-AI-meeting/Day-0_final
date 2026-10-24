@@ -598,6 +598,11 @@ def export_session(session_id: str, values: dict[str, str]) -> dict[str, Any]:
             f"join sessions s on s.invite_id=i.id where s.id='{sid}') t"
         ),
     }
+    if data["session"] is None:
+        raise SystemExit(
+            f"세션 {sid}를 {container}에서 찾지 못했다"
+            "(VC_PG_CONTAINER가 대상 스택의 postgres인지 확인)"
+        )
     for table in EXPORT_TABLES:
         order = ORDER.get(table, "1")
         data[table] = query(
