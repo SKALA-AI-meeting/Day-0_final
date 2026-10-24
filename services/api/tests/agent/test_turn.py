@@ -12,11 +12,14 @@ def _stim(kind: str, phase: str, generation: int) -> Stimulus:
     return Stimulus(type=kind, phase=phase, generation=generation)
 
 
-def keyword_with(h, supporters: dict[str, str]) -> dict[str, str]:
+def keyword_with(h, supporters: dict[str, str], *, card_delivered: bool = True) -> dict[str, str]:
     """키워드 안 행을 만들고 지지를 놓는다. 반환 {키: option_id}.
 
-    지원자 지지가 있으면 지원자의 최신 발언이 그 안을 지지로 세는 발언이었던 상태로 둔다.
+    지원자 지지가 있으면 지원자의 최신 발언이 그 안을 지지로 세는 발언이었던 상태로 둔다. 기본은
+    키워드 카드가 이미 전달된 뒤다(카드 전에는 합의 채움을 보류한다, C3).
     """
+    if card_delivered:
+        h.server.deliver("persuasion_keyword", "p3")
     ids = {}
     for key in dict.fromkeys(supporters.values()):
         ids[key] = h.server.add_option(key, "p1")
@@ -152,6 +155,7 @@ async def test_quiet_only_when_called_or_asked_all(harness):
             {"speakers": [{"seat": "p2", "purpose": "respond"}, {"seat": "p1", "purpose": "react"}]}
         ],
     )
+    h.server.deliver("persuasion_keyword", "p3")  # 카드 뒤라 턴 LLM이 고른다
     mid = h.candidate("음 그렇군요.", intent_of("other", confidence="low"))
     run = await h.run("message", message_id=mid)
     assert [s["seat"] for s in run.decision["speakers"]] == ["p1"]

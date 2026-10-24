@@ -817,6 +817,10 @@ async def fill_slot(
     result, options = await judge_phase(db, session, position.scenario, option.phase)
     if result["consensus_option_id"] != option.id:
         raise conflict("no_consensus", "option is not the consensus")
+    if await pending_cards(db, session, position.scenario, option.phase):
+        # 카드 전달 전에는 AI 동료가 칸을 채우지 않는다(C3). 지원자 확정·시간 초과는 이 검사를
+        # 거치지 않는다
+        raise conflict("card_pending", "a card of this phase is not delivered yet")
     seat = body["seat"]
     slot = await confirm(
         db,
@@ -851,6 +855,14 @@ async def fill_slot(
 
 
 # ---- DebateState ---------------------------------------------------------------------------------
+
+
+async def pending_cards(
+    db: AsyncSession, session: Session, scenario: dict[str, Any], phase: str
+) -> list[str]:
+    """그 단계에서 담당 전원이 아직 전달하지 않은 시각 카드(`sc.pending_cards`, C3)."""
+    rows = (await db.scalars(select(SessionCard).where(SessionCard.session_id == session.id))).all()
+    return sc.pending_cards(scenario, phase, {c.card_id: list(c.delivered_seats) for c in rows})
 
 
 async def debate_state(
@@ -1008,6 +1020,12 @@ async def debate_state(
             }
             for c in cards
         ],
+        # 이 단계에서 전달이 끝나지 않은 시각 카드(진행 매니저의 합의 채움 보류, C3)
+        "pending_cards": sc.pending_cards(
+            scenario, phase, {c.card_id: list(c.delivered_seats) for c in cards}
+        )
+        if debate_phase
+        else [],
         "cost_left": budget.cost_left(session),
         "candidate_intents": [
             {

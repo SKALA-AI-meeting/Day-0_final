@@ -315,3 +315,21 @@ def card_required_count(card_def: dict[str, Any]) -> int:
     if not card_def.get("actor"):
         return 0
     return len(card_def["actor"]) if card_def.get("actor_mode") == "joint" else 1
+
+
+def pending_cards(
+    scenario: dict[str, Any], phase: str, delivered: dict[str, list[str]]
+) -> list[str]:
+    """그 단계에서 담당 동료의 전달이 끝나지 않은 시각 카드(결정 C3: 전달 전 AI 합의 채움 보류).
+
+    `delivered`는 `session_cards` 행의 카드별 `delivered_seats`(행이 없는 카드는 미전달). 카드
+    시각 전이든 뒤든 담당 전원이 게시할 때까지 들고, 단계가 끝나면 대상에서 빠진다.
+    """
+    found: list[str] = []
+    for card_def in scenario["cards"]:
+        need = card_required_count(card_def)
+        if card_def["stage_id"] != phase or card_def.get("offset_min") is None or need == 0:
+            continue
+        if len(delivered.get(card_def["card_id"], [])) < need:
+            found.append(card_def["card_id"])
+    return found

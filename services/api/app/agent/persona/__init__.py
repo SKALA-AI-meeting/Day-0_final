@@ -181,8 +181,19 @@ def stance_text(plan: StancePlan, ds: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+STEER_LABELS = {"seed": "복선", "bridge": "연결"}
+
+
 def card_text(card: dict[str, Any]) -> str:
-    """카드 차례의 사실(코드)과 설계된 장면의 목적(cards.yaml `purpose`, 데이터)."""
+    """카드 차례의 사실(코드)과 설계된 장면의 목적(cards.yaml `purpose`, 데이터). 카드 전 이끎
+    차례(`stage` seed·bridge)면 장면은 아직 아니고 `steer` 내용만 보인다(C3)."""
+    stage = card.get("stage")
+    if stage in STEER_LABELS:
+        label = STEER_LABELS[stage]
+        lines = [f"- 이번 발언이 내 카드 차례: 아니요 (장면 전, {label} 차례)"]
+        for purpose in card.get("purposes") or []:
+            lines.append(f"- 이번 발언에 담을 {label}: {purpose}")
+        return "\n".join(lines)
     turn = "예" if card.get("turn") else "아니요 (앞 카드 발언을 이어가는 차례)"
     pressure = card.get("pressure")
     if pressure:

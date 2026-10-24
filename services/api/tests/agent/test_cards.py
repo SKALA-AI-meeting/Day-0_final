@@ -247,6 +247,9 @@ async def test_moved_critic_must_record_support_for_candidate_option(harness):
         ],
     )
     h.server.confirm_keyword("water")
+    # 해결책 카드 두 장이 전달된 뒤(전달 전에는 합의 채움을 보류한다, C3)
+    h.server.deliver("persuasion_solution", "p3")
+    h.server.deliver("inclusion_silence", "p2")
     await h.run("phase_started")
     s2 = option_id(h, "water_s2")
     h.candidate("생활 인프라가 좋다고 생각해요.", intent_of("propose", key="water_s3"))
@@ -404,3 +407,109 @@ async def test_critic_count_survives_restart(harness):
 
     await h.run("message", message_id=mid)
     assert h.server.support["p3"] == p1
+
+
+# ---- 카드 이끎(C3): 복선 → 연결 → 실행, 카드 전달 전 합의 채움 보류 --------------------------
+def steer_of(h, card_id: str, stage: str) -> str:
+    return h.server.catalog.card(card_id)["steer"][stage]
+
+
+def card_block(text: str) -> list[str]:
+    found = re.search(r"\[카드 차례\]\n(.*?)(?:\n\n\[|\Z)", text, re.S)
+    return found.group(1).splitlines() if found else []
+
+
+async def test_manager_leads_card_seed_bridge_execute_in_order(harness):
+    """키워드 카드 담당(비판형)이 단계 시작에서 복선, 다음 지원자 메시지에서 연결(턴 LLM 없이 담당을
+    고름), card_due에서 실행 순서로 말한다. 카드 시각·담당·장면은 그대로다."""
+    h = harness("keyword", turn=[RuntimeError("불려서는 안 된다")])
+    card = "persuasion_keyword"
+
+    started = await h.run("phase_started")
+    assert [s["seat"] for s in started.decision["speakers"]] == ["p1", "p3"]
+    seed = next(s for s in h.snapshots if s["seat"] == "p3")
+    assert card_block(seed["text"]) == [
+        "- 이번 발언이 내 카드 차례: 아니요 (장면 전, 복선 차례)",
+        f"- 이번 발언에 담을 복선: {steer_of(h, card, 'seed')}",
+    ]
+    assert card_block(next(s for s in h.snapshots if s["seat"] == "p1")["text"]) == []
+
+    mid = h.candidate("음, 어떤 게 좋을까요.", intent_of("other", confidence="low"))
+    bridge = await h.run("message", message_id=mid)
+    assert [(s["seat"], s["reply_to"]) for s in bridge.decision["speakers"]] == [("p3", mid)]
+    assert bridge.decision["llm_used"] is False and not h.turn.calls
+    assert bridge.decision["reason"] == "카드 전 이끎 차례(복선·연결)"
+    assert card_block(h.snapshots[-1]["text"]) == [
+        "- 이번 발언이 내 카드 차례: 아니요 (장면 전, 연결 차례)",
+        f"- 이번 발언에 담을 연결: {steer_of(h, card, 'bridge')}",
+    ]
+    assert card not in h.server.cards  # 복선·연결은 카드 전달이 아니다
+
+    # 복선·연결을 마친 뒤의 지원자 메시지는 이끌지 않는다(턴 LLM 실패 → 기본 응답 자리)
+    again = await h.run("message", message_id=h.candidate("그렇군요.", intent_of("other")))
+    assert again.decision["llm_used"] is True
+    assert card_block(h.snapshots[-1]["text"]) == []
+
+    done = await h.run("card_due", card_id=card)
+    assert done.decision["speakers"][0]["card_ids"] == [card]
+    assert card_block(h.snapshots[-1]["text"])[0] == "- 이번 발언이 내 카드 차례: 예"
+    assert h.server.cards[card]["delivered"] == ["p3"]
+
+
+async def test_steering_skips_cards_without_steer_data_and_quiet(harness):
+    """이끎 데이터가 없는 카드(머뭇거림 고정 한 줄)는 이끌지 않고 소극형은 이끎 담당으로 고르지
+    않는다. 해결책 단계는 반론 카드 담당(비판형)만 복선을 받는다."""
+    h = harness("solution")
+    h.server.confirm_keyword("water")
+    await h.run("phase_started")
+    texts = {s["seat"]: s["text"] for s in h.snapshots}
+    assert "복선 차례" in card_block(texts["p3"])[0] and card_block(texts["p1"]) == []
+    assert "p2" not in texts
+
+
+async def test_ai_fill_is_held_until_the_phase_cards_are_delivered(harness):
+    """합의가 있어도 그 단계 카드가 전달되기 전에는 채우지 않고 화자를 정한다. 전달 뒤 run에서
+    지원자의 최신 발언이 그 안의 동의면 채운다(C3)."""
+    h = harness(
+        "keyword",
+        persona=[say("저는 바람이 더 낫다고 봐요.", {"option_id": "wind", "stance": "support"})],
+    )
+    water = h.server.add_option("water", "p1")
+    for who in ("candidate", "p1", "p2"):
+        h.server.set_support(who, water)
+    h.server.confirmed = water
+    mid = h.candidate("물로 가요.", intent_of("agree", option_id=water))
+
+    held = await h.run("message", message_id=mid)
+    assert held.decision["fill"] is None and held.decision["fill_held"] == ["persuasion_keyword"]
+    assert [s["seat"] for s in held.decision["speakers"]] == ["p3"]
+    assert "fill_slot" not in h.tool_names() and "keyword" not in h.server.slots
+
+    # 카드 전달(담당 비판형의 카드 발언) 뒤 지원자가 다시 동의하면 채운다
+    await h.run("card_due", card_id="persuasion_keyword")
+    assert h.server.cards["persuasion_keyword"]["delivered"] == ["p3"]
+    again = h.candidate("그래도 물로 정해요.", intent_of("agree", option_id=water))
+    filled = await h.run("message", message_id=again)
+    assert filled.decision["fill"] == {"option_id": water, "seat": "p2"}
+    assert filled.decision["fill_held"] == [] and h.server.slots["keyword"]["option_id"] == water
+
+
+async def test_partially_delivered_joint_card_still_holds_fill(harness):
+    """공동 담당 카드는 전원이 전달할 때까지 보류한다(이전 api처럼 `pending_cards`가 없으면 그래프가
+    같은 규칙으로 계산)."""
+    h = problem(harness)
+    p2 = h.server.add_option("water_p2", "p1")
+    for who in ("candidate", "p1", "p3"):
+        h.server.set_support(who, p2)
+    h.server.confirmed = p2
+    h.server.deliver(FLEX, "p1")
+    h.server.deliver(PRESSURE, "p1")
+    original = h.server.debate_state
+    h.server.debate_state = lambda: {k: v for k, v in original().items() if k != "pending_cards"}
+    mid = h.candidate("침수로 가요.", intent_of("agree", option_id=p2))
+    run = await h.run("message", message_id=mid)
+    assert run.decision["fill"] is None and run.decision["fill_held"] == [FLEX]
+    h.server.debate_state = original
+    h.server.deliver(FLEX, "p3")
+    run = await h.run("message", message_id=h.candidate("네.", intent_of("agree", option_id=p2)))
+    assert run.decision["fill"] == {"option_id": p2, "seat": "p3"}
