@@ -6,6 +6,11 @@
 (생략하면 start-at과 같다). 출력은 초대 링크·세션 id와 단계별로 응답에 있는 확인용 정보(세션 토큰,
 디브리핑 토큰, 관리자 리포트 링크)다. `--llm`은 어느 스택이어야 하는지 안내만 하고 스택은 건드리지
 않는다. 토큰은 시드 세션 것만 찍고 내부 토큰은 찍지 않는다.
+
+과금 게이트: 시드 세션은 만들어지는 순간부터 AI 동료가 진행하므로, 결정적 스택이 명시되지
+않았으면(`--llm live`, env `LLM_FAKE=0`, `LLM_FAKE` 없음) `ALLOW_API=1` 없이는 시작하지 않는다.
+없음을 실제로 보는 것은 api(`LLM_FAKE == "1"`만 fake)와 같은 규칙이다. `stage_advance.py`도 같다
+(`make stage*`는 프로필의 `LLM_FAKE`를 넘긴다).
 """
 
 import argparse
@@ -33,6 +38,22 @@ def env() -> dict[str, str]:
             values.update({k: v for k, v in dotenv_values(path).items() if v is not None})
     values.update(os.environ)
     return values
+
+
+def require_allow_api(values: dict[str, str], what: str, live: bool = False) -> None:
+    """env `LLM_FAKE=1`로 명시된 결정적 스택이 아니면(live·0·없음) `ALLOW_API=1` 없이는 끝낸다."""
+    value = values.get("LLM_FAKE")
+    if live:
+        source = "--llm live"
+    else:
+        source = "LLM_FAKE 없음" if value is None else f"env LLM_FAKE={value}"
+    if not live and value == "1":
+        return
+    if values.get("ALLOW_API") != "1":
+        raise SystemExit(
+            f"{what}: 대상 스택이 실제 LLM({source})이라 세션 진행이 모델 호출(과금)이다. "
+            "ALLOW_API=1을 명시해야 실행한다"
+        )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -67,6 +88,7 @@ async def make(internal: httpx.AsyncClient, body: dict) -> dict:
 async def main() -> None:
     args = parse_args()
     values = env()
+    require_allow_api(values, "make_session", live=args.llm == "live")
     internal_url = values.get("E2E_INTERNAL_URL", "http://localhost:8001")
     headers = {"X-Internal-Token": values.get("INTERNAL_TOKEN", "")}
     async with httpx.AsyncClient(base_url=internal_url, timeout=60, headers=headers) as internal:

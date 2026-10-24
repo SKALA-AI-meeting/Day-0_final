@@ -52,7 +52,7 @@
 pnpm --dir apps/web install --frozen-lockfile        # 처음 한 번
 pnpm --dir apps/web dev                              # http://localhost:3000 (api는 NEXT_PUBLIC_API_URL)
 NEXT_PUBLIC_MOCK=1 pnpm --dir apps/web dev           # api 없이 mocks/의 계약 예시로 동작
-make up                                              # 전체 스택(컨테이너 web 포함)
+make up PROFILE=dev-fake                             # 전체 스택(컨테이너 web 포함)
 ```
 
 mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를 주소에 붙이면 최악 데이터로 화면을 본다.
@@ -69,7 +69,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 | 종류 | 도구 | 실행 | 필요한 것 |
 |---|---|---|---|
 | 단위·컴포넌트 | vitest | `pnpm --dir apps/web test` 또는 `make test` | 없음 |
-| 단계별 화면 | Playwright | `make e2e-stack-up` → `make e2e-stack-seed` → `make e2e-stages [STAGE=…]` → `make e2e-stack-down` | 도커 스택(별도 compose 프로젝트, web 3100), `infra/.env.e2e` |
+| 단계별 화면 | Playwright | `make up PROFILE=test-text` → `make seed PROFILE=test-text` → `make e2e SUITE=stages PROFILE=test-text [STAGE=…]` → `make down PROFILE=test-text` | 도커 스택(별도 compose 프로젝트, web 3100), 프로필 `test-text` |
 | 린트 | eslint + prettier | `make lint` | 없음 |
 
 단계별 화면 테스트는 내부 테스트 API로 단계 시드 세션을 만들어 실제 화면을 조작하고 스크린샷을 `tests/e2e/records/stages/`에 남긴다. 스택 준비는 [`docs/guides/testing.md`](../../docs/guides/testing.md)를 따른다.
@@ -256,7 +256,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-**단계별 화면 테스트(Playwright, `make e2e-stages`)**: 테스트 제목 9개(정적 파싱)
+**단계별 화면 테스트(Playwright, `make e2e SUITE=stages PROFILE=test-text`)**: 테스트 제목 9개(정적 파싱)
 
 <details><summary><code>e2e/admin-capture.spec.ts</code> (0)</summary>
 

@@ -210,6 +210,14 @@ async def test_live_llm_mode_skips_level_expectations(fake, target, monkeypatch)
     assert run_mod.detect_llm_fake(False)[1] == "env LLM_FAKE=0"
     monkeypatch.setenv("LLM_FAKE", "1")
     assert run_mod.detect_llm_fake(False)[0] is True
+    monkeypatch.delenv("LLM_FAKE")
+    assert run_mod.detect_llm_fake(False)[0] is False  # 없음 = 실제 LLM(api와 같다)
+
+
+def test_live_stack_requires_allow_api():
+    with pytest.raises(SystemExit, match="ALLOW_API=1"):
+        run_mod.require_allow_api("env LLM_FAKE=0", {})
+    run_mod.require_allow_api("env LLM_FAKE=0", {"ALLOW_API": "1"})
 
 
 async def test_assistant_must_cite_keyword_materials(fake, target):

@@ -39,6 +39,8 @@ ROOT = HERE.parents[2]
 sys.path[:0] = [str(ROOT / "tests")]
 from e2e.client import env  # noqa: E402
 
+from eval import llm_access  # noqa: E402  키 규칙 사본·ALLOW_API 게이트
+
 SEED = (ROOT / "scripts" / "seed.py").read_text("utf-8")
 SESSION_MINUTES = 15  # 가상 지원자·어시스턴트 평가셋은 15분 세션으로 돈다
 
@@ -377,12 +379,9 @@ class Driver:
 
     async def run_autonomous(self, persona: str) -> None:
         model = self.values.get("VC_MODEL") or self.values.get("OPENAI_MODEL") or "gpt-4o-mini"
-        key_name = "OPENAI_API_KEY" if model == "gpt-4o-mini" else "OPENAI_API_KEY_PERSONAL"
-        key = self.values.get(key_name, "")
-        if not key:
-            raise RuntimeError(f"{key_name}가 비어 있다")
+        key, base_url = llm_access.api_key_for(model, self.values)
         llm = httpx.AsyncClient(
-            base_url="https://api.openai.com/v1",
+            base_url=base_url,
             headers={"Authorization": f"Bearer {key}"},
             timeout=60,
         )
@@ -616,6 +615,8 @@ async def main() -> None:
     parser.add_argument("--export-only", default=None, help="세션 id: 진행 없이 내보내기·지표만")
     args = parser.parse_args()
     values = env()
+    if not args.export_only:  # 세션 진행은 스택의 실제 LLM 호출(과금)을 일으킨다
+        llm_access.require_allow_api("virtual-candidate", values)
     stamp = f"{datetime.now():%Y%m%d-%H%M}"
     out = args.out or ROOT / "tests" / "e2e" / "records" / "virtual" / f"{stamp}-{args.mode}"
     out.mkdir(parents=True, exist_ok=True)

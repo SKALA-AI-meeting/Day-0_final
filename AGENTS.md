@@ -51,7 +51,7 @@
 |---|---|
 | 항상 | `make test`, `make lint`, `make docs-check`(README 생성 블록·features.md 테스트 참조 검사) |
 | API·라우트·MCP 도구·테스트를 바꿨을 때 | `make docs-gen` 뒤 `make docs-check` |
-| 화면 흐름을 바꿨을 때 | `make e2e-stages`(격리 스택) |
+| 화면 흐름을 바꿨을 때 | `make e2e SUITE=stages PROFILE=test-text`(격리 스택) |
 
 ## 금지
 

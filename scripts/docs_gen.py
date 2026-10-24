@@ -291,7 +291,8 @@ def gen_tests_web(_: str) -> str:
     out += [f"**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 {n_unit}개(정적 파싱)", ""]
     out += _plain_details(units)
     out += [
-        f"**단계별 화면 테스트(Playwright, `make e2e-stages`)**: 테스트 제목 {n_spec}개(정적 파싱)",
+        f"**단계별 화면 테스트(Playwright, `make e2e SUITE=stages PROFILE=test-text`)**: "
+        f"테스트 제목 {n_spec}개(정적 파싱)",
         "",
     ]
     out += _plain_details(specs)

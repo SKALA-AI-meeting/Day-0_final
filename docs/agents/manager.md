@@ -35,4 +35,4 @@
 ## 검증
 
 - 단위(LLM mock): `services/api/tests/agent/test_turn.py`(지명 우선·제외 자리·화자 ≤ 2·침묵 초대·합의 채우기(같은 run 재판정 없음)·설득 가능 규칙 횟수·재실행 멱등), `test_manager_context.py`(지명 응답·넘친 지명의 다음 실행 응답(재시작 포함)·반복 지명에서 굶지 않음·대화 창 밖 지명·고정 문장 카드는 지명을 닫지 않음·진행 발언 최소 1명·화자별 `reply_to`·`[상황]` 블록), `test_cards.py`(카드 전달·기준안 잠금), `test_script.py`(15분 대본)
-- 평가셋: `tests/eval/persona_scripts.yaml`의 지명 무응답·질문 무시 장면(`make eval-live`, `tests/eval/persona_eval.py`의 `replies`: 지원자 메시지마다 `reply_to`로 답한 발언이 있는지, 부른 자리가 답했는지)
+- 평가셋: `tests/eval/persona_scripts.yaml`의 지명 무응답·질문 무시 장면(`make eval PROFILE=eval-text ALLOW_API=1`, `tests/eval/persona_eval.py`의 `replies`: 지원자 메시지마다 `reply_to`로 답한 발언이 있는지, 부른 자리가 답했는지)

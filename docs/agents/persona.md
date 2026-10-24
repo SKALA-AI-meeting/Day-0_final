@@ -38,7 +38,7 @@
 
 - 단위(LLM mock): `services/api/tests/agent/test_persona.py`(계획 밖 입장·판정 유도·비용 상한·컨텍스트 경계), `test_persona_voice.py`(입장 상태 블록·상황 사실·카드 차례 목적·실제 지지 이동만 거부·소극형 전체 질문 규칙), `test_cards.py`
 - 픽스처: `prompts/fixtures/stance_offplan.yaml`·`verdict.yaml`·`leak.yaml`·`preemption.yaml`(채용 건에 복사하지 않음)
-- 평가셋: `tests/eval/persona_scripts.yaml`(지명 무응답·질문 무시·오인용·카드), `tests/eval/leak_cases.yaml`(유출·유도 질문). `make eval-live`
+- 평가셋: `tests/eval/persona_scripts.yaml`(지명 무응답·질문 무시·오인용·카드), `tests/eval/leak_cases.yaml`(유출·유도 질문). `make eval PROFILE=eval-text ALLOW_API=1`
 
 ## 알려진 한계
 

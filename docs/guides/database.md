@@ -4,19 +4,19 @@
 
 ## 새 DB
 
-- compose의 postgres는 볼륨이 비어 있을 때만 `infra/db/schema.sql`을 `/docker-entrypoint-initdb.d`로 한 번 적용한다. 볼륨 이름은 compose 프로젝트 이름을 앞에 붙인다: `make up`·`make infra-up`은 `infra_pgdata`, 격리 e2e 스택은 `dayzero-debate_pgdata`.
+- compose의 postgres는 볼륨이 비어 있을 때만 `infra/db/schema.sql`을 `/docker-entrypoint-initdb.d`로 한 번 적용한다. 볼륨 이름은 compose 프로젝트 이름을 앞에 붙인다: `make up`(dev-fake·dev-real·deploy, `SCOPE=infra` 포함)은 `infra_pgdata`, 격리 스택(test-text·eval-text)은 `dayzero-debate_pgdata`.
 - api 단위 테스트는 실행마다 임시 DB(`dayzero_test_<랜덤>`)를 만들어 `schema.sql`을 적용하고 끝나면 지운다(`services/api/tests/conftest.py`). 그래서 `schema.sql` 수정은 다른 사람의 개발 DB를 건드리지 않는다.
-- 자료 원문(`materials`)과 검색 청크(`material_chunks`)는 스키마가 아니라 시드가 채운다(로컬 개발 `make seed`, 격리 스택 `make e2e-stack-seed`).
+- 자료 원문(`materials`)과 검색 청크(`material_chunks`)는 스키마가 아니라 시드가 채운다(`make seed PROFILE=… [SCOPE=infra]`).
 
 ## schema.sql을 바꾼 뒤
 
 볼륨이 이미 있으면 `schema.sql`을 고쳐도 다시 적용되지 않는다. 로컬 DB는 개발용이므로 볼륨을 지우고 다시 만든다.
 
 ```
-make down                       # 또는 make infra-down
-docker volume rm infra_pgdata   # 격리 스택이면 make e2e-stack-down 뒤 dayzero-debate_pgdata
-make infra-up                   # 또는 make up. 빈 볼륨에 schema.sql이 적용된다
-make seed                       # 자료 원문·채용 건·재색인 다시 만들기
+make down [SCOPE=infra]         # 격리 스택이면 make down PROFILE=test-text
+docker volume rm infra_pgdata   # 격리 스택이면 dayzero-debate_pgdata
+make up [SCOPE=infra]           # 빈 볼륨에 schema.sql이 적용된다
+make seed [SCOPE=infra]         # 자료 원문·채용 건·재색인 다시 만들기
 ```
 
 ## 데이터를 남겨야 할 때

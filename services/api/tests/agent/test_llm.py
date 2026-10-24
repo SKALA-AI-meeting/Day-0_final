@@ -14,15 +14,16 @@ from app.agent.llm import (
     make_llm,
     model_for,
 )
+from app.agent.llm.roles import RESTRICTED_MODELS, key_name_for
 from langchain_core.messages import HumanMessage
 
 FAKE_ENV = {"LLM_FAKE": "1"}
-KEYS = {"OPENAI_API_KEY": "test-restricted", "OPENAI_API_KEY_PERSONAL": "test-personal"}
+KEYS = {"OPENAI_API_KEY": "test-restricted"}
 
 
 def test_role_models_and_temperature():
-    env = {**KEYS, "MODEL_PERSONA": "gpt-4o"}
-    assert model_for("persona", env) == "gpt-4o" and model_for("turn", env) == "gpt-4o-mini"
+    env = {**KEYS, "MODEL_PERSONA": "gpt-4.1-mini"}
+    assert model_for("persona", env) == "gpt-4.1-mini" and model_for("turn", env) == "gpt-4o-mini"
     for role, config in ROLE_CONFIG.items():
         llm = make_llm(role, env)
         assert isinstance(llm, OpenAILLM) and llm.temperature == config.temperature
@@ -30,8 +31,24 @@ def test_role_models_and_temperature():
 
 
 def test_missing_key_is_config_error():
-    with pytest.raises(ValueError, match="OPENAI_API_KEY_PERSONAL"):
-        make_llm("persona", {"OPENAI_API_KEY": "x", "MODEL_PERSONA": "gpt-4o"})
+    with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
+        make_llm("persona", {"MODEL_PERSONA": "gpt-5.4-mini"})
+
+
+def test_restricted_key_allowlist():
+    """허용 목록의 gpt-*만 OPENAI_API_KEY. 목록 밖 gpt-*는 키가 있어도 설정 오류(개인 키 없음)."""
+    assert RESTRICTED_MODELS == {
+        "gpt-4o-mini",
+        "gpt-4.1-mini",
+        "gpt-5.4-mini",
+        "gpt-5.4-nano",
+        "gpt-5-nano",
+    }
+    for model in RESTRICTED_MODELS:
+        assert key_name_for(model) == ("OPENAI_API_KEY", None)
+    assert key_name_for("gemini-2.5-flash")[0] == "GEMINI_API_KEY"
+    with pytest.raises(ValueError, match="allowlist"):
+        make_llm("persona", {**KEYS, "OPENAI_API_KEY_PERSONAL": "x", "MODEL_PERSONA": "gpt-4o"})
 
 
 async def test_wrapper_passes_role_temperature():

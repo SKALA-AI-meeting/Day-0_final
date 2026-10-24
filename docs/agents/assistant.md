@@ -31,4 +31,4 @@
 ## 검증
 
 - 단위(LLM mock): `services/api/tests/agent/test_assistant.py`(인용 필터·숫자 검사·문장 단위 자르기), 청크 경계 `services/rag-mcp/tests/test_chunk.py`
-- 평가셋: `tests/eval/assistant_cases.yaml`(실행기 `tests/eval/assistant_eval.py`, 테스트 `tests/eval/test_assistant_eval.py`). `make eval-live`
+- 평가셋: `tests/eval/assistant_cases.yaml`(실행기 `tests/eval/assistant_eval.py`, 테스트 `tests/eval/test_assistant_eval.py`). `make eval PROFILE=eval-text ALLOW_API=1`

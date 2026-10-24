@@ -1,7 +1,9 @@
 """환경 설정. compose는 env_file로 주입하고, 로컬은 infra/.env.local → infra/.env 순으로 읽는다.
 
 평가 모델·키 선택은 api `app/agent/llm/roles.py`의 평가 역할(`evaluator`) 규칙 사본이다:
-`MODEL_EVALUATOR`가 비면 `OPENAI_MODEL`(기본 gpt-4o-mini), 키는 모델 id로 고른다.
+`MODEL_EVALUATOR`가 비면 `OPENAI_MODEL`(기본 gpt-4o-mini), 키는 모델 id로 고른다(제한 키 허용 목록의
+gpt-* → OPENAI_API_KEY, gemini-* → GEMINI_API_KEY, 그 밖은 설정 오류. 개인 키 경로 없음).
+허용 목록을 바꾸면 roles.py와 함께 고친다.
 """
 
 import os
@@ -17,6 +19,10 @@ REPO_ROOT = _parents[3] if len(_parents) > 3 else _parents[-1]
 
 MODEL = "gpt-4o-mini"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+# roles.py RESTRICTED_MODELS와 같은 목록
+RESTRICTED_MODELS = frozenset(
+    {"gpt-4o-mini", "gpt-4.1-mini", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5-nano"}
+)
 # roles.py ROLE_CONFIG["evaluator"]와 같은 값
 EVALUATOR_TIMEOUT = 60.0
 EVALUATOR_RETRY_DELAYS = (1.0, 3.0)
@@ -53,12 +59,13 @@ def evaluator_model(env: Mapping[str, str]) -> str:
 
 def key_for(model: str, env: Mapping[str, str]) -> tuple[str, str | None]:
     """(api_key, base_url). 키가 비어 있으면 설정 오류로 멈춘다(다른 키로 몰래 바꾸지 않는다)."""
-    if model == MODEL:
+    if model in RESTRICTED_MODELS:
         name, base_url = "OPENAI_API_KEY", None
-    elif model.startswith("gpt-"):
-        name, base_url = "OPENAI_API_KEY_PERSONAL", None
     elif model.startswith("gemini-"):
         name, base_url = "GEMINI_API_KEY", GEMINI_BASE_URL
+    elif model.startswith("gpt-"):
+        allowed = ", ".join(sorted(RESTRICTED_MODELS))
+        raise ValueError(f"model {model} is not in the restricted-key allowlist ({allowed})")
     else:
         raise ValueError(f"no key rule for model: {model}")
     key = env.get(name, "")

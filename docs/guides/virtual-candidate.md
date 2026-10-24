@@ -27,18 +27,18 @@
 
 ## 실행
 
-선행 조건: 전체 스택(`make up`)과 시드(`make seed-compose SEED_ARGS="--minutes 15"` 또는 `make seed`)가 끝나 시드가 만든 15분 채용 건(이름은 `scripts/seed.py` `--position` 기본값 "서비스기획 신입")이 있고, `infra/.env`에 실제 키가 있다.
+선행 조건: 실제 LLM 프로필의 스택(`make up PROFILE=eval-text ALLOW_API=1`, 격리 스택 api 8100)과 시드(`make seed PROFILE=eval-text SEED_ARGS="--minutes 15"`)가 끝나 시드가 만든 15분 채용 건(이름은 `scripts/seed.py` `--position` 기본값 "서비스기획 신입")이 있고, `infra/.env`에 제한 키가 있다. 실제 모델을 부르므로 명령마다 `ALLOW_API=1`을 붙인다(없으면 시작하지 않는다).
 
 ```
-make virtual-candidate MODE=scripted      # 대본형 1회(약 15분 + 리포트 대기)
-make virtual-candidate MODE=autonomous    # 자율형 1회
+make measure PROFILE=eval-text MODE=scripted ALLOW_API=1      # 대본형 1회(약 15분 + 리포트 대기)
+make measure PROFILE=eval-text MODE=autonomous ALLOW_API=1    # 자율형 1회
 uv run --project services/api python tests/eval/virtual_candidate/drive.py --mode scripted --export-only <세션 id>   # 진행 없이 내보내기·지표만
 uv run --project services/api python tests/eval/virtual_candidate/metrics.py <session.json>... --judge   # 지표 다시 계산(LLM 판정 포함)
 ```
 
 두 모드는 서로 다른 세션이라 동시에 돌려도 된다. 기록은 `tests/e2e/records/virtual/<일시>-<mode>/`에 남고 git이 무시한다: `log.md`(시각 · 단계 · 행동 · 의도 · 직후 반응), `transcript.jsonl`(WS 프레임·REST 호출), `session.json`(내보내기), `metrics.json`. 측정 결과를 남길 때는 요약 수치만 `tests/e2e/records/`의 기준선 기록으로 옮긴다.
 
-환경 변수(모두 선택): `VC_API_URL`(기본 `http://localhost:8000`), `VC_POSITION`(채용 건 이름, 기본은 `scripts/seed.py` `--position` 기본값. 같은 이름 중 15분 채용 건만 보고 재시드로 여럿이면 가장 최근 것), `VC_ADMIN_EMAIL`·`VC_ADMIN_PASSWORD`(없으면 `scripts/seed.py` 기본값), `VC_MODEL`(자율형 지원자 모델, 기본 `OPENAI_MODEL`), `VC_JUDGE_MODEL`(판정 모델. 기존 판정(요약 모순·거짓 합의·동료 응답·오인용)은 없으면 gpt-4o-mini, 귀속 판정은 없으면 gpt-4o), `VC_PG_CONTAINER`(내보내기에 쓰는 postgres 컨테이너, 기본 `infra-postgres-1`).
+환경 변수(모두 선택): `VC_API_URL`(기본 `http://localhost:8000`), `VC_POSITION`(채용 건 이름, 기본은 `scripts/seed.py` `--position` 기본값. 같은 이름 중 15분 채용 건만 보고 재시드로 여럿이면 가장 최근 것), `VC_ADMIN_EMAIL`·`VC_ADMIN_PASSWORD`(없으면 `scripts/seed.py` 기본값), `VC_MODEL`(자율형 지원자 모델, 기본 `OPENAI_MODEL`. 제한 키 허용 목록 안이어야 한다), `VC_JUDGE_MODEL`(판정 모델. `--judge`를 켤 때 필수이고 기본값이 없다. 제한 키 모델은 보정 기준 미달이라 기록된 기준선과 비교할 수 없다, [testing.md](testing.md) "귀속 판정"), `VC_PG_CONTAINER`(내보내기에 쓰는 postgres 컨테이너, 기본 `infra-postgres-1`. 격리 스택은 `dayzero-debate-postgres-1`). `VC_API_URL`은 `make measure`가 프로필의 공개 주소로 채운다.
 
 내보내기는 compose의 postgres 컨테이너에서 `psql`로 그 세션의 행만 읽는다(읽기 전용, 포트를 열지 않는다). 표는 sessions·positions(시나리오 복사본)·messages·message_intents·agent_runs·options·stances·slots·session_cards·observations·proposals·assistant_calls·material_views·connection_gaps·evaluation_runs·evaluations·reports이고, 초대 토큰 해시·이메일은 읽지 않는다.
 
@@ -61,7 +61,7 @@ uv run --project services/api python tests/eval/virtual_candidate/metrics.py <se
 | 카드 | 도달한 단계의 카드 수, 발동, 전달(전달 자리 있음), 미발동 카드 | 규칙 |
 | 동료 무응답 | 지원자가 동료를 부르거나 물은 메시지 뒤 다음 지원자 발언 전 동료 발언이 없음(규칙), 부른 동료가 말하지 않음(규칙), 답이 실제로 그 말에 응답하지 않음(LLM). `reply_to`: 동료 발언의 `meta.reply_to`로 센 값(토론 단계 지원자 메시지 중 답한 발언이 없는 수, 부른 자리 중 그 메시지에 답하지 않은 자리 수, 다음 지원자 메시지 뒤에 답한 것 포함. 그 기록이 없는 이전 세션은 null) | 규칙·LLM |
 | 오인용(보조) | 지원자 이름을 언급한 동료 발언 중 지원자가 하지 않은 말·입장을 지원자 것으로 돌린 것 | LLM |
-| 귀속 판정(`judge.attribution`) | 토론 단계 동료 발언 전체에서 귀속을 뽑아 게시 전 원문과 대조(`supported`·`overstated`·`unsupported`·`undeterminable`). 건수·분모, 귀속별·게시물별 비율, 귀속 빈도, 초안 검사(guard·`stance_check`)와의 연결. 정의는 [testing.md](testing.md) "귀속 판정" | LLM(`VC_JUDGE_MODEL`, 없으면 gpt-4o) |
+| 귀속 판정(`judge.attribution`) | 토론 단계 동료 발언 전체에서 귀속을 뽑아 게시 전 원문과 대조(`supported`·`overstated`·`unsupported`·`undeterminable`). 건수·분모, 귀속별·게시물별 비율, 귀속 빈도, 초안 검사(guard·`stance_check`)와의 연결. 정의는 [testing.md](testing.md) "귀속 판정" | LLM(`VC_JUDGE_MODEL`, 기본값 없음) |
 | 어시스턴트 근거 | 답의 숫자가 열린 자료 원문에 없는 호출, 도구 결과 없는 출처 줄, 잘림 의심 | 규칙 |
 
 ## 안전 규칙
@@ -69,4 +69,4 @@ uv run --project services/api python tests/eval/virtual_candidate/metrics.py <se
 - 비밀번호·토큰·키는 화면이나 기록에 출력하지 않는다. 관리자 비밀번호와 OpenAI 키는 env·`infra/.env`에서 읽어 요청에만 쓰고, transcript의 토큰 필드는 가린다. 초대 링크는 인증 토큰을 담고 있어 기록하지 않는다.
 - 자기가 만든 초대·세션만 다룬다. 다른 세션을 취소·수정하지 않는다.
 - 실제 사람 테스터의 대화는 저장소에 넣지 않는다. 저장소 기록에는 가명과 요약 수치만 남긴다(저장소 공개).
-- 실제 모델을 부르므로 `make test`·`make test-e2e`에 들어가지 않는다.
+- 실제 모델을 부르므로 `make test`에 들어가지 않고 `ALLOW_API=1` 없이는 시작하지 않는다.

@@ -43,4 +43,4 @@ report-worker는 `scenarios/`를 마운트하지 않는다. 카탈로그 파일�
 ## 검증
 
 - 단위(LLM mock): `services/report-worker/tests/test_evaluate.py`, `test_facts_checks.py`(장면 구간·사실 모순 거부), `test_graph.py`(복사본 고정·버전 맵), `services/api/tests/test_evaluator_facts.py`(평가 사실 계산)
-- 평가셋: `tests/eval/bars_sessions.yaml`(대표 세션 + 장면 세션), `tests/eval/test_eval.py::test_bars_live`. `make eval-live`
+- 평가셋: `tests/eval/bars_sessions.yaml`(대표 세션 + 장면 세션), `tests/eval/test_eval.py::test_bars_live`. `make eval PROFILE=eval-text ALLOW_API=1`

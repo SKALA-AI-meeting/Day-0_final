@@ -60,4 +60,4 @@ apps/web/
 - UX 결정대로 캡처 6장(진행 중 토론방·입력 중, 단계 전환, 자료 탭, 기획안 작성, 디브리핑, 리포트 요약+근거)을 라이트로 뜰 수 있고 다크 1장(토론방)을 함께 뜬다.
 - `review-animations`·`break-ui` 통과.
 
-같은 항목을 실제 api(`NEXT_PUBLIC_MOCK=0`)에서는 단계별 화면 테스트(`make e2e-stages`, `LLM_FAKE=1`)로 확인한다([guides/testing.md](../guides/testing.md) "단계별 테스트").
+같은 항목을 실제 api(`NEXT_PUBLIC_MOCK=0`)에서는 단계별 화면 테스트(`make e2e SUITE=stages PROFILE=test-text`, 가짜 LLM)로 확인한다([guides/testing.md](../guides/testing.md) "단계별 테스트").
