@@ -58,6 +58,7 @@ class FakeServer:
         self.cost_left = 2.0
         self.candidate_name = "김지원"
         self.remaining = 600
+        self.elapsed = 0  # 단계 시작 기준 경과 초(카드 이끎 허용 구간: 카드 offset_min 전)
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.fail_tools: set[str] = set()
         self.materials = {
@@ -213,6 +214,11 @@ class FakeServer:
                 for seat in SEATS
             },
             "first_stated_at": {seat: self.stated.get(seat) for seat in SEATS},
+            # api처럼 그 단계 전체 기록에서 센 자리별 발언 수와 단계 시작 기준 경과 초
+            "phase_message_counts": {
+                seat: sum(1 for m, _ in self.timed() if m["sender"] == seat) for seat in SEATS
+            },
+            "phase_elapsed_seconds": self.elapsed,
             # api처럼 그 단계 전체 기록(대화 창 30개와 무관)에서 계산한 열린 지명
             "open_mentions": self.open_mentions(),
             "seats": [{"seat": "candidate", "display_name": self.candidate_name}]

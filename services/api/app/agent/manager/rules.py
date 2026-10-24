@@ -360,6 +360,26 @@ def pending_cards(phase: str, ds: dict[str, Any], catalog: Catalog) -> list[str]
 STEER_STAGES = ("seed", "bridge")
 
 
+def phase_posts(seat: str, ds: dict[str, Any], transcript: list[dict[str, Any]]) -> int:
+    """이 자리가 이 단계에서 게시한 토론방 발언 수. api가 전체 기록으로 센 DebateState
+    `phase_message_counts`를 쓰고, 없으면(이전 api) 대화 창에서 센다."""
+    counts = ds.get("phase_message_counts")
+    if isinstance(counts, dict):
+        return int(counts.get(seat) or 0)
+    return sum(1 for m in transcript if m.get("sender") == seat)
+
+
+def steer_window_open(card: dict[str, Any], ds: dict[str, Any]) -> bool:
+    """카드 이끎 허용 구간(단계 시작 ~ 카드 예정 시각) 안인지. 스케줄러와 같은 기준(단계 시작 +
+    `offset_min`)을 DebateState `phase_elapsed_seconds`로 잰다. 값이 없으면(이전 api) 이끌지
+    않는다. 예정 시각이 지난 카드는 전달 재시도 중이어도 더 이끌지 않는다."""
+    elapsed = ds.get("phase_elapsed_seconds")
+    offset = card.get("offset_min")
+    if not isinstance(elapsed, int | float) or offset is None:
+        return False
+    return float(elapsed) < float(offset) * 60
+
+
 def steer_stage(
     seat: str,
     phase: str,
@@ -369,12 +389,14 @@ def steer_stage(
 ) -> tuple[str, list[str]] | None:
     """카드 전 이 자리의 이끎 차례(C3 복선 → 연결 → 실행 중 앞 둘)와 보일 내용(`steer`).
 
-    대상은 그 단계에서 아직 시작되지 않은(첫 카드 발언 없음) 카드 중 `steer` 데이터가 있고 이 자리가
-    지금 담당인 카드다. 차례는 이 자리가 이 단계에서 한 발언 수로 정한다: 0번 → `seed`(복선),
-    1번 → `bridge`(연결), 그 뒤는 이끌지 않는다(실행은 `card_due`의 카드 차례). 카드 시각·담당은
-    바꾸지 않고 말은 동료가 만든다.
+    대상은 그 단계에서 허용 구간(`steer_window_open`) 안이고 아직 시작되지 않은(첫 카드 발언
+    없음) 카드 중 `steer` 데이터가 있고 이 자리가 **지금** 담당(`card_actors`, 지원자 지지에 따라
+    바뀔 수 있음)인 카드다. 차례는 이 자리의 이 단계 전체 발언 수(`phase_posts`)로 정한다: 0번 →
+    `seed`(복선), 1번 → `bridge`(연결), 그 뒤는 이끌지 않는다(실행은 `card_due`의 카드 차례).
+    담당이 바뀌면 새 담당은 자기 발언 수의 차례부터 간다(카드마다 차례를 저장하지 않는다).
+    카드 시각·담당은 바꾸지 않고 말은 동료가 만든다.
     """
-    spoken = sum(1 for m in transcript if m.get("sender") == seat)
+    spoken = phase_posts(seat, ds, transcript)
     if spoken >= len(STEER_STAGES):
         return None
     stage = STEER_STAGES[spoken]
@@ -382,6 +404,8 @@ def steer_stage(
     for card in catalog.cards_in(phase):
         steer = card.get("steer") or {}
         if not steer.get(stage) or not first_delivery(card["card_id"], ds):
+            continue
+        if not steer_window_open(card, ds):
             continue
         if seat in card_actors(card, ds, catalog):
             lines.append(str(steer[stage]))
@@ -401,6 +425,8 @@ def steer_responder(
     blocked = set(skip) | {catalog.seat_of("quiet"), recent_streak_seat(transcript)}
     for card in catalog.cards_in(phase):
         if not card.get("steer") or not first_delivery(card["card_id"], ds):
+            continue
+        if not steer_window_open(card, ds):
             continue
         for seat in card_actors(card, ds, catalog):
             if seat in blocked:

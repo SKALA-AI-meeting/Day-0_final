@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 311개(live 3개 포함, `make test`는 live를 뺀다).
+총 314개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -183,7 +183,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_cards.py</code> (21)</summary>
+<details><summary><code>tests/agent/test_cards.py</code> (24)</summary>
 
 - `test_c5_lead_lock_joint_delivery_and_observations`
 - `test_c5_api_lock_is_used`
@@ -205,6 +205,9 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_steering_skips_cards_without_steer_data_and_quiet`
 - `test_ai_fill_is_held_until_the_phase_cards_are_delivered`
 - `test_partially_delivered_joint_card_still_holds_fill`
+- `test_steering_counts_full_phase_posts_not_the_recent_window`
+- `test_steering_stops_at_the_card_time_even_if_delivery_is_pending`
+- `test_steering_follows_the_current_assignee_with_its_own_stage`
 
 </details>
 

@@ -513,3 +513,64 @@ async def test_partially_delivered_joint_card_still_holds_fill(harness):
     h.server.deliver(FLEX, "p3")
     run = await h.run("message", message_id=h.candidate("네.", intent_of("agree", option_id=p2)))
     assert run.decision["fill"] == {"option_id": p2, "seat": "p3"}
+
+
+async def test_steering_counts_full_phase_posts_not_the_recent_window(harness):
+    """이끎 차례는 대화 창(최근 30개)이 아니라 그 단계 전체 발언 수(DebateState
+    `phase_message_counts`)로 정한다. 복선 발언이 창 밖으로 밀려도 연결을 건너뛰지 않고, 연결 뒤에는
+    다시 복선으로 돌아가지 않는다."""
+    h = harness("keyword", turn=[RuntimeError("불려서는 안 된다")])
+    await h.run("phase_started")  # p1·p3 발언(p3 복선)
+    for i in range(35):
+        h.candidate(f"음 {i}.", intent_of("other", confidence="low"))
+    assert all(m["sender"] == "candidate" for m in h.server.messages[-30:])
+    mid = h.candidate("어떤 게 좋을까요.", intent_of("other", confidence="low"))
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p3"]
+    assert "연결 차례" in card_block(h.snapshots[-1]["text"])[0]
+    # 복선·연결을 마친 뒤(전체 발언 2회)에는 창에 자기 발언이 없어도 이끌지 않는다
+    for i in range(35):
+        h.candidate(f"또 {i}.", intent_of("other", confidence="low"))
+    h.turn.script = ['{"speakers": [{"seat": "p1"}]}']
+    run = await h.run(
+        "message", message_id=h.candidate("그렇군요.", intent_of("other", confidence="low"))
+    )
+    assert run.decision["llm_used"] is True and card_block(h.snapshots[-1]["text"]) == []
+
+
+async def test_steering_stops_at_the_card_time_even_if_delivery_is_pending(harness):
+    """허용 구간은 카드 예정 시각(단계 시작 + offset_min, 스케줄러와 같은 기준)까지다. 시각이 지나
+    카드가 아직 전달되지 않았어도(재시도 중) 복선·연결로 고르지 않는다."""
+    h = harness("keyword", turn=['{"speakers": [{"seat": "p1"}]}'])
+    offset = h.server.catalog.card("persuasion_keyword")["offset_min"]
+    h.server.elapsed = int(offset * 60)  # 예정 시각 도달
+    mid = h.candidate("음.", intent_of("other", confidence="low"))
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p1"]
+    assert run.decision["llm_used"] is True and card_block(h.snapshots[-1]["text"]) == []
+    # 이끎 구간 값이 없는(이전 api) DebateState에서도 이끌지 않는다
+    original = h.server.debate_state
+    h.server.debate_state = lambda: {
+        k: v for k, v in original().items() if k != "phase_elapsed_seconds"
+    }
+    h.server.elapsed = 0
+    h.turn.script = ['{"speakers": [{"seat": "p1"}]}']
+    run = await h.run("message", message_id=h.candidate("네.", intent_of("other")))
+    assert run.decision["llm_used"] is True and card_block(h.snapshots[-1]["text"]) == []
+    h.server.debate_state = original
+
+
+async def test_steering_follows_the_current_assignee_with_its_own_stage(harness):
+    """이끎 대상은 그 순간의 카드 담당이다. 지원자 지지로 담당이 바뀌면 새 담당이 자기 발언 수의
+    차례부터 이끈다(카드마다 차례를 저장하지 않음). 비판형이 복선을 한 뒤 지원자가 비판형 키워드
+    (바람)를 지지하면 담당이 고집형으로 바뀌고, 고집형은 단계 시작 발언 1회가 있어 연결 차례다."""
+    h = harness("keyword", turn=[RuntimeError("불려서는 안 된다")])
+    await h.run("phase_started")
+    h.candidate("바람이 좋겠어요.", intent_of("propose", key="wind"))
+    mid = h.candidate("어떻게들 보세요.", intent_of("other", confidence="low"))
+    run = await h.run("message", message_id=mid)
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p1"]
+    lines = card_block(h.snapshots[-1]["text"])
+    assert "연결 차례" in lines[0] and steer_of(h, "persuasion_keyword", "bridge") in lines[1]
+    done = await h.run("card_due", card_id="persuasion_keyword")
+    assert done.decision["speakers"][0]["seat"] == "p1"

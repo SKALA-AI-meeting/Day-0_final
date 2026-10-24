@@ -55,6 +55,8 @@ HIDDEN_STATE_KEYS = (
     "candidate_intents",
     "first_spoke_at",
     "first_stated_at",
+    "phase_message_counts",
+    "phase_elapsed_seconds",
 )
 
 

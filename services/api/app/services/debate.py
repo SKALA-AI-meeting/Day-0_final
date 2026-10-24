@@ -953,6 +953,21 @@ async def debate_state(
             )
         ).all()
     )
+    # AI 자리별 이 단계 토론방 발언 수(전체 기록. 진행 매니저의 카드 이끎 차례, 대화 창과 무관)
+    phase_counts = dict(
+        (
+            await db.execute(
+                select(Message.sender, func.count())
+                .where(
+                    Message.session_id == session.id,
+                    Message.phase == phase,
+                    Message.channel == "room",
+                    Message.sender.in_(SEATS),
+                )
+                .group_by(Message.sender)
+            )
+        ).all()
+    )
     # AI 자리별 이 단계 첫 지지 입장 기록 시각(입장을 밝힌 뒤 반응을 세는 기준)
     first_stated = dict(
         (
@@ -1044,6 +1059,9 @@ async def debate_state(
         ],
         "first_spoke_at": {seat: iso(first_spoke.get(seat)) for seat in SEATS},
         "first_stated_at": {seat: iso(first_stated.get(seat)) for seat in SEATS},
+        "phase_message_counts": {seat: int(phase_counts.get(seat) or 0) for seat in SEATS},
+        # 스케줄러가 카드 시각을 재는 것과 같은 단계 시작 기준 경과 초(카드 이끎 허용 구간 판정)
+        "phase_elapsed_seconds": max(int((now - session.phase_started_at).total_seconds()), 0),
         "open_mentions": open_mentions,
     }
 
