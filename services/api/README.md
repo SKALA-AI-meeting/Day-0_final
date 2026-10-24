@@ -146,7 +146,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 285개(live 3개 포함, `make test`는 live를 뺀다).
+총 307개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -300,24 +300,30 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_persona_voice.py</code> (16)</summary>
+<details><summary><code>tests/agent/test_persona_voice.py</code> (22)</summary>
 
 - `test_stance_block_is_state_not_instruction`
-- `test_undeclared_stance_is_a_fact_and_questions_pass`
+- `test_undeclared_stance_is_a_fact_and_only_structured_output_counts`
 - `test_unnamed_objection_counts_from_stored_intents`
 - `test_moved_stance_is_shown_as_a_fact`
 - `test_card_turn_shows_facts_and_scene_purpose_from_data`
 - `test_agreeable_phrasing_with_reservation_passes`
 - `test_explicit_support_move_in_text_is_rejected_even_with_own_stance`
+- `test_withdrawal_in_text_conflicting_with_structured_support_is_regenerated`
 - `test_withdrawal_of_own_option_in_text_is_rejected_without_structured_stance`
 - `test_quote_check_passes_a_real_quote`
 - `test_quote_check_regenerates_then_safe_phrase`
 - `test_quote_check_regenerated_draft_is_rechecked_in_order`
 - `test_quote_check_uses_full_phase_history_not_the_window`
 - `test_quote_check_covers_unnamed_attribution_to_the_candidate`
+- `test_quote_check_drops_rows_whose_span_is_not_in_the_draft`
+- `test_quote_check_covers_the_candidate_called_by_role`
 - `test_quote_check_is_skipped_without_targets`
 - `test_quote_check_failure_posts_with_skipped_mark`
+- `test_quote_check_is_skipped_when_sources_are_incomplete`
+- `test_quote_check_gate_needs_a_reporting_form`
 - `test_quiet_skips_a_second_open_question_until_spoken_again`
+- `test_quiet_exclusion_needs_an_answered_open_question`
 
 </details>
 

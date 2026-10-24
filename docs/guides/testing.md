@@ -143,7 +143,7 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 - 귀속 판정(`attribution`, LLM, 주 지표): 아래 "귀속 판정". 귀속 장면 세션(`attribution_keyword`·`attribution_problem`·`attribution_solution`)의 발언 18개는 `scene` 유형(약한 동의·조건부 동의·A 인정 B 우선·실제 번복·동료 말 인용·전제 질문·생략형 귀속·정상 질문 대조군)이 붙어 있고 자리 p1~p3을 섞는다. 결과의 `attribution.by_scene`은 장면 뒤 다음 지원자 발언(또는 세션 끝)까지의 동료 발언 전부(카드 뒤 발언 포함)의 귀속 판정을 유형별로 묶는다(규칙 `misquote`는 앞 3개만 본다). 이름만 바꾼 장면은 두지 않는다.
 - 호응 뒤 자기 안 밀기(`push_after_ack`): 반대·다른 안 없는 짧은 호응(`kind: ack`) 뒤 다음 지원자 발언 전 동료 발언 중 입장을 다시 기록한 비율. 자기 안 되풀이의 대리 지표.
 - 인용 대조(`quote_check`): 동료 발언의 `meta.quote_check` 분포(`none`·`pass`·`regenerated`·`safe`·`skipped`). 지연(`latency`): 자극 한 번의 그래프 실행 시간 p50·p95(ms), 인용 대조의 비용 관측.
-- `fallbacks.quote_check`: 동료 발언의 인용 검사 표식 분포(`none`·`pass`·`regenerated`·`safe`·`skipped`). 검사가 없는 빌드(main)에서는 모두 `absent`다.
+- `fallbacks.quote_check`: 동료 발언의 인용 검사 표식 분포(`none`·`pass`·`regenerated`·`safe`·`skipped`). 검사 기록이 없는 기록(인용 대조 이전 빌드)에서는 모두 `absent`다.
 
 ### 귀속 판정 (`tests/eval/attribution.py`)
 
