@@ -5,8 +5,9 @@
 - --check: 생성 결과가 커밋된 README와 다르면 차이를 출력하고 실패한다(파일은 쓰지 않는다).
 - --features: docs/features.md의 테스트 참조가 실제로 있는지 본다(pytest는 수집, 나머지는 grep).
 
-API 목록은 routers/*.py, MCP 도구는 각 서비스 tools.py를 정적으로 파싱해(import·DB·네트워크 불필요)
-만들고, pytest 테스트는 서비스별 `pytest --collect-only`, web 테스트는 정적 파싱으로 모은다.
+API 목록은 main.py의 라우터 목록(PUBLIC_ROUTERS·INTERNAL_ROUTERS)대로 routers/*.py,
+MCP 도구는 각 서비스 tools.py를 정적으로 파싱해(import·DB·네트워크 불필요) 만들고,
+pytest 테스트는 서비스별 `pytest --collect-only`, web 테스트는 정적 파싱으로 모은다.
 """
 
 import argparse
@@ -46,6 +47,9 @@ SUMMARIES = {
     "POST /sessions/{session_id}/voice/capture": "AI 완료 장벽 뒤 사용자 발언권 발급",
     "POST /sessions/{session_id}/voice/abort": "장치·파일 오류 발언권 복구",
     "POST /sessions/{session_id}/voice/playback": "실제 재생 결과 확인·재시도",
+    "POST /sessions/{session_id}/voice/rerecord": "받아 적은 글을 버리고 같은 차례에서 다시 녹음",
+    "POST /sessions/{session_id}/voice/hand": "손들기·손 내리기",
+    "POST /sessions/{session_id}/voice/stream": "녹음 중 소리 조각 접수(말하는 동안 받아 적기)",
     "POST /sessions/{session_id}/voice/audio": "최종 PCM WAV 접수·STT 작업 예약",
     "POST /sessions/{session_id}/voice/retry": "동일 완성 파일 STT 제한 재시도",
     "GET /sessions/{session_id}/voice/assets/{job_id}": "세션 전용 TTS WAV 조회",
@@ -145,12 +149,35 @@ def router_routes(path: Path) -> list[tuple[str, str, str]]:
     return routes
 
 
+def app_routers() -> dict[str, list[str]]:
+    """main.py가 실제로 붙이는 라우터 목록(PUBLIC_ROUTERS·INTERNAL_ROUTERS)을 정적으로 읽는다."""
+    tree = ast.parse((ROOT / "services/api/app/main.py").read_text(encoding="utf-8"))
+    found = {}
+    for node in tree.body:
+        target = getattr(node, "target", None) or (getattr(node, "targets", None) or [None])[0]
+        name = getattr(target, "id", "")
+        if name in ("PUBLIC_ROUTERS", "INTERNAL_ROUTERS") and node.value is not None:
+            found[name] = list(ast.literal_eval(node.value))
+    if set(found) != {"PUBLIC_ROUTERS", "INTERNAL_ROUTERS"}:
+        raise SystemExit("main.py에서 PUBLIC_ROUTERS·INTERNAL_ROUTERS를 찾지 못함")
+    return found
+
+
 def gen_api(_: str) -> str:
     base = ROOT / "services/api/app/routers"
+    # 그룹은 main.py가 붙이는 라우터 목록을 그대로 쓴다. 따로 적어 두면 새 라우터가 표에서 빠진다
+    routers = app_routers()
     groups = [
-        ("공개 앱(8000)", ["candidate", "admin", "ws"]),
-        ("내부 앱(8001, `X-Internal-Token`)", ["internal"]),
+        ("공개 앱(8000)", routers["PUBLIC_ROUTERS"]),
+        ("내부 앱(8001, `X-Internal-Token`)", routers["INTERNAL_ROUTERS"]),
     ]
+    listed = {n for _, names in groups for n in names}
+    files = {p.stem for p in base.glob("*.py") if p.stem != "__init__" and router_routes(p)}
+    if files - listed or listed - files:
+        raise SystemExit(
+            "routers/*.py와 main.py 라우터 목록이 다름: "
+            f"빠진 라우터 {sorted(files - listed)}, 파일 없는 이름 {sorted(listed - files)}"
+        )
     out = [NOTE, ""]
     for title, names in groups:
         out += [f"**{title}**", "", "| 메서드 | 경로 | 하는 일 |", "|---|---|---|"]

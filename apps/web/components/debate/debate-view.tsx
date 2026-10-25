@@ -339,6 +339,9 @@ export function DebateView({
     voice: voiceEnabled,
     pinned,
   });
+  // 토론방이 한 번 열리면 굳힌다. 지원자 차례(candidateTurn)는 지나가면 꺼지므로,
+  // 첫 차례를 말없이 넘겨 발언권이 동료에게 가도 인사 화면으로 돌아가지 않게 렌더 중에 바로 세운다
+  if (!flags.intro && !introDone) setIntroDone(true);
   useEffect(() => {
     if (!flags.intro) return;
     const timer = setTimeout(() => setIntroDone(true), INTRO_MAX_MS);

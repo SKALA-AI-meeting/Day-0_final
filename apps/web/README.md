@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 112개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 113개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -157,6 +157,12 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 - 글자가 있는 동안 5초마다 start를 갱신하고, 비우면 stop을 보낸다
 - 발언 글자 수 상한을 입력 칸에 걸고, 넘는 글은 보내지 않는다
+
+</details>
+
+<details><summary><code>components/debate/debate-view.dom.test.tsx</code> (1)</summary>
+
+- 첫 내 차례를 말없이 넘겨도 열린 토론방이 인사 화면으로 돌아가지 않는다
 
 </details>
 

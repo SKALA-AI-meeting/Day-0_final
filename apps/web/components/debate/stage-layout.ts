@@ -51,7 +51,7 @@ export type StageInput = {
   snap: StateSnapshot;
   /** 지원자가 보낸 메시지가 있음(아직 ack 전인 것 포함) */
   candidateSpoke: boolean;
-  /** 인사 차례를 화면에서 끝냄(바로 대화하기·대기 시간 경과). TTS가 붙으면 인사 재생 끝이 이것을 세운다 */
+  /** 인사 차례를 화면에서 끝냄(바로 대화하기·대기 시간 경과·토론방이 한 번 열림). 한 번 서면 같은 화면에서 내리지 않는다 */
   introDone: boolean;
   ended: boolean;
   /** 말하기(음성 입력)를 쓸 수 있음. 왼쪽 음성 패널을 둔다 */
