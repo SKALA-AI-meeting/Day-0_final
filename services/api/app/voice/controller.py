@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.masking import mask
-from app.models import AgentRun, Message, SpeechJob, VoiceState
+from app.models import AgentRun, Invite, Message, Position, SpeechJob, VoiceState
 from app.services.common import ServiceError, conflict, iso
 from app.voice import live, quota
 from app.voice.speech import pcm
@@ -62,6 +62,14 @@ def ready_hold(position, data: dict | None = None) -> timedelta:
     if priority not in ("hand", "forced") and manual_start(position):
         return timedelta(seconds=position.scenario["voice_policy"]["turn_hold_seconds"])
     return timedelta(seconds=think_seconds(position) + READY_GRACE_SECONDS)
+
+
+def ready_expired(position, data: dict, now) -> bool:
+    return (
+        data.get("state") == "USER_READY"
+        and bool(data.get("ready_at"))
+        and now >= at(data["ready_at"]) + ready_hold(position, data)
+    )
 
 
 def auto_start_at(position, data: dict) -> str | None:
@@ -165,6 +173,8 @@ def validate(session, state, turn_id, epoch, now):
         or state.get("phase") != session.phase
     ):
         raise conflict("voice_turn_conflict")
+    if session.phase not in DEBATE_PHASES:
+        raise conflict("voice_turn_expired")
 
 
 async def sync(db, session, position, now):
@@ -189,6 +199,35 @@ async def sync(db, session, position, now):
         data.update(blocked_reason="session_ending")
         state.data = data
         return {**data, "items": [], "server_now": iso(now)}, []
+    if session.phase not in DEBATE_PHASES:
+        data.update(state="AI_GENERATING", release_ready=True, blocked_reason="proposal_phase")
+        # 단계 전환 전에 이미 만들어진 발언은 재생을 마쳐 heard 기록에 남긴다.
+        old_jobs = (
+            await db.scalars(
+                select(SpeechJob)
+                .where(
+                    SpeechJob.session_id == session.id,
+                    SpeechJob.kind == "tts",
+                    SpeechJob.data["status"].astext.in_(["queued", "processing", "ready", "error"]),
+                )
+                .order_by(SpeechJob.created_at, SpeechJob.id)
+            )
+        ).all()
+        items = [
+            {
+                "id": str(j.id),
+                "message_id": j.data["message_id"],
+                "seat": j.data["seat"],
+                "status": j.data["status"],
+                "duration_ms": j.data.get("duration_ms"),
+                "error": j.data.get("error"),
+            }
+            for j in old_jobs
+        ]
+        if items:
+            data["state"] = "AI_SPEAKING"
+        state.data = data
+        return {**data, "items": items, "server_now": iso(now)}, []
     forced = await needs_forced_turn(db, session, position, data, now)
     if forced and data["state"] == "USER_READY" and not data.get("priority"):
         data.update(
@@ -199,7 +238,7 @@ async def sync(db, session, position, now):
     if (
         data["state"] == "USER_READY"
         and not data.get("release_ready")
-        and now < at(data["ready_at"]) + ready_hold(position, data)
+        and not ready_expired(position, data, now)
     ):
         state.data = data
         return {**data, "items": [], "server_now": iso(now)}, []
@@ -343,10 +382,10 @@ async def sync(db, session, position, now):
         data["state"] = "AI_SPEAKING"
     else:
         if data["state"] != "USER_READY":
-            data["ready_at"] = iso(now)
+            data.update(ready_at=iso(now), release_ready=False, blocked_reason=None)
         data["state"] = "USER_READY"
-    if data["state"] == "USER_READY" and now > at(data["ready_at"]) + ready_hold(position, data):
-        # 시작하지 않은 예약은 카드/침묵 실행을 위해 반납한다.
+    if ready_expired(position, data, now):
+        # 스케줄러가 실제로 다음 차례를 넘기기 전까지 capture는 허용한다.
         data["release_ready"] = True
     state.data = data
     return {**data, "items": items, "server_now": iso(now)}, pending
@@ -376,12 +415,15 @@ async def blocked(ctx, session_id):
     async with ctx.session_factory() as db:
         state = await db.get(VoiceState, session_id)
         session = await db.get(Session, session_id)
+        if not state or not session or session.status != "in_progress":
+            return False
+        position = await db.get(Position, (await db.get(Invite, session.invite_id)).position_id)
         return bool(
-            state
-            and session.status == "in_progress"
+            session.phase in DEBATE_PHASES
             and state.data.get("generation") == session.generation
             and state.data.get("state") in HOLD
             and not state.data.get("release_ready")
+            and not ready_expired(position, state.data, ctx.clock.now())
             and ctx.clock.now() < session.phase_deadline_at
             and (
                 not state.data.get("speech_deadline_at")
@@ -398,24 +440,13 @@ async def capture(db, session, position, body, now):
         return data
     if data["state"] != "USER_READY":
         raise conflict("voice_turn_conflict")
-    if (
-        getattr(body, "restart", False)
-        and data.get("blocked_reason")
-        and (
-            data.get("capture_count", 0) >= 2
-            or (data.get("speech_deadline_at") and at(data["speech_deadline_at"]) <= now)
-        )
-    ):
-        data = {
-            "turn_id": str(uuid.uuid4()),
-            "generation": session.generation,
-            "phase": session.phase,
-            "state": "USER_READY",
-            "epoch": data.get("epoch"),
-            "ready_at": iso(now),
-        }
+    # 유지 시간이 지나도 스케줄러가 차례를 넘기기 전이면 발언을 시작할 수 있다.
     if data.get("capture_count", 0) >= 2:
         raise conflict("voice_retry_exhausted")
+    if getattr(body, "restart", False) and data.get("blocked_reason"):
+        # 실패한 녹음의 마감은 새 녹음에 적용하지 않는다. 재시도 횟수는 유지한다.
+        for key in ("utterance_id", "speech_started_at", "speech_deadline_at"):
+            data.pop(key, None)
     jid = uuid.uuid4()
     deadline = min(
         now + timedelta(seconds=position.scenario["voice_policy"]["user_turn_seconds"]),

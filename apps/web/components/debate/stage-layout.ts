@@ -56,7 +56,7 @@ export type StageInput = {
   ended: boolean;
   /** 말하기(음성 입력)를 쓸 수 있음. 왼쪽 음성 패널을 둔다 */
   voice?: boolean;
-  /** 사용자가 상단 바에서 직접 켜거나 끈 영역. 자동 판단보다 앞선다 */
+  /** 사용자가 상단 바에서 직접 켜거나 끈 영역. 기획안 단계의 기획안은 항상 보인다 */
   pinned?: Partial<Record<RightPane, boolean>>;
 };
 
@@ -90,7 +90,8 @@ export function stageFlags({
     library:
       !snap.materials.locked || snap.assistant.length > 0 || phase === "solution" || proposalPhase,
   };
-  const show = (pane: RightPane) => !intro && (pinned[pane] ?? auto[pane]);
+  const show = (pane: RightPane) =>
+    !intro && (pane === "proposal" && proposalPhase ? true : (pinned[pane] ?? auto[pane]));
   return {
     intro,
     proposalPhase: !intro && proposalPhase,

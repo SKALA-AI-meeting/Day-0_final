@@ -15,7 +15,7 @@ from typing import Any, Literal, Protocol
 
 from app.ports import SessionPorts
 
-StimulusType = Literal["message", "phase_started", "idle", "card_due"]
+StimulusType = Literal["message", "phase_started", "idle", "turn_elapsed", "card_due"]
 Phase = Literal["keyword", "problem", "solution", "proposal"]
 Seat = Literal["p1", "p2", "p3"]
 # 메일박스 run 상태: queued → started → finished | deferred | skipped | failed (agent_runs.status)
@@ -80,11 +80,12 @@ FAKE_LINES: dict[StimulusType, tuple[Seat, str]] = {
     "message": ("p1", "[fake] 네, 그 의견 잘 들었어요."),
     "phase_started": ("p1", "[fake] 이번 단계도 같이 정해 봐요."),
     "idle": ("p3", "[fake] 지원자님 생각은 어떠세요?"),
+    "turn_elapsed": ("p3", "[fake] 이 부분은 제가 이어서 생각해 볼게요."),
 }
 
 
 class FakeAgentRunner:
-    """message·phase_started → 자리 고정 문장 1건, idle → 비판형 자리 초대 1건.
+    """message·phase_started·turn_elapsed → 자리 고정 문장 1건, idle → 비판형 자리 초대 1건.
 
     card_due는 게시하지 않는다.
     """

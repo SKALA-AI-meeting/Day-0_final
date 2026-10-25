@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 90개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 93개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -221,11 +221,24 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
+<details><summary><code>components/debate/voice/control-state.test.ts</code> (2)</summary>
+
+- 스케줄러가 차례를 넘기기 전에는 유지 시간 이후에도 녹음을 시작할 수 있다
+- 발언권 유지 시간이 끝나면 0초 대신 동료가 이어 말한다는 안내를 보인다
+
+</details>
+
 <details><summary><code>components/debate/voice/memo-pad.dom.test.tsx</code> (3)</summary>
 
 - 입력하면 세션별로 저장되고 다시 열면 이어진다
 - 저장소가 막혀도 입력은 되고 저장 안 됨을 알린다
 - 세션이 끝나면 읽기 전용이다
+
+</details>
+
+<details><summary><code>components/debate/voice/microphone.test.ts</code> (1)</summary>
+
+- 응답하지 않는 마이크 권한 요청은 8초 뒤 끝나고 늦은 스트림을 닫는다
 
 </details>
 
@@ -384,7 +397,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 <details><summary><code>e2e/stages/voice.spec.ts</code> (1)</summary>
 
-- 음성 회의: 채팅 UI 없음·AI 종료 뒤 녹음·60초 자동 제출 1회
+- 음성 회의: 채팅 UI 없음·직접 발언 시작과 제출 1회
 
 </details>
 <!-- /gen:tests -->

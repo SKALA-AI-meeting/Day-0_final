@@ -183,7 +183,7 @@ MCP 서버·report-worker·토론 그래프가 쓰는 내부 REST와 평가 저�
 
 ## 진행 매니저 결정 스키마
 
-토론 그래프 `turn` 노드의 출력. `agent_runs.decision`에 저장한다(관측·테스트용). 진행 매니저는 누가 어떤 메시지에 답할지와 그 자리의 차례(카드·침묵 초대)만 정하고, 무엇을 어떻게 말할지(발언 목적·대상 안)는 정하지 않는다(결정 C1).
+토론 그래프 `turn` 노드의 출력. `agent_runs.decision`에 저장한다(관측·테스트용). `stimulus`는 `message`·`phase_started`·`idle`·`turn_elapsed`·`card_due` 중 하나이며, `turn_elapsed`는 음성 지원자 차례 유지 시간 종료 후 침묵 초대가 이미 게시된 단계의 일반 동료 발언이다(`invite=false`). 진행 매니저는 누가 어떤 메시지에 답할지와 그 자리의 차례(카드·침묵 초대)만 정하고, 무엇을 어떻게 말할지(발언 목적·대상 안)는 정하지 않는다(결정 C1).
 
 ```json
 {"stimulus": "message", "generation": 12, "speakers": [{"seat": "p1", "reply_to": "<지원자 메시지 id>", "card_ids": [], "invite": false}], "fill": null, "invite": false, "llm_used": false, "queued": [{"seat": "p3", "message_id": "<지원자 메시지 id>"}], "dropped_seats": [], "reason": "지원자가 이름을 부름", "fill_held": []}

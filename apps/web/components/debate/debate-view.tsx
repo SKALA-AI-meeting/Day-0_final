@@ -305,6 +305,7 @@ export function DebateView({
   // 음성 토론: 차례·녹음·재생·확인은 서버 발언권을 따르는 useVoiceTurn이 맡고, 화면은 칸에 나눠 그린다.
   // 지원자가 말하는 동안(녹음·받아 적기·제출 중)에는 결정 사항 확정을 잠근다.
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const [pinned, setPinned] = useState<Partial<Record<RightPane, boolean>>>({});
   const voice = useVoiceTurn({
     enabled: voiceEnabled,
     auth,
@@ -313,12 +314,19 @@ export function DebateView({
     locked,
     onSend: session.sendVoice,
     onBusy: setVoiceBusy,
+    onFocusProposal: () => {
+      setPinned((prev) => ({ ...prev, proposal: true }));
+      document
+        .querySelector<HTMLElement>(
+          "[data-panel='proposal'] input, [data-panel='proposal'] textarea",
+        )
+        ?.focus();
+    },
   });
   const speaking: Seat[] = voice.speakingSeat ? [voice.speakingSeat] : [];
 
   // 인사 차례: TTS가 붙기 전에는 [바로 대화하기]나 대기 시간(INTRO_MAX_MS)으로 끝낸다
   const [introDone, setIntroDone] = useState(false);
-  const [pinned, setPinned] = useState<Partial<Record<RightPane, boolean>>>({});
   const [libraryTab, setLibraryTab] = useState<LibraryTab>("materials");
   const flags = stageFlags({
     snap,

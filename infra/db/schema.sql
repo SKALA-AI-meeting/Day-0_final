@@ -185,8 +185,8 @@ CREATE TABLE agent_runs (                    -- 자극 실행 기록이자 메�
   run_id uuid PRIMARY KEY,
   session_id uuid NOT NULL REFERENCES sessions(id),
   graph text NOT NULL CHECK (graph IN ('debate','assistant')),
-  stimulus text CHECK (stimulus IN ('message','phase_started','idle','card_due')),
-  ref_id text,                              -- message_id 또는 card_id
+  stimulus text CHECK (stimulus IN ('message','phase_started','idle','turn_elapsed','card_due')),
+  ref_id text,                              -- message_id, phase 또는 card_id
   generation int,
   status text NOT NULL DEFAULT 'queued'
     CHECK (status IN ('queued','started','finished','deferred','skipped','failed')),

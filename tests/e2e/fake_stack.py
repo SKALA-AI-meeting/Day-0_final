@@ -982,7 +982,10 @@ class FakeStack:
             ((content.find(o["label"]), o) for o in options if o["label"] in content),
             key=lambda t: t[0],
         )
-        target = hits[0][1] if hits else None
+        # "A보다 B"는 B를 지지한다. 앞에 나온 비교 대상을 지지로 기록하면
+        # 실 스택의 의도 분류와 합의 시점이 달라진다.
+        comparison = "보다" in content and len(hits) > 1
+        target = (hits[-1] if comparison else hits[0])[1] if hits else None
         addressed = [seat for seat in SEATS if NAMES[seat] in content]
         if any(w in content for w in OPPOSE_WORDS):
             intent = "oppose" if target else "other"
@@ -993,7 +996,9 @@ class FakeStack:
         else:
             intent = "propose" if target else "other"
         confidence = (
-            "high" if (target and len(hits) == 1) or intent in ("question", "other") else "low"
+            "high"
+            if (target and (len(hits) == 1 or comparison)) or intent in ("question", "other")
+            else "low"
         )
         return {
             "intent": intent,

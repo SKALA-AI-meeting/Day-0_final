@@ -104,13 +104,27 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
                         snap["state"] = "PROCESSING"
                     if job.data["status"] in ("empty", "error"):
                         state = await controller.row(db, session_id)
-                        state.data = {
-                            **state.data,
-                            "state": "USER_READY",
-                            "blocked_reason": job.data["status"],
-                            "release_ready": True,
-                        }
-                        snap.update(state="USER_READY", blocked_reason=job.data["status"])
+                        if (
+                            state.data.get("state") != "USER_READY"
+                            or state.data.get("blocked_reason") != job.data["status"]
+                        ):
+                            state.data = {
+                                **state.data,
+                                "state": "USER_READY",
+                                "ready_at": iso(ctx.clock.now()),
+                                "blocked_reason": job.data["status"],
+                                "release_ready": False,
+                            }
+                        snap.update(
+                            state="USER_READY",
+                            ready_at=state.data["ready_at"],
+                            blocked_reason=job.data["status"],
+                            release_ready=False,
+                        )
+                        snap["turn_until_at"] = iso(
+                            controller.at(snap["ready_at"])
+                            + controller.ready_hold(position, state.data)
+                        )
             await db.commit()
     for jid in pending:
         ctx.spawn(controller.run_job(ctx, jid))
@@ -185,8 +199,9 @@ async def abort_capture(session_id: uuid.UUID, body: TurnIn, ctx: Ctx, _: Candid
             state.data = {
                 **state.data,
                 "state": "USER_READY",
+                "ready_at": iso(ctx.clock.now()),
                 "blocked_reason": "voice_recording_failed",
-                "release_ready": True,
+                "release_ready": False,
             }
             await db.commit()
             return state.data
@@ -213,7 +228,15 @@ async def playback(session_id: uuid.UUID, body: PlaybackIn, ctx: Ctx, _: Candida
                 await db.commit()
                 return {"ok": True}
             snap, _pending = await controller.sync(db, session, position, ctx.clock.now())
-            controller.validate(session, snap, body.turn_id, body.epoch, ctx.clock.now())
+            if session.phase == "proposal":
+                if (
+                    session.status != "in_progress"
+                    or snap["turn_id"] != body.turn_id
+                    or snap["epoch"] != body.epoch
+                ):
+                    raise conflict("voice_turn_conflict")
+            else:
+                controller.validate(session, snap, body.turn_id, body.epoch, ctx.clock.now())
             if not snap["items"] or snap["items"][0]["id"] != str(job.id):
                 raise conflict("voice_turn_conflict")
             data = dict(job.data)

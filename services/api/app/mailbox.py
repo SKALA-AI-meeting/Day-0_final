@@ -43,9 +43,9 @@ SCENARIO_COPY_MISSING = "scenario_copy_missing"
 
 
 def pending_key(session_id: uuid.UUID, stimulus: Stimulus) -> Hashable | None:
-    """스케줄러 중복 방지 키: 같은 단계 idle, 같은 card_id card_due."""
-    if stimulus.type == "idle":
-        return (session_id, "idle", stimulus.phase)
+    """스케줄러 중복 방지 키: 같은 단계 idle/turn_elapsed, 같은 card_id card_due."""
+    if stimulus.type in ("idle", "turn_elapsed"):
+        return (session_id, stimulus.type, stimulus.phase)
     if stimulus.type == "card_due":
         return (session_id, "card_due", stimulus.card_id)
     return None
@@ -288,6 +288,6 @@ class Mailboxes:
             _, position, _ = await load_context(db, run.session_id)
             phase = sc.card(position.scenario, run.ref_id)["stage_id"]
             return Stimulus("card_due", phase, generation, card_id=run.ref_id)
-        if run.stimulus in ("phase_started", "idle") and run.ref_id:
+        if run.stimulus in ("phase_started", "idle", "turn_elapsed") and run.ref_id:
             return Stimulus(run.stimulus, run.ref_id, generation)
         return None

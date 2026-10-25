@@ -156,7 +156,7 @@ outbox:    completed AND report_enqueued_at null → report.generate 재발행 /
 purge:     ended_at + 90일 지난 세션 삭제(`services/purge.py` `purge_expired`, completed·failed·cancelled 모두, [architecture/data-model.md](../architecture/data-model.md) 보관 표, R5-21)
 ```
 
-그래프 자극은 4종(`message`·`phase_started`·`idle`·`card_due`)이고 정본은 [architecture/session-lifecycle.md](../architecture/session-lifecycle.md) "그래프 자극"이다. `timeout`과 `room_quiet`는 없다(R5-2·R5-3). 카드 트리거는 시각 기반 `card_due` 하나뿐이다(이벤트 트리거 없음, R5-4). 침묵 초대 전달 여부는 단계별 `invite_delivered` 플래그로 추적한다(초대 메시지가 실제 게시될 때 api가 켬).
+그래프 자극은 5종(`message`·`phase_started`·`idle`·`turn_elapsed`·`card_due`)이고 정본은 [architecture/session-lifecycle.md](../architecture/session-lifecycle.md) "그래프 자극"이다. `timeout`과 `room_quiet`는 없다(R5-2·R5-3). 카드 트리거는 시각 기반 `card_due` 하나뿐이다(이벤트 트리거 없음, R5-4). 침묵 초대 전달 여부는 단계별 `invite_delivered` 플래그로 추적한다(초대 메시지가 실제 게시될 때 api가 켬).
 
 ## 내부 API
 

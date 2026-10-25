@@ -1,6 +1,6 @@
 // 단계별 화면 테스트 공용: 내부 테스트 API로 시드 세션 만들기·시간 당기기, 스크린샷·내부 조회.
 // 내부 토큰은 env(INTERNAL_TOKEN) 또는 infra/.env에서 읽고 출력하지 않는다.
-import { type Page, expect, request } from "@playwright/test";
+import { type Page, expect, request, test } from "@playwright/test";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -12,6 +12,27 @@ export const ADMIN = { email: "e2e@example.com", password: "e2e-password" };
 export const VOICE_ENABLED = !["0", "false"].includes(
   (process.env.VOICE_ENABLED ?? "1").toLowerCase(),
 );
+
+test.beforeEach(async ({ page }) => {
+  if (!VOICE_ENABLED) return;
+  await page.goto("/");
+  const mic = await page.evaluate(async () => {
+    try {
+      const stream = await Promise.race([
+        navigator.mediaDevices.getUserMedia({ audio: true }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+      ]);
+      stream.getTracks().forEach((track) => track.stop());
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  expect(
+    mic,
+    "테스트 브라우저에서 마이크를 열 수 없습니다. fake media 장치와 권한을 확인하세요.",
+  ).toBe(true);
+});
 
 function internalToken(): string {
   if (process.env.INTERNAL_TOKEN) return process.env.INTERNAL_TOKEN;
@@ -142,12 +163,17 @@ export async function tab(page: Page, label: string): Promise<void> {
   const inLibrary = label === "자료" || label === "AI 어시스턴트";
   const area = inLibrary ? LIBRARY : label;
   const region = page.getByRole("region", { name: area, exact: true });
+  await expect(page.getByRole("group", { name: "영역 보이기" })).toBeVisible();
+  await expect(
+    region.or(page.getByRole("group", { name: "영역 보이기" }).getByRole("button", { name: area })),
+  ).toBeVisible();
   if (!(await region.isVisible())) {
     await page
       .getByRole("group", { name: "영역 보이기" })
       .getByRole("button", { name: area })
       .click();
   }
+  await expect(region).toBeVisible();
   if (inLibrary) await region.getByRole("tab", { name: label }).click();
   else await region.getByRole("heading", { name: label }).click();
 }

@@ -947,6 +947,11 @@ def rule_decision(
             speakers.append(speaker(inviter[0], invite=True))
             decision["invite"] = True
             decision["reason"] = decision["reason"] or "지원자 침묵"
+    if kind == "turn_elapsed" and phase in DEBATE_PHASES:
+        seats = catalog.seats_by_priority(["critic", "stubborn", "quiet"])
+        if seats and seats[0] not in used and len(speakers) < MAX_SPEAKERS:
+            speakers.append(speaker(seats[0]))
+            decision["reason"] = decision["reason"] or "지원자 차례 종료"
     # 5. 단계 시작: 고정 입장 자리(소극형 제외). 문제 상황은 카드 전이라 고집형 한 명
     if kind == "phase_started":
         if phase == "problem":

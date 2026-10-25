@@ -27,13 +27,23 @@ from sqlalchemy import func, select, update
 from app import queue
 from app.agent.runner import Stimulus
 from app.mailbox import pending_key
-from app.models import AgentRun, Invite, Message, MessageIntent, Position, Session, SessionCard
+from app.models import (
+    AgentRun,
+    Invite,
+    Message,
+    MessageIntent,
+    Position,
+    Session,
+    SessionCard,
+    VoiceState,
+)
 from app.services import purge, timeout
 from app.services import scenario as sc
 from app.services import session as session_service
 from app.services.common import Effects, serialize_message
 from app.services.context import AppContext
 from app.services.phases import save_message
+from app.voice.controller import ready_expired
 
 log = logging.getLogger(__name__)
 TICK_SECONDS = 5
@@ -129,11 +139,33 @@ async def _due_stimuli(db, ctx: AppContext, session: Session, position: Position
     phase = session.phase
     out: list[Stimulus] = []
     idle = Stimulus("idle", phase, session.generation)
-    if phase not in session.invite_delivered_phases and not ctx.mailboxes.has_pending(
-        pending_key(session.id, idle)
+    voice = await db.get(VoiceState, session.id) if ctx.settings.voice_enabled else None
+    hold_ended = bool(
+        voice
+        and voice.data.get("generation") == session.generation
+        and voice.data.get("phase") == phase
+        and ready_expired(position, voice.data, now)
+    )
+    if hold_ended:
+        stimulus = (
+            idle
+            if phase not in session.invite_delivered_phases
+            else Stimulus("turn_elapsed", phase, session.generation)
+        )
+        if not ctx.mailboxes.has_pending(pending_key(session.id, stimulus)):
+            # 새 차례를 상태에 먼저 반영한다. 대기열 실패 시 sync가 다시 USER_READY로 복구한다.
+            voice.data = {
+                **voice.data,
+                "state": "AI_GENERATING",
+                "turn_id": str(uuid.uuid4()),
+            }
+            out.append(stimulus)
+    elif (
+        phase not in session.invite_delivered_phases
+        and not ctx.mailboxes.has_pending(pending_key(session.id, idle))
+        and await _silence(db, session, scenario, now)
     ):
-        if await _silence(db, session, scenario, now):
-            out.append(idle)
+        out.append(idle)
     delivered = {
         c.card_id: c.delivered_seats
         for c in (
@@ -152,6 +184,7 @@ async def _due_stimuli(db, ctx: AppContext, session: Session, position: Position
             continue
         if await _card_retry_allowed(db, session, card["card_id"], now):
             out.append(stimulus)
+    await db.commit()
     return out
 
 
