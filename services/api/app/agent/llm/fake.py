@@ -201,8 +201,9 @@ def _intent(messages: list[BaseMessage], _tools: Any) -> str:
     else:
         intent = "other"
     # "X은/는 반대예요"처럼 안을 직접 지목한 반대는 단정이다(양보·걱정을 덧붙인 유보가 아니다)
+    explicit = r"\s*[은는]?\s*반대(?![는은가]?\s*아니)"
     explicit_oppose = bool(
-        intent == "oppose" and hit and re.search(re.escape(hit[0]) + r"\s*[은는]?\s*반대", text)
+        intent == "oppose" and hit and re.search(re.escape(hit[0]) + explicit, text)
     )
     addressed = [
         p["seat"]
