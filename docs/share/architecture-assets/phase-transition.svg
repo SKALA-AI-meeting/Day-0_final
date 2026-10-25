@@ -1,40 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-label="단계 전환 · 세 가지 칸의 확정과 기획안">
-<style>text{font-family:Apple SD Gothic Neo,Noto Sans KR,Malgun Gothic,sans-serif;fill:#1D1D1F}.title{font-size:20px;font-weight:700}.head{font-size:15px;font-weight:700}.body{font-size:12.5px}.small{font-size:11px;fill:#4A5263}.line{stroke:#4A5263;stroke-width:1.8;fill:none}.dash{stroke:#B25000;stroke-width:1.5;stroke-dasharray:5 4;fill:none}</style>
-<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#4A5263" /></marker></defs>
-<text x="24" y="32" class="title">단계 전환 · 토론 3단계의 확정과 기획안</text>
-<rect x="35" y="68" width="220" height="78" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<text x="49" y="93" class="head">키워드</text>
-<text x="49" y="113" class="body">10분</text>
-<path d="M255 107 L305 107" class="line" marker-end="url(#arrow)" />
-<rect x="305" y="68" width="220" height="78" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<text x="319" y="93" class="head">문제 상황</text>
-<text x="319" y="113" class="body">18분</text>
-<path d="M525 107 L575 107" class="line" marker-end="url(#arrow)" />
-<rect x="575" y="68" width="220" height="78" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<text x="589" y="93" class="head">해결책</text>
-<text x="589" y="113" class="body">18분</text>
-<path d="M795 107 L845 107" class="line" marker-end="url(#arrow)" />
-<rect x="845" y="68" width="220" height="78" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<text x="859" y="93" class="head">기획안</text>
-<text x="859" y="113" class="body">14분</text>
-<rect x="35" y="220" width="310" height="123" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<text x="49" y="245" class="head">지원자 직접 확정</text>
-<text x="49" y="265" class="body">카드 시각 전이면 preempted</text>
-<text x="49" y="283" class="body">카드 미게시여도 확정·전환</text>
-<rect x="395" y="220" width="310" height="123" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<text x="409" y="245" class="head">AI 합의 확정</text>
-<text x="409" y="265" class="body">지원자 포함 3/4 · 최신 명시 동의</text>
-<text x="409" y="283" class="body">카드 게시 뒤 · fill_held 가능</text>
-<rect x="755" y="220" width="310" height="123" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<text x="769" y="245" class="head">시간 초과 확정</text>
-<text x="769" y="265" class="body">candidate_support → most_support</text>
-<text x="769" y="283" class="body">→ earliest → default</text>
-<rect x="35" y="420" width="1030" height="145" rx="10" fill="#EEF0F3" stroke="#5F6873" stroke-width="1.5" />
-<text x="49" y="445" class="head">api가 확정과 전환을 저장</text>
-<text x="49" y="465" class="body">AI 합의: fill_slot 한 트랜잭션 / 시간 초과: filled_by=system, slots.timeout_rule과 규칙별 시스템 공지</text>
-<text x="49" y="483" class="body">카드 이끎: seed → bridge → execute · 차례 20초 만료: idle/turn_elapsed</text>
-<text x="49" y="501" class="body">기획안 단계(음성): 동료 발언권·USER_READY 없음, 어시스턴트만 도움</text>
-<path d="M190 343 L190 420" class="line" marker-end="url(#arrow)" />
-<path d="M550 343 L550 420" class="line" marker-end="url(#arrow)" />
-<path d="M910 343 L910 420" class="line" marker-end="url(#arrow)" />
-<path d="M145 146 L145 178" class="line" /><path d="M415 146 L415 178" class="line" /><path d="M685 146 L685 178" class="line" /><path d="M145 178 L910 178" class="line" /><path d="M190 178 L190 220" class="line" marker-end="url(#arrow)" /><path d="M550 178 L550 220" class="line" marker-end="url(#arrow)" /><path d="M910 178 L910 220" class="line" marker-end="url(#arrow)" /><text x="813" y="170" text-anchor="middle" class="small">토론 3단계 모두</text></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 364" width="1000" height="364"><style>
+.b-seat{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:.9}
+.b-agentstep{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.4}
+.b-topic2{fill:#FFFFFF;stroke:#D2D2D7;stroke-width:1}
+.edge-xd{stroke:#D70015;stroke-width:1.5;fill:none;stroke-dasharray:5 3}
+.xmark{stroke:#D70015;stroke-width:2.6;fill:none;stroke-linecap:round}
+text{font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;fill:#1D1D1F}
+.t{font-size:12.5px;font-weight:700}
+.s{font-size:10.5px;fill:#4A5263}
+.tier{font-size:12.5px;font-weight:700;fill:#0066CC}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:9.5px;fill:#3C4556}
+.mono-s{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:8.6px;fill:#3C4556}
+.lab{font-size:10.5px;fill:#2F3746}
+.lab-t{font-size:10.5px;font-weight:700;fill:#1D1D1F}
+.lab-b{font-size:10.5px;fill:#D70015;font-weight:700}
+.lab-g{font-size:10.5px;fill:#6E6E73;font-weight:700}
+.st{font-size:10px;font-weight:700;fill:#0066CC;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.numt{font-size:10px;font-weight:700;fill:#fff}
+.halo{paint-order:stroke;stroke:#FFFFFF;stroke-width:3.2px;stroke-linejoin:round}
+.numc{fill:#0071E3}
+.edge{stroke:#3C4556;stroke-width:1.4;fill:none}
+.edge-d{stroke:#3C4556;stroke-width:1.3;fill:none;stroke-dasharray:4 3}
+.edge-x{stroke:#D70015;stroke-width:1.5;fill:none}
+.ah{fill:#3C4556}
+.ahx{fill:#D70015}
+.aho{fill:none;stroke:#3C4556;stroke-width:1.5;stroke-linejoin:round}
+.bnd{fill:none;stroke:#D70015;stroke-width:1.3;stroke-dasharray:7 4}
+.lbnd{fill:none;stroke:#9AA3AD;stroke-width:1.1;stroke-dasharray:3 3}
+.life{stroke:#9AA3AD;stroke-width:1;stroke-dasharray:4 4}
+.b-web{fill:#E5F4EC;stroke:#1F8A5B;stroke-width:1.4}
+.b-web-bar{stroke:#1F8A5B;stroke-width:1}
+.b-web-dot{fill:#1F8A5B}
+.b-api{fill:#FDECEB;stroke:#C4362F;stroke-width:1.4}
+.b-in{fill:#FFFFFF;stroke:#C4362F;stroke-width:1}
+.b-agent{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.6}
+.b-agent-in{fill:none;stroke:#5B3FB3;stroke-width:.8}
+.b-mcp{fill:#E8F0FD;stroke:#2459B8;stroke-width:1.4}
+.b-mq{fill:#FDF1DD;stroke:#B26A00;stroke-width:1.4}
+.b-topic{fill:#FFFFFF;stroke:#B26A00;stroke-width:1}
+.b-db{fill:#EEF0F3;stroke:#5F6873;stroke-width:1.4}
+.b-ext{fill:#FFFFFF;stroke:#8B939C;stroke-width:1.4;stroke-dasharray:5 3}
+.b-node{fill:#FFFFFF;stroke:#5F6873;stroke-width:1.3}
+.node-top{fill:#F1F3F6}
+.node-side{fill:#E3E7EC}
+.b-step{fill:#F3F6FB;stroke:#0071E3;stroke-width:1.2}
+.b-state{fill:#E8F2FD;stroke:#0071E3;stroke-width:1.2}
+.b-note{fill:#FFFBEF;stroke:#E2CF9E;stroke-width:1}
+.b-plug{fill:#FFFFFF;stroke:#5B3FB3;stroke-width:1.2}
+.plug{stroke:#5B3FB3;stroke-width:1.3}
+.plug-dot{fill:#5B3FB3}
+.axis{stroke:#5F6873;stroke-width:1.2}
+.tick{stroke:#9AA3AD;stroke-width:1}
+.dot{fill:#0071E3}
+.dot-rel{fill:#FFFFFF;stroke:#0071E3;stroke-width:1.5}
+</style><rect width="1000" height="364" fill="#FFFFFF"/><defs><marker id="mf-v3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker><marker id="mo-v3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" class="aho"/></marker><marker id="mx-v3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahx"/></marker></defs><rect x="20" y="34" width="168" height="58" rx="8" class="b-state"/><text x="104.0" y="58.0" text-anchor="middle" class="st">keyword</text><text x="104.0" y="76.0" text-anchor="middle" class="s">키워드 · 10분</text><rect x="218" y="34" width="168" height="58" rx="8" class="b-state"/><text x="302.0" y="58.0" text-anchor="middle" class="st">problem</text><text x="302.0" y="76.0" text-anchor="middle" class="s">문제 상황 · 18분</text><rect x="416" y="34" width="168" height="58" rx="8" class="b-state"/><text x="500.0" y="58.0" text-anchor="middle" class="st">solution</text><text x="500.0" y="76.0" text-anchor="middle" class="s">해결책 · 18분</text><rect x="614" y="34" width="168" height="58" rx="8" class="b-state"/><text x="698.0" y="58.0" text-anchor="middle" class="st">proposal</text><text x="698.0" y="76.0" text-anchor="middle" class="s">기획안 작성 · 14분</text><rect x="812" y="34" width="168" height="58" rx="8" class="b-step"/><text x="896.0" y="58.0" text-anchor="middle" class="st">completed</text><text x="896.0" y="76.0" text-anchor="middle" class="s">제출 → 리포트 큐</text><line x1="188" y1="63" x2="217" y2="63" class="edge" marker-end="url(#mf-v3b)"/><text x="203.0" y="28.0" text-anchor="middle" class="lab halo">칸 confirmed</text><line x1="386" y1="63" x2="415" y2="63" class="edge" marker-end="url(#mf-v3b)"/><text x="401.0" y="28.0" text-anchor="middle" class="lab halo">칸 confirmed</text><line x1="584" y1="63" x2="613" y2="63" class="edge" marker-end="url(#mf-v3b)"/><text x="599.0" y="28.0" text-anchor="middle" class="lab halo">칸 confirmed</text><line x1="782" y1="63" x2="811" y2="63" class="edge" marker-end="url(#mf-v3b)"/><text x="797.0" y="28.0" text-anchor="middle" class="lab halo">제출 · ends_at</text><text x="20.0" y="12.0" text-anchor="start" class="tier">phase (in_progress 안)</text><rect x="20" y="104" width="960" height="84" rx="8" class="b-note"/><text x="34.0" y="122.0" text-anchor="start" class="lab-t">칸 상태는 empty → confirmed 두 개 · 확정 세 경로는 토론 3단계 공통 · 칸마다 resolution · filled_by를 남김 · 확정 경로에 LLM 없음</text><text x="34.0" y="140.0" text-anchor="start" class="lab">① 지원자 [이걸로 정하기] → candidate. 카드 미전달이어도 확정 · 카드 시각 전이면 그 카드는 preempted. 안 연결은 옵션 키 · 정규화 라벨 일치만</text><text x="34.0" y="157.0" text-anchor="start" class="lab">② AI 합의 채우기 → 지원자 포함 3/4 + 지원자 최신 발언이 명시 동의 + 그 단계 카드 전달 뒤(전이면 fill_held · 409 card_pending) → fill_slot 한 트랜잭션</text><text x="34.0" y="174.0" text-anchor="start" class="lab">③ 단계 마감 → api가 직접: candidate_support → most_support → earliest → default · filled_by=system · 적용 규칙별 고정 시스템 안내</text><text x="20.0" y="208.0" text-anchor="start" class="tier">카드 6장 · card_due(단계 시작 + offset_min) → 담당 전원 게시 = delivered · honesty_credit만 예외 · 카드 전 이끎 seed → bridge</text><rect x="26" y="216" width="156" height="20" rx="4" class="b-topic"/><text x="104.0" y="230.0" text-anchor="middle" class="mono">persuasion_keyword +3분</text><rect x="224" y="216" width="156" height="20" rx="4" class="b-topic"/><text x="302.0" y="230.0" text-anchor="middle" class="mono">flexibility_majority +3분</text><rect x="224" y="242" width="156" height="20" rx="4" class="b-topic"/><text x="302.0" y="256.0" text-anchor="middle" class="mono">listening_pressure +3분</text><rect x="422" y="216" width="156" height="20" rx="4" class="b-topic"/><text x="500.0" y="230.0" text-anchor="middle" class="mono">inclusion_silence +2분</text><rect x="422" y="242" width="156" height="20" rx="4" class="b-topic"/><text x="500.0" y="256.0" text-anchor="middle" class="mono">persuasion_solution +5분</text><rect x="620" y="216" width="156" height="20" rx="4" class="b-topic"/><text x="698.0" y="230.0" text-anchor="middle" class="mono">honesty_credit 시작 때 기록</text><text x="896.0" y="230.0" text-anchor="middle" class="s">디브리핑 · 리포트</text><text x="698.0" y="256.0" text-anchor="middle" class="s">새 음성 차례 없음 · 어시스턴트만</text><text x="302.0" y="284.0" text-anchor="middle" class="s">기준안은 card_due 때 잠금</text><rect x="20" y="296" width="960" height="60" rx="8" class="b-api"/><text x="34.0" y="316.0" text-anchor="start" class="t">api 스케줄러 (5초) → 세션 메일박스</text><text x="34.0" y="334.0" text-anchor="start" class="s">card_due{card_id}(최초 포함 카드당 최대 3회 · 30초 간격) · idle(침묵 초대, 단계당 1회) · turn_elapsed(내 차례 20초 만료, 동료 1명) · 강제 차례(발언 없는 단계의 끝 무렵 1회)</text><text x="34.0" y="348.0" text-anchor="start" class="s">시간 초과 채우기는 api가 직접(그래프 · LLM 없음) · 마감 L/30 전 안내 · ends_at 자동 제출 · 일찍 확정하면 남은 시간 이월</text><line x1="104.0" y1="295" x2="104.0" y2="286" class="edge" marker-end="url(#mo-v3b)"/><line x1="302.0" y1="295" x2="302.0" y2="290" class="edge" marker-end="url(#mo-v3b)"/><line x1="500.0" y1="295" x2="500.0" y2="286" class="edge" marker-end="url(#mo-v3b)"/></svg>

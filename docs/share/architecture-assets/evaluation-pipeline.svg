@@ -1,29 +1,56 @@
-<ns0:svg xmlns:ns0="http://www.w3.org/2000/svg" width="1100" height="620" viewBox="0 0 1100 620" role="img" aria-label="평가 파이프라인 · 사실에서 사람의 최종 검토까지">
-<ns0:style>text{font-family:Apple SD Gothic Neo,Noto Sans KR,Malgun Gothic,sans-serif;fill:#1D1D1F}.title{font-size:20px;font-weight:700}.head{font-size:15px;font-weight:700}.body{font-size:12.5px}.small{font-size:11px;fill:#4A5263}.line{stroke:#4A5263;stroke-width:1.8;fill:none}.dash{stroke:#B25000;stroke-width:1.5;stroke-dasharray:5 4;fill:none}</ns0:style>
-<ns0:defs><ns0:marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><ns0:path d="M0 0 L8 4 L0 8 Z" fill="#4A5263" /></ns0:marker></ns0:defs>
-<ns0:text x="24" y="32" class="title">평가 파이프라인 · 사실에서 사람의 최종 검토까지</ns0:text>
-<ns0:rect x="120" y="58" width="860" height="70" rx="10" fill="#FDF1DD" stroke="#B26A00" stroke-width="1.5" />
-<ns0:text x="134" y="83" class="head">report.generate 수신</ns0:text>
-<ns0:text x="134" y="103" class="body">세션 종료 · 재시도/DLQ</ns0:text>
-<ns0:path d="M550 128 L550 146" class="line" marker-end="url(#arrow)" />
-<ns0:rect x="120" y="146" width="860" height="70" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<ns0:text x="134" y="171" class="head">collect</ns0:text>
-<ns0:text x="134" y="191" class="body">세션 기록 · 척도 · 기여 · 채용 건 복사본 수집</ns0:text>
-<ns0:path d="M550 216 L550 234" class="line" marker-end="url(#arrow)" />
-<ns0:rect x="120" y="234" width="860" height="70" rx="10" fill="#EEF0F3" stroke="#5F6873" stroke-width="1.5" />
-<ns0:text x="134" y="259" class="head">aggregate</ns0:text>
-<ns0:text x="134" y="279" class="body">장면 사실 계산 · 결정 시각 · preempted · AI 사용 집계</ns0:text>
-<ns0:path d="M550 304 L550 322" class="line" marker-end="url(#arrow)" />
-<ns0:rect x="120" y="322" width="860" height="70" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<ns0:text x="134" y="347" class="head">evaluate · 요소별 판단과 검증</ns0:text>
-<ns0:text x="134" y="367" class="body">근거·사실 검증 → 요소 재요청 → 코드로 요약 조립</ns0:text>
-<ns0:path d="M550 392 L550 410" class="line" marker-end="url(#arrow)" />
-<ns0:rect x="120" y="410" width="860" height="70" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<ns0:text x="134" y="435" class="head">draft</ns0:text>
-<ns0:text x="134" y="455" class="body">검증된 평가와 대화 맥락으로 초안 구성 · 소비자가 /report/draft 저장</ns0:text>
-<ns0:path d="M550 480 L550 498" class="line" marker-end="url(#arrow)" />
-<ns0:rect x="120" y="498" width="860" height="70" rx="10" fill="#EEF0F3" stroke="#5F6873" stroke-width="1.5" />
-<ns0:text x="134" y="523" class="head">approval (interrupt) → finalize</ns0:text>
-<ns0:text x="134" y="543" class="body">담당자 검토 완료 뒤 report.approve로 재개 · 최종 저장</ns0:text>
-<ns0:text x="550" y="602" text-anchor="middle" class="small">기록 없음: 장면 없음 · 반응 없음 · 판단 보류 / 근거 없는 수준은 저장 금지</ns0:text>
-</ns0:svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 314" width="1000" height="314"><style>
+.b-seat{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:.9}
+.b-agentstep{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.4}
+.b-topic2{fill:#FFFFFF;stroke:#D2D2D7;stroke-width:1}
+.edge-xd{stroke:#D70015;stroke-width:1.5;fill:none;stroke-dasharray:5 3}
+.xmark{stroke:#D70015;stroke-width:2.6;fill:none;stroke-linecap:round}
+text{font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;fill:#1D1D1F}
+.t{font-size:12.5px;font-weight:700}
+.s{font-size:10.5px;fill:#4A5263}
+.tier{font-size:12.5px;font-weight:700;fill:#0066CC}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:9.5px;fill:#3C4556}
+.mono-s{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:8.6px;fill:#3C4556}
+.lab{font-size:10.5px;fill:#2F3746}
+.lab-t{font-size:10.5px;font-weight:700;fill:#1D1D1F}
+.lab-b{font-size:10.5px;fill:#D70015;font-weight:700}
+.lab-g{font-size:10.5px;fill:#6E6E73;font-weight:700}
+.st{font-size:10px;font-weight:700;fill:#0066CC;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.numt{font-size:10px;font-weight:700;fill:#fff}
+.halo{paint-order:stroke;stroke:#FFFFFF;stroke-width:3.2px;stroke-linejoin:round}
+.numc{fill:#0071E3}
+.edge{stroke:#3C4556;stroke-width:1.4;fill:none}
+.edge-d{stroke:#3C4556;stroke-width:1.3;fill:none;stroke-dasharray:4 3}
+.edge-x{stroke:#D70015;stroke-width:1.5;fill:none}
+.ah{fill:#3C4556}
+.ahx{fill:#D70015}
+.aho{fill:none;stroke:#3C4556;stroke-width:1.5;stroke-linejoin:round}
+.bnd{fill:none;stroke:#D70015;stroke-width:1.3;stroke-dasharray:7 4}
+.lbnd{fill:none;stroke:#9AA3AD;stroke-width:1.1;stroke-dasharray:3 3}
+.life{stroke:#9AA3AD;stroke-width:1;stroke-dasharray:4 4}
+.b-web{fill:#E5F4EC;stroke:#1F8A5B;stroke-width:1.4}
+.b-web-bar{stroke:#1F8A5B;stroke-width:1}
+.b-web-dot{fill:#1F8A5B}
+.b-api{fill:#FDECEB;stroke:#C4362F;stroke-width:1.4}
+.b-in{fill:#FFFFFF;stroke:#C4362F;stroke-width:1}
+.b-agent{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.6}
+.b-agent-in{fill:none;stroke:#5B3FB3;stroke-width:.8}
+.b-mcp{fill:#E8F0FD;stroke:#2459B8;stroke-width:1.4}
+.b-mq{fill:#FDF1DD;stroke:#B26A00;stroke-width:1.4}
+.b-topic{fill:#FFFFFF;stroke:#B26A00;stroke-width:1}
+.b-db{fill:#EEF0F3;stroke:#5F6873;stroke-width:1.4}
+.b-ext{fill:#FFFFFF;stroke:#8B939C;stroke-width:1.4;stroke-dasharray:5 3}
+.b-node{fill:#FFFFFF;stroke:#5F6873;stroke-width:1.3}
+.node-top{fill:#F1F3F6}
+.node-side{fill:#E3E7EC}
+.b-step{fill:#F3F6FB;stroke:#0071E3;stroke-width:1.2}
+.b-state{fill:#E8F2FD;stroke:#0071E3;stroke-width:1.2}
+.b-note{fill:#FFFBEF;stroke:#E2CF9E;stroke-width:1}
+.b-plug{fill:#FFFFFF;stroke:#5B3FB3;stroke-width:1.2}
+.plug{stroke:#5B3FB3;stroke-width:1.3}
+.plug-dot{fill:#5B3FB3}
+.axis{stroke:#5F6873;stroke-width:1.2}
+.tick{stroke:#9AA3AD;stroke-width:1}
+.dot{fill:#0071E3}
+.dot-rel{fill:#FFFFFF;stroke:#0071E3;stroke-width:1.5}
+</style><rect width="1000" height="314" fill="#FFFFFF"/><defs><marker id="mf-v3c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker><marker id="mo-v3c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" class="aho"/></marker><marker id="mx-v3c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahx"/></marker></defs><polygon points="22,62 160,62 172,88 160,114 22,114 34,88" class="b-step"/><text x="101.0" y="85.0" text-anchor="middle" class="st">collect</text><text x="101.0" y="101.0" text-anchor="middle" class="s">평가 입력 수집</text><polygon points="181,62 319,62 331,88 319,114 181,114 193,88" class="b-step"/><text x="260.0" y="85.0" text-anchor="middle" class="st">aggregate</text><text x="260.0" y="101.0" text-anchor="middle" class="s">사실 지표 · LLM 없음</text><polygon points="340,62 478,62 490,88 478,114 340,114 352,88" class="b-agentstep"/><text x="419.0" y="85.0" text-anchor="middle" class="st">evaluate</text><text x="419.0" y="101.0" text-anchor="middle" class="s">평가 에이전트 · LLM</text><polygon points="499,62 637,62 649,88 637,114 499,114 511,88" class="b-step"/><text x="578.0" y="85.0" text-anchor="middle" class="st">draft</text><text x="578.0" y="101.0" text-anchor="middle" class="s">리포트 초안</text><polygon points="658,62 796,62 808,88 796,114 658,114 670,88" class="b-step"/><text x="737.0" y="85.0" text-anchor="middle" class="st">approval</text><text x="737.0" y="101.0" text-anchor="middle" class="s">interrupt · 담당자 검토 대기</text><polygon points="817,62 955,62 967,88 955,114 817,114 829,88" class="b-step"/><text x="896.0" y="85.0" text-anchor="middle" class="st">finalize</text><text x="896.0" y="101.0" text-anchor="middle" class="s">확정 저장</text><rect x="22" y="10" width="300" height="30" rx="6" class="b-mq"/><text x="172.0" y="30.0" text-anchor="middle" class="mono">report.generate {session_id, attempt, eval_round}</text><line x1="60" y1="40" x2="60" y2="61" class="edge" marker-end="url(#mo-v3c)"/><text x="330.0" y="30.0" text-anchor="start" class="lab">← 제출 · 자동 제출 뒤 api가 발행</text><rect x="667" y="10" width="300" height="30" rx="6" class="b-mq"/><text x="817.0" y="30.0" text-anchor="middle" class="mono">report.approve{eval_round} → 재개</text><line x1="892.0" y1="40" x2="892.0" y2="61" class="edge" marker-end="url(#mo-v3c)"/><rect x="28" y="128" width="138" height="19" rx="4" class="b-topic2"/><text x="97.0" y="141.0" text-anchor="middle" class="mono">get_rubric</text><rect x="28" y="152" width="138" height="19" rx="4" class="b-topic2"/><text x="97.0" y="165.0" text-anchor="middle" class="mono">get_session_record</text><rect x="28" y="176" width="138" height="19" rx="4" class="b-topic2"/><text x="97.0" y="189.0" text-anchor="middle" class="mono">get_contributions</text><rect x="187" y="128" width="138" height="19" rx="4" class="b-topic2"/><text x="256.0" y="141.0" text-anchor="middle" class="mono">evaluator_facts</text><rect x="187" y="152" width="138" height="19" rx="4" class="b-topic2"/><text x="256.0" y="165.0" text-anchor="middle" class="mono">contribution_check</text><rect x="187" y="176" width="138" height="19" rx="4" class="b-topic2"/><text x="256.0" y="189.0" text-anchor="middle" class="s">핵심 · 보조 장면</text><rect x="346" y="128" width="138" height="19" rx="4" class="b-topic2"/><text x="415.0" y="141.0" text-anchor="middle" class="s">요소마다 1회 × 5</text><rect x="346" y="152" width="138" height="19" rx="4" class="b-topic2"/><text x="415.0" y="165.0" text-anchor="middle" class="mono">temperature 0.1</text><rect x="346" y="176" width="138" height="19" rx="4" class="b-topic2"/><text x="415.0" y="189.0" text-anchor="middle" class="mono">save_evaluation</text><rect x="505" y="128" width="138" height="19" rx="4" class="b-topic2"/><text x="574.0" y="141.0" text-anchor="middle" class="mono">get_transcript_span</text><rect x="505" y="152" width="138" height="19" rx="4" class="b-topic2"/><text x="574.0" y="165.0" text-anchor="middle" class="s">앞 5 · 뒤 3 맥락</text><rect x="505" y="176" width="138" height="19" rx="4" class="b-topic2"/><text x="574.0" y="189.0" text-anchor="middle" class="s">근거 검증 · 조립</text><rect x="664" y="128" width="138" height="19" rx="4" class="b-topic2"/><text x="733.0" y="141.0" text-anchor="middle" class="s">① 체크포인트 저장</text><rect x="664" y="152" width="138" height="19" rx="4" class="b-topic2"/><text x="733.0" y="165.0" text-anchor="middle" class="s">② POST report/draft</text><rect x="664" y="176" width="138" height="19" rx="4" class="b-topic2"/><text x="733.0" y="189.0" text-anchor="middle" class="s">③ report_ready → ack</text><rect x="823" y="128" width="138" height="19" rx="4" class="b-topic2"/><text x="892.0" y="141.0" text-anchor="middle" class="s">final = draft 그대로</text><rect x="823" y="152" width="138" height="19" rx="4" class="b-topic2"/><text x="892.0" y="165.0" text-anchor="middle" class="mono">POST report/final</text><rect x="823" y="176" width="138" height="19" rx="4" class="b-topic2"/><text x="892.0" y="189.0" text-anchor="middle" class="s">조정은 조회 시 병합</text><rect x="22" y="212" width="956" height="94" rx="8" class="b-note"/><text x="36.0" y="231.0" text-anchor="start" class="lab-t">워커 검증 (evaluate 안) · api는 형식과 세션 소속만 검증</text><text x="36.0" y="249.0" text-anchor="start" class="lab">근거 없는 수준 금지 · 근거는 같은 세션의 지원자 메시지 · 금지 표현은 거부 · 근거 1개의 수준 4·5는 수준 3 · 확신도 medium으로 깎음 · 확신도 상한도 깎음(clamp)</text><text x="36.0" y="266.0" text-anchor="start" class="lab">형식 오류 · 근거 부재 · 사실 모순 → 요소 단위 1회 재요청(새로 깨진 차원은 첫 출력 통과 행 유지) → 남은 실패 차원은 evaluate_failed. 전송 · 타임아웃은 저장 없이 큐 재시도</text><text x="36.0" y="283.0" text-anchor="start" class="lab">선결정은 preempted, 지원자 안 채택 뒤 장면 없는 차원은 not_applicable로 워커가 고정 · 저장은 evaluations + evaluation_runs(run_id · prompt_versions · model)</text><text x="36.0" y="300.0" text-anchor="start" class="lab">요소 level은 워커가 차원 평균 반올림(.5 올림) · 요소 요약은 차원별 summary_line으로 워커 코드가 조립 · 같은 run_id면 LLM 재호출 없이 재사용</text></svg>

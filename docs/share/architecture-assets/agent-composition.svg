@@ -1,37 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="530" viewBox="0 0 1100 530" role="img" aria-label="에이전트 구성 · 결정적 그래프와 역할">
-<style>text{font-family:Apple SD Gothic Neo,Noto Sans KR,Malgun Gothic,sans-serif;fill:#1D1D1F}.title{font-size:20px;font-weight:700}.head{font-size:15px;font-weight:700}.body{font-size:12.5px}.small{font-size:11px;fill:#4A5263}.line{stroke:#4A5263;stroke-width:1.8;fill:none}.dash{stroke:#B25000;stroke-width:1.5;stroke-dasharray:5 4;fill:none}</style>
-<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#4A5263" /></marker></defs>
-<text x="24" y="32" class="title">에이전트 구성 · 결정적 그래프와 역할</text>
-<rect x="28" y="60" width="250" height="95" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<text x="42" y="85" class="head">의도 분류 · MODEL_INTENT</text>
-<text x="42" y="105" class="body">message 자극을 꺼낼 때 실행</text>
-<text x="42" y="123" class="body">withhold · reservation · excluded</text>
-<rect x="325" y="60" width="335" height="95" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<text x="339" y="85" class="head">진행 매니저 · MODEL_TURN</text>
-<text x="339" y="105" class="body">합의·카드·지명·질문 규칙</text>
-<text x="339" y="123" class="body">빈 자리: 이끎 → LLM → 기본 응답</text>
-<rect x="710" y="60" width="360" height="95" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<text x="724" y="85" class="head">동료 · MODEL_PERSONA</text>
-<text x="724" y="105" class="body">고집형 · 소극형 · 비판형</text>
-<text x="724" y="123" class="body">[상황] [내 입장] [카드 차례]</text>
-<path d="M278 108 L325 108" class="line" marker-end="url(#arrow)" />
-<path d="M660 108 L710 108" class="line" marker-end="url(#arrow)" />
-<rect x="28" y="210" width="1040" height="105" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<text x="42" y="235" class="head">토론 그래프 · 체크포인터 없음</text>
-<text x="42" y="255" class="body">load → cards → turn → respond → guard → stance_check → wait_typing → apply</text>
-<text x="42" y="273" class="body">apply → 다음 화자 respond 반복 / 화자 0명이면 바로 fill → END</text>
-<path d="M512 155 L512 210" class="line" marker-end="url(#arrow)" />
-<rect x="28" y="360" width="315" height="112" rx="10" fill="#E8F0FD" stroke="#2459B8" stroke-width="1.5" />
-<text x="42" y="385" class="head">debate / rag MCP</text>
-<text x="42" y="405" class="body">토론 상태·기록·자료</text>
-<text x="42" y="423" class="body">동료 허용 조회 도구 · 평가 접근 없음</text>
-<rect x="390" y="360" width="315" height="112" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<text x="404" y="385" class="head">AI 어시스턴트</text>
-<text x="404" y="405" class="body">api assistant runner · 별도 도구 호출 루프</text>
-<text x="404" y="423" class="body">모든 단계 · 오른쪽 아래 탭에서 열림</text>
-<rect x="752" y="360" width="316" height="112" rx="10" fill="#FDF1DD" stroke="#B26A00" stroke-width="1.5" />
-<text x="766" y="385" class="head">평가 에이전트 · 워커</text>
-<text x="766" y="405" class="body">세션 종료 뒤 요소별 판단</text>
-<text x="766" y="423" class="body">요소 요약은 워커 코드가 조립</text>
-<text x="550" y="507" text-anchor="middle" class="small">게시된 동료 발언 → TTS → 순차 재생 → ended 확인 → USER_READY</text>
-<text x="550" y="302" text-anchor="middle" class="small">fill은 이전부터 성립한 합의만 처리 · 이번 발언의 합의는 다음 run</text></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 452" width="1000" height="452"><style>
+.b-seat{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:.9}
+.b-agentstep{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.4}
+.b-topic2{fill:#FFFFFF;stroke:#D2D2D7;stroke-width:1}
+.edge-xd{stroke:#D70015;stroke-width:1.5;fill:none;stroke-dasharray:5 3}
+.xmark{stroke:#D70015;stroke-width:2.6;fill:none;stroke-linecap:round}
+text{font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;fill:#1D1D1F}
+.t{font-size:12.5px;font-weight:700}
+.s{font-size:10.5px;fill:#4A5263}
+.tier{font-size:12.5px;font-weight:700;fill:#0066CC}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:9.5px;fill:#3C4556}
+.mono-s{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:8.6px;fill:#3C4556}
+.lab{font-size:10.5px;fill:#2F3746}
+.lab-t{font-size:10.5px;font-weight:700;fill:#1D1D1F}
+.lab-b{font-size:10.5px;fill:#D70015;font-weight:700}
+.lab-g{font-size:10.5px;fill:#6E6E73;font-weight:700}
+.st{font-size:10px;font-weight:700;fill:#0066CC;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.numt{font-size:10px;font-weight:700;fill:#fff}
+.halo{paint-order:stroke;stroke:#FFFFFF;stroke-width:3.2px;stroke-linejoin:round}
+.numc{fill:#0071E3}
+.edge{stroke:#3C4556;stroke-width:1.4;fill:none}
+.edge-d{stroke:#3C4556;stroke-width:1.3;fill:none;stroke-dasharray:4 3}
+.edge-x{stroke:#D70015;stroke-width:1.5;fill:none}
+.ah{fill:#3C4556}
+.ahx{fill:#D70015}
+.aho{fill:none;stroke:#3C4556;stroke-width:1.5;stroke-linejoin:round}
+.bnd{fill:none;stroke:#D70015;stroke-width:1.3;stroke-dasharray:7 4}
+.lbnd{fill:none;stroke:#9AA3AD;stroke-width:1.1;stroke-dasharray:3 3}
+.life{stroke:#9AA3AD;stroke-width:1;stroke-dasharray:4 4}
+.b-web{fill:#E5F4EC;stroke:#1F8A5B;stroke-width:1.4}
+.b-web-bar{stroke:#1F8A5B;stroke-width:1}
+.b-web-dot{fill:#1F8A5B}
+.b-api{fill:#FDECEB;stroke:#C4362F;stroke-width:1.4}
+.b-in{fill:#FFFFFF;stroke:#C4362F;stroke-width:1}
+.b-agent{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.6}
+.b-agent-in{fill:none;stroke:#5B3FB3;stroke-width:.8}
+.b-mcp{fill:#E8F0FD;stroke:#2459B8;stroke-width:1.4}
+.b-mq{fill:#FDF1DD;stroke:#B26A00;stroke-width:1.4}
+.b-topic{fill:#FFFFFF;stroke:#B26A00;stroke-width:1}
+.b-db{fill:#EEF0F3;stroke:#5F6873;stroke-width:1.4}
+.b-ext{fill:#FFFFFF;stroke:#8B939C;stroke-width:1.4;stroke-dasharray:5 3}
+.b-node{fill:#FFFFFF;stroke:#5F6873;stroke-width:1.3}
+.node-top{fill:#F1F3F6}
+.node-side{fill:#E3E7EC}
+.b-step{fill:#F3F6FB;stroke:#0071E3;stroke-width:1.2}
+.b-state{fill:#E8F2FD;stroke:#0071E3;stroke-width:1.2}
+.b-note{fill:#FFFBEF;stroke:#E2CF9E;stroke-width:1}
+.b-plug{fill:#FFFFFF;stroke:#5B3FB3;stroke-width:1.2}
+.plug{stroke:#5B3FB3;stroke-width:1.3}
+.plug-dot{fill:#5B3FB3}
+.axis{stroke:#5F6873;stroke-width:1.2}
+.tick{stroke:#9AA3AD;stroke-width:1}
+.dot{fill:#0071E3}
+.dot-rel{fill:#FFFFFF;stroke:#0071E3;stroke-width:1.5}
+</style><rect width="1000" height="452" fill="#FFFFFF"/><defs><marker id="mf-v2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker><marker id="mo-v2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" class="aho"/></marker><marker id="mx-v2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahx"/></marker></defs><text x="24.0" y="16.0" text-anchor="start" class="tier">자극 · 요청</text><text x="250.0" y="16.0" text-anchor="start" class="tier">에이전트 · 언제 도는가</text><text x="770.0" y="16.0" text-anchor="start" class="tier">결과</text><rect x="10" y="24" width="980" height="318" rx="10" class="lbnd"/><text x="980.0" y="40.0" text-anchor="end" class="lab-g">세션 중 · api 프로세스 안</text><rect x="24" y="52" width="176" height="48" rx="7" class="b-web"/><line x1="24" y1="63" x2="200" y2="63" class="b-web-bar"/><circle cx="32" cy="57.5" r="2" class="b-web-dot"/><circle cx="39" cy="57.5" r="2" class="b-web-dot"/><circle cx="46" cy="57.5" r="2" class="b-web-dot"/><text x="112.0" y="78.5" text-anchor="middle" class="t">지원자 발언</text><text x="112.0" y="93.5" text-anchor="middle" class="s">받아 적은 글 그대로 · generation +1</text><rect x="250" y="52" width="470" height="48" rx="6" class="b-plug"/><text x="485.0" y="73.0" text-anchor="middle" class="t">실시간 의도 분류 · MODEL_INTENT</text><text x="485.0" y="88.0" text-anchor="middle" class="s">메일박스가 message 자극을 꺼내면 그래프 전에 호출 · withhold · reservation · excluded</text><rect x="770" y="52" width="210" height="48" rx="6" class="b-state"/><text x="875.0" y="73.0" text-anchor="middle" class="t">토론 상태</text><text x="875.0" y="88.0" text-anchor="middle" class="s">high · 유보 없는 지지만 누적</text><line x1="293" y1="121" x2="293" y2="101" class="edge" marker-end="url(#mf-v2)"/><line x1="720" y1="76" x2="769" y2="76" class="edge" marker-end="url(#mf-v2)"/><polyline points="200,76 214,76 214,150 249,150" class="edge" marker-end="url(#mf-v2)"/><rect x="24" y="160" width="176" height="42" rx="7" class="b-api"/><text x="112.0" y="178.0" text-anchor="middle" class="t">api 스케줄러 (5초)</text><text x="112.0" y="193.0" text-anchor="middle" class="s">idle · turn_elapsed · card_due</text><rect x="24" y="212" width="176" height="42" rx="7" class="b-api"/><text x="112.0" y="230.0" text-anchor="middle" class="t">advance_phase</text><text x="112.0" y="245.0" text-anchor="middle" class="s">phase_started</text><line x1="200" y1="181" x2="249" y2="181" class="edge" marker-end="url(#mf-v2)"/><line x1="200" y1="233" x2="249" y2="233" class="edge" marker-end="url(#mf-v2)"/><rect x="250" y="122" width="86" height="140" rx="8" class="b-mq"/><text x="293.0" y="140.0" text-anchor="middle" class="t">메일박스</text><rect x="262" y="150" width="62" height="14" rx="3" class="b-topic"/><rect x="262" y="170" width="62" height="14" rx="3" class="b-topic"/><rect x="262" y="190" width="62" height="14" rx="3" class="b-topic"/><text x="293.0" y="226.0" text-anchor="middle" class="s">세션별 Task 1개</text><text x="293.0" y="240.0" text-anchor="middle" class="s">자극 5종 직렬</text><text x="293.0" y="254.0" text-anchor="middle" class="s">녹음 중 보류</text><line x1="336" y1="192" x2="351" y2="192" class="edge" marker-end="url(#mf-v2)"/><rect x="352" y="116" width="368" height="152" rx="10" class="b-agent"/><rect x="355" y="119" width="362" height="146" rx="8" class="b-agent-in"/><text x="536.0" y="136.0" text-anchor="middle" class="t">토론 그래프</text><rect x="368" y="144" width="336" height="36" rx="5" class="b-seat"/><text x="536.0" y="159.0" text-anchor="middle" class="t">진행 매니저 · MODEL_TURN</text><text x="536.0" y="173.0" text-anchor="middle" class="s">규칙 우선 화자 0~2명 · 빈 자리면 이끎 → LLM → 기본 응답</text><line x1="420" y1="180" x2="420" y2="193" class="edge" marker-end="url(#mf-v2)"/><rect x="368" y="194" width="104" height="40" rx="5" class="b-seat"/><text x="420.0" y="210.0" text-anchor="middle" class="t">p1 강한결</text><text x="420.0" y="225.0" text-anchor="middle" class="s">고집형</text><line x1="536" y1="180" x2="536" y2="193" class="edge" marker-end="url(#mf-v2)"/><rect x="484" y="194" width="104" height="40" rx="5" class="b-seat"/><text x="536.0" y="210.0" text-anchor="middle" class="t">p2 윤하람</text><text x="536.0" y="225.0" text-anchor="middle" class="s">소극형</text><line x1="652" y1="180" x2="652" y2="193" class="edge" marker-end="url(#mf-v2)"/><rect x="600" y="194" width="104" height="40" rx="5" class="b-seat"/><text x="652.0" y="210.0" text-anchor="middle" class="t">p3 서지안</text><text x="652.0" y="225.0" text-anchor="middle" class="s">비판형</text><text x="536.0" y="254.0" text-anchor="middle" class="s">respond(MODEL_PERSONA) → guard → stance_check → apply</text><rect x="770" y="122" width="210" height="140" rx="6" class="b-state"/><text x="875.0" y="163.0" text-anchor="middle" class="t">동료 발언 · 음성 재생</text><text x="875.0" y="178.0" text-anchor="middle" class="s">post_message · set_stance</text><text x="875.0" y="191.0" text-anchor="middle" class="s">fill_slot(공지 포함, 카드 전달 뒤)</text><text x="875.0" y="204.0" text-anchor="middle" class="s">card_ids → 카드마다 delivered</text><text x="875.0" y="217.0" text-anchor="middle" class="s">게시 직전 generation 확인</text><text x="875.0" y="230.0" text-anchor="middle" class="s">TTS → 순서대로 재생 → ended</text><line x1="720" y1="192" x2="769" y2="192" class="edge" marker-end="url(#mf-v2)"/><rect x="24" y="280" width="176" height="48" rx="7" class="b-web"/><line x1="24" y1="291" x2="200" y2="291" class="b-web-bar"/><circle cx="32" cy="285.5" r="2" class="b-web-dot"/><circle cx="39" cy="285.5" r="2" class="b-web-dot"/><circle cx="46" cy="285.5" r="2" class="b-web-dot"/><text x="112.0" y="306.5" text-anchor="middle" class="t">어시스턴트 요청</text><text x="112.0" y="321.5" text-anchor="middle" class="s">REST · 세션당 60회</text><rect x="250" y="280" width="470" height="48" rx="6" class="b-plug"/><text x="485.0" y="301.0" text-anchor="middle" class="t">어시스턴트 · MODEL_ASSISTANT</text><text x="485.0" y="316.0" text-anchor="middle" class="s">tool-calling 루프: 모델이 search_materials · get_material을 골라 최대 3회 → 숫자 검사 → guard</text><rect x="770" y="280" width="210" height="48" rx="6" class="b-state"/><text x="875.0" y="301.0" text-anchor="middle" class="t">답 + 인용</text><text x="875.0" y="316.0" text-anchor="middle" class="s">실제 쓴 자료만 cited_material_ids</text><line x1="200" y1="304" x2="249" y2="304" class="edge" marker-end="url(#mf-v2)"/><line x1="720" y1="304" x2="769" y2="304" class="edge" marker-end="url(#mf-v2)"/><rect x="10" y="356" width="980" height="86" rx="10" class="lbnd"/><text x="980.0" y="372.0" text-anchor="end" class="lab-g">세션 뒤 · report-worker</text><rect x="24" y="380" width="176" height="48" rx="7" class="b-mq"/><text x="112.0" y="401.0" text-anchor="middle" class="t">report.generate</text><text x="112.0" y="416.0" text-anchor="middle" class="s">제출 · 자동 제출 뒤</text><rect x="250" y="380" width="470" height="48" rx="6" class="b-agentstep"/><text x="485.0" y="401.0" text-anchor="middle" class="t">평가 에이전트 · MODEL_EVALUATOR</text><text x="485.0" y="416.0" text-anchor="middle" class="s">요소마다 1회 × 5 · 다른 요소 결과는 보지 않음 · 도구 없음 · 요약은 워커가 조립</text><rect x="770" y="380" width="210" height="48" rx="6" class="b-state"/><text x="875.0" y="401.0" text-anchor="middle" class="t">차원 19개 수준 1~5</text><text x="875.0" y="416.0" text-anchor="middle" class="s">근거 · 확신도 · 기록 상태 → 담당자 검토</text><line x1="200" y1="404" x2="249" y2="404" class="edge" marker-end="url(#mf-v2)"/><line x1="720" y1="404" x2="769" y2="404" class="edge" marker-end="url(#mf-v2)"/></svg>
