@@ -48,6 +48,8 @@ export type Message = {
   is_invite: boolean;
   t_min: number;
   created_at: string;
+  /** 지원자 메시지만: 보낸 message.send의 client_msg_id(음성은 발언 id) */
+  client_msg_id?: string;
 };
 
 export type Slot = {

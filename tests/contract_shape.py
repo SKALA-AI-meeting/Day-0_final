@@ -228,6 +228,7 @@ MESSAGE = {
     "is_invite": bool,
     "t_min": NUM,
     "created_at": TS,
+    "client_msg_id?": str,  # 지원자 메시지만
 }
 INTENT_OUTPUT = {
     "intent": INTENT,

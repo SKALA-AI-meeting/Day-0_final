@@ -2,7 +2,7 @@
 // 반대가 남은 상태의 지원자 혼자 확정(solo_confirm)
 import { expect, test } from "@playwright/test";
 
-import { type Seed, advance, internalGet, say, seed, settle, shot } from "./helpers";
+import { type Seed, VOICE_ENABLED, advance, internalGet, say, seed, settle, shot } from "./helpers";
 
 type Slot = {
   phase: string;
@@ -67,7 +67,7 @@ test("silent: 침묵하면 idle 뒤 비판형 초대 메시지가 1건", async (
         (await internalGet<{ is_invite: boolean }[]>(s.sessionId, "/messages")).filter(
           (m) => m.is_invite,
         ).length,
-      { timeout: 45000 },
+      { timeout: VOICE_ENABLED ? 45000 : 15000 },
     )
     .toBe(1);
   await shot(page, "solution", "03-침묵 초대");

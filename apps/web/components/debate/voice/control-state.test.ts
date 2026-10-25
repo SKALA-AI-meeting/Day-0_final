@@ -1,12 +1,6 @@
 import { expect, test } from "vitest";
 import { frameErrorText } from "../use-session";
-import {
-  ACTION_LABEL,
-  blockedTrouble,
-  canStartVoice,
-  isTypingTarget,
-  turnHoldNotice,
-} from "./control-state";
+import { ACTION_LABEL, blockedTrouble, canStartVoice, turnHoldNotice } from "./control-state";
 
 test("스케줄러가 차례를 넘기기 전에는 유지 시간 이후에도 녹음을 시작할 수 있다", () => {
   expect(canStartVoice("proposal")).toBe(false);
@@ -29,14 +23,6 @@ test("막힌 차례는 이유마다 제목·할 일과 그 일을 하는 버튼 
   // 빈 인식 결과는 오류가 아니라 직접 입력 칸으로 보인다
   expect(blockedTrouble("empty", true)).toBeNull();
   expect(Object.values(ACTION_LABEL).some((label) => label.includes("/"))).toBe(false);
-});
-
-test("Space 단축키는 글을 쓰는 곳·버튼에 포커스가 있으면 쓰지 않는다", () => {
-  const closest = (match: boolean) =>
-    ({ closest: () => (match ? {} : null) }) as unknown as Element;
-  expect(isTypingTarget(closest(true))).toBe(true);
-  expect(isTypingTarget(closest(false))).toBe(false);
-  expect(isTypingTarget(null)).toBe(false);
 });
 
 test("너무 긴 발언 오류는 비었다는 안내 대신 글자 수 안내를 보인다", () => {

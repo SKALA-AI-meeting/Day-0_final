@@ -63,6 +63,8 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
   const socketRef = useRef<SessionSocket | null>(null);
   // 저장 확인(message.ack)을 받은 client_msg_id. 음성 발언은 발언 id를 client_msg_id로 보낸다
   const acked = useRef(new Set<string>());
+  // 마지막으로 /state 스냅샷을 받은 시각(재연결 뒤 따라잡았는지 판단)
+  const syncedAt = useRef(0);
   const authRef = useRef(auth);
   const path = `/sessions/${auth.sessionId}`;
 
@@ -70,6 +72,7 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
     try {
       const snap = await api<StateSnapshot>(`${path}/state`, { token: authRef.current.getToken() });
       dispatch({ type: "snapshot", snap, now: Date.now() });
+      syncedAt.current = Date.now();
     } catch {
       // 다음 연결·공백 때 다시 읽는다
     }
@@ -134,6 +137,8 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
 
   /** 이 client_msg_id(음성은 발언 id)의 저장 확인을 받았는지 */
   const wasAcked = useCallback((id: string) => acked.current.has(id), []);
+  /** 마지막 /state 동기화 시각(ms). 없으면 0 */
+  const lastSyncedAt = useCallback(() => syncedAt.current, []);
 
   const sendVoice = useCallback((id: string, content: string, turn: string, epoch: string) => {
     socketRef.current?.send({
@@ -296,6 +301,7 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
     sendMessage,
     sendVoice,
     wasAcked,
+    lastSyncedAt,
     sendTyping,
     confirmSlot,
     openMaterial,

@@ -27,7 +27,7 @@ test("수용 카드 발언 → 시간 초과 채우기 → 입력 닫힘", async
         (await internalGet<{ sender: string; content: string }[]>(s.sessionId, "/messages")).some(
           (m) => m.sender === "p1" && m.content.includes("가뭄"),
         ),
-      { timeout: 45000 },
+      { timeout: VOICE_ENABLED ? 45000 : 15000 },
     )
     .toBeTruthy();
   // 관찰(record_observation)은 카드 발언을 게시한 뒤에 기록되므로 잠시 기다린다

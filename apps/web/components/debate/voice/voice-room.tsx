@@ -14,7 +14,7 @@ import {
   ACTION_LABEL,
   blockedTrouble,
   canStartVoice,
-  isTypingTarget,
+  spaceShortcutBlocked,
   turnHoldNotice,
   type Action,
   type Trouble,
@@ -116,6 +116,8 @@ type Props = {
   onSend: (id: string, text: string, turn: string, epoch: string) => void;
   /** 보낸 발언(id = client_msg_id)의 저장 확인(message.ack)을 받았는지 */
   wasSaved?: (id: string) => boolean;
+  /** 마지막 /state 동기화 시각(ms). 재연결 뒤 따라잡기 전에는 미제출로 판단하지 않는다 */
+  lastSyncedAt?: () => number;
   onBusy: (busy: boolean) => void;
   onFocusProposal: () => void;
   /** 연결이 끊겨 다시 잇는 중(처음 연결 중과 구분해 끊김 상태를 보인다) */
@@ -386,6 +388,8 @@ export function useVoiceTurn(props: Props) {
   const sentIds = useRef(new Set<string>());
   // 서버가 저장했다고 알려 준 발언 id(음성 상태의 utterance.message_id)
   const savedIds = useRef(new Set<string>());
+  // 마지막으로 연결이 끊긴 시각(ms). 그 뒤 /state 동기화가 있어야 미제출을 판단한다
+  const droppedAt = useRef(0);
   // 차례가 끝나 제출하지 못한 글(읽기 전용으로 남김)
   const [unsent, setUnsent] = useState("");
   const [draft, setDraft] = useState("");
@@ -422,7 +426,13 @@ export function useVoiceTurn(props: Props) {
     const e = edit.current;
     edit.current = { id: "", text: "", changed: false };
     if (!e.id || !e.text.trim() || !e.changed) return;
-    const saved = () => savedIds.current.has(e.id) || !!latest.current.wasSaved?.(e.id);
+    const saved = () =>
+      savedIds.current.has(e.id) ||
+      !!latest.current.wasSaved?.(e.id) ||
+      // ack를 놓쳐도(끊김) 다시 받은 스냅샷에 그 발언 id로 저장된 지원자 메시지가 있으면 저장된 것이다
+      latest.current.snap.messages.some(
+        (m) => m.sender === "candidate" && m.client_msg_id === e.id,
+      );
     if (saved()) return;
     if (!sentIds.current.has(e.id)) {
       setUnsent(e.text);
@@ -431,7 +441,11 @@ export function useVoiceTurn(props: Props) {
     const until = Date.now() + SENT_CONFIRM_MS;
     const check = () => {
       if (saved()) return;
-      if (Date.now() >= until) setUnsent(e.text);
+      // 끊겨 있거나 다시 이어진 뒤 /state로 따라잡기 전에는 판단하지 않고 기다린다
+      const synced =
+        latest.current.connected &&
+        (latest.current.lastSyncedAt?.() ?? Number.POSITIVE_INFINITY) > droppedAt.current;
+      if (synced && Date.now() >= until) setUnsent(e.text);
       else setTimeout(check, SENT_CHECK_MS);
     };
     setTimeout(check, SENT_CHECK_MS);
@@ -465,6 +479,7 @@ export function useVoiceTurn(props: Props) {
   useEffect(() => {
     if (!props.connected || props.locked) {
       // 녹음 중에 끊기면 그 녹음은 버려진다. 다시 이어지면 다시 말해 달라고 알린다
+      if (!props.connected) droppedAt.current = Date.now();
       const dropped = !props.locked && recorder.current?.state === "recording";
       const turn = currentTurn.current || "dropped";
       stopMedia();
@@ -1089,14 +1104,14 @@ export function useVoiceTurn(props: Props) {
     !exhaustedNow;
   const startDisabled = !props.connected || micPending || !canStartVoice(phase);
 
-  // Space로 [발언하기]. 글을 쓰는 곳이나 버튼에 포커스가 있으면 쓰지 않는다(그곳의 Space를 빼앗지 않음)
+  // Space로 [발언하기]. 상호작용 요소에 포커스가 있거나 대화상자가 열려 있으면 쓰지 않는다
   useEffect(() => {
     if (!canSpeak || startDisabled || !voice) return;
     const turn = voice;
     const onKey = (event: KeyboardEvent) => {
       if (event.code !== "Space" && event.key !== " ") return;
       if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      if (isTypingTarget(event.target)) return;
+      if (spaceShortcutBlocked(event.target)) return;
       event.preventDefault();
       void record(turn);
     };

@@ -55,12 +55,24 @@ export function blockedTrouble(reason: string | undefined, myTurn: boolean): Tro
   }
 }
 
-/** 글을 쓰는 곳(입력칸·편집 영역)이나 버튼에 포커스가 있으면 Space 단축키를 쓰지 않는다 */
-export function isTypingTarget(target: EventTarget | null): boolean {
+/** 포커스가 여기 있으면 Space가 그 요소의 동작(입력·누르기·펼치기·탭 전환)이므로 단축키로 쓰지 않는다 */
+const INTERACTIVE =
+  "input, textarea, select, button, summary, a[href], [role='button'], [role='tab'], " +
+  "[role='textbox'], [role='checkbox'], [role='switch'], [role='menuitem'], [role='option'], " +
+  "[role='slider'], [contenteditable]:not([contenteditable='false'])";
+/** 열려 있는 대화상자·팝업. 이 중 하나라도 있으면 단축키를 쓰지 않는다(뒤 화면의 녹음을 켜지 않음) */
+const OPEN_LAYER =
+  "[role='dialog'], [role='alertdialog'], dialog[open], [aria-modal='true'], [data-state='open']";
+
+/** Space로 [발언하기]를 누르지 말아야 하는지: 상호작용 요소에 포커스가 있거나 대화상자가 열려 있음 */
+export function spaceShortcutBlocked(
+  target: EventTarget | null,
+  root: Pick<ParentNode, "querySelector"> | null = typeof document === "undefined"
+    ? null
+    : document,
+): boolean {
+  if (root?.querySelector(OPEN_LAYER)) return true;
   if (!target || typeof (target as Element).closest !== "function") return false;
   const el = target as HTMLElement;
-  if (el.isContentEditable) return true;
-  return !!el.closest(
-    "input, textarea, select, button, [contenteditable=''], [contenteditable='true'], [role='textbox']",
-  );
+  return el.isContentEditable || !!el.closest(INTERACTIVE);
 }

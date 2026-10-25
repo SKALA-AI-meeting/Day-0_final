@@ -316,6 +316,7 @@ export function DebateView({
     locked,
     onSend: session.sendVoice,
     wasSaved: session.wasAcked,
+    lastSyncedAt: session.lastSyncedAt,
     onBusy: setVoiceBusy,
     onFocusProposal: () => {
       setPinned((prev) => ({ ...prev, proposal: true }));
