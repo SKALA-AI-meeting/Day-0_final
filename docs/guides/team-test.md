@@ -5,12 +5,12 @@
 ## 1. 준비
 
 - 코드: 처음이면 `git clone`, 이미 있으면 `git checkout main && git pull`.
-- 설치: Docker Desktop(실행 중이어야 함), `uv`, `pnpm`(`corepack enable`), Chrome.
+- 설치: Docker Desktop(실행 중이어야 함), Chrome, `git`, `make`, `python3`(macOS는 기본 포함). 서비스는 모두 컨테이너에서 돌아 `uv`·`pnpm`은 필요 없다.
 - `infra/.env`: 팀장에게 안전한 채널(1:1 메시지 등)로 받아 `infra/.env`에 둔다. 이 파일은 커밋하지 않고 채팅방·이슈·스크린샷에도 올리지 않는다. 키가 노출되면 바로 팀장에게 알린다.
 
 ## 2. 처음이 아니면: DB 볼륨 다시 만들기
 
-DB 스키마가 최근 바뀌어, 예전에 `make up`을 해 본 사람은 볼륨을 지워야 한다. **로컬 DB의 데이터(채용 건·세션·리포트)가 모두 사라진다.** 남기고 싶으면 스택이 떠 있을 때 먼저 백업한다.
+postgres는 볼륨이 비어 있을 때만 `infra/db/schema.sql`을 적용한다. 그래서 예전에 `make up`을 해 본 사람은 볼륨에 옛 스키마가 남아 있어 API가 뜨지 않을 수 있으니 볼륨을 지운다. **로컬 DB의 데이터(채용 건·세션·리포트)가 모두 사라진다.** 남기고 싶으면 스택이 떠 있을 때 먼저 백업한다.
 
 ```
 docker compose -f infra/docker-compose.yml --env-file infra/.env exec -T postgres pg_dump -U dayzero -Fc dayzero > backup.dump
