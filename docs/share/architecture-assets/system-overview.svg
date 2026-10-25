@@ -4,7 +4,7 @@
 <ns0:text x="24" y="32" class="title">전체 구성 · 음성 회의부터 사람 검토까지</ns0:text>
 <ns0:rect x="30" y="62" width="300" height="94" rx="10" fill="#E5F4EC" stroke="#1F8A5B" stroke-width="1.5" />
 <ns0:text x="44" y="87" class="head">브라우저 · Next.js</ns0:text>
-<ns0:text x="44" y="107" class="body">2×2 프로필 · 자막 · 최근 발언 10개</ns0:text>
+<ns0:text x="44" y="107" class="body">발표자 보기 · 자막 · 방금 한 말</ns0:text>
 <ns0:text x="44" y="125" class="body">메모 · 녹음 → 전사 확인 → WS 제출</ns0:text>
 <ns0:rect x="400" y="62" width="330" height="94" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
 <ns0:text x="414" y="87" class="head">FastAPI · 공개 REST / WS</ns0:text>

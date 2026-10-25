@@ -282,7 +282,7 @@
   <table>
     <tr><th style="width:19%">에이전트</th><th>하는 일</th><th style="width:30%">도구</th></tr>
     <tr><td><b>진행 매니저</b></td><td>자극마다 화자 0~2명을 규칙으로 정하고, 규칙으로 정해지지 않은 지원자 발언에만 LLM을 씀</td><td>결정적 노드가 <span class="nw">debate-mcp 전부</span> · record_observation</td></tr>
-    <tr><td><b>페르소나 × 3</b></td><td>성향 · 고정 입장 · 자리 기억(자기 발언 최대 3개)으로 1~3문장 발언</td><td>get_transcript · get_draft · rag 2, 응답당 3회. DebateState는 컨텍스트로</td></tr>
+    <tr><td><b>페르소나 × 3</b></td><td>성향 · 고정 입장 · 자리 기억(자기 발언 최대 3개)으로 1~2문장(약 120자) 발언</td><td>get_transcript · get_draft · rag 2, 응답당 3회. DebateState는 컨텍스트로</td></tr>
     <tr><td><b>의도 분류</b></td><td>지원자 발언을 제안 · 동의 · 반대 · 질문 · 기타와 대상 안, 지명 대상으로 분류</td><td>없음, 10초 넘으면 기타</td></tr>
     <tr><td><b>어시스턴트</b></td><td>지원자 요청에 자료를 스스로 골라 인용과 함께 답함</td><td>rag 2, 최대 3회</td></tr>
     <tr><td><b>평가 에이전트</b></td><td>요소마다 1회 호출로 차원별 수준 · 근거 · 확신도 판단</td><td>없음(워커가 입력 주입)</td></tr>
