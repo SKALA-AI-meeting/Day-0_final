@@ -1,7 +1,7 @@
 // 지원자 mock 서버(NEXT_PUBLIC_MOCK=1). 경로 표(ROUTES)와 메모리 세션, MockSocket, 15분 데모 재생, 조작 패널용 mockControls().
 // 형태는 전부 docs/contracts/README.md와 같고, 상태는 화면과 같은 applyFrame으로 굴려 /state 재조회가 화면과 맞는다.
 // 데모 대본은 fixtures/debate_script.json(계약 ws_events를 15분 비율로 줄인 것, README 참고).
-import { applyFrame, clock } from "@/components/debate/state";
+import { CANDIDATE_MESSAGE_MAX_CHARS, applyFrame, clock } from "@/components/debate/state";
 import type {
   Debrief,
   EndReason,
@@ -576,6 +576,14 @@ export class MockSocket implements SocketLike {
     }
     const content = String(frame.payload.content ?? "").trim();
     if (!content) return;
+    if (content.length > CANDIDATE_MESSAGE_MAX_CHARS) {
+      this.deliver({
+        type: "error",
+        seq: s.snap.ws_seq,
+        payload: { code: "invalid_input", message: "too long" },
+      });
+      return;
+    }
     s.msgNo += 1;
     const messageId = `m-c${s.msgNo}`;
     // 저장 직후 ack, 이어서 같은 메시지를 message.new로(의도 분류를 기다리지 않음)

@@ -41,6 +41,7 @@ import { PHASES, type EndReason, type Seat, type StateSnapshot } from "./types";
 import { useDebateSession, type SessionAuth } from "./use-session";
 import { MemoPad } from "./voice/memo-pad";
 import { useVoiceTurn } from "./voice/voice-room";
+import { sentences } from "./voice/caption";
 
 export function PhaseBar({ snap }: { snap: StateSnapshot }) {
   const current = snap.session.phase;
@@ -425,6 +426,9 @@ export function DebateView({
                   snap={voice.chatSnap}
                   speaking={speaking}
                   candidateTalking={voice.recording}
+                  caption={
+                    voice.currentCaption ? (sentences(voice.currentCaption.text).at(-1) ?? "") : ""
+                  }
                   intro={false}
                   onSkipIntro={() => setIntroDone(true)}
                 />

@@ -24,6 +24,7 @@ export function ProfileStage({
   onSkipIntro,
   voice = null,
   candidateTalking = false,
+  caption = "",
   onJump,
 }: {
   snap: StateSnapshot;
@@ -34,6 +35,7 @@ export function ProfileStage({
   voice?: VoiceInput | null;
   /** 음성 토론에서 지원자가 녹음 중인지(서버 발언권 기준). 지원자 칸을 말하는 중으로 강조한다 */
   candidateTalking?: boolean;
+  caption?: string;
   /** 프로필 안 메시지를 누르면 토론방의 그 말풍선으로. 토론방이 숨어 있으면 없음 */
   onJump?: (messageId: string) => void;
 }) {
@@ -43,6 +45,11 @@ export function ProfileStage({
   const people = snap.participants
     .filter((p) => p.id !== "candidate")
     .concat(snap.participants.filter((p) => p.id === "candidate"));
+  // 화면 읽기 도구용 자막: 늘 붙어 있는 한 곳에서 내용만 바꿔 첫 문장부터 읽히게 한다.
+  // 카드 아래 보이는 자막은 aria-hidden이라 두 번 읽지 않고, 프로필 버튼 이름에도 섞이지 않는다.
+  const captionSpeaker = caption
+    ? people.find((p) => p.id !== "candidate" && speaking.includes(p.id as Seat))
+    : undefined;
   return (
     <div className="flex size-full justify-center [container-type:size]">
       <section
@@ -63,6 +70,9 @@ export function ProfileStage({
             </Button>
           </header>
         )}
+        <p aria-live="polite" aria-atomic="true" className="sr-only" data-testid="caption-live">
+          {captionSpeaker ? `${captionSpeaker.display_name}: ${caption}` : ""}
+        </p>
         <ul className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-[3cqmin]">
           {people.map((person) => (
             <ProfileTile
@@ -71,6 +81,7 @@ export function ProfileStage({
               snap={snap}
               speaking={person.id === "candidate" ? talking : speaking.includes(person.id as Seat)}
               voice={person.id === "candidate" && talking ? voice : null}
+              caption={speaking.includes(person.id as Seat) ? caption : ""}
               onJump={onJump}
             />
           ))}
@@ -85,6 +96,7 @@ function ProfileTile({
   snap,
   speaking,
   voice,
+  caption,
   onJump,
 }: {
   person: Participant;
@@ -92,6 +104,7 @@ function ProfileTile({
   speaking: boolean;
   /** 지원자가 말하는 중일 때만: 소리 크기만큼 빛난다 */
   voice: VoiceInput | null;
+  caption: string;
   onJump?: (messageId: string) => void;
 }) {
   const me = person.id === "candidate";
@@ -129,6 +142,14 @@ function ProfileTile({
               {speaking ? "말하는 중" : me ? "나" : "AI 동료"}
             </span>
           </span>
+          {!me && speaking && (
+            <span
+              aria-hidden="true"
+              className="max-h-[5em] w-full overflow-y-auto px-2 text-center text-footnote"
+            >
+              {caption}
+            </span>
+          )}
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner side="right" align="start" sideOffset={10} className="z-40">

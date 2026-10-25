@@ -187,13 +187,20 @@ export function RecordView({
                     {nameOf(names, e.by)}
                   </span>
                   {e.type === "message" && e.by !== "system" ? (
-                    <span
-                      className={cn(
-                        "w-fit max-w-[85%] rounded-bubble px-3 py-1.5 break-words",
-                        BUBBLE[e.by],
+                    <span className="flex flex-col gap-1">
+                      <span
+                        className={cn(
+                          "w-fit max-w-[85%] rounded-bubble px-3 py-1.5 break-words",
+                          BUBBLE[e.by],
+                        )}
+                      >
+                        {e.summary}
+                      </span>
+                      {e.stt_transcript !== undefined && (
+                        <small className="text-muted">
+                          인식 원문: {e.stt_transcript || "(빈 내용)"}
+                        </small>
                       )}
-                    >
-                      {e.summary}
                     </span>
                   ) : (
                     <span className={cn("break-words", e.by === "system" && "text-muted")}>

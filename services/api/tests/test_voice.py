@@ -9,6 +9,7 @@ import pytest
 from app import scheduler
 from app.models import Message, Session, SpeechJob, VoiceState
 from app.routers.ws import handle_send
+from app.services import debate, reports
 from app.services.common import ServiceError
 from app.voice import controller, quota
 from app.voice.speech import FakeSpeech, pcm, silence
@@ -97,6 +98,128 @@ async def test_voice_playback_barrier_and_single_message(api, voice_ctx):
         ).all()
         assert len(mine) == 1
         assert mine[0].meta["source"] == "voice"
+        assert mine[0].meta["edited"] is False  # 고치지 않은 인식 글
+
+
+@pytest.mark.parametrize(
+    "recognition,submitted",
+    [
+        ("물에 관한 의견입니다", "물에 관한 수정 의견입니다"),
+        ("", "마이크 없이 직접 쓴 의견입니다"),
+    ],
+)
+async def test_voice_edited_submit_keeps_recognition_and_turn_fence(
+    api, voice_ctx, recognition, submitted
+):
+    sess = await setup(api, voice_ctx)
+    voice_ctx.speech.transcript = recognition
+    snap = await snapshot(api, voice_ctx, sess)
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    start = (await post(api, sess, "capture", turn)).json()
+    assert (
+        await post(
+            api,
+            sess,
+            "audio",
+            {
+                **turn,
+                "utterance_id": start["utterance_id"],
+                "audio_base64": base64.b64encode(silence()).decode(),
+                "stop_reason": "button",
+            },
+        )
+    ).status_code == 200
+    await voice_ctx.drain_spawned()
+    snap = await snapshot(api, voice_ctx, sess)
+    assert snap["utterance"]["status"] == ("ready" if recognition else "empty")
+    # 수정하는 동안 보일 제출 마감: ready는 녹음 마감 + 처리 여유, empty는 내 차례 끝
+    # (둘 다 단계 마감 이내)
+    async with voice_ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        limit = min(session.phase_deadline_at, session.ends_at)
+    expected = (
+        controller.at(start["speech_deadline_at"])
+        + timedelta(seconds=controller.PROCESSING_GRACE_SECONDS)
+        if recognition
+        else controller.at(snap["turn_until_at"])
+    )
+    assert controller.at(snap["utterance"]["submit_deadline_at"]) == min(limit, expected)
+    payload = {
+        "client_msg_id": start["utterance_id"],
+        "content": submitted,
+        "voice_turn_id": turn["turn_id"],
+        "epoch": turn["epoch"],
+    }
+    async with voice_ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        with pytest.raises(ServiceError) as wrong_turn:
+            await controller.submit(
+                db, session, {**payload, "voice_turn_id": str(uuid.uuid4())}, voice_ctx.clock.now()
+            )
+        assert wrong_turn.value.code == "voice_turn_conflict"
+        with pytest.raises(ServiceError) as wrong_utterance:
+            await controller.submit(
+                db, session, {**payload, "client_msg_id": str(uuid.uuid4())}, voice_ctx.clock.now()
+            )
+        assert wrong_utterance.value.code == "voice_payload_mismatch"
+        await db.rollback()
+    await handle_send(voice_ctx, sess.id, payload)
+    async with voice_ctx.session_factory() as db:
+        mine = (
+            await db.scalars(
+                select(Message).where(Message.session_id == sess.id, Message.sender == "candidate")
+            )
+        ).all()
+        assert len(mine) == 1
+        assert mine[0].content == submitted
+        assert mine[0].meta["stt_transcript"] == recognition
+        assert mine[0].meta["edited"] is True
+        # 관리자 전체 기록: 본문은 제출 글, 고친 경우에만 원래 인식 글을 함께 준다
+        entry = next(
+            e
+            for e in await reports.record(db, await db.get(Session, sess.id))
+            if e["ref"]["id"] == str(mine[0].id)
+        )
+        assert entry["summary"] == submitted
+        assert entry["stt_transcript"] == recognition
+
+
+async def test_voice_too_long_submit_is_rejected_and_turn_kept(api, voice_ctx):
+    """받아 적은 글을 길게 고쳐도 서버가 상한을 넘는 발언은 받지 않고, 줄여 다시 보내면 들어간다."""
+    sess = await setup(api, voice_ctx)
+    snap = await snapshot(api, voice_ctx, sess)
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    start = (await post(api, sess, "capture", turn)).json()
+    audio = {
+        **turn,
+        "utterance_id": start["utterance_id"],
+        "audio_base64": base64.b64encode(silence()).decode(),
+        "stop_reason": "button",
+    }
+    assert (await post(api, sess, "audio", audio)).status_code == 200
+    await voice_ctx.drain_spawned()
+    await snapshot(api, voice_ctx, sess)
+    payload = {
+        "client_msg_id": start["utterance_id"],
+        "voice_turn_id": turn["turn_id"],
+        "epoch": turn["epoch"],
+    }
+    mark = api.mark(sess)
+    long = "가" * (debate.CANDIDATE_MESSAGE_MAX_CHARS + 1)
+    await handle_send(voice_ctx, sess.id, {**payload, "content": long})
+    errors = [f for f in api.frames_since(sess, mark) if f["type"] == "error"]
+    assert [e["payload"]["code"] for e in errors] == ["invalid_input"]
+    snap = await snapshot(api, voice_ctx, sess)
+    assert snap["utterance"]["status"] == "ready"  # 발언권을 소비하지 않음
+    fits = "나" * debate.CANDIDATE_MESSAGE_MAX_CHARS
+    await handle_send(voice_ctx, sess.id, {**payload, "content": fits})
+    async with voice_ctx.session_factory() as db:
+        mine = (
+            await db.scalars(
+                select(Message).where(Message.session_id == sess.id, Message.sender == "candidate")
+            )
+        ).all()
+        assert [m.content for m in mine] == [fits]
 
 
 async def test_voice_heard_ids_follow_playback_end(api, voice_ctx):
@@ -409,7 +532,7 @@ async def test_voice_rerecord_once_with_fresh_time(api, voice_ctx, clock):
     # 채용 건의 동료 이름이 받아 적기 구문 목록으로 넘어간다(이름 오인식 → 호명 누락 방지)
     assert {"윤하람", "하람님", "한결님", "지안님"} <= set(ctx.speech.phrases)
     wait = (controller.at(u["confirm_deadline_at"]) - ctx.clock.now()).total_seconds()
-    assert 2.9 < wait <= 3  # 테스트 시계는 호출마다 마이크로초씩 흐른다
+    assert 7.9 < wait <= 8  # 기본 확인 8초. 테스트 시계는 호출마다 마이크로초씩 흐른다
     turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
     r = await post(api, sess, "rerecord", {**turn, "job_id": u["id"]})
     assert r.status_code == 200, r.text
