@@ -8,7 +8,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 역할 | 지원자: 초대 링크 입장 → 동의 → 토론방(채팅·결정 사항·참고 자료·어시스턴트·기획안) → 디브리핑. 담당자: 가입·로그인, 채용 건 생성, 초대, 리포트 검토, 전체 기록 |
+| 역할 | 지원자: 초대 링크 입장 → 동의 → 음성 회의(프로필 4칸·메모장·결정 사항·참고 자료·어시스턴트·기획안) → 디브리핑. 담당자: 가입·로그인, 채용 건 생성, 초대, 리포트 검토, 전체 기록 |
 | 사용 기술 | Next.js App Router(standalone 빌드), React, Tailwind v4, base-ui + cva + clsx, vitest, Playwright, pnpm, Node 22 |
 | 포트 | 3000 (헬스 `/api/health`) |
 | 필요한 env | `NEXT_PUBLIC_API_URL`(기본 `http://localhost:8000`) `NEXT_PUBLIC_WS_URL`(기본 `ws://localhost:8000`) `NEXT_PUBLIC_MOCK`(`1`이면 api 없이 mock) `NEXT_PUBLIC_VOICE_ENABLED`(기본 1, 0은 테스트 텍스트 모드). 테스트용: `WEB_URL` `E2E_INTERNAL_URL` `INTERNAL_TOKEN` |
@@ -25,7 +25,7 @@
 | 리포트 보기·차원 조정·검토 완료·인쇄 | `components/admin/report-view.tsx`, `review.ts` | [F-04, F-04a, F-04c, F-09](../../PRD.md) |
 | 전체 기록과 근거 이동 | `components/admin/record-view.tsx` | [F-05](../../PRD.md) |
 | 초대 링크 입장·동의·이어하기 | `components/debate/link-screens.tsx`, `candidate-flow.tsx` | [F-10, F-11, F-19](../../PRD.md) |
-| 토론방(말풍선·입력 중·새 메시지 표시) | `components/debate/chat.tsx`, `reducer.ts`, `lib/ws.ts` | [F-12](../../PRD.md) |
+| 음성 회의(프로필 4칸·자막·발언하기·인식 글 확인/수정·최근 발언·메모장) | `components/debate/voice/voice-room.tsx`, `profile-stage.tsx`, `voice/memo-pad.tsx`, `reducer.ts`, `lib/ws.ts` (`chat.tsx`는 테스트 텍스트 모드 전용) | [F-12](../../PRD.md) |
 | 결정 사항 패널과 확인 창 | `components/debate/decision-panel.tsx` | [F-13](../../PRD.md) |
 | 단계 진행바·남은 시간 | `components/debate/debate-view.tsx` | [F-14](../../PRD.md) |
 | 참고 자료 뷰어(Markdown), 어시스턴트 | `components/debate/side-panels.tsx`, `markdown.tsx` | [F-15, F-16](../../PRD.md) |
@@ -441,13 +441,13 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - [`docs/contracts/ws.md`](../../docs/contracts/ws.md): WebSocket 계약
 - [`docs/guides/testing.md`](../../docs/guides/testing.md): 테스트 종류와 실행법
 
-## 토론 화면 배치와 음성 입출력(시험)
+## 토론 화면 배치와 음성 회의
 
-토론 화면(`components/debate/debate-view.tsx`)은 크기를 바꿀 수 있는 분할 레이아웃이다. 위 문서들의 "우측 탭" 설명은 이 배치로 바뀌는 중이며, 바뀐 결정과 남은 문서 정리는 PR에서 다룬다.
+토론 화면(`components/debate/debate-view.tsx`)은 크기를 바꿀 수 있는 분할 레이아웃이다. 음성 모드(기본)의 지원자 화면은 이 배치를 따른다.
 
-- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 토론방이 가운데에 열린다. 왼쪽은 프로필(누르면 이름과 이번 단계에서 한 말)·음성 패널·단계 안내, 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
+- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 가운데 칸이 음성 회의로 바뀐다. 가운데는 지원자와 AI 동료 3명의 프로필 4칸(말하는 사람 강조, 동료 카드 아래 현재 문장 자막)과 아래의 발언 조작([발언하기]·손들기·남은 시간·음량·[발언 완료]·인식 글 확인/수정·[최근 발언])이다. 왼쪽은 지원자 메모장(`voice/memo-pad.tsx`, 이 브라우저에만 저장하고 서버·평가에 보내지 않음)과 첫 확정 뒤의 단계 안내(인사가 끝나면 왼쪽 프로필 칸은 비운다), 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
 - 크기 조절: 영역 사이 경계를 끌거나 화살표 키로 바꾸고, 두 번 누르면 원래대로 돌아간다. 엔진은 `components/ui/split-layout.tsx`, 단계별 규칙은 `components/debate/stage-layout.ts`.
-- 말하기(STT): 입력창 옆 마이크로 녹음하면 글자로 바뀌어 입력창에 들어가고, 지원자가 고쳐서 보낸다. 녹음은 저장하지 않는다. 녹음 중에는 typing을 보내지 않는다(계약 그대로).
-- AI 동료 음성(TTS): 음성 패널에서 켜면 새로 온 AI 동료 메시지를 읽고, 읽는 동료를 프로필에서 강조한다. 목소리는 자리별로 고정하고 말투 지시는 세 명 모두 같다.
-- 대체 순서: 글자 변환은 웹 서버 라우트 → mock 예시 문장 → 없음 순서로 쓴다. 서버 음성 기능이 없거나(`/api/voice/status`) 2번 연달아 실패하면 그 화면에서 말하기·AI 동료 음성을 끄고 글자로만 진행한다. 플래그가 없으면 음성 UI는 보이지 않고 기존 화면과 같게 동작한다.
-- 켜는 법(개발용): `NEXT_PUBLIC_VOICE_API=1`(화면), `VOICE_API=1`(서버 라우트 `/api/voice/transcribe`·`/api/voice/speech`). 모델은 `MODEL_STT`(기본 `gpt-4o-mini-transcribe`)·`MODEL_TTS`(기본 `gpt-4o-mini-tts`), 키 선택은 `lib/voice-server.ts`의 `voiceKey`.
+- 말하기(STT): 일반 차례에 [발언하기]를 누르면 최대 60초 녹음하고(발언 완료 버튼과 타이머가 같은 종료 함수), 서버가 전사한 글을 기본 8초 동안 확인한 뒤 자동 제출한다. 수정하면 자동 제출이 멈추고 [발언 제출]을 눌러야 하며 입력은 500자로 막는다. 빈 인식 결과는 직접 입력한다. 구현은 `components/debate/voice/voice-room.tsx`·`recorder.ts`이고 계약은 [음성 계약](../../docs/contracts/voice.md)이다.
+- AI 동료 음성(TTS): 서버가 만든 검증된 AI 메시지를 순서대로 재생하고(실제 재생 종료를 확인한 뒤 다음 항목·내 차례), 말하는 동료를 프로필에서 강조하며 재생 중인 문장을 자막으로 보인다. 목소리는 자리별로 고정한다.
+- 대체 순서: `NEXT_PUBLIC_VOICE_API` 경로(웹 서버 라우트 글자 변환)와 `VoiceInput`·`VoicePanel`은 미연결(코드만 남음)이다. 현재 화면은 이 경로를 쓰지 않는다.
+- 켜는 법(미연결 코드): `NEXT_PUBLIC_VOICE_API=1`·`VOICE_API=1`로 `/api/voice/*` 라우트를 켤 수 있지만 토론 화면은 쓰지 않는다. 모델은 `MODEL_STT`·`MODEL_TTS`, 키 선택은 `lib/voice-server.ts`의 `voiceKey`.
