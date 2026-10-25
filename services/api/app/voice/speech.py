@@ -1,4 +1,8 @@
-"""완성 파일 기반 Azure F0 음성 어댑터. 부분 인식 결과는 외부로 전달하지 않는다."""
+"""완성 파일 기반 음성 어댑터(Azure F0·OpenAI). 부분 인식 결과는 외부로 전달하지 않는다.
+
+VOICE_PROVIDER가 공급자를 고른다: azure(F0, 유료 폴백 없음), openai(제한 키, 사용량 과금),
+fake(개발·테스트).
+"""
 
 import asyncio
 import io
@@ -17,6 +21,23 @@ from app.services.common import ServiceError
 
 log = logging.getLogger(__name__)
 VOICES = {"p1": "ko-KR-InJoonNeural", "p2": "ko-KR-SunHiNeural", "p3": "ko-KR-BongJinNeural"}
+# OpenAI 목소리. 자리(p1~p3)에 고정하고 페르소나 성향과 연결하지 않는다
+OPENAI_VOICES = {"p1": "ash", "p2": "coral", "p3": "sage"}
+OPENAI_URL = "https://api.openai.com/v1"
+OPENAI_STT_MODEL = "gpt-4o-mini-transcribe"
+OPENAI_TTS_MODEL = "gpt-4o-mini-tts"
+OPENAI_TTS_RATE = 24000  # response_format=pcm: 24kHz 16-bit mono little-endian
+# 말투 지시는 세 자리 모두 같다(성향이 목소리로 드러나지 않게). gpt-4o 계열 TTS만 받는다
+OPENAI_SPEECH_INSTRUCTIONS = (
+    "회의에서 동료에게 말하듯 자연스럽고 차분한 한국어로, 또박또박 읽어 주세요."
+)
+
+
+def voices_for(provider: str) -> dict[str, str]:
+    """채용 건 정책에 복사할 자리별 목소리"""
+    return dict(OPENAI_VOICES if provider == "openai" else VOICES)
+
+
 # 빠른 받아 적기 API 버전. 구문 목록(phraseList)은 이 버전부터 지원한다(MS 문서)
 FAST_TRANSCRIPTION_API = "2025-10-15"
 
@@ -53,6 +74,20 @@ def silence(seconds: float = 0.1) -> bytes:
         dst.setsampwidth(2)
         dst.setframerate(16000)
         dst.writeframes(b"\0\0" * int(seconds * 16000))
+    return out.getvalue()
+
+
+def wav_from_pcm(frames: bytes, rate: int) -> bytes:
+    """PCM16 mono 원본에 길이가 맞는 WAV 머리를 붙인다.
+
+    재생 길이 계산(controller)이 머리의 프레임 수를 읽는다.
+    """
+    out = io.BytesIO()
+    with wave.open(out, "wb") as dst:
+        dst.setnchannels(1)
+        dst.setsampwidth(2)
+        dst.setframerate(rate)
+        dst.writeframes(frames[: len(frames) // 2 * 2])
     return out.getvalue()
 
 
@@ -233,11 +268,73 @@ class AzureSpeech:
         return await asyncio.to_thread(recognize)
 
 
+class OpenAISpeech:
+    """OpenAI 음성: 받아 적기 /audio/transcriptions, 읽기 /audio/speech.
+
+    키는 제한 키 허용 목록 규칙(app/agent/llm/roles.py speech_key)을 따르고,
+    모델은 MODEL_STT·MODEL_TTS로 바꾼다. 사용량 과금이다.
+    """
+
+    def __init__(self) -> None:
+        self.stt_model = os.getenv("MODEL_STT") or OPENAI_STT_MODEL
+        self.tts_model = os.getenv("MODEL_TTS") or OPENAI_TTS_MODEL
+
+    def _key(self, model: str) -> str:
+        from app.agent.llm.roles import speech_key
+
+        try:
+            return speech_key(model)
+        except ValueError as exc:
+            raise ServiceError(503, "voice_unavailable", "OpenAI 음성 설정이 필요합니다") from exc
+
+    async def verify(self) -> None:
+        """키와 모델 설정만 확인한다(외부 호출 없음). 모델 권한(403)은 실제 호출에서 드러난다."""
+        self._key(self.stt_model)
+        self._key(self.tts_model)
+
+    async def synthesize(self, text: str, voice: str) -> bytes:
+        if voice not in OPENAI_VOICES.values():
+            raise ServiceError(422, "voice_policy_mismatch", "허용되지 않은 voice")
+        body = {"model": self.tts_model, "voice": voice, "input": text, "response_format": "pcm"}
+        if self.tts_model.startswith("gpt-4o"):
+            body["instructions"] = OPENAI_SPEECH_INSTRUCTIONS
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                f"{OPENAI_URL}/audio/speech",
+                headers={"Authorization": f"Bearer {self._key(self.tts_model)}"},
+                json=body,
+            )
+            response.raise_for_status()
+        return wav_from_pcm(response.content, OPENAI_TTS_RATE)
+
+    async def transcribe(self, audio: bytes, phrases: Sequence[str] = ()) -> str:
+        """완성 WAV를 한 번에 받아 적는다.
+
+        phrases(동료 이름 등)는 prompt로 넘겨 그 단어로 알아듣게 돕는다.
+        """
+        pcm(audio)
+        data = {"model": self.stt_model, "language": "ko", "response_format": "json"}
+        if phrases:
+            data["prompt"] = "회의 참여자와 자주 나오는 말: " + ", ".join(phrases)
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                f"{OPENAI_URL}/audio/transcriptions",
+                headers={"Authorization": f"Bearer {self._key(self.stt_model)}"},
+                data=data,
+                files={"file": ("speech.wav", audio, "audio/wav")},
+            )
+            response.raise_for_status()
+        return str(response.json().get("text", "")).strip()
+
+
 def provider():
-    if os.getenv("VOICE_PROVIDER", "azure") == "fake":
+    name = os.getenv("VOICE_PROVIDER", "azure")
+    if name == "fake":
         if os.getenv("LLM_FAKE") != "1" and os.getenv("ENABLE_TEST_API") != "1":
             raise ServiceError(503, "voice_unavailable", "FakeSpeech는 개발 모드 전용입니다")
         return FakeSpeech()
-    if os.getenv("VOICE_PROVIDER", "azure") != "azure":
+    if name == "openai":
+        return OpenAISpeech()
+    if name != "azure":
         raise ServiceError(503, "voice_unavailable", "지원하지 않는 음성 공급자")
     return AzureSpeech()

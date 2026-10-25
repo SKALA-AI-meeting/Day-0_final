@@ -28,6 +28,11 @@ GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 RESTRICTED_MODELS = frozenset(
     {"gpt-4o-mini", "gpt-4.1-mini", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5-nano"}
 )
+# 음성(STT·TTS) 모델도 같은 제한 키를 쓴다(VOICE_PROVIDER=openai, decisions.md 2026-10-25).
+# LLM 역할 모델로는 고를 수 없고 app/voice/speech.py의 OpenAISpeech만 쓴다.
+RESTRICTED_SPEECH_MODELS = frozenset(
+    {"gpt-4o-mini-transcribe", "gpt-4o-transcribe", "whisper-1", "gpt-4o-mini-tts", "tts-1"}
+)
 
 
 @dataclass(frozen=True)
@@ -80,6 +85,20 @@ def key_for(model: str, env: Mapping[str, str] | None = None) -> tuple[str, str 
     if not key:
         raise ValueError(f"{name} is required for model {model}")
     return key, base_url
+
+
+def speech_key(model: str, env: Mapping[str, str] | None = None) -> str:
+    """음성 모델의 제한 키. 허용 목록 밖이거나 키가 비면 설정 오류로 멈춘다.
+
+    다른 키로 바꾸지 않는다.
+    """
+    if model not in RESTRICTED_SPEECH_MODELS:
+        allowed = ", ".join(sorted(RESTRICTED_SPEECH_MODELS))
+        raise ValueError(f"speech model {model} is not in the restricted-key allowlist ({allowed})")
+    key = _env(env).get("OPENAI_API_KEY", "")
+    if not key:
+        raise ValueError(f"OPENAI_API_KEY is required for speech model {model}")
+    return key
 
 
 def make_llm(role: str, env: Mapping[str, str] | None = None) -> BaseLLM:

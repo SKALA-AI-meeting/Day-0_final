@@ -2,7 +2,7 @@
 
 import os
 
-from app.voice.speech import VOICES
+from app.voice.speech import voices_for
 
 
 def pinned_policy() -> dict:
@@ -23,15 +23,16 @@ def pinned_policy() -> dict:
         raise ValueError("VOICE_FORCED_WAIT_SECONDS must be 0..120")
     provider = os.getenv("VOICE_PROVIDER", "azure")
     return {
-        "version": "azure-f0-v1" if provider == "azure" else "fake-v1",
+        "version": {"azure": "azure-f0-v1", "openai": "openai-v1"}.get(provider, "fake-v1"),
         "provider": provider,
         "user_turn_seconds": seconds,
         "think_seconds": think,
         "turn_hold_seconds": hold,
         "confirm_seconds": confirm,
         "forced_wait_seconds": forced_wait,
-        "voices": VOICES.copy(),
+        "voices": voices_for(provider),
         "locale": "ko-KR",
-        "sku": "F0",
-        "paid_budget_usd": 0,
+        # F0 무료 등급은 Azure만. OpenAI는 사용량 과금이라 예산을 정해 두지 않는다(한도는 quota.py)
+        "sku": "F0" if provider == "azure" else None,
+        "paid_budget_usd": None if provider == "openai" else 0,
     }

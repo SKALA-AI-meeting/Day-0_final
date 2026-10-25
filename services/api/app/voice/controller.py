@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta
 
@@ -686,11 +687,13 @@ async def run_job(ctx, job_id):
                 job.data = {**job.data, "status": "canceled"}
                 await db.commit()
                 return
+            # Azure F0는 무료 등급, OpenAI는 사용량 과금이라 비용을 여기서 확정하지 않는다
+            metered = os.getenv("VOICE_PROVIDER", "azure") == "openai"
             extra = {
                 "status": "error" if error else "ready",
                 "error": error,
-                "billing_status": "unknown" if error else "free_f0",
-                "net_cost_usd": None if error else 0,
+                "billing_status": "unknown" if error else ("metered" if metered else "free_f0"),
+                "net_cost_usd": None if error or metered else 0,
             }
             if not error and kind == "tts":
                 import io

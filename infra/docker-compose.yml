@@ -145,6 +145,7 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
         NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
         NEXT_PUBLIC_VOICE_ENABLED: ${VOICE_ENABLED:-1}
+        NEXT_PUBLIC_VOICE_PROVIDER: ${VOICE_PROVIDER:-azure}
     env_file: ${DAYZERO_ENV_FILE:-.env}
     ports:
       - "${WEB_PORT:-3000}:3000"

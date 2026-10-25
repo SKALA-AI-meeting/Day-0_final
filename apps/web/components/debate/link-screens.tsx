@@ -20,6 +20,10 @@ export const VOICE_ENABLED = !["0", "false"].includes(
   (process.env.NEXT_PUBLIC_VOICE_ENABLED ?? "1").toLowerCase(),
 );
 
+/** 음성을 처리하는 외부 서비스 이름(동의 화면). 빌드 시점의 VOICE_PROVIDER를 따른다 */
+const VOICE_PROCESSOR =
+  process.env.NEXT_PUBLIC_VOICE_PROVIDER === "openai" ? "OpenAI" : "Azure Speech";
+
 export const NAME_MAX = 20;
 
 /** 토론 화면의 최소 폭(debate-view의 min-w-[1024px])과 같다 */
@@ -154,7 +158,7 @@ export function ConsentScreen({
           {
             title: "기록되는 것",
             body: VOICE_ENABLED
-              ? "음성 발언의 최종 전사, 결정 사항 선택, 기획안, AI 어시스턴트 요청 원문, 자료 열람. 음성은 Azure Speech에서 처리하며 원음은 전사 성공 시 삭제하고, 처리 실패 시 최대 24시간 임시 보관합니다."
+              ? `음성 발언의 최종 전사, 결정 사항 선택, 기획안, AI 어시스턴트 요청 원문, 자료 열람. 음성은 ${VOICE_PROCESSOR}에서 처리하며 원음은 전사 성공 시 삭제하고, 처리 실패 시 최대 24시간 임시 보관합니다.`
               : "토론 메시지, 결정 사항 선택, 기획안, AI 어시스턴트 요청 원문, 자료 열람.",
           },
           {

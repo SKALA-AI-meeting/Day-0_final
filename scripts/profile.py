@@ -194,8 +194,8 @@ class Profile:
             out.append(f"LLM_FAKE={self.get('LLM_FAKE')!r}: 0 또는 1")
         if self.get("VOICE_ENABLED").lower() not in ("0", "1", "false", "true"):
             out.append("VOICE_ENABLED는 true 또는 false(1 또는 0)")
-        if self.get("VOICE_PROVIDER") not in ("azure", "fake"):
-            out.append("VOICE_PROVIDER는 azure 또는 fake")
+        if self.get("VOICE_PROVIDER") not in ("azure", "openai", "fake"):
+            out.append("VOICE_PROVIDER는 azure·openai·fake 중 하나")
         if self.voice_mode == "off" and self.get("ENABLE_TEST_API") != "1":
             out.append("VOICE_ENABLED=0에는 ENABLE_TEST_API=1이 필요하다")
         if self.get("ENABLE_TEST_API") not in ("", "0", "1"):
@@ -305,6 +305,16 @@ class Profile:
                         "VOICE_QUOTA_PERIOD",
                     )
                 )
+            )
+        if self.voice_mode == "openai":
+            stt = self.get("MODEL_STT") or "gpt-4o-mini-transcribe"
+            tts = self.get("MODEL_TTS") or "gpt-4o-mini-tts"
+            has_key = self.has("OPENAI_API_KEY") or self.shell.get("OPENAI_API_KEY")
+            key = "있음" if has_key else "없음"
+            period = "있음" if self.has("VOICE_QUOTA_PERIOD") else "없음"
+            lines.append(
+                f"  OpenAI 음성   STT {stt}, TTS {tts} → OPENAI_API_KEY ({key}), "
+                f"VOICE_QUOTA_PERIOD {period}"
             )
         lines.append(
             f"  .env 파일     {'있음' if self.env_path.is_file() else '없음'} "

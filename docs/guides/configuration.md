@@ -13,7 +13,7 @@ env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값�
 | `eval-text` | test·측정 | 실제(제한 키) | 끔 | 1 | `dayzero-debate`, 위와 같음 | LLM, `ALLOW_API=1` 필요 |
 | `test-voice` | test | fake | fake | 1 | `dayzero-debate`, 위와 같음 | 없음 |
 | `eval-voice` | test·측정 | 실제(제한 키) | fake | 1 | `dayzero-debate`, 위와 같음 | LLM, `ALLOW_API=1` 필요 |
-| `dev-real` | dev | 실제(제한 키) | Azure | 0 | `infra`, web 3000·api 8000 | LLM, `ALLOW_API=1` 필요 |
+| `dev-real` | dev | 실제(제한 키) | OpenAI(제한 키) | 0 | `infra`, web 3000·api 8000 | LLM·OpenAI 음성, `ALLOW_API=1` 필요 |
 | `deploy` | deploy | 실제(제한 키) | Azure | 0(1 금지) | `infra`(공개 주소는 `.env`) | LLM, `ALLOW_API=1` 필요 |
 
 - `make profile PROFILE=…`은 유효 모드(목적·역할별 모델·키 **이름과 있음/없음**·테스트 API·compose 프로젝트·포트)를 출력하고, `make doctor PROFILE=…`은 거기에 검사를 더한다(외부 호출 없음): deploy에 가짜 LLM·테스트 API·자리표시 비밀값 금지, 실제 LLM 프로필의 역할별 모델이 허용 목록에 있고 키가 있는지, 셸의 모드 변수(`LLM_FAKE`·`ENABLE_TEST_API`·`AGENT_RUNNER`·추적 플래그)가 프로필과 다르지 않은지. 비밀값은 어디에도 출력하지 않는다.

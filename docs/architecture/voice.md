@@ -47,3 +47,14 @@ TtsService·SttService는 토론 에이전트와 독립 인터페이스다. 기�
 `infra/.env.example`의 Azure 설정을 실제 `.env`에 채우고 새 스키마·채용 건으로 실행한다. 새 DB는 schema.sql을 적용한다. 기존 로컬 DB는 [DB 가이드](../guides/database.md)에 따라 백업한 뒤 음성 테이블 3개의 DDL만 추가할 수 있다. 기존 개발 DB를 초기화하지 않는다. F0 설정이 없으면 시작을 차단한다. 재연결할 기존 음성 세션에도 같은 공급자 설정을 유지해야 한다.
 
 격리 스택의 모드는 프로필이 정한다. `test-text`는 가짜 LLM·음성 끔, `test-voice`는 가짜 LLM·FakeSpeech, `eval-text`는 실제 LLM·음성 끔, `eval-voice`는 실제 LLM·FakeSpeech다. FakeSpeech TTS는 짧은 무음 WAV이며 한국어 음질 검증이 아니다. 내부 `/test/voice-transcript`로 전사 결과만 지정하고 음성 프로필에서는 실제 브라우저의 녹음·업로드·재생 이벤트를 통과한다. 실 Azure·한국어 품질 검증은 별도 live 작업이다. 현재 클라우드 키를 제공하지 않으면 실제 전사·합성 품질을 확인했다고 보고하지 않는다.
+
+## OpenAI 공급자(`VOICE_PROVIDER=openai`)
+
+`dev-real` 프로필은 Azure 대신 OpenAI 음성을 쓴다. 어댑터는 `services/api/app/voice/speech.py`의 `OpenAISpeech`이고, 화면·턴 제어·저장 경로는 Azure와 같다(공급자 객체만 바뀜).
+
+- 받아 적기: `/v1/audio/transcriptions`에 완성 WAV(PCM16 mono 16kHz)를 한 번에 보낸다. 모델 `MODEL_STT`(기본 `gpt-4o-mini-transcribe`), `language=ko`. 구문 목록(동료 이름 등)은 `prompt`로 넘긴다. 말하는 동안 받아 적기(`live.py`)도 같은 메서드를 조각마다 부른다.
+- 읽기: `/v1/audio/speech`에 `response_format=pcm`(24kHz)으로 받아 길이가 맞는 WAV 머리를 붙인다. 모델 `MODEL_TTS`(기본 `gpt-4o-mini-tts`). 목소리는 자리별 고정(p1 `ash`, p2 `coral`, p3 `sage`)이고 말투 지시는 세 자리 모두 같다.
+- 키: 제한 키(`OPENAI_API_KEY`)의 음성 허용 목록(`app/agent/llm/roles.py` `RESTRICTED_SPEECH_MODELS`). 목록 밖 모델이나 빈 키는 `voice_unavailable`로 멈춘다. `verify()`는 외부 호출 없이 설정만 본다. 모델 권한이 없는 프로젝트는 실제 호출에서 403이 나고 그 작업은 `voice_speech_failed`가 된다.
+- 비용: F0 무료 등급이 아니라 사용량 과금이다. 채용 건 정책은 `version: openai-v1`, `sku: null`, `paid_budget_usd: null`로 복사되고, 작업 기록은 `billing_status: metered`, `net_cost_usd: null`이다. 사용량 원장은 `openai:<기간>`이며 월 한도·동시 1세션·분당 TTS 15회 제한은 Azure와 같다.
+- 정책이 다른 공급자로 만든 채용 건은 시작할 수 없다(`candidate.py`). OpenAI로 바꾼 뒤에는 새 채용 건을 시드한다.
+
