@@ -600,9 +600,8 @@ async def submit(db, session, payload, now):
         job is None
         or job.session_id != session.id
         or job.kind != "stt"
-        or job.data.get("status") != "ready"
-        or not job.data.get("transcript")
-        or job.data["transcript"] != mask(str(payload.get("content", "")).strip())
+        or job.data.get("status") not in ("ready", "empty")
+        or not mask(str(payload.get("content", "")).strip())
         or state.data.get("utterance_id") != str(jid)
     ):
         raise conflict("voice_payload_mismatch")

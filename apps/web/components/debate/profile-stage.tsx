@@ -24,6 +24,7 @@ export function ProfileStage({
   onSkipIntro,
   voice = null,
   candidateTalking = false,
+  caption = "",
   onJump,
 }: {
   snap: StateSnapshot;
@@ -34,6 +35,7 @@ export function ProfileStage({
   voice?: VoiceInput | null;
   /** 음성 토론에서 지원자가 녹음 중인지(서버 발언권 기준). 지원자 칸을 말하는 중으로 강조한다 */
   candidateTalking?: boolean;
+  caption?: string;
   /** 프로필 안 메시지를 누르면 토론방의 그 말풍선으로. 토론방이 숨어 있으면 없음 */
   onJump?: (messageId: string) => void;
 }) {
@@ -71,6 +73,7 @@ export function ProfileStage({
               snap={snap}
               speaking={person.id === "candidate" ? talking : speaking.includes(person.id as Seat)}
               voice={person.id === "candidate" && talking ? voice : null}
+              caption={speaking.includes(person.id as Seat) ? caption : ""}
               onJump={onJump}
             />
           ))}
@@ -85,6 +88,7 @@ function ProfileTile({
   snap,
   speaking,
   voice,
+  caption,
   onJump,
 }: {
   person: Participant;
@@ -92,6 +96,7 @@ function ProfileTile({
   speaking: boolean;
   /** 지원자가 말하는 중일 때만: 소리 크기만큼 빛난다 */
   voice: VoiceInput | null;
+  caption: string;
   onJump?: (messageId: string) => void;
 }) {
   const me = person.id === "candidate";
@@ -129,6 +134,15 @@ function ProfileTile({
               {speaking ? "말하는 중" : me ? "나" : "AI 동료"}
             </span>
           </span>
+          {!me && speaking && (
+            <span
+              aria-live="polite"
+              aria-atomic="true"
+              className="max-h-[5em] w-full overflow-y-auto px-2 text-center text-footnote"
+            >
+              {caption}
+            </span>
+          )}
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner side="right" align="start" sideOffset={10} className="z-40">

@@ -494,7 +494,7 @@ async def record(db: AsyncSession, session: Session) -> list[dict[str, Any]]:
     """전체 기록 타임라인. ref = 리포트 근거 record_ref와 같은 값."""
     items: list[dict[str, Any]] = []
 
-    def add(at, type_, by, summary, ref_id):
+    def add(at, type_, by, summary, ref_id, stt_transcript=None):
         tm = t_min(session, at) or 0.0
         items.append(
             {
@@ -502,6 +502,7 @@ async def record(db: AsyncSession, session: Session) -> list[dict[str, Any]]:
                 "type": type_,
                 "by": by,
                 "summary": summary,
+                **({"stt_transcript": stt_transcript} if stt_transcript is not None else {}),
                 "ref": {"type": type_, "id": str(ref_id), "t_min": tm},
             }
         )
@@ -512,7 +513,15 @@ async def record(db: AsyncSession, session: Session) -> list[dict[str, Any]]:
         )
     ).all()
     for m in room:
-        add(m.created_at, "message", m.sender, m.content, m.id)
+        original = (m.meta or {}).get("stt_transcript")
+        add(
+            m.created_at,
+            "message",
+            m.sender,
+            m.content,
+            m.id,
+            original if original is not None and original != m.content else None,
+        )
         if (m.meta or {}).get("kind") == "stage_start":
             add(m.created_at, "phase", "system", f"단계 시작: {m.phase}", m.phase)
     for s in (await db.scalars(select(Slot).where(Slot.session_id == session.id))).all():

@@ -15,7 +15,7 @@ def pinned_policy() -> dict:
     hold = int(os.getenv("VOICE_TURN_HOLD_SECONDS", "20"))
     if not 5 <= hold <= 120:
         raise ValueError("VOICE_TURN_HOLD_SECONDS must be 5..120")
-    confirm = int(os.getenv("VOICE_CONFIRM_SECONDS", "3"))
+    confirm = int(os.getenv("VOICE_CONFIRM_SECONDS", "8"))
     if not 0 <= confirm <= 30:
         raise ValueError("VOICE_CONFIRM_SECONDS must be 0..30")
     forced_wait = int(os.getenv("VOICE_FORCED_WAIT_SECONDS", "30"))

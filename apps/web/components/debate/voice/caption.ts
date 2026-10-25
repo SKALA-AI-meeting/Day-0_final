@@ -20,3 +20,17 @@ export function spokenCount(parts: string[], progress: number): number {
   }
   return parts.length;
 }
+
+/** 동료 본문은 재생 완료 또는 현재 재생 중인 범위만 화면에 전달한다. */
+export function heardMessages<T extends { id: string; sender: string; content: string }>(
+  messages: T[],
+  heardIds: string[],
+  speaking: { id: string; text: string } | null,
+): T[] {
+  const heard = new Set(heardIds);
+  return messages
+    .filter(
+      (m) => !["p1", "p2", "p3"].includes(m.sender) || heard.has(m.id) || m.id === speaking?.id,
+    )
+    .map((m) => (m.id === speaking?.id && !heard.has(m.id) ? { ...m, content: speaking.text } : m));
+}

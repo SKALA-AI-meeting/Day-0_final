@@ -5,7 +5,7 @@ import { API_URL, ApiError, api } from "@/lib/api";
 import { Button } from "@/components/ui";
 import type { Seat, StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
-import { sentences, spokenCount } from "./caption";
+import { heardMessages, sentences, spokenCount } from "./caption";
 import { canStartVoice, turnHoldNotice } from "./control-state";
 import { MICROPHONE_HELP, isMicrophoneError, requestMicrophone } from "./microphone";
 import { finishOnce, normalize } from "./recorder";
@@ -105,6 +105,72 @@ const LABEL: Record<string, string> = {
   PROCESSING: "발언을 제출하고 있어요",
 };
 
+/**
+ * 받아 적은 글 확인. 수정하지 않은 인식 글만 확인 시간이 끝나면 자동 제출한다. 한 글자라도 고치거나
+ * 인식 글이 비어 직접 쓰는 경우에는 자동 제출을 멈추고 [발언 제출]을 기다린다(되살리는 카운트다운 없음).
+ * 빈 인식 결과는 서버가 다시 녹음(rerecord)을 받지 않으므로 [다시 녹음] 대신 화면의 [다시 시도]로 다시 말한다.
+ */
+export function TranscriptConfirm({
+  text,
+  changed,
+  empty,
+  seconds,
+  holdSeconds,
+  rerecorded,
+  onChange,
+  onSubmit,
+  onRerecord,
+}: {
+  text: string;
+  changed: boolean;
+  empty: boolean;
+  /** 자동 제출까지 남은 초 */
+  seconds: number;
+  /** 빈 인식 결과일 때 내 차례가 지켜지는 남은 초(지나면 동료가 이어 말한다) */
+  holdSeconds?: number;
+  rerecorded: boolean;
+  onChange: (text: string) => void;
+  onSubmit: () => void;
+  onRerecord: () => void;
+}) {
+  const hint = empty
+    ? holdSeconds !== undefined && holdSeconds > 0
+      ? `직접 입력해 [발언 제출]을 누르세요. ${Math.ceil(holdSeconds)}초 안에 제출하지 않으면 동료가 이어서 말해요`
+      : "직접 입력해 [발언 제출]을 누르세요"
+    : changed
+      ? "수정한 내용은 [발언 제출]을 눌러 보내세요"
+      : `${Math.ceil(seconds)}초 뒤 자동으로 제출돼요. 수정하면 자동 제출이 멈춰요`;
+  return (
+    <div className="flex flex-col gap-2">
+      <label htmlFor="voice-transcript" className="text-footnote font-medium">
+        받아 적은 내용 (수정 가능)
+      </label>
+      <textarea
+        id="voice-transcript"
+        rows={3}
+        value={text}
+        onChange={(event) => onChange(event.target.value)}
+        aria-describedby="voice-transcript-hint"
+        className="w-full rounded-xl border border-line bg-surface p-3"
+        placeholder="인식된 말이 없어요. 직접 입력해 제출할 수 있어요."
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={!text.trim()} onClick={onSubmit}>
+          발언 제출
+        </Button>
+        {!rerecorded && !empty && (
+          <Button variant="secondary" onClick={onRerecord}>
+            다시 녹음 (1회)
+          </Button>
+        )}
+      </div>
+      <p id="voice-transcript-hint" className="text-footnote text-muted tabular-nums">
+        {hint}
+      </p>
+    </div>
+  );
+}
+
 /** 음성 토론의 차례·녹음·재생·확인 동작. 화면 조각과 상태를 돌려주고, 배치는 토론 화면(debate-view)이 정한다. */
 export function useVoiceTurn(props: Props) {
   const latest = useRef(props);
@@ -122,9 +188,16 @@ export function useVoiceTurn(props: Props) {
   const [heardIds, setHeardIds] = useState<string[]>([]);
   // 지금 재생 중인 동료 발언과, 대화 기록에 보여 줄 문장들(재생 위치까지)
   const [speaking, setSpeaking] = useState<{ id: string; text: string } | null>(null);
-  // [이대로 제출]을 누른 발언 id. 확인 시간이 남아도 바로 제출한다(ref는 polling용, state는 화면용)
+  // [발언 제출]을 누른 발언 id. 확인 시간이 남아도 바로 제출한다(ref는 polling용, state는 화면용)
   const confirmed = useRef("");
   const [confirmedId, setConfirmedId] = useState("");
+  const edit = useRef<{ id: string; text: string; changed: boolean }>({
+    id: "",
+    text: "",
+    changed: false,
+  });
+  const [draft, setDraft] = useState("");
+  const [draftChanged, setDraftChanged] = useState(false);
   const stream = useRef<MediaStream | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
@@ -380,7 +453,7 @@ export function useVoiceTurn(props: Props) {
         const sound = new Audio(url);
         player.current = sound;
         setActive(item.seat);
-        // 재생 위치에 맞춰 대화 기록의 말풍선에 문장을 하나씩 더한다
+        // 재생 위치에 맞춰 현재 자막에 문장을 하나씩 더한다
         const message = latest.current.snap.messages.find((m) => m.id === item.message_id);
         const parts = sentences(message?.content ?? "");
         const show = (count: number) => {
@@ -391,9 +464,10 @@ export function useVoiceTurn(props: Props) {
               : { id: item.message_id, text },
           );
         };
-        show(1);
+        let started = false;
         sound.ontimeupdate = () => {
-          if (sound.duration) show(spokenCount(parts, sound.currentTime / sound.duration));
+          if (started && sound.duration)
+            show(spokenCount(parts, sound.currentTime / sound.duration));
         };
         await result("start");
         await new Promise<void>((resolve, reject) => {
@@ -409,10 +483,16 @@ export function useVoiceTurn(props: Props) {
             clearTimeout(timeout);
             reject(new Error("playback"));
           };
-          sound.play().catch((e) => {
-            clearTimeout(timeout);
-            reject(e);
-          });
+          sound
+            .play()
+            .then(() => {
+              started = true;
+              show(1);
+            })
+            .catch((e) => {
+              clearTimeout(timeout);
+              reject(e);
+            });
         });
         if (op === operation.current) await result("ended");
       } catch (e) {
@@ -457,12 +537,23 @@ export function useVoiceTurn(props: Props) {
         // 녹음 종료/업로드 중에는 서버의 직전 USER_SPEAKING 스냅샷을 표시하지 않는다.
         if (!busy.current || waitingMic.current || player.current) setVoice(next);
         const u = next.utterance;
-        // 받아 적은 글은 확인 시간 동안 보여 주고, [이대로 제출]을 누르거나 시간이 끝나면 제출한다
-        const reviewed = confirmed.current === u?.id || confirmLeft(next) <= 0;
-        if (u?.status === "ready" && u.transcript && reviewed) {
+        if (u && u.id !== edit.current.id && (u.status === "ready" || u.status === "empty")) {
+          edit.current = { id: u.id, text: u.transcript ?? "", changed: false };
+          setDraft(u.transcript ?? "");
+          setDraftChanged(false);
+        }
+        // 수정을 시작하면 자동 제출하지 않는다. 빈 인식 결과도 직접 쓴 뒤 제출할 수 있다.
+        const reviewed =
+          confirmed.current === u?.id || (!edit.current.changed && confirmLeft(next) <= 0);
+        if (
+          u &&
+          (u.status === "ready" || u.status === "empty") &&
+          edit.current.text.trim() &&
+          reviewed
+        ) {
           pending.current = {
             id: u.id,
-            text: u.transcript,
+            text: edit.current.text,
             turn: next.turn_id,
             epoch: next.epoch,
             sent: pending.current?.sent ?? 0,
@@ -588,8 +679,15 @@ export function useVoiceTurn(props: Props) {
   };
 
   const submitNow = (id: string) => {
+    if (!edit.current.text.trim()) return;
     confirmed.current = id;
     setConfirmedId(id);
+  };
+
+  const changeDraft = (id: string, text: string) => {
+    edit.current = { id, text, changed: true };
+    setDraft(text);
+    setDraftChanged(true);
   };
 
   const rerecord = async (snap: VoiceSnapshot, id: string) => {
@@ -599,6 +697,10 @@ export function useVoiceTurn(props: Props) {
         token: token(),
         body: { turn_id: snap.turn_id, epoch: snap.epoch, job_id: id },
       });
+      pending.current = null;
+      confirmed.current = "";
+      setConfirmedId("");
+      edit.current = { id: "", text: "", changed: false };
       lastTurn.current = "";
       void record({ ...snap, ...next });
     } catch {
@@ -609,27 +711,27 @@ export function useVoiceTurn(props: Props) {
   // 받아 적기가 끝나 확인을 기다리는 발언(자동 제출 전)
   const review =
     !props.locked &&
-    voice?.utterance?.status === "ready" &&
-    voice.utterance.transcript &&
+    (voice?.utterance?.status === "ready" || voice?.utterance?.status === "empty") &&
     !voice.utterance.message_id &&
     confirmedId !== voice.utterance.id &&
-    confirmLeft(voice) > 0
+    (confirmLeft(voice) > 0 || draftChanged || voice.utterance.status === "empty")
       ? voice.utterance
       : null;
 
   // 동료 발언은 재생이 끝난 것만 대화 기록에 전부 보이고, 재생 중인 발언은 말한 문장까지만
   // 보인다(목소리보다 글이 앞서지 않게, V5 들은 범위). 지원자 발언과 시스템 안내는 바로 보인다.
-  const heard = useMemo(() => {
-    const ids = new Set(heardIds);
-    return {
+  const heard = useMemo(
+    () => ({
       ...props.snap,
-      messages: props.snap.messages
-        .filter((m) => !SEATS.has(m.sender) || ids.has(m.id) || m.id === speaking?.id)
-        .map((m) =>
-          m.id === speaking?.id && !ids.has(m.id) ? { ...m, content: speaking.text } : m,
-        ),
-    };
-  }, [props.snap, heardIds, speaking]);
+      messages: heardMessages(props.snap.messages, heardIds, speaking),
+    }),
+    [props.snap, heardIds, speaking],
+  );
+  const recent = heard.messages
+    .filter((m) => m.sender === "candidate" || SEATS.has(m.sender))
+    .filter((m) => m.content)
+    .slice(-10)
+    .reverse();
 
   // 음성 칸(중범 님 분할 레이아웃의 voice 칸)에 들어갈 조작부. 프로필 강조·대화 기록은 토론 화면이 그린다.
   const controls = (
@@ -719,20 +821,21 @@ export function useVoiceTurn(props: Props) {
           </div>
         )}
       {props.snap.session.phase !== "proposal" && review && voice && (
-        <div className="flex flex-col gap-2">
-          <p className="rounded-xl border border-line bg-surface p-3">{review.transcript}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => submitNow(review.id)}>이대로 제출</Button>
-            {!voice.rerecorded && (
-              <Button variant="secondary" onClick={() => void rerecord(voice, review.id)}>
-                다시 녹음 (1회)
-              </Button>
-            )}
-          </div>
-          <p className="text-footnote text-muted tabular-nums">
-            {Math.ceil(confirmLeft(voice))}초 뒤 자동으로 제출돼요
-          </p>
-        </div>
+        <TranscriptConfirm
+          text={draft}
+          changed={draftChanged}
+          empty={review.status === "empty"}
+          seconds={confirmLeft(voice)}
+          holdSeconds={
+            review.status === "empty" && voice.turn_until_at
+              ? secondsUntil(voice, voice.turn_until_at)
+              : undefined
+          }
+          rerecorded={!!voice.rerecorded}
+          onChange={(text) => changeDraft(review.id, text)}
+          onSubmit={() => submitNow(review.id)}
+          onRerecord={() => void rerecord(voice, review.id)}
+        />
       )}
       {props.snap.session.phase !== "proposal" &&
         !props.locked &&
@@ -756,6 +859,19 @@ export function useVoiceTurn(props: Props) {
             {enabled ? "다시 시도" : "음성 참여 시작"}
           </Button>
         )}
+      <details className="border-t border-line pt-2">
+        <summary className="cursor-pointer text-footnote font-medium">최근 발언</summary>
+        <ol className="mt-2 max-h-48 space-y-2 overflow-y-auto text-footnote">
+          {recent.map((m) => (
+            <li key={m.id}>
+              <strong>
+                {props.snap.participants.find((p) => p.id === m.sender)?.display_name ?? "지원자"}
+              </strong>
+              : {m.content}
+            </li>
+          ))}
+        </ol>
+      </details>
     </section>
   );
 
@@ -766,6 +882,7 @@ export function useVoiceTurn(props: Props) {
     speakingSeat: active as Seat | null,
     /** 들은 만큼만 보이는 대화(토론방용) */
     chatSnap: heard,
+    currentCaption: speaking,
     /** 지원자 차례가 한 번이라도 왔는지·지금 녹음 중인지(칸 펼치기·프로필 강조용) */
     candidateTurn: !!voice && CANDIDATE_STATES.has(voice.state),
     recording: voice?.state === "USER_SPEAKING",

@@ -55,6 +55,8 @@ async def handle_send(ctx: AppContext, session_id: uuid.UUID, payload: dict[str,
                         **message.meta,
                         "source": "voice",
                         "utterance_id": str(voice_job.id),
+                        "stt_transcript": voice_job.data.get("transcript", ""),
+                        "edited": message.content != voice_job.data.get("transcript", ""),
                     }
                 await db.commit()
                 serialized = serialize_message(session, message)

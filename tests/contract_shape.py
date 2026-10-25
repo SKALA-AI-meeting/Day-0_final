@@ -1107,7 +1107,15 @@ SHAPES: dict[str, Any] = {
         "notes": [{"id": str, "text": str, "reviewer_name": str, "created_at": TS}]
     },
     "admin_record": [
-        {"t_min": NUM, "type": RECORD_TYPE, "by": SENDER, "summary": str, "ref": RECORD_REF}
+        {
+            "t_min": NUM,
+            "type": RECORD_TYPE,
+            "by": SENDER,
+            "summary": str,
+            # 음성 지원자 메시지를 고친 경우에만: 원래 인식 글(빈 문자열 가능)
+            "stt_transcript?": str,
+            "ref": RECORD_REF,
+        }
     ],
     "report": REPORT,
     # 내부 REST

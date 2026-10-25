@@ -94,7 +94,7 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
                             for k in ("status", "transcript", "message_id", "error")
                         },
                     }
-                    if job.data["status"] == "ready" and job.data.get("ready_at"):
+                    if job.data["status"] in ("ready", "empty") and job.data.get("ready_at"):
                         wait = timedelta(seconds=controller.confirm_seconds(position))
                         ready = controller.at(job.data["ready_at"])
                         snap["utterance"]["confirm_deadline_at"] = iso(ready + wait)
