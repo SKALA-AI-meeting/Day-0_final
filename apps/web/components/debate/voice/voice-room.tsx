@@ -6,6 +6,7 @@ import { API_URL, ApiError, api } from "@/lib/api";
 import { Button, cn } from "@/components/ui";
 import { CANDIDATE_MESSAGE_MAX_CHARS } from "../state";
 import type { Seat, StateSnapshot } from "../types";
+import type { Message } from "../types";
 import type { SessionAuth } from "../use-session";
 import { elapsedText } from "../voice";
 import { LevelBars } from "../voice-ui";
@@ -70,12 +71,6 @@ export type VoiceSnapshot = {
   /** 동료 차례 중 든 손(내리면 없음) */
   hand?: unknown;
 };
-/** 받아 적은 글 확인 시간이 남은 초(서버 시각 기준). 확인 시간이 없으면 0 */
-function confirmLeft(snap: VoiceSnapshot): number {
-  const deadline = snap.utterance?.confirm_deadline_at;
-  if (!deadline) return 0;
-  return Math.max(0, (Date.parse(deadline) - Date.parse(snap.server_now)) / 1000);
-}
 /** 지금부터 서버 시각 기준으로 남은 초 */
 function secondsUntil(snap: VoiceSnapshot, at?: string): number {
   if (!at) return 0;
@@ -86,9 +81,16 @@ function thinkLeft(snap: VoiceSnapshot): number {
   if (!snap.think_deadline_at) return 0;
   return Math.max(0, (Date.parse(snap.think_deadline_at) - Date.parse(snap.server_now)) / 1000);
 }
-const SEATS = new Set(["p1", "p2", "p3"]);
 /** 안내(진행을 막지 않는 정보)를 보여 주는 시간(ms). 오류와 달리 저절로 사라진다 */
 const NOTICE_MS = 6000;
+const DELIVERED_NOTICE_MS = 3000;
+export function scheduleNotice(
+  text: string,
+  duration: number,
+  set: (update: (now: string) => string) => void,
+): ReturnType<typeof setTimeout> {
+  return setTimeout(() => set((now) => (now === text ? "" : now)), duration);
+}
 /** 단계(또는 세션)가 끝나 서버가 이 차례의 녹음·제출을 받지 않는 경우 */
 function expired(e: unknown): boolean {
   return e instanceof ApiError && e.code === "voice_turn_expired";
@@ -102,6 +104,33 @@ function exhausted(e: unknown): boolean {
   return e instanceof ApiError && e.code === "voice_retry_exhausted";
 }
 const CANDIDATE_STATES = new Set(["USER_READY", "USER_SPEAKING", "TRANSCRIBING", "PROCESSING"]);
+/** 현재 재생과 마지막 표시 화자를 분리해 재생 사이에도 큰 칸을 유지한다. */
+export function displayedSeat(
+  state: string | undefined,
+  active: Seat | null,
+  lastColleague: Seat | null,
+  awaitingSaved = false,
+): Seat | "candidate" | null {
+  if (["USER_SPEAKING", "TRANSCRIBING", "PROCESSING"].includes(state ?? "") || awaitingSaved)
+    return "candidate";
+  return active ?? lastColleague;
+}
+export function shouldResetAwaitingSaved(
+  previous: VoiceSnapshot | null,
+  next: VoiceSnapshot,
+  phaseChanged: boolean,
+): boolean {
+  return (
+    phaseChanged ||
+    (!!previous && (previous.turn_id !== next.turn_id || previous.epoch !== next.epoch)) ||
+    next.state === "AI_SPEAKING" ||
+    next.state === "USER_READY" ||
+    !next.utterance
+  );
+}
+export function showRaisedHand(hand: unknown, priority?: "hand" | "forced"): boolean {
+  return !!hand && priority !== "forced";
+}
 // 음성 상태 확인 주기(ms). 평소 750(계약 docs/contracts/voice.md), 기다리는 상태에서는 250.
 // 작게 하면 준비된 발언을 더 빨리 알지만 서버 요청이 늘어난다(세션당 초당 4회).
 const POLL_MS = 750;
@@ -114,22 +143,19 @@ type Props = {
   connected: boolean;
   locked: boolean;
   onSend: (id: string, text: string, turn: string, epoch: string) => void;
-  /** 보낸 발언(id = client_msg_id)의 저장 확인(message.ack)을 받았는지 */
-  wasSaved?: (id: string) => boolean;
-  /** 마지막 /state 동기화 시각(ms). 재연결 뒤 따라잡기 전에는 미제출로 판단하지 않는다 */
-  lastSyncedAt?: () => number;
   onBusy: (busy: boolean) => void;
   onFocusProposal: () => void;
   /** 연결이 끊겨 다시 잇는 중(처음 연결 중과 구분해 끊김 상태를 보인다) */
   reconnecting?: boolean;
 };
 const LABEL: Record<string, string> = {
-  AI_GENERATING: "동료가 발언을 준비하고 있어요",
+  // 다음에 누가 말할지는 미리 보이지 않는다(회의처럼 말을 시작해야 알 수 있다)
+  AI_GENERATING: "동료 차례예요",
   AI_SPEAKING: "동료의 발언을 듣고 있어요",
   USER_READY: "내 차례예요",
-  USER_SPEAKING: "녹음 중",
-  TRANSCRIBING: "발언을 글로 옮기고 있어요",
-  PROCESSING: "발언을 제출하고 있어요",
+  USER_SPEAKING: "발언 중",
+  TRANSCRIBING: "발언을 정리하고 있어요",
+  PROCESSING: "발언을 전달하고 있어요",
 };
 /** 차례 유지·자동 녹음까지 남은 시간을 크게 줄이는 막대. 5초 이하면 경고 색 */
 function Countdown({
@@ -226,129 +252,56 @@ function InfoLine({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * 받아 적은 글 확인. 수정하지 않은 인식 글만 확인 시간이 끝나면 자동 제출한다. 한 글자라도 고치거나
- * 인식 글이 비어 직접 쓰는 경우에는 자동 제출을 멈추고 [발언 제출]을 기다린다(되살리는 카운트다운 없음).
- * 빈 인식 결과는 서버가 다시 녹음(rerecord)을 받지 않으므로 확인 칸 밖의 [다시 녹음](새 녹음)으로 다시 말한다.
- */
-export function TranscriptConfirm({
-  text,
-  changed,
-  empty,
-  seconds,
-  submitSeconds,
-  rerecorded,
-  onChange,
-  onSubmit,
+export function VoiceNotices({ notice, systemNotice }: { notice: string; systemNotice: string }) {
+  return (
+    <>
+      {notice && <InfoLine>{notice}</InfoLine>}
+      {systemNotice && <InfoLine>{systemNotice}</InfoLine>}
+    </>
+  );
+}
+
+export function newSystemNotice(messages: Message[], seen: Set<string>): string {
+  let latest = "";
+  for (const message of messages) {
+    if (message.sender !== "system" || seen.has(message.id)) continue;
+    seen.add(message.id);
+    latest = message.content;
+  }
+  return latest;
+}
+
+export function candidateMessageSaved(messages: Message[], utteranceId: string): boolean {
+  return (
+    !!utteranceId &&
+    messages.some((m) => m.sender === "candidate" && m.client_msg_id === utteranceId)
+  );
+}
+
+/** 빈 인식 결과는 글 대신 다시 말하기를 안내한다. */
+export function EmptyRecognition({
   onRerecord,
+  disabled = false,
+  tooLong = false,
 }: {
-  text: string;
-  changed: boolean;
-  empty: boolean;
-  /** 자동 제출까지 남은 초 */
-  seconds: number;
-  /** 이 발언을 제출할 수 있는 남은 초(서버 submit_deadline_at 기준). 지나면 들어가지 않는다 */
-  submitSeconds?: number;
-  rerecorded: boolean;
-  onChange: (text: string) => void;
-  onSubmit: () => void;
   onRerecord: () => void;
+  disabled?: boolean;
+  tooLong?: boolean;
 }) {
-  const left = submitSeconds !== undefined ? Math.ceil(submitSeconds) : undefined;
-  const length = text.trim().length;
-  const tooLong = length > CANDIDATE_MESSAGE_MAX_CHARS;
-  const hint = empty
-    ? left !== undefined
-      ? `직접 입력해 [발언 제출]을 누르세요. ${left}초 안에 제출하지 않으면 동료가 이어서 말해요`
-      : "직접 입력해 [발언 제출]을 누르세요"
-    : changed
-      ? left !== undefined
-        ? `수정한 내용은 [발언 제출]을 눌러 보내세요. ${left}초 안에 보내지 않으면 이번 발언은 들어가지 않아요`
-        : "수정한 내용은 [발언 제출]을 눌러 보내세요"
-      : `${Math.ceil(seconds)}초 뒤 자동으로 제출돼요. 수정하면 자동 제출이 멈춰요`;
   return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor="voice-transcript" className="text-footnote font-medium">
-        받아 적은 내용 (수정 가능)
-      </label>
-      <textarea
-        id="voice-transcript"
-        rows={3}
-        value={text}
-        maxLength={CANDIDATE_MESSAGE_MAX_CHARS}
-        onChange={(event) => onChange(event.target.value)}
-        aria-describedby="voice-transcript-hint voice-transcript-count"
-        className="w-full rounded-xl border border-line bg-surface p-3"
-        placeholder="인식된 말이 없어요. 직접 입력해 제출할 수 있어요."
-      />
-      <p
-        id="voice-transcript-count"
-        className={`self-end text-caption tabular-nums ${tooLong ? "font-semibold text-warning" : "text-muted"}`}
-      >
-        {length}/{CANDIDATE_MESSAGE_MAX_CHARS}자{tooLong ? " · 줄여야 제출할 수 있어요" : ""}
+    <div role="alert" className="flex flex-col items-start gap-2">
+      <p>
+        {tooLong
+          ? "말이 길어 전하지 못했어요. 짧게 다시 말해 주세요"
+          : "잘 들리지 않았어요. 다시 말해 주세요"}
       </p>
-      <div className="flex flex-wrap gap-2">
-        <Button disabled={!text.trim() || tooLong} onClick={onSubmit}>
-          발언 제출
-        </Button>
-        {!rerecorded && !empty && (
-          <Button variant="secondary" onClick={onRerecord}>
-            다시 녹음 (1회)
-          </Button>
-        )}
-      </div>
-      <p id="voice-transcript-hint" className="text-footnote text-muted tabular-nums">
-        {hint}
-      </p>
+      <Button variant="secondary" disabled={disabled} onClick={onRerecord}>
+        다시 말하기
+      </Button>
     </div>
   );
 }
 
-/**
- * 차례가 끝나 제출하지 못한 발언. 고치거나 직접 쓴 글이 말없이 사라지지 않게 읽기 전용으로 남기고
- * 복사할 수 있게 한다. 지원자가 닫을 때까지 보인다.
- */
-export function UnsentSpeech({ text, onDismiss }: { text: string; onDismiss: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  };
-  return (
-    <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warning/40 p-3">
-      <p className="text-footnote font-semibold text-warning">제출하지 못한 발언이 있어요</p>
-      <p className="text-footnote text-muted">
-        차례가 끝나 아래 글은 토론에 들어가지 않았어요. 필요하면 복사해 다음 발언에 써 주세요.
-      </p>
-      <textarea
-        readOnly
-        rows={3}
-        value={text}
-        aria-label="제출하지 못한 발언"
-        className="w-full rounded-xl border border-line bg-surface-sunken p-3"
-      />
-      <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" onClick={() => void copy()}>
-          {copied ? "복사했어요" : "복사"}
-        </Button>
-        <Button variant="secondary" onClick={onDismiss}>
-          닫기
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * 제출을 보낸 뒤 저장 확인을 기다리는 시간(ms). 지나도 확인이 없으면 제출하지 못한 것으로 본다.
- * 늘리면 느린 연결·재연결에서 잘못된 "제출하지 못한 발언" 안내가 줄지만, 정말 못 보낸 글을 늦게 알린다.
- */
-const SENT_CONFIRM_MS = 15000;
-const SENT_CHECK_MS = 500;
 /** 손들기(차례 유지) 시간의 기본값(초). 서버가 시작 시각(ready_at)을 주지 않을 때 막대 길이에 쓴다 */
 const DEFAULT_HOLD_SECONDS = 20;
 
@@ -361,8 +314,20 @@ export function useVoiceTurn(props: Props) {
   const [voice, setVoice] = useState<VoiceSnapshot | null>(null);
   const [error, setError] = useState<Trouble | null>(null);
   const [notice, setNotice] = useState("");
+  const [awaitingSaved, setAwaitingSaved] = useState(false);
+  const [systemNotice, setSystemNotice] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [active, setActive] = useState<string | null>(null);
+  const [lastDisplayed, setLastDisplayed] = useState<Seat | null>(null);
+  const [recentCaption, setRecentCaption] = useState<{ seat: Seat; text: string } | null>(null);
+  const seenSystemIds = useRef(
+    new Set(props.snap.messages.filter((m) => m.sender === "system").map((m) => m.id)),
+  );
+  const submittedId = useRef("");
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const systemNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const phaseRef = useRef(props.snap.session.phase);
+  const voiceRef = useRef<VoiceSnapshot | null>(null);
   // 녹음 경과·한도(초)
   const [clock, setClock] = useState({ elapsed: 0, total: 60 });
   // 녹음 중 마이크 소리 크기(파형·내 프로필 빛). 화면 전체를 다시 그리지 않게 따로 구독한다
@@ -372,28 +337,13 @@ export function useVoiceTurn(props: Props) {
   // 녹음 중에 연결이 끊겼다가 다시 이어졌는지(그동안의 발언은 저장되지 않음)
   const [droppedTurn, setDroppedTurn] = useState("");
   const [micPending, setMicPending] = useState(false);
+  const finishButton = useRef<HTMLButtonElement | null>(null);
+  const focusFinish = useRef(false);
   const [heardIds, setHeardIds] = useState<string[]>([]);
   // 지금 재생 중인 동료 발언과, 대화 기록에 보여 줄 문장들(재생 위치까지)
   const [speaking, setSpeaking] = useState<{ id: string; text: string } | null>(null);
-  // [발언 제출]을 누른 발언 id. 확인 시간이 남아도 바로 제출한다(ref는 polling용, state는 화면용)
-  const confirmed = useRef("");
-  const [confirmedId, setConfirmedId] = useState("");
-  // 확인 중인 발언의 글. changed는 지원자가 고치거나 직접 쓴 글인지
-  const edit = useRef<{ id: string; text: string; changed: boolean }>({
-    id: "",
-    text: "",
-    changed: false,
-  });
-  // message.send를 보낸 발언 id
-  const sentIds = useRef(new Set<string>());
-  // 서버가 저장했다고 알려 준 발언 id(음성 상태의 utterance.message_id)
-  const savedIds = useRef(new Set<string>());
-  // 마지막으로 연결이 끊긴 시각(ms). 그 뒤 /state 동기화가 있어야 미제출을 판단한다
-  const droppedAt = useRef(0);
-  // 차례가 끝나 제출하지 못한 글(읽기 전용으로 남김)
-  const [unsent, setUnsent] = useState("");
-  const [draft, setDraft] = useState("");
-  const [draftChanged, setDraftChanged] = useState(false);
+  // 서버가 전사한 글은 화면에 보이지 않고 바로 제출한다.
+  const edit = useRef<{ id: string; text: string }>({ id: "", text: "" });
   const stream = useRef<MediaStream | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
@@ -416,49 +366,45 @@ export function useVoiceTurn(props: Props) {
   const path = `/sessions/${props.auth.sessionId}/voice`;
   const token = () => latest.current.auth.getToken();
 
-  /**
-   * 확인 중이던 발언이 서버에서 사라졌을 때(제출·차례 종료·단계 전환·세션 종료) 한 번 부른다.
-   * 지원자가 고치거나 직접 쓴 글만 본다(고치지 않은 인식 글은 다시 말하면 되므로 남기지 않는다).
-   * 그 발언 id의 저장 확인(message.ack 또는 음성 상태의 message_id)이 없으면 제출하지 못한 글로 남긴다.
-   * 보낸 발언은 느린 연결·재연결을 생각해 SENT_CONFIRM_MS 동안 확인을 기다린다.
-   */
-  const settleEdit = useCallback(() => {
-    const e = edit.current;
-    edit.current = { id: "", text: "", changed: false };
-    if (!e.id || !e.text.trim() || !e.changed) return;
-    const saved = () =>
-      savedIds.current.has(e.id) ||
-      !!latest.current.wasSaved?.(e.id) ||
-      // ack를 놓쳐도(끊김) 다시 받은 스냅샷에 그 발언 id로 저장된 지원자 메시지가 있으면 저장된 것이다
-      latest.current.snap.messages.some(
-        (m) => m.sender === "candidate" && m.client_msg_id === e.id,
-      );
-    if (saved()) return;
-    if (!sentIds.current.has(e.id)) {
-      setUnsent(e.text);
-      return;
-    }
-    const until = Date.now() + SENT_CONFIRM_MS;
-    const check = () => {
-      if (saved()) return;
-      // 끊겨 있거나 다시 이어진 뒤 /state로 따라잡기 전에는 판단하지 않고 기다린다
-      const synced =
-        latest.current.connected &&
-        (latest.current.lastSyncedAt?.() ?? Number.POSITIVE_INFINITY) > droppedAt.current;
-      if (synced && Date.now() >= until) setUnsent(e.text);
-      else setTimeout(check, SENT_CHECK_MS);
-    };
-    setTimeout(check, SENT_CHECK_MS);
+  const showNotice = useCallback((text: string, duration = NOTICE_MS) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setNotice(text);
+    noticeTimer.current = scheduleNotice(text, duration, setNotice);
   }, []);
 
   useEffect(() => {
-    if (props.locked) settleEdit();
-  }, [props.locked, settleEdit]);
+    if (phaseRef.current !== props.snap.session.phase) {
+      phaseRef.current = props.snap.session.phase;
+      setAwaitingSaved(false);
+      setSystemNotice("");
+      if (systemNoticeTimer.current) clearTimeout(systemNoticeTimer.current);
+    }
+  }, [props.snap.session.phase]);
 
-  const showNotice = useCallback((text: string) => {
-    setNotice(text);
-    setTimeout(() => setNotice((now) => (now === text ? "" : now)), NOTICE_MS);
-  }, []);
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+      if (systemNoticeTimer.current) clearTimeout(systemNoticeTimer.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const fresh = newSystemNotice(props.snap.messages, seenSystemIds.current);
+    if (fresh) {
+      if (systemNoticeTimer.current) clearTimeout(systemNoticeTimer.current);
+      setSystemNotice(fresh);
+      systemNoticeTimer.current = setTimeout(
+        () => setSystemNotice((now) => (now === fresh ? "" : now)),
+        8000,
+      );
+    }
+    if (candidateMessageSaved(props.snap.messages, submittedId.current)) {
+      submittedId.current = "";
+      setAwaitingSaved(false);
+      showNotice("전달했어요", DELIVERED_NOTICE_MS);
+    }
+  }, [props.snap.messages, showNotice]);
 
   const stopMedia = useCallback(() => {
     operation.current++;
@@ -479,7 +425,6 @@ export function useVoiceTurn(props: Props) {
   useEffect(() => {
     if (!props.connected || props.locked) {
       // 녹음 중에 끊기면 그 녹음은 버려진다. 다시 이어지면 다시 말해 달라고 알린다
-      if (!props.connected) droppedAt.current = Date.now();
       const dropped = !props.locked && recorder.current?.state === "recording";
       const turn = currentTurn.current || "dropped";
       stopMedia();
@@ -506,6 +451,8 @@ export function useVoiceTurn(props: Props) {
   const record = useCallback(
     async (snap: VoiceSnapshot) => {
       if (busy.current || snap.turn_id === lastTurn.current) return;
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+      setNotice((now) => (now === "전달했어요" ? "" : now));
       busy.current = true;
       waitingMic.current = true;
       setMicPending(true);
@@ -539,6 +486,8 @@ export function useVoiceTurn(props: Props) {
         }
         lastTurn.current = start.turn_id;
         setVoice(start);
+        setAwaitingSaved(false);
+        setRecentCaption(null);
         const duration = Math.max(
           0,
           Math.min(
@@ -653,8 +602,8 @@ export function useVoiceTurn(props: Props) {
             setError({
               title: "발언을 보내지 못했어요",
               detail: pendingAudio.current
-                ? "녹음은 남아 있어요. 연결을 확인하고 다시 보내 주세요."
-                : "연결과 마이크를 확인하고 다시 녹음해 주세요.",
+                ? "방금 한 말은 남아 있어요. 연결을 확인하고 다시 보내 주세요."
+                : "연결과 마이크를 확인하고 다시 말해 주세요.",
               action: pendingAudio.current ? "resend" : "rerecord",
             });
           } finally {
@@ -666,8 +615,8 @@ export function useVoiceTurn(props: Props) {
         });
         r.onerror = () => {
           setError({
-            title: "녹음이 끊겼어요",
-            detail: "마이크 연결을 확인하고 다시 녹음해 주세요.",
+            title: "발언이 끊겼어요",
+            detail: "마이크 연결을 확인하고 다시 말해 주세요.",
             action: "rerecord",
           });
           finish.current();
@@ -686,8 +635,8 @@ export function useVoiceTurn(props: Props) {
             isMicrophoneError(e)
               ? { title: "마이크를 쓸 수 없어요", detail: MICROPHONE_HELP, action: "rerecord" }
               : {
-                  title: "녹음을 시작하지 못했어요",
-                  detail: "연결을 확인하고 다시 녹음해 주세요.",
+                  title: "발언을 시작하지 못했어요",
+                  detail: "연결을 확인하고 다시 말해 주세요.",
                   action: "rerecord",
                 },
           );
@@ -728,7 +677,7 @@ export function useVoiceTurn(props: Props) {
         if (op !== operation.current) return;
         const sound = new Audio(url);
         player.current = sound;
-        setActive(item.seat);
+        setRecentCaption(null);
         // 재생 위치에 맞춰 현재 자막에 문장을 하나씩 더한다
         const message = latest.current.snap.messages.find((m) => m.id === item.message_id);
         const parts = sentences(message?.content ?? "");
@@ -763,6 +712,8 @@ export function useVoiceTurn(props: Props) {
             .play()
             .then(() => {
               started = true;
+              setActive(item.seat);
+              setLastDisplayed(item.seat as Seat);
               show(1);
             })
             .catch((e) => {
@@ -770,7 +721,10 @@ export function useVoiceTurn(props: Props) {
               reject(e);
             });
         });
-        if (op === operation.current) await result("ended");
+        if (op === operation.current) {
+          await result("ended");
+          if (parts.length) setRecentCaption({ seat: item.seat as Seat, text: parts.at(-1)! });
+        }
       } catch (e) {
         // 재생 중 단계가 바뀌어 서버가 이 차례를 닫았으면 오류가 아니다. 멈추지 않고 새 차례로 넘어간다
         if (op === operation.current && !turnMoved(e)) {
@@ -808,6 +762,15 @@ export function useVoiceTurn(props: Props) {
         const next = await api<VoiceSnapshot>(path, { token: token() });
         if (disposed) return;
         lastState = next.state;
+        if (
+          shouldResetAwaitingSaved(
+            voiceRef.current,
+            next,
+            phaseRef.current !== props.snap.session.phase,
+          )
+        )
+          setAwaitingSaved(false);
+        voiceRef.current = next;
         currentTurn.current = next.turn_id;
         const nextFence = `${next.generation}:${next.epoch}`;
         if (fence.current && nextFence !== fence.current) stopMedia();
@@ -817,34 +780,28 @@ export function useVoiceTurn(props: Props) {
         // 녹음 종료/업로드 중에는 서버의 직전 USER_SPEAKING 스냅샷을 표시하지 않는다.
         if (!busy.current || waitingMic.current || player.current) setVoice(next);
         const u = next.utterance;
-        if (u?.message_id) savedIds.current.add(u.id);
-        // 확인 중이던 발언이 없어졌거나(제출·마감) 기획안 단계로 넘어갔으면 제출됐는지 확인한다
+        // 발언이 사라졌거나 단계가 끝나면 로컬 전사도 지운다.
         if (
           edit.current.id &&
           (u?.id !== edit.current.id || next.blocked_reason === "proposal_phase")
         )
-          settleEdit();
+          edit.current = { id: "", text: "" };
         if (
           u &&
           u.id !== edit.current.id &&
           (u.status === "ready" || u.status === "empty") &&
           next.blocked_reason !== "proposal_phase"
         ) {
-          edit.current = { id: u.id, text: u.transcript ?? "", changed: false };
-          setDraft(u.transcript ?? "");
-          setDraftChanged(false);
+          edit.current = { id: u.id, text: u.transcript ?? "" };
         }
-        // 수정을 시작하면 자동 제출하지 않는다. 빈 인식 결과도 직접 쓴 뒤 제출할 수 있다.
-        // 글자 수 상한을 넘으면 서버가 받지 않으므로 줄일 때까지 보내지 않는다.
-        const reviewed =
-          confirmed.current === u?.id || (!edit.current.changed && confirmLeft(next) <= 0);
+        // 음성 화면은 확인 시간과 관계없이 인식된 글을 바로 제출한다.
+        // 상한 초과·빈 인식은 다시 말하기를 안내한다.
         if (
           u &&
           u.id === edit.current.id &&
           (u.status === "ready" || u.status === "empty") &&
           edit.current.text.trim() &&
-          edit.current.text.trim().length <= CANDIDATE_MESSAGE_MAX_CHARS &&
-          reviewed
+          edit.current.text.trim().length <= CANDIDATE_MESSAGE_MAX_CHARS
         ) {
           pending.current = {
             id: u.id,
@@ -859,7 +816,8 @@ export function useVoiceTurn(props: Props) {
           const p = pending.current;
           p.sent = Date.now();
           setVoice({ ...next, state: "PROCESSING" });
-          sentIds.current.add(p.id);
+          submittedId.current = p.id;
+          setAwaitingSaved(true);
           latest.current.onSend(p.id, p.text, p.turn, p.epoch);
         }
         if (enabled && !error && !busy.current && next.epoch) {
@@ -907,7 +865,6 @@ export function useVoiceTurn(props: Props) {
     error,
     play,
     record,
-    settleEdit,
     stopMedia,
   ]);
 
@@ -920,7 +877,7 @@ export function useVoiceTurn(props: Props) {
       if (!pendingAudio.current || !voice) return;
       if (pendingAudio.current.turn_id !== voice.turn_id) {
         pendingAudio.current = null;
-        showNotice("발언 차례가 바뀌어 이전 녹음은 보내지 않았어요. 다음 차례에 말해 주세요.");
+        showNotice("발언 차례가 바뀌어 방금 한 말은 전하지 못했어요. 다음 차례에 말해 주세요.");
         return;
       }
       try {
@@ -937,8 +894,8 @@ export function useVoiceTurn(props: Props) {
           return;
         }
         setError({
-          title: "녹음을 다시 보내지 못했어요",
-          detail: "녹음은 남아 있어요. 연결을 확인하고 다시 보내 주세요.",
+          title: "발언을 다시 보내지 못했어요",
+          detail: "방금 한 말은 남아 있어요. 연결을 확인하고 다시 보내 주세요.",
           action: "resend",
         });
       }
@@ -985,23 +942,46 @@ export function useVoiceTurn(props: Props) {
         setError(
           exhausted(e)
             ? {
-                title: "더 받아 적을 수 없어요",
-                detail: "같은 녹음으로 다시 시도할 수 있는 횟수를 다 썼어요. 다시 녹음해 주세요.",
+                title: "더 확인할 수 없어요",
+                detail: "방금 한 말로 다시 시도할 수 있는 횟수를 다 썼어요. 다시 말해 주세요.",
                 action: "rerecord",
               }
             : expired(e)
               ? null
               : {
-                  title: "다시 받아 적지 못했어요",
-                  detail: "연결을 확인하고 다시 녹음해 주세요.",
+                  title: "발언을 다시 확인하지 못했어요",
+                  detail: "연결을 확인하고 다시 말해 주세요.",
                   action: "rerecord",
                 },
         ),
       );
       return;
     }
-    if ((action === "rerecord" || action === "start") && voice?.state === "USER_READY")
+    if (action === "rerecord" && voice?.utterance?.status === "ready") {
+      try {
+        const next = await api<VoiceSnapshot>(`${path}/rerecord`, {
+          method: "POST",
+          token: token(),
+          body: { turn_id: voice.turn_id, epoch: voice.epoch, job_id: voice.utterance.id },
+        });
+        setVoice(next);
+        focusFinish.current = true;
+        void record(next);
+      } catch (e) {
+        if (exhausted(e)) setExhaustedTurn(voice.turn_id);
+        else if (!expired(e) && !turnMoved(e))
+          setError({
+            title: "다시 말하기를 시작하지 못했어요",
+            detail: "연결을 확인하고 다시 눌러 주세요.",
+            action: "rerecord",
+          });
+      }
+      return;
+    }
+    if ((action === "rerecord" || action === "start") && voice?.state === "USER_READY") {
+      if (action === "rerecord") focusFinish.current = true;
       void record(voice);
+    }
     // reconnect: 오류를 지우면 다음 확인(polling)이 이어서 재생·녹음을 맡는다
   };
 
@@ -1029,51 +1009,19 @@ export function useVoiceTurn(props: Props) {
     }
   };
 
-  const submitNow = (id: string) => {
-    const text = edit.current.text.trim();
-    if (!text || text.length > CANDIDATE_MESSAGE_MAX_CHARS) return;
-    confirmed.current = id;
-    setConfirmedId(id);
-  };
-
-  const changeDraft = (id: string, text: string) => {
-    edit.current = { ...edit.current, id, text, changed: true };
-    setDraft(text);
-    setDraftChanged(true);
-  };
-
-  const rerecord = async (snap: VoiceSnapshot, id: string) => {
-    try {
-      const next = await api<VoiceSnapshot>(`${path}/rerecord`, {
-        method: "POST",
-        token: token(),
-        body: { turn_id: snap.turn_id, epoch: snap.epoch, job_id: id },
-      });
-      pending.current = null;
-      confirmed.current = "";
-      setConfirmedId("");
-      edit.current = { id: "", text: "", changed: false };
-      lastTurn.current = "";
-      void record({ ...snap, ...next });
-    } catch (e) {
-      // 받아 적은 글은 그대로 남아 있으므로 막지 않고, 고쳐서 제출하도록 안내한다
-      showNotice(
-        exhausted(e)
-          ? "다시 녹음은 한 번만 할 수 있어요. 받아 적은 내용을 고쳐 제출해 주세요."
-          : "다시 녹음하지 못했어요. 받아 적은 내용을 고쳐 제출해 주세요.",
-      );
-    }
-  };
-
-  // 받아 적기가 끝나 확인을 기다리는 발언(자동 제출 전)
+  // 빈 인식과 상한 초과는 다시 말하기를 안내한다. 정상 전사는 화면에 노출하지 않는다.
   const review =
     !props.locked &&
-    (voice?.utterance?.status === "ready" || voice?.utterance?.status === "empty") &&
+    voice?.utterance?.status === "empty" &&
     !voice.utterance.message_id &&
-    confirmedId !== voice.utterance.id &&
-    (confirmLeft(voice) > 0 || draftChanged || voice.utterance.status === "empty")
+    voice.state === "USER_READY"
       ? voice.utterance
       : null;
+  const tooLong =
+    !!voice?.utterance &&
+    voice.utterance.status === "ready" &&
+    !voice.utterance.message_id &&
+    (voice.utterance.transcript?.trim().length ?? 0) > CANDIDATE_MESSAGE_MAX_CHARS;
 
   // 동료 발언은 재생이 끝난 것만 대화 기록에 전부 보이고, 재생 중인 발언은 말한 문장까지만
   // 보인다(목소리보다 글이 앞서지 않게, V5 들은 범위). 지원자 발언과 시스템 안내는 바로 보인다.
@@ -1084,12 +1032,6 @@ export function useVoiceTurn(props: Props) {
     }),
     [props.snap, heardIds, speaking],
   );
-  const recent = heard.messages
-    .filter((m) => m.sender === "candidate" || SEATS.has(m.sender))
-    .filter((m) => m.content)
-    .slice(-10)
-    .reverse();
-
   const phase = props.snap.session.phase;
   // 토론 중(기획안 단계·종료 전)
   const debating = phase !== "proposal" && !props.locked;
@@ -1121,9 +1063,14 @@ export function useVoiceTurn(props: Props) {
 
   const nameOf = (seat?: string | null) =>
     seat ? props.snap.participants.find((p) => p.id === seat)?.display_name : undefined;
-  // 말하는(준비하는) 동료 이름: 재생 중인 자리, 없으면 맨 앞 발언의 자리
-  const speakerName = nameOf(active) ?? nameOf(voice?.items?.[0]?.seat);
+  const speakerName = nameOf(active);
   const recording = debating && voice?.state === "USER_SPEAKING";
+  useEffect(() => {
+    if (recording && focusFinish.current && finishButton.current) {
+      finishButton.current.focus();
+      focusFinish.current = false;
+    }
+  }, [recording]);
   const disconnected = !props.locked && !props.connected && !!props.reconnecting;
   const statusText = disconnected
     ? "연결이 끊겼어요. 다시 연결하는 중…"
@@ -1133,12 +1080,12 @@ export function useVoiceTurn(props: Props) {
         ? "토론이 종료됐어요"
         : !voice
           ? "회의 상태를 불러오는 중…"
-          : review
-            ? "받아 적은 내용을 확인해 주세요"
-            : voice.state === "AI_SPEAKING" && speakerName
-              ? `${speakerName}님이 말하는 중`
-              : voice.state === "AI_GENERATING" && speakerName
-                ? `${speakerName}님이 발언을 준비하고 있어요`
+          : review || tooLong
+            ? "내 차례예요"
+            : voice.state === "PROCESSING"
+              ? "발언을 전달하는 중…"
+              : voice.state === "AI_SPEAKING" && speakerName
+                ? `${speakerName}님이 발언 중`
                 : (LABEL[voice.state] ?? LABEL.AI_GENERATING);
   // 진행을 막는 오류: 화면에서 생긴 오류가 먼저, 없으면 서버가 막아 둔 내 차례
   const trouble =
@@ -1194,7 +1141,7 @@ export function useVoiceTurn(props: Props) {
           기획안으로 이동
         </Button>
       )}
-      {debating && notice && <InfoLine>{notice}</InfoLine>}
+      {debating && <VoiceNotices notice={notice} systemNotice={systemNotice} />}
       {debating && exhaustedNow && (
         <InfoLine>다시 시도할 수 있는 횟수를 다 썼어요. 다음 차례에 말해 주세요.</InfoLine>
       )}
@@ -1210,7 +1157,7 @@ export function useVoiceTurn(props: Props) {
         <div className="flex flex-col items-center gap-3">
           {voice.priority === "forced" && (
             <p className="font-semibold text-accent">
-              이번 단계에서 아직 의견을 말하지 않았어요. 지금 말해 주세요
+              이번 단계에 {nameOf("candidate") ?? "지원자"}님 의견도 들려주세요
             </p>
           )}
           <Button
@@ -1228,8 +1175,8 @@ export function useVoiceTurn(props: Props) {
             <Countdown
               seconds={thinkLeft(voice)}
               total={thinkTotal}
-              label="뒤 녹음이 자동으로 시작돼요"
-              valueText={`${Math.ceil(thinkLeft(voice))}초 뒤 녹음이 자동으로 시작돼요`}
+              label="뒤 내 발언이 시작돼요"
+              valueText={`${Math.ceil(thinkLeft(voice))}초 뒤 내 발언이 시작돼요`}
             />
           ) : holdLeft > 0 ? (
             <Countdown
@@ -1277,46 +1224,35 @@ export function useVoiceTurn(props: Props) {
             )}
           </div>
         )}
-      {phase !== "proposal" && review && voice && (
-        <TranscriptConfirm
-          text={draft}
-          changed={draftChanged}
-          empty={review.status === "empty"}
-          seconds={confirmLeft(voice)}
-          submitSeconds={
-            review.submit_deadline_at
-              ? secondsUntil(voice, review.submit_deadline_at)
-              : review.status === "empty" && voice.turn_until_at
-                ? secondsUntil(voice, voice.turn_until_at)
-                : undefined
-          }
-          rerecorded={!!voice.rerecorded}
-          onChange={(text) => changeDraft(review.id, text)}
-          onSubmit={() => submitNow(review.id)}
-          onRerecord={() => void rerecord(voice, review.id)}
+      {phase !== "proposal" && !error && (review || tooLong) && voice && !exhaustedNow && (
+        <EmptyRecognition
+          tooLong={tooLong}
+          disabled={!props.connected}
+          onRerecord={() => void resume("rerecord")}
         />
       )}
       {debating &&
         !error &&
         !exhaustedNow &&
         voice?.state === "USER_READY" &&
-        voice.blocked_reason === "empty" && (
+        voice.blocked_reason === "empty" &&
+        !review && (
           <Button
             variant="secondary"
             className="self-start"
             disabled={!props.connected}
             onClick={() => void resume("rerecord")}
           >
-            다시 녹음
+            다시 말하기
           </Button>
         )}
-      {unsent && <UnsentSpeech text={unsent} onDismiss={() => setUnsent("")} />}
       {recording && (
         <div className="flex flex-col items-stretch gap-3">
           <div className="flex h-12 items-center rounded-lg bg-danger-soft px-3">
             <LevelBars voice={mic} className="h-8 w-full justify-between" />
           </div>
           <button
+            ref={finishButton}
             type="button"
             onClick={() => finish.current()}
             className="press flex h-14 items-center justify-center gap-2 rounded-xl border-2 border-danger bg-surface text-callout font-semibold text-danger hover:bg-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger"
@@ -1324,7 +1260,7 @@ export function useVoiceTurn(props: Props) {
             <Square size={16} fill="currentColor" aria-hidden />
             발언 완료
           </button>
-          <p className="text-center text-footnote text-muted">시간이 끝나면 자동으로 제출해요</p>
+          <p className="text-center text-footnote text-muted">시간이 끝나면 자동으로 전달해요</p>
         </div>
       )}
       {debating && trouble && (
@@ -1339,16 +1275,6 @@ export function useVoiceTurn(props: Props) {
           음성 참여 시작
         </Button>
       )}
-      <details className="border-t border-line pt-2">
-        <summary className="cursor-pointer text-footnote font-medium">최근 발언</summary>
-        <ol className="mt-2 max-h-48 space-y-2 overflow-y-auto text-footnote">
-          {recent.map((m) => (
-            <li key={m.id}>
-              <strong>{nameOf(m.sender) ?? "지원자"}</strong>: {m.content}
-            </li>
-          ))}
-        </ol>
-      </details>
     </section>
   );
 
@@ -1357,9 +1283,20 @@ export function useVoiceTurn(props: Props) {
     controls,
     /** 지금 목소리가 나오는 동료 자리(프로필 강조용) */
     speakingSeat: active as Seat | null,
+    featuredSeat: displayedSeat(
+      voice?.state,
+      active as Seat | null,
+      lastDisplayed,
+      awaitingSaved && !active,
+    ),
+    hand: showRaisedHand(voice?.hand, voice?.priority),
     /** 들은 만큼만 보이는 대화(토론방용) */
     chatSnap: heard,
     currentCaption: speaking,
+    recentCaption:
+      recentCaption?.seat === displayedSeat(undefined, active as Seat | null, lastDisplayed)
+        ? recentCaption.text
+        : "",
     /** 지원자 차례가 한 번이라도 왔는지·지금 녹음 중인지(칸 펼치기·프로필 강조용) */
     candidateTurn: !!voice && CANDIDATE_STATES.has(voice.state),
     recording: voice?.state === "USER_SPEAKING",

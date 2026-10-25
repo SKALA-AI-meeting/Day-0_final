@@ -16,8 +16,8 @@ export type Action = "resend" | "replay" | "retranscribe" | "rerecord" | "reconn
 export const ACTION_LABEL: Record<Action, string> = {
   resend: "다시 보내기",
   replay: "다시 재생",
-  retranscribe: "다시 받아 적기",
-  rerecord: "다시 녹음",
+  retranscribe: "다시 확인하기",
+  rerecord: "다시 말하기",
   reconnect: "다시 연결",
   start: "말하기 시작",
 };
@@ -27,21 +27,21 @@ export type Trouble = { title: string; detail: string; action: Action | null };
 
 /**
  * 서버가 막아 둔 내 차례(blocked_reason)를 지원자에게 보일 오류로. 빈 인식 결과는 오류가 아니라
- * 확인 칸(직접 입력)과 [다시 녹음]으로 보이므로 null. 내 차례가 아니면 버튼 없이 안내만 한다.
+ * [다시 말하기] 안내로 보이므로 null. 내 차례가 아니면 버튼 없이 안내만 한다.
  */
 export function blockedTrouble(reason: string | undefined, myTurn: boolean): Trouble | null {
   const act = (action: Action) => (myTurn ? action : null);
   switch (reason) {
     case "error":
       return {
-        title: "발언을 글로 옮기지 못했어요",
-        detail: "같은 녹음으로 다시 받아 적어 볼 수 있어요.",
+        title: "발언을 확인하지 못했어요",
+        detail: "방금 한 말을 다시 확인해 볼 수 있어요.",
         action: act("retranscribe"),
       };
     case "voice_recording_failed":
       return {
-        title: "녹음을 받지 못했어요",
-        detail: "마이크 연결을 확인하고 다시 녹음해 주세요.",
+        title: "발언이 전해지지 않았어요",
+        detail: "마이크 연결을 확인하고 다시 말해 주세요.",
         action: act("rerecord"),
       };
     case "voice_interrupted":

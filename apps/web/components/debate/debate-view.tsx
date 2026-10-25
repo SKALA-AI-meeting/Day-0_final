@@ -2,7 +2,7 @@
 
 // 토론 세션 화면: 상단 바(단계 진행바·영역 켜고 끄기·이 단계 남은 시간·?·나가기) / 배경 레이어 위 분할 레이아웃.
 // 칸 배치와 단계별 비율은 stage-layout.ts, 크기 조절·전환은 components/ui/split-layout.tsx,
-// 음성 토론(차례·녹음·재생·받아 적은 글 확인)은 voice/voice-room.tsx의 useVoiceTurn.
+// 음성 토론(차례·녹음·재생·받아 적은 글의 즉시 전달)은 voice/voice-room.tsx의 useVoiceTurn.
 // 남은 시간과 오피스 시각을 한 줄에 쓰지 않는다(R7). 종료되면 입력을 모두 잠그고 [나가기]로 디브리핑.
 import { Dialog } from "@base-ui/react/dialog";
 import {
@@ -315,8 +315,6 @@ export function DebateView({
     reconnecting: session.connection === "reconnecting",
     locked,
     onSend: session.sendVoice,
-    wasSaved: session.wasAcked,
-    lastSyncedAt: session.lastSyncedAt,
     onBusy: setVoiceBusy,
     onFocusProposal: () => {
       setPinned((prev) => ({ ...prev, proposal: true }));
@@ -421,7 +419,7 @@ export function DebateView({
             </div>
           ),
           summary: <PhaseSummary snap={snap} />,
-          // 가운데 칸: 4명 프로필(2x2, 말하는 사람 강조, 칸을 가득 채움) + 바로 아래 차례·녹음·손들기 조작
+          // 가운데 칸: 4명 프로필(발언 시작 시 발표자 확대, 칸을 가득 채움) + 바로 아래 차례·녹음·손들기 조작
           chat: voiceEnabled ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden">
               <div className="flex min-h-0 flex-1">
@@ -431,9 +429,12 @@ export function DebateView({
                   fill
                   voice={voice.mic}
                   candidateTalking={voice.recording}
+                  featuredSeat={voice.featuredSeat}
+                  hand={voice.hand}
                   caption={
                     voice.currentCaption ? (sentences(voice.currentCaption.text).at(-1) ?? "") : ""
                   }
+                  recentCaption={voice.recentCaption}
                   intro={false}
                   onSkipIntro={() => setIntroDone(true)}
                 />
