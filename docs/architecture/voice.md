@@ -60,10 +60,20 @@ TtsService·SttService는 토론 에이전트와 독립 인터페이스다. 기�
 
 ## Gemini 공급자(`VOICE_PROVIDER=gemini`)
 
-`dev-real` 프로필의 음성 공급자다. 어댑터는 `speech.py`의 `GeminiSpeech`이고 키는 기존 규칙(gemini-* → `GEMINI_API_KEY`)을 따른다.
+`VOICE_PROVIDER=gemini`(또는 `VOICE_TTS_PROVIDER=gemini`)일 때의 공급자다. 어댑터는 `speech.py`의 `GeminiSpeech`이고 키는 기존 규칙(gemini-* → `GEMINI_API_KEY`)을 따른다.
 
 - 받아 적기: `models/{MODEL_STT}:generateContent`에 완성 WAV를 인라인 오디오로 보내고 "들리는 그대로 받아 적어라(다듬기·요약 금지, 말소리가 없으면 빈 문자열)" 지시를 붙인다. 기본 `gemini-3.5-flash-lite`, temperature 0. 전용 음성 인식이 아니라 생성 모델이므로 말을 다듬거나 지어낼 위험이 있다(전사는 평가 근거라 실제 발언으로 확인한다). 구문 목록은 지시에 붙인다.
 - 읽기: TTS 모델(기본 `gemini-2.5-flash-preview-tts`)에 `responseModalities: AUDIO`와 자리별 고정 목소리(p1 `Charon`, p2 `Kore`, p3 `Orus`)를 보낸다. 원시 PCM(`audio/L16;rate=24000`)이면 WAV 머리를 붙이고, WAV로 오면 그대로 쓴다. 말투 지시는 세 자리 모두 같다. 10/25 시험에서 한 문장에 약 5초가 걸렸다.
 - 비용·정책: 사용량 과금. 정책 `version: gemini-v1`, 원장 `gemini:<기간>`, 과금 표시는 OpenAI와 같다(`metered`).
 - 데이터: Gemini API 무료 티어는 입력을 Google이 제품 개선에 쓸 수 있다. 실제 지원자 음성에 쓰기 전에 키 프로젝트의 결제 티어를 확인한다. 동의 화면은 처리 업체를 "Google Gemini"로 적는다(`NEXT_PUBLIC_VOICE_PROVIDER`).
+
+## 받아 적기·읽기 분리(`VOICE_STT_PROVIDER`·`VOICE_TTS_PROVIDER`)
+
+두 값을 따로 주면 `SplitSpeech`가 받아 적기는 STT 공급자, 읽기는 TTS 공급자에 맡긴다(비우면 `VOICE_PROVIDER` 하나). 채용 건 정책의 `provider`는 `"<stt>+<tts>"`(예: `whisper+gemini`), 목소리는 읽기 공급자 것을 복사하고, 사용량 원장은 `<stt>+<tts>:<기간>`이다. 과금 표시는 그 작업을 맡은 쪽이 과금 공급자일 때만 `metered`다.
+
+`dev-real`은 받아 적기 `whisper`(로컬) + 읽기 `gemini`다.
+
+- 로컬 받아 적기(`WhisperSpeech`): faster-whisper(CPU int8)를 API 프로세스 안에서 돌린다. 모델 `WHISPER_MODEL`(기본 `large-v3-turbo`), 스레드 `WHISPER_THREADS`(기본 4), 빔 `WHISPER_BEAM`(기본 1), 동시 처리 `WHISPER_CONCURRENCY`(기본 1). 완성 WAV의 PCM을 배열로 넘기고, 구문 목록은 `initial_prompt`로 넘긴다. 모델은 첫 사용(세션 시작 확인 `verify`) 때 `/models/whisper`(compose `hfcache` 볼륨)에 내려받아 프로세스에 하나만 둔다. 지원자 소리는 서버 밖으로 나가지 않고 과금이 없다.
+- 읽기는 Gemini TTS로, 개인 Gemini 키에는 AI 동료가 만든 문장만 간다(지원자 음성·발언은 보내지 않는다).
+- 동의 화면은 "이 서비스 서버(외부 전송 없음)에서 받아 적고, AI 동료 음성은 Google Gemini"로 적는다.
 

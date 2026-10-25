@@ -21,8 +21,11 @@ def scope(now) -> str:
         raise ServiceError(503, "voice_quota_unverified", "VOICE_QUOTA_PERIOD 확인이 필요합니다")
     if period == "auto":
         period = now.astimezone(UTC).strftime("%Y-%m")
-    if os.getenv("VOICE_PROVIDER", "azure") in ("openai", "gemini"):
-        return os.getenv("VOICE_PROVIDER") + ":" + period
+    from app.voice.speech import provider_label
+
+    label = provider_label()
+    if label not in ("azure", "fake"):
+        return label + ":" + period
     return os.getenv("AZURE_SPEECH_RESOURCE_ID", "fake") + ":" + period
 
 

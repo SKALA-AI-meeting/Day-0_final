@@ -59,6 +59,7 @@ services:
       assessment-mcp: { condition: service_healthy }
     volumes:
       - ../scenarios:/scenarios:ro
+      - hfcache:/models   # 로컬 받아 적기(VOICE_STT_PROVIDER=whisper) 모델. rag-mcp와 같은 캐시 볼륨
 
   debate-mcp:
     build: ../services/debate-mcp
@@ -146,6 +147,8 @@ services:
         NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
         NEXT_PUBLIC_VOICE_ENABLED: ${VOICE_ENABLED:-1}
         NEXT_PUBLIC_VOICE_PROVIDER: ${VOICE_PROVIDER:-azure}
+        NEXT_PUBLIC_VOICE_STT_PROVIDER: ${VOICE_STT_PROVIDER:-}
+        NEXT_PUBLIC_VOICE_TTS_PROVIDER: ${VOICE_TTS_PROVIDER:-}
     env_file: ${DAYZERO_ENV_FILE:-.env}
     ports:
       - "${WEB_PORT:-3000}:3000"

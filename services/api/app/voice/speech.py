@@ -1,7 +1,8 @@
 """완성 파일 기반 음성 어댑터(Azure F0·OpenAI). 부분 인식 결과는 외부로 전달하지 않는다.
 
 VOICE_PROVIDER가 공급자를 고른다: azure(F0, 유료 폴백 없음), openai(제한 키, 사용량 과금),
-gemini(GEMINI_API_KEY, 사용량 과금), fake(개발·테스트).
+gemini(GEMINI_API_KEY, 사용량 과금), fake(개발·테스트). VOICE_STT_PROVIDER·VOICE_TTS_PROVIDER로
+받아 적기와 읽기를 서로 다른 공급자에 맡길 수 있다(예: 받아 적기 whisper(로컬), 읽기 gemini).
 """
 
 import asyncio
@@ -435,8 +436,119 @@ class GeminiSpeech:
         return "".join(p.get("text", "") for p in parts).strip().strip('"').strip()
 
 
-def provider():
+# 로컬 받아 적기(faster-whisper, CPU int8). 모델·스레드·빔은 env로 바꾼다
+WHISPER_MODEL = "large-v3-turbo"
+
+
+class WhisperSpeech:
+    """로컬 받아 적기 전용(faster-whisper). 소리가 이 서버 밖으로 나가지 않고 과금이 없다.
+
+    모델은 처음 쓸 때 WHISPER_CACHE(기본 /models/whisper)에 내려받아 프로세스에 하나만 둔다.
+    CPU를 많이 쓰므로 동시에 WHISPER_CONCURRENCY개(기본 1)까지만 받아 적는다. 읽기는 하지 않는다.
+    """
+
+    _models: dict = {}
+    _load_lock = threading.Lock()
+
+    def __init__(self) -> None:
+        self.model_name = os.getenv("WHISPER_MODEL") or WHISPER_MODEL
+        self.threads = int(os.getenv("WHISPER_THREADS", "4"))
+        self.beam = int(os.getenv("WHISPER_BEAM", "1"))
+        self.cache = os.getenv("WHISPER_CACHE", "/models/whisper")
+        self._slots = asyncio.Semaphore(int(os.getenv("WHISPER_CONCURRENCY", "1")))
+
+    def _model(self):
+        key = (self.model_name, self.threads)
+        with self._load_lock:
+            if key not in self._models:
+                from faster_whisper import WhisperModel
+
+                self._models[key] = WhisperModel(
+                    self.model_name,
+                    device="cpu",
+                    compute_type="int8",
+                    cpu_threads=self.threads,
+                    download_root=self.cache,
+                )
+            return self._models[key]
+
+    async def verify(self) -> None:
+        """모델을 적재해 둔다(처음 한 번은 내려받기 때문에 오래 걸린다)."""
+        try:
+            await asyncio.to_thread(self._model)
+        except Exception as exc:
+            raise ServiceError(
+                503, "voice_unavailable", "로컬 받아 적기 모델을 쓸 수 없습니다"
+            ) from exc
+
+    async def synthesize(self, text: str, voice: str) -> bytes:
+        raise ServiceError(503, "voice_unavailable", "로컬 받아 적기 공급자는 읽기를 하지 않습니다")
+
+    async def transcribe(self, audio: bytes, phrases: Sequence[str] = ()) -> str:
+        """완성 WAV(PCM16 mono 16kHz)를 받아 적는다. phrases는 initial_prompt로 넘긴다."""
+        frames, _ = pcm(audio)
+        prompt = ("참여자와 자주 나오는 말: " + ", ".join(phrases) + ".") if phrases else None
+
+        def run() -> str:
+            import numpy as np
+
+            wav = np.frombuffer(frames, np.int16).astype(np.float32) / 32768
+            segments, _ = self._model().transcribe(
+                wav,
+                language="ko",
+                beam_size=self.beam,
+                initial_prompt=prompt,
+                condition_on_previous_text=False,
+                vad_filter=False,
+            )
+            return "".join(s.text for s in segments).strip()
+
+        async with self._slots:
+            return await asyncio.to_thread(run)
+
+
+class SplitSpeech:
+    """받아 적기와 읽기를 서로 다른 공급자에 맡긴다."""
+
+    def __init__(self, stt, tts) -> None:
+        self.stt = stt
+        self.tts = tts
+
+    async def verify(self) -> None:
+        await self.stt.verify()
+        await self.tts.verify()
+
+    async def synthesize(self, text: str, voice: str) -> bytes:
+        return await self.tts.synthesize(text, voice)
+
+    async def transcribe(self, audio: bytes, phrases: Sequence[str] = ()) -> str:
+        return await self.stt.transcribe(audio, phrases)
+
+
+def voice_providers() -> tuple[str, str]:
+    """(받아 적기, 읽기) 공급자 이름. 따로 정하지 않으면 VOICE_PROVIDER 하나를 쓴다."""
     name = os.getenv("VOICE_PROVIDER", "azure")
+    return os.getenv("VOICE_STT_PROVIDER") or name, os.getenv("VOICE_TTS_PROVIDER") or name
+
+
+def provider_label() -> str:
+    """채용 건 정책·사용량 원장에 쓰는 이름. 둘이 같으면 그 이름, 다르면 "받아적기+읽기"."""
+    stt, tts = voice_providers()
+    return stt if stt == tts else f"{stt}+{tts}"
+
+
+def provider():
+    stt, tts = voice_providers()
+    if stt == tts:
+        return _provider(stt)
+    if tts == "whisper":
+        raise ServiceError(503, "voice_unavailable", "whisper는 받아 적기 전용입니다")
+    return SplitSpeech(_provider(stt), _provider(tts))
+
+
+def _provider(name: str):
+    if name == "whisper":
+        return WhisperSpeech()
     if name == "fake":
         if os.getenv("LLM_FAKE") != "1" and os.getenv("ENABLE_TEST_API") != "1":
             raise ServiceError(503, "voice_unavailable", "FakeSpeech는 개발 모드 전용입니다")

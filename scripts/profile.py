@@ -43,6 +43,8 @@ MODE_KEYS = (
     "LLM_FAKE",
     "VOICE_ENABLED",
     "VOICE_PROVIDER",
+    "VOICE_STT_PROVIDER",
+    "VOICE_TTS_PROVIDER",
     "ENABLE_TEST_API",
     "AGENT_RUNNER",
     "LANGCHAIN_TRACING_V2",
@@ -150,12 +152,20 @@ class Profile:
         return "fake" if self.llm_fake else "live"
 
     @property
+    def voice_parts(self) -> tuple[str, str]:
+        """(받아 적기, 읽기) 공급자. 따로 정하지 않으면 VOICE_PROVIDER 하나.
+
+        app/voice/speech.py voice_providers와 같은 규칙이다.
+        """
+        name = self.get("VOICE_PROVIDER")
+        return self.get("VOICE_STT_PROVIDER") or name, self.get("VOICE_TTS_PROVIDER") or name
+
+    @property
     def voice_mode(self) -> str:
-        return (
-            "off"
-            if self.get("VOICE_ENABLED").lower() in ("0", "false")
-            else self.get("VOICE_PROVIDER")
-        )
+        if self.get("VOICE_ENABLED").lower() in ("0", "false"):
+            return "off"
+        stt, tts = self.voice_parts
+        return stt if stt == tts else f"{stt}+{tts}"
 
     def role_models(self) -> dict[str, str]:
         base = self.get("OPENAI_MODEL") or DEFAULTS["OPENAI_MODEL"]
@@ -196,6 +206,20 @@ class Profile:
             out.append("VOICE_ENABLED는 true 또는 false(1 또는 0)")
         if self.get("VOICE_PROVIDER") not in ("azure", "openai", "gemini", "fake"):
             out.append("VOICE_PROVIDER는 azure·openai·gemini·fake 중 하나")
+        if self.get("VOICE_STT_PROVIDER") not in (
+            "",
+            "azure",
+            "openai",
+            "gemini",
+            "whisper",
+            "fake",
+        ):
+            out.append("VOICE_STT_PROVIDER는 비움·azure·openai·gemini·whisper·fake 중 하나")
+        if self.get("VOICE_TTS_PROVIDER") not in ("", "azure", "openai", "gemini", "fake"):
+            out.append(
+                "VOICE_TTS_PROVIDER는 비움·azure·openai·gemini·fake 중 하나"
+                "(whisper는 받아 적기 전용)"
+            )
         if self.voice_mode == "off" and self.get("ENABLE_TEST_API") != "1":
             out.append("VOICE_ENABLED=0에는 ENABLE_TEST_API=1이 필요하다")
         if self.get("ENABLE_TEST_API") not in ("", "0", "1"):
@@ -306,26 +330,31 @@ class Profile:
                     )
                 )
             )
-        if self.voice_mode in ("openai", "gemini"):
-            label, key_name, stt, tts = (
-                ("OpenAI", "OPENAI_API_KEY", "gpt-4o-mini-transcribe", "gpt-4o-mini-tts")
-                if self.voice_mode == "openai"
-                else (
-                    "Gemini",
-                    "GEMINI_API_KEY",
-                    "gemini-3.5-flash-lite",
-                    "gemini-2.5-flash-preview-tts",
-                )
-            )
-            stt = self.get("MODEL_STT") or stt
-            tts = self.get("MODEL_TTS") or tts
-            has_key = self.has(key_name) or self.shell.get(key_name)
-            key = "있음" if has_key else "없음"
+        stt, tts = self.voice_parts
+        if self.voice_mode != "off" and {stt, tts} & {"openai", "gemini", "whisper"}:
+            parts = [("STT", stt, "MODEL_STT"), ("TTS", tts, "MODEL_TTS")]
+            defaults = {
+                ("openai", "STT"): "gpt-4o-mini-transcribe",
+                ("openai", "TTS"): "gpt-4o-mini-tts",
+                ("gemini", "STT"): "gemini-3.5-flash-lite",
+                ("gemini", "TTS"): "gemini-2.5-flash-preview-tts",
+            }
+            keys = {"openai": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY"}
+            shown = []
+            for part, name, model_env in parts:
+                if name == "whisper":
+                    model = self.get("WHISPER_MODEL") or "large-v3-turbo"
+                    shown.append(f"{part} whisper {model}(로컬, 키 없음)")
+                elif name in keys:
+                    model = self.get(model_env) or defaults[(name, part)]
+                    has = self.has(keys[name]) or self.shell.get(keys[name])
+                    shown.append(
+                        f"{part} {name} {model} → {keys[name]}({'있음' if has else '없음'})"
+                    )
+                else:
+                    shown.append(f"{part} {name}")
             period = "있음" if self.has("VOICE_QUOTA_PERIOD") else "없음"
-            lines.append(
-                f"  {label} 음성   STT {stt}, TTS {tts} → {key_name} ({key}), "
-                f"VOICE_QUOTA_PERIOD {period}"
-            )
+            lines.append(f"  음성 공급자   {', '.join(shown)}, VOICE_QUOTA_PERIOD {period}")
         lines.append(
             f"  .env 파일     {'있음' if self.env_path.is_file() else '없음'} "
             f"({self.env_path.relative_to(self.root)})"

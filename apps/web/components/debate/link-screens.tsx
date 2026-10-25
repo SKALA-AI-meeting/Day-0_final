@@ -20,10 +20,20 @@ export const VOICE_ENABLED = !["0", "false"].includes(
   (process.env.NEXT_PUBLIC_VOICE_ENABLED ?? "1").toLowerCase(),
 );
 
-/** 음성을 처리하는 외부 서비스 이름(동의 화면). 빌드 시점의 VOICE_PROVIDER를 따른다 */
+/** 음성을 처리하는 곳(동의 화면). 빌드 시점의 VOICE_STT·TTS_PROVIDER(없으면 VOICE_PROVIDER)를 따른다 */
+const PROCESSOR_NAMES: Record<string, string> = {
+  openai: "OpenAI",
+  gemini: "Google Gemini",
+  azure: "Azure Speech",
+};
+const VOICE_STT =
+  process.env.NEXT_PUBLIC_VOICE_STT_PROVIDER || process.env.NEXT_PUBLIC_VOICE_PROVIDER;
+const VOICE_TTS =
+  process.env.NEXT_PUBLIC_VOICE_TTS_PROVIDER || process.env.NEXT_PUBLIC_VOICE_PROVIDER;
 const VOICE_PROCESSOR =
-  { openai: "OpenAI", gemini: "Google Gemini" }[process.env.NEXT_PUBLIC_VOICE_PROVIDER ?? ""] ??
-  "Azure Speech";
+  VOICE_STT === "whisper"
+    ? `이 서비스 서버(외부 전송 없음)에서 받아 적고, AI 동료 음성은 ${PROCESSOR_NAMES[VOICE_TTS ?? ""] ?? "Azure Speech"}`
+    : (PROCESSOR_NAMES[VOICE_STT ?? ""] ?? "Azure Speech");
 
 export const NAME_MAX = 20;
 

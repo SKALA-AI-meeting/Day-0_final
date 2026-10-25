@@ -2,7 +2,7 @@
 
 import os
 
-from app.voice.speech import METERED_PROVIDERS, voices_for
+from app.voice.speech import METERED_PROVIDERS, provider_label, voice_providers, voices_for
 
 
 def pinned_policy() -> dict:
@@ -21,20 +21,25 @@ def pinned_policy() -> dict:
     forced_wait = int(os.getenv("VOICE_FORCED_WAIT_SECONDS", "30"))
     if not 0 <= forced_wait <= 120:
         raise ValueError("VOICE_FORCED_WAIT_SECONDS must be 0..120")
-    provider = os.getenv("VOICE_PROVIDER", "azure")
+    provider = provider_label()
+    stt, tts = voice_providers()
+    versions = {
+        "azure": "azure-f0-v1",
+        "openai": "openai-v1",
+        "gemini": "gemini-v1",
+        "fake": "fake-v1",
+    }
     return {
-        "version": {"azure": "azure-f0-v1", "openai": "openai-v1", "gemini": "gemini-v1"}.get(
-            provider, "fake-v1"
-        ),
+        "version": versions.get(provider, f"{provider}-v1"),
         "provider": provider,
         "user_turn_seconds": seconds,
         "think_seconds": think,
         "turn_hold_seconds": hold,
         "confirm_seconds": confirm,
         "forced_wait_seconds": forced_wait,
-        "voices": voices_for(provider),
+        "voices": voices_for(tts),
         "locale": "ko-KR",
         # F0 무료 등급은 Azure만. OpenAI·Gemini는 사용량 과금이라 예산이 없다(한도는 quota.py)
         "sku": "F0" if provider == "azure" else None,
-        "paid_budget_usd": None if provider in METERED_PROVIDERS else 0,
+        "paid_budget_usd": None if {stt, tts} & METERED_PROVIDERS else 0,
     }

@@ -2,7 +2,6 @@
 
 import hashlib
 import logging
-import os
 import uuid
 from datetime import datetime, timedelta
 
@@ -688,7 +687,10 @@ async def run_job(ctx, job_id):
                 await db.commit()
                 return
             # Azure F0는 무료 등급, OpenAI·Gemini는 사용량 과금이라 비용을 여기서 확정하지 않는다
-            metered = os.getenv("VOICE_PROVIDER", "azure") in ("openai", "gemini")
+            from app.voice.speech import METERED_PROVIDERS, voice_providers
+
+            # 받아 적기·읽기 중 실제로 쓴 쪽이 과금 공급자인지
+            metered = voice_providers()[0 if kind == "stt" else 1] in METERED_PROVIDERS
             extra = {
                 "status": "error" if error else "ready",
                 "error": error,

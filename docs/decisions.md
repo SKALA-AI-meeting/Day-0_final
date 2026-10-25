@@ -517,3 +517,9 @@ V6·V7의 공식 자료 비교·비용 계산·독립 인터페이스·차단 �
 |---|---|---|
 | `dev-real`의 음성을 Gemini(`VOICE_PROVIDER=gemini`, STT `gemini-3.5-flash-lite`·TTS `gemini-2.5-flash-preview-tts`, 키 `GEMINI_API_KEY`)로 돌린다. OpenAI 음성 공급자는 코드에 남긴다 | 제한 키 프로젝트가 OpenAI 음성 모델 5개를 모두 403으로 막아, 이미 있는 Gemini 키로 실제 음성 경로를 시험한다(사용자 결정). 키 규칙(gemini-* → GEMINI_API_KEY)을 바꾸지 않아도 된다 | OpenAI: 모델 권한이 열리면 `VOICE_PROVIDER=openai`로 바로 쓴다. Azure: 키·F0 리소스가 없다. 위험: 생성 모델 전사의 다듬기·지어내기, TTS 지연(문장당 약 5초), 무료 티어 데이터 사용 — 실제 지원자에게 쓰기 전에 확인한다 |
 
+## 2026-10-25 받아 적기는 로컬 Whisper, 읽기만 Gemini
+
+| 결정 | 이유 | 대안과 기각 이유 |
+|---|---|---|
+| 음성 공급자를 받아 적기·읽기로 나누고(`VOICE_STT_PROVIDER`·`VOICE_TTS_PROVIDER`), `dev-real`은 받아 적기 로컬 Whisper(faster-whisper, CPU) + 읽기 Gemini TTS로 둔다. Gemini 키는 개인 키라 AI 동료가 만든 문장만 보낸다(개인 키를 쓰지 않는다는 프로필 원칙의 예외, 사용자 결정) | 회사 키(OpenAI 제한 키)는 음성 모델 권한이 없고, 개인 Gemini 키로 지원자 음성을 보내지 않기 위해서다. 로컬 받아 적기는 과금이 없고 소리가 서버 밖으로 나가지 않는다 | Gemini 받아 적기: 개인 키로 지원자 음성이 나가고 무료 티어면 학습에 쓰일 수 있다. OpenAI 받아 적기: 회사 프로젝트 권한이 열리면 `VOICE_STT_PROVIDER=openai`로 바꾼다. 문맥을 LLM이 관리하는 결정 표: 합의·입장은 결정적 코드가 정한다는 고정 제약에 어긋나 두지 않는다 |
+
