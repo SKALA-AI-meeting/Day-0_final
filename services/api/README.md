@@ -14,9 +14,11 @@
 | 필요한 env | `DATABASE_URL` `RABBITMQ_URL` `JWT_SECRET` `INTERNAL_TOKEN` `ASSESSMENT_MCP_TOKEN` `DEBATE_MCP_URL` `RAG_MCP_URL` `ASSESSMENT_MCP_URL` `SCENARIOS_DIR` `OPENAI_API_KEY` `OPENAI_MODEL` `MODEL_INTENT` `MODEL_TURN` `MODEL_PERSONA` `MODEL_ASSISTANT` `MODEL_EVALUATOR` `GEMINI_API_KEY` `WEB_ORIGIN` `WEB_BASE_URL` `CONTACT_EMAIL` `SESSION_COST_HARD_USD` `AGENT_RUNNER` `LLM_FAKE` `LLM_FAULT` `ENABLE_TEST_API` `VOICE_ENABLED` `VOICE_PROVIDER` |
 | 의존 서비스 | postgres(필수), rabbitmq(큐 발행), debate-mcp·rag-mcp·assessment-mcp(토론 그래프·결정적 노드의 도구 호출) |
 
-env의 의미·기본값은 `config.py`(`get_settings`)와 `agent/llm/roles.py`, 예시는 `infra/.env.example`이다. 로컬 실행은 `infra/.env.local` → `infra/.env` 순으로 읽고 이미 있는 환경변수를 덮어쓰지 않는다. `LLM_FAKE=1`은 LLM 호출만 결정적 고정 응답으로 바꾸고, `ENABLE_TEST_API=1`이면 `/internal/test/*`가 열린다(운영은 비움). `LLM_FAULT`는 e2e 장애 주입 전용이다.
+env의 의미·기본값은 `config.py`(`get_settings`)와 `agent/llm/roles.py`, 예시는 `infra/.env.example`이다. `LLM_FAKE=1`은 LLM 호출만 결정적 고정 응답으로 바꾸고, `ENABLE_TEST_API=1`이면 `/internal/test/*`가 열린다(운영은 비움). `LLM_FAULT`는 e2e 장애 주입 전용이다.
 
 ## 구현된 기능
+
+코드 경로는 `services/api/app/` 기준이다.
 
 | 기능 | 코드 | PRD |
 |---|---|---|
@@ -41,7 +43,7 @@ env의 의미·기본값은 `config.py`(`get_settings`)와 `agent/llm/roles.py`,
 
 ## 실행
 
-저장소 루트에서 실행한다. 먼저 인프라(`postgres`·`rabbitmq`·`rag-mcp`)를 띄우고 env 파일 두 개를 준비한다. 로컬 실행 env: `infra/.env.local`을 만들고 DB·큐·내부 API·MCP 주소를 `localhost`로 바꾼다(항목은 [configuration.md](../../docs/guides/configuration.md) "로컬 실행용 `infra/.env.local`"). 로컬 서비스는 `infra/.env.local` → `infra/.env` 순으로 읽는다.
+저장소 루트에서 실행한다. 먼저 인프라(`postgres`·`rabbitmq`·`rag-mcp`)를 띄우고 env 파일 두 개를 준비한다. 로컬 실행 env는 [configuration.md](../../docs/guides/configuration.md) "로컬 실행용 `infra/.env.local`"을 따른다.
 
 ```
 cp infra/.env.example infra/.env                              # 비밀값 채움(처음 한 번)
@@ -138,6 +140,8 @@ debate-mcp·assessment-mcp도 떠 있어야 토론 그래프와 리포트 평가
 요청·응답 형식은 [`docs/contracts/api.md`](../../docs/contracts/api.md)(공개), [`docs/contracts/internal.md`](../../docs/contracts/internal.md)(내부), [`docs/contracts/ws.md`](../../docs/contracts/ws.md)(WebSocket)에 있다.
 
 ## 구조
+
+경로는 `services/api/app/` 기준이다(테스트 도구만 `services/api/tests/`).
 
 - `services/session.py`·`phases.py`: 상태·단계 전이(SessionService), 누적 마감, 전환 프레임.
 - `services/debate.py`: 지원자 메시지 저장·generation, 의도 분류 반영, 안·입장, 칸 확정·합의 채우기, DebateState. `services/consensus.py`는 순수 판정 함수, `services/timeout.py`는 마감 채우기.

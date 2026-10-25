@@ -15,7 +15,30 @@
 | POST `/rerecord` | `{turn_id, epoch, job_id}` | 발언권 상태(state USER_READY). 받아 적기가 끝난(ready) 현재 발언을 제출하지 않고 버린다. 같은 차례에서 1회만 허용하고(`rerecorded:true`), 두 번째는 409 `voice_retry_exhausted`. 받아 적은 글이 500자(지원자 발언 상한)를 넘어 제출할 수 없는 발언을 버리는 경우는 이 1회에 세지 않고 따로 차례당 2회까지 허용하며(`long_rerecords`, 넘으면 409 `voice_retry_exhausted`) `rerecorded`를 바꾸지 않는다. 다음 `/capture`는 발언 시간을 새로 받는다 |
 | GET `/assets/{job_id}` | 없음 | 같은 세션의 TTS `audio/wav`, `Cache-Control:no-store`. 없거나 만료면 404 |
 
-VoiceState는 `{turn_id, epoch, generation, phase, state, ready_at, server_now, items}`다. proposal 단계에는 `USER_READY`를 만들지 않고 새 발언권 요청은 409 `voice_turn_expired`다. GET(접미 없음) 응답에는 `heard_message_ids`(재생이 끝난 동료 발언의 메시지 id 목록, 전 단계 포함)가 더 있고, 화면은 이 목록으로 청취 여부를 확인한다. 재생 중인 동료의 문장을 큰 칸에 자막으로 보이고, 끝난 뒤 방금 한 말 한 문장만 남긴다. 기록 목록은 없다. 재생 중인 발언은 items의 `message_id`로 본문을 찾아 재생 위치까지의 문장만 보인다. state가 USER_READY면 `turn_until_at`(내 차례를 지켜 주는 끝 시각)이 있고, 단계 마감·세션 종료가 가까워 녹음을 `user_turn_seconds`만큼 못 하면 `speech_limit_seconds`(지금 녹음을 시작하면 말할 수 있는 초, 0이면 이번 단계에서 더 녹음할 수 없음)도 있다(개정 V18, 마감은 늘리지 않음). 녹음 마감(`speech_deadline_at`)은 단계 마감·세션 종료보다 10초(받아 적기·확인·제출 여유) 앞을 넘지 않아서, 마감에 맞춰 잘린 녹음도 단계가 끝나기 전에 제출된다. 그 10초 안에서는 `/capture`가 409 `voice_turn_expired`다. 녹음은 자동으로 시작하지 않는다. 일반·손들기·강제 차례 모두 지원자가 [발언하기]로 `/capture`하고, 지켜 주는 시간은 모두 ready_at부터 `voice_policy.turn_hold_seconds`(없던 예전 채용 건은 20초)다. 예전 채용 건 정책에 남은 `think_seconds`는 읽지 않는다. state는 AI_GENERATING·AI_SPEAKING·USER_READY·USER_SPEAKING·TRANSCRIBING·PROCESSING이다. items는 저장 순서의 `{id,message_id,seat,status,duration_ms,error}`이며 본문/평가 정보는 없다. 조건부 필드는 `blocked_reason`, `release_ready`, `utterance_id`, `speech_started_at`, `speech_deadline_at`, `utterance:{id,status,transcript,message_id,error,confirm_deadline_at?,submit_deadline_at?}`, `rerecorded`, `priority`(손들기·강제 차례), `hand`(든 손), `hand_turn`, `forced_phase`(그 단계 강제 차례를 이미 줌)이다. 강제 차례: 키워드·문제 상황·해결책 단계에서 그 단계 지원자 발언이 없고 단계 마감까지 남은 시간이 `min(forced_wait_seconds + user_turn_seconds + 10, 단계 길이 × 0.5)`초 이하가 되면(단계 길이는 `phase_started_at`부터 단계 마감까지, 기본 정책은 100초와 단계 절반 중 짧은 쪽), 동료 차례면 손들기와 같이(지금 발언 뒤 보호 발언만 듣고) 일반 내 차례면 그 자리에서 `priority: "forced"` 차례가 된다. 단계당 한 번이다. 지원자 메시지보다 먼저 만들어졌는데 재생이 시작되지 않은 동료 발언은 보호 발언이 아니면 재생하지 않는다(`error: superseded`). utterance가 ready 또는 empty면 `confirm_deadline_at`(받아 적기 완료 + 채용 건의 `voice_policy.confirm_seconds`)이 있고, ready면 `submit_deadline_at`도 있다. 음성 화면은 확인 시각을 기다리지 않고 ready 전사를 바로 `message.send`로 보낸다. 인식 글을 지원자에게 보이거나 고치는 입력 칸은 없다. empty 결과는 제출할 수 없고 [다시 말하기]로 같은 차례에서 다시 녹음한다(`/capture` restart). 500자를 넘는 ready 전사도 제출하지 않고 `/rerecord`로 짧게 다시 말하게 하며, 이 다시 말하기는 일반 다시 말하기 1회와 따로 차례당 2회까지다. `submit_deadline_at`은 단계·세션 마감과 녹음 마감 + 100초(서버 PROCESSING 유지 한도) 중 이른 시각이다. 저장 확인은 `client_msg_id`(= 발언 id)의 지원자 메시지로 판별하고 "전달했어요"를 3초 동안 보인다. 작업 상태는 queued·processing·ready·heard·error·empty·submitted·recording·canceled 중 해당 단계의 값이다. epoch는 WS 연결마다 바뀌며 연결 전에는 null일 수 있다.
+## VoiceState
+
+GET(접미 없음)과 발언권 상태를 돌려주는 요청의 응답이다. 화면 동작(자막·발표자 보기·"전달했어요")은 [음성 구현](../architecture/voice.md) "화면"이 정본이다.
+
+- 기본 필드: `{turn_id, epoch, generation, phase, state, ready_at, server_now, items}`. epoch는 WS 연결마다 바뀌며 연결 전에는 null일 수 있다.
+- `state`: AI_GENERATING·AI_SPEAKING·USER_READY·USER_SPEAKING·TRANSCRIBING·PROCESSING. proposal 단계에는 `USER_READY`를 만들지 않고 새 발언권 요청은 409 `voice_turn_expired`다.
+- `items`: 저장 순서의 `{id, message_id, seat, status, duration_ms, error}`. 본문·평가 정보는 없고, 화면은 `message_id`로 본문을 찾는다. 작업 상태는 queued·processing·ready·heard·error·empty·submitted·recording·canceled 중 해당 단계의 값이다.
+- `heard_message_ids`(GET만): 재생이 끝난 동료 발언의 메시지 id 목록(전 단계 포함). 화면은 이 목록으로 청취 여부를 확인한다.
+- `turn_until_at`(USER_READY만): 내 차례를 지켜 주는 끝 시각. 일반·손들기·강제 차례 모두 ready_at부터 `voice_policy.turn_hold_seconds`(값이 없는 채용 건은 20초)다. 정책에 남은 `think_seconds`는 읽지 않는다. 녹음은 자동으로 시작하지 않고 지원자가 [발언하기]로 `/capture`한다.
+- `speech_limit_seconds`: 단계 마감·세션 종료가 가까워 `user_turn_seconds`만큼 녹음할 수 없을 때, 지금 시작하면 말할 수 있는 초(0이면 이번 단계에서 더 녹음할 수 없음). 마감은 늘리지 않는다.
+- `speech_deadline_at`: 단계 마감·세션 종료보다 10초(받아 적기·확인·제출 여유) 앞을 넘지 않는다. 그 10초 안에서는 `/capture`가 409 `voice_turn_expired`다.
+- `priority`: 손들기(`hand`)·강제 차례(`forced`). `forced_phase`는 그 단계 강제 차례를 이미 줬다는 표시다(단계당 한 번). 강제 차례의 조건과 기본값은 [음성 구현](../architecture/voice.md) "강제 차례"가 정본이다.
+- 그 밖의 조건부 필드: `blocked_reason`(아래 표), `release_ready`, `utterance_id`, `speech_started_at`, `utterance:{id, status, transcript, message_id, error, confirm_deadline_at?, submit_deadline_at?}`, `rerecorded`, `hand`(든 손), `hand_turn`.
+- `confirm_deadline_at`(utterance가 ready·empty): 받아 적기 완료 + 채용 건의 `voice_policy.confirm_seconds`. 음성 화면은 이 시각을 기다리지 않고 ready 전사를 바로 `message.send`로 보낸다. `submit_deadline_at`(ready): 단계·세션 마감과 녹음 마감 + 100초(서버 PROCESSING 유지 한도) 중 이른 시각.
+- `superseded`(items `error`): 지원자 메시지보다 먼저 만들어졌는데 재생이 시작되지 않은 동료 발언은 보호 발언이 아니면 재생하지 않는다.
+- 저장 확인은 `client_msg_id`(= 발언 id)의 지원자 메시지로 판별한다.
+
+## 다시 말하기와 발언 길이
+
+- 지원자 발언은 앞뒤 공백을 뺀 1~500자다([WS 계약](ws.md) message.send).
+- empty 결과는 제출할 수 없고 [다시 말하기]로 같은 차례에서 다시 녹음한다(`/capture` restart).
+- 500자를 넘는 ready 전사도 제출하지 않고 `/rerecord`로 짧게 다시 말하게 한다. 일반 다시 말하기는 차례당 1회, 500자 초과로 다시 말하기는 따로 차례당 2회까지다. 녹음 시작은 차례당 2회가 상한이다.
+
+## 오류
 
 오류 봉투는 기존 `{error:{code,message}}`다. 409 `voice_turn_conflict`·`voice_turn_expired`·`voice_payload_mismatch`·`voice_retry_exhausted`·`voice_quota_exhausted`·`voice_capacity`·`voice_policy_mismatch`, 422 `voice_audio_invalid`, 429 `voice_rate_limited`, 503 `voice_unavailable`·`voice_quota_unverified`를 사용한다. 생성/전사 실패는 작업의 error(`voice_speech_failed`, 재생 실패는 `voice_playback_failed`)로 기록하고 응답 오류로 내지 않는다. TTS 공급자는 요청한 voice가 서버의 자리별 voice 목록(`services/api/app/voice/speech.py` `VOICES`) 밖이면 내부에서 422 `voice_policy_mismatch`로 거부하며, 이것도 작업 error `voice_speech_failed`로 남는다. 시작 요청의 409 `voice_policy_mismatch`(채용 건 공급자와 실행 공급자 불일치)는 아래 "실행 모드". 마감 뒤 STT를 새 phase에 저장하지 않는다.
 

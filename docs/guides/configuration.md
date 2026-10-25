@@ -1,20 +1,12 @@
 # 설정과 실행 모드
 
-env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값은 각 서비스 `config.py`가 정본이다. 이 문서는 실행 프로필과 실행 모드마다 무엇이 어디에 붙는지, env가 어떤 순서로 읽히는지를 적는다.
+env 이름·기본값·뜻의 정본은 `infra/.env.example`의 주석이고, 코드의 기본값은 각 서비스 `config.py`다. 이 문서는 실행 프로필·실행 모드마다 무엇이 달라지는지, env가 어떤 순서로 읽히는지, 어느 서비스가 읽는지를 적는다.
 
 ## 실행 프로필 (`PROFILE`)
 
 실행 모드(가짜/실제 LLM, 음성, 테스트 API, 포트, compose 프로젝트, 추적)는 `infra/profiles/<이름>.env`가 정한다. 비밀값은 `infra/.env`에만 두고 프로필 파일에는 비밀 아닌 선택값만 둔다(비밀 이름에 값이 있으면 해석기가 거부한다). `scripts/profile.py`가 **기본값 → `infra/.env` → 프로필** 순으로 겹쳐 유효 모드를 만들고, `make up/down/seed/eval/measure/e2e/stage PROFILE=…`이 그 값을 compose(`--env-file`과 컨테이너 `env_file` 모두 `infra/.env.resolved-<프로필>`, git 무시)와 호스트 러너(프로세스 env)에 같이 준다.
 
-| 프로필 | 목적 | LLM | 음성 | 테스트 API | compose 프로젝트·포트 | 외부 사용 |
-|---|---|---|---|---|---|
-| `dev-fake`(기본) | dev | fake(`LLM_FAKE=1`) | fake | 1 | `infra`, web 3000·api 8000 | 없음 |
-| `test-text` | test | fake | 끔 | 1 | `dayzero-debate`, web 3100·api 8100·내부 8101·postgres 5442·rag 9112 | 없음 |
-| `eval-text` | test·측정 | 실제(제한 키) | 끔 | 1 | `dayzero-debate`, 위와 같음 | LLM, `ALLOW_API=1` 필요 |
-| `test-voice` | test | fake | fake | 1 | `dayzero-debate`, 위와 같음 | 없음 |
-| `eval-voice` | test·측정 | 실제(제한 키) | fake | 1 | `dayzero-debate`, 위와 같음 | LLM, `ALLOW_API=1` 필요 |
-| `dev-real` | dev | 실제(제한 키) | Azure | 0 | `infra`, web 3000·api 8000 | LLM, `ALLOW_API=1` 필요 |
-| `deploy` | deploy | 실제(제한 키) | Azure | 0(1 금지) | `infra`(공개 주소는 `.env`) | LLM, `ALLOW_API=1` 필요 |
+프로필별 LLM·음성·테스트 API·compose 프로젝트·외부 사용은 [`infra/profiles/README.md`](../../infra/profiles/README.md) 표가 정본이다. 격리 스택(`dayzero-debate`)의 호스트 포트는 아래 "실행 모드" 표.
 
 - `make profile PROFILE=…`은 유효 모드(목적·역할별 모델·키 **이름과 있음/없음**·테스트 API·compose 프로젝트·포트)를 출력하고, `make doctor PROFILE=…`은 거기에 검사를 더한다(외부 호출 없음): deploy에 가짜 LLM·테스트 API·자리표시 비밀값 금지, 실제 LLM 프로필의 역할별 모델이 허용 목록에 있고 키가 있는지, 셸의 모드 변수(`LLM_FAKE`·`ENABLE_TEST_API`·`AGENT_RUNNER`·추적 플래그)가 프로필과 다르지 않은지. 비밀값은 어디에도 출력하지 않는다.
 - **과금 동의**: 실제 LLM 프로필로 무언가를 띄우거나 부르는 명령(`make up`, `make eval`, `make measure`, live 테스트, 판정·가상 지원자 스크립트 직접 실행)은 매번 `ALLOW_API=1`을 명시해야 한다. 키가 있다는 이유로 호출하지 않는다. `make down`은 동의·키 없이 된다.
@@ -79,7 +71,7 @@ env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값�
 
 | 이름 | 읽는 곳 | 뜻·기본값 |
 |---|---|---|
-| `OPENAI_API_KEY`, `GEMINI_API_KEY` | api·report-worker LLM 래퍼, 호스트 러너(가상 지원자·판정) | 모델 id로 키를 고른다: 제한 키 허용 목록(`gpt-4o-mini`·`gpt-4.1-mini`·`gpt-5.4-mini`·`gpt-5.4-nano`·`gpt-5-nano`)의 gpt-* → `OPENAI_API_KEY`, gemini-* → `GEMINI_API_KEY`, 목록 밖 gpt-*는 키가 있어도 설정 오류(대체 모델·개인 키 경로 없음). 비어 있으면 설정 오류. 정본은 `services/api/app/agent/llm/roles.py`, 사본은 worker `config.py`·`tests/eval/llm_access.py`·`scripts/profile.py` |
+| `OPENAI_API_KEY`, `GEMINI_API_KEY` | api·report-worker LLM 래퍼, 호스트 러너(가상 지원자·판정) | 모델 id로 키를 고른다. 허용 목록과 규칙은 [architecture/harness.md](../architecture/harness.md) "역할별 모델"(코드 정본 `services/api/app/agent/llm/roles.py`, 사본은 worker `config.py`·`tests/eval/llm_access.py`·`scripts/profile.py`). 비어 있으면 설정 오류 |
 | `ALLOW_API` | Makefile·live 테스트·판정·가상 지원자 진입점 | `1`일 때만 실제 API(과금) 호출을 시작한다. 명령마다 붙이고 env 파일에 두지 않는다 |
 | `VOICE_ENABLED`, `VOICE_PROVIDER` | api·web 빌드·프로필 | 기본 `1`·`azure`. `0`은 테스트 API가 켜져야 하며 음성 공급자 생성과 검증을 건너뛴다. fake는 테스트용 |
 | `PROFILE`, `DAYZERO_ENV_FILE` | Makefile·compose | 실행 프로필 이름(기본 `dev-fake`), compose 컨테이너 env 파일(make가 준다) |
@@ -108,12 +100,16 @@ env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값�
 | `PLAYTEST_PORT` | playtest 드라이버 | 드라이버 서버 포트, 기본 9400 |
 | `VC_API_URL`·`VC_POSITION`·`VC_ADMIN_EMAIL`·`VC_ADMIN_PASSWORD`·`VC_MODEL`·`VC_PG_CONTAINER` | 가상 지원자 호스트 러너 | [virtual-candidate.md](virtual-candidate.md) |
 
-`.env.example`에 없는 키를 코드에 더하면 `.env.example`과 이 표를 함께 고친다.
-
+새 env는 `.env.example`에 이름·기본값·뜻을 주석과 함께 더하고, 읽는 곳이나 모드별 차이가 있으면 이 표에도 더한다.
 
 ## 음성 모드
 
-기본 `VOICE_PROVIDER=azure`는 F0만 허용한다. `AZURE_SPEECH_KEY`·`AZURE_SPEECH_REGION`·`AZURE_SPEECH_RESOURCE_ID`와 DefaultAzureCredential용 관리 ID 또는 서비스 계정 설정은 `.env`에만 둔다. F0 자원 조회·listKeys 권한이 필요하며 요금제 변경 권한은 주지 않는다. `VOICE_QUOTA_PERIOD`는 사용량 원장 기간 ID다. `auto`(`.env.example` 기본)는 UTC 연-월마다 새 원장이고, 다른 값은 그대로 기간 ID로 쓴다. 값이 없으면 음성 호출이 차단된다. `VOICE_USER_TURN_SECONDS` 기본 60(1~60)은 새 채용 건에 고정된다. `VOICE_TURN_HOLD_SECONDS` 기본 20(5~120)은 내 차례(일반·손들기·강제)를 지켜 주는 시간이다. 모든 차례는 자동 녹음 없이 지원자가 [발언하기]를 눌러 시작하고, 이 시간이 지나면 동료가 이어 말한다(손들기로 다시 잡을 수 있음). 크면 지원자가 생각할 시간이 늘지만 침묵이 길어지고, 작으면 반대다. 새 채용 건에 고정된다. `VOICE_CONFIRM_SECONDS` 기본 0(0~30)은 서버가 새 채용 건에 고정하는 확인 시각 설정이다. 현재 음성 화면은 이 시각을 기다리지 않고 받아 적은 글을 바로 제출한다. `infra/.env.example`과 모든 프로필도 0이다. `VOICE_FORCED_WAIT_SECONDS` 기본 30(0~120)은 강제 차례(그 단계에서 아직 말하지 않은 지원자)가 지금 동료 발언이 끝나기를 기다릴 몫이고, 새 채용 건에 고정된다. 강제 차례는 단계 마감 "이 값 + 발언 한도 + 10초" 전에 오되, 단계 길이(시작~마감)의 절반보다 일찍 오지 않는다(짧은 세션에서 단계 시작 직후 끼어들지 않게). 크면 60초 발언이 마감에 잘릴 일이 줄지만 더 일찍 끼어들고, 작으면 반대다. 말하는 동안 받아 적기(`/voice/stream`)는 `VOICE_SEGMENT_SECONDS` 기본 10(4~30)초가 쌓이면 그 직전 `VOICE_SEGMENT_SEARCH_SECONDS` 기본 4초 안에서 소리가 가장 작은 `VOICE_SEGMENT_PAUSE_MS` 기본 300ms 구간(말이 멈춘 곳)을 찾아 잘라 미리 받아 적는다. SECONDS가 작으면 녹음 끝에 남는 꼬리가 짧아 기다림이 줄지만 요청이 늘고(무료 요금제 요청 한도), 크면 반대다. PAUSE가 너무 짧으면 단어 사이 짧은 틈에서 잘릴 수 있다. 채용 건에 고정하지 않는 운영 설정이다.
+기본 `VOICE_PROVIDER=azure`는 F0만 허용한다. `AZURE_SPEECH_KEY`·`AZURE_SPEECH_REGION`·`AZURE_SPEECH_RESOURCE_ID`와 DefaultAzureCredential용 관리 ID 또는 서비스 계정 설정은 `.env`에만 둔다. F0 자원 조회·listKeys 권한이 필요하며 요금제 변경 권한은 주지 않는다. `VOICE_*` 값의 뜻·범위·기본값은 `infra/.env.example` 주석이 정본이다. 모드에 따라 달라지는 점만 적는다.
+
+- 채용 건에 고정되는 값: `VOICE_USER_TURN_SECONDS`·`VOICE_TURN_HOLD_SECONDS`·`VOICE_CONFIRM_SECONDS`·`VOICE_FORCED_WAIT_SECONDS`는 새 채용 건 생성 때 `voice_policy`로 복사되므로 바꾼 값은 새 채용 건부터 적용된다. 강제 차례가 오는 시점은 [음성 구현](../architecture/voice.md) "강제 차례".
+- `VOICE_CONFIRM_SECONDS`는 기본 0(바로 전달)이다. 음성 화면은 받아 적은 글을 보여 주지 않고 바로 제출한다.
+- 운영 설정(채용 건에 고정하지 않음): 말하는 동안 받아 적기의 `VOICE_SEGMENT_SECONDS`·`VOICE_SEGMENT_SEARCH_SECONDS`·`VOICE_SEGMENT_PAUSE_MS`. SECONDS를 줄이면 녹음 끝 대기가 줄지만 요청이 늘어 F0 요청 한도에 가까워진다.
+- `VOICE_QUOTA_PERIOD`: Azure 프로필은 `infra/.env` 값(기본 `auto`, UTC 달마다 새 원장)을 쓰고, FakeSpeech 프로필은 프로필이 정한다([`infra/profiles/README.md`](../../infra/profiles/README.md)). 값이 없으면 음성 호출이 차단된다.
 
 격리 e2e override는 API에 FakeSpeech·FakeLLM·테스트 API를 강제한다. 새 음성 스키마는 기존 볼륨에 자동 적용되지 않으므로 테스트/개발 DB를 구분하고 DB 가이드를 따른다. 실제 Azure 설정이 없어도 Fake 기반 검증은 가능하지만 음질·인식 정확도 검증과 구분한다.
 

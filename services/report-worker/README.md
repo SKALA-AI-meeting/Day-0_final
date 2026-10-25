@@ -44,7 +44,7 @@ env 이름은 `report_worker/config.py`·`llm.py`·`heartbeat.py`와 `infra/.env
 
 ## 실행
 
-저장소 루트에서 실행한다. postgres·rabbitmq·api(내부 8001)·assessment-mcp(9103)가 떠 있어야 한다. 로컬 실행 env: `infra/.env.local`을 만들고 DB·큐·내부 API·MCP 주소를 `localhost`로 바꾼다(항목은 [configuration.md](../../docs/guides/configuration.md) "로컬 실행용 `infra/.env.local`"). 로컬 서비스는 `infra/.env.local` → `infra/.env` 순으로 읽는다.
+저장소 루트에서 실행한다. postgres·rabbitmq·api(내부 8001)·assessment-mcp(9103)가 떠 있어야 한다. 로컬 실행 env는 [configuration.md](../../docs/guides/configuration.md) "로컬 실행용 `infra/.env.local`"을 따른다.
 
 ```
 make up SCOPE=infra                                                # postgres, rabbitmq, rag-mcp

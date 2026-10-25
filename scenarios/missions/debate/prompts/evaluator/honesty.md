@@ -28,7 +28,7 @@
 - **자동 제출**: 그 시점 초안을 그대로 읽는다. 기여 칸에 내용이 있으면 정상 판정하되 확신도 `low`.
 - **시간 압박**: 기획안 단계가 짧으면(데모 모드) 누락에 시간 영향 가능성을 `rationale`에 적고 확신도 `low`.
 - **페르소나 개입**: AI 동료가 선점 금지를 어기고 제안자를 알려 줬다면 그 뒤 정확한 기록은 정상 판정하되 확신도를 한 단계 낮춘다.
-- **이중 계산 금지**: `idea_credit` 칸은 `hon_credit_record`만, 채팅의 출처는 `hon_source_in_talk`만 본다. 혼자 확정 행위는 수용 `flex_decision_respect`에 맡기고 `hon_process_truth`는 그때 한 말과 기록만 본다.
+- **이중 계산 금지**: `idea_credit` 칸은 `hon_credit_record`만, 발언의 출처는 `hon_source_in_talk`만 본다. 혼자 확정 행위는 수용 `flex_decision_respect`에 맡기고 `hon_process_truth`는 그때 한 말과 기록만 본다.
 
 ## 경계
 

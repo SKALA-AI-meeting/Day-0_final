@@ -596,7 +596,7 @@ elements:
     no_record: '`ai_adopted_units`가 비어 있고 본문에 쓴 AI 부가 아이디어도 없음 → `not_applicable`(공을 돌릴 대상이 없음). 자동 제출(`proposals.auto_submitted = true`)이면서 칸이 비어 있음 → `auto_submitted_blank`. 기획안 단계가 접속 끊김으로 대부분 사라짐 → `no_activity`.'
   - dimension_id: hon_source_in_talk
     name: 토론 중 출처 존중
-    definition: 토론 채팅에서 다른 참여자의 아이디어를 언급·지지·확장할 때 그 사람의 것으로 다루고 자기 것처럼 다시 내놓지 않는가
+    definition: 토론 발언에서 다른 참여자의 아이디어를 언급·지지·확장할 때 그 사람의 것으로 다루고 자기 것처럼 다시 내놓지 않는가
     positive_signals: '"지안님 말처럼", "하람님 안에 덧붙이면", 잘못 돌아온 공 정정, 자기 보완 부분 구분'
     negative_signals: 남의 안을 직후에 자기 새 제안처럼 재진술, "제가 아까 말한 빗물 저금통"(실제 윤하람), 정정받고도 주장 유지
     core_cards: []

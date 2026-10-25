@@ -1,6 +1,6 @@
 # 음성 토론 구현
 
-턴 기반 음성 토론의 현재 구현이다. 경로·필드·오류 코드는 [음성 계약](../contracts/voice.md), 결정과 이유는 [decisions.md](../decisions.md) "2026-10-22 턴 기반 음성 토론 전환 설계"(V1~V18)와 2026-10-25 음성 결정들이 정본이다.
+턴 기반 음성 토론의 현재 구현이다. 경로·필드·오류 코드는 [음성 계약](../contracts/voice.md), 결정과 이유는 [decisions.md](../decisions.md)가 정본이다.
 
 지원자 1명과 AI 동료 3명이 발언권을 번갈아 갖는다. 동료는 검증을 마친 텍스트를 TTS로 순서대로 재생하고, 지원자는 마이크로 말한 뒤 받아 적은 글 한 건을 기존 WS `message.send`로 제출한다. 동시 발언, 동료 발언을 끊는 끼어들기(barge-in), 실시간 양방향 오디오, 부분 받아 적기 제출은 없다. 음색·억양·발음·말의 속도는 평가하지 않는다.
 
@@ -14,9 +14,9 @@
 | 사용량 원장(`services/api/app/voice/quota.py`) | 월·세션 사용량 예약과 차감, 호출 속도 제한 | 유료 전환 |
 | 정책(`services/api/app/voice/policy.py`) | 채용 건 생성 때 `positions.scenario.voice_policy`에 고정할 값 | 진행 중 env로 정책 보충 |
 | 메일박스·토론 그래프 | 기존 의도 분류·화자 0~2명·guard·stance_check·apply·fill | 재생을 기다리며 트랜잭션·락 유지 |
-| 브라우저(`apps/web/components/debate/voice/`의 `voice-room.tsx`·`recorder.ts`·`streamer.ts` 등, `voice-ui.tsx`·`voice.ts`) | 상태 반영, 단일 오디오 큐, 녹음·업로드·조각 전송, 실제 재생 결과 보고 | 서버 턴을 혼자 완료 처리 |
+| 브라우저(`apps/web/components/debate/voice/`의 `voice-room.tsx`·`recorder.ts`·`streamer.ts` 등과 `apps/web/components/debate/`의 `profile-stage.tsx`·`voice-ui.tsx`·`voice.ts`, 화면 구성은 [apps/web/README.md](../../apps/web/README.md)) | 상태 반영, 단일 오디오 큐, 녹음·업로드·조각 전송, 실제 재생 결과 보고 | 서버 턴을 혼자 완료 처리 |
 
-동료 발언은 1~2문장·약 120자 안쪽의 요점 하나로 말하고(프롬프트 규칙, guard 상한 400자는 그대로), 앞 발언을 받는 상투어로 시작하거나 바로 앞 화자와 같은 구조·근거로 말하지 않는다([agents/persona.md](../agents/persona.md)). TTS는 `guard`·`stance_check`를 통과해 `apply`가 저장한 최종 게시 본문만 받는다. 합의 채움·시간 초과의 고정 공지도 음성 항목에 포함한다. 토론 그래프 체크포인터·새 MCP·음성 전용 서비스는 없다. 재생 대기 동안 DB 락이나 메일박스를 붙들지 않는다.
+동료 발언의 길이 목표와 안전 상한은 [agents/persona.md](../agents/persona.md) "출력"이 정본이다. TTS는 `guard`·`stance_check`를 통과해 `apply`가 저장한 최종 게시 본문만 받는다. 합의 채움·시간 초과의 고정 공지도 음성 항목에 포함한다. 토론 그래프 체크포인터·새 MCP·음성 전용 서비스는 없다. 재생 대기 동안 DB 락이나 메일박스를 붙들지 않는다.
 
 ## 발언권 상태와 완료 장벽
 
@@ -49,7 +49,7 @@
 - 발언 한도는 채용 건의 `user_turn_seconds`(기본 60초, `VOICE_USER_TURN_SECONDS` 1~60)이고 서버가 `/capture`를 허가한 시각부터 잰다. AI 생성·재생 시간은 한도에 넣지 않는다. 녹음 마감은 단계 마감·세션 종료 10초 전을 넘지 않고, 그 10초 안에서는 녹음을 시작할 수 없다. 남은 시간이 한도보다 짧으면 "이번 발언은 최대 N초"를 알린다(`speech_limit_seconds`). 단계 마감·세션 종료는 늘리지 않는다.
 - [발언 완료]와 타이머는 같은 1회 종료 함수를 쓴다. 마지막 녹음 조각 뒤 브라우저가 PCM16 mono 16kHz WAV 한 파일로 만들어 `/audio`로 올린다(같은 파일 해시면 멱등).
 - 받아 적은 글은 지원자에게 보이지 않고 `client_msg_id = utterance_id`로 바로 `message.send`한다. 서버는 같은 세션·턴·epoch·generation의 ready STT 작업과 제출 글이 같은지(앞뒤 공백만 허용) 확인하고, 다르면 `voice_payload_mismatch`로 거부한다. 제출 글에 기존 마스킹을 적용하며, 이 글이 곧 받아 적은 글이라 원문을 따로 두지 않는다. 토론 그래프·평가·관리자 전체 기록은 이 글을 쓴다.
-- 지원자 발언은 앞뒤 공백을 뺀 1~500자다(서버 `CANDIDATE_MESSAGE_MAX_CHARS`와 화면 `state.ts`가 같은 값). 빈 인식과 500자 초과는 제출하지 않고 [다시 말하기]를 안내한다. 일반 다시 말하기는 차례당 1회, 500자 초과로 다시 말하기는 따로 차례당 2회까지다. 녹음 시작은 차례당 2회가 상한이다.
+- 지원자 발언 길이 상한(서버 `CANDIDATE_MESSAGE_MAX_CHARS`와 화면 `state.ts`가 같은 값)과 빈 인식·너무 긴 인식의 [다시 말하기] 횟수는 [음성 계약](../contracts/voice.md)이 정본이다.
 - phase·generation이 바뀌면 미디어를 멈추고 늦은 받아 적기를 새 단계에 저장하지 않는다. 녹음·받아 적기·제출이 끝나기 전에는 결정 사항 확정을 할 수 없다.
 
 ## 받아 적기(STT)
@@ -79,4 +79,4 @@
 - 모드는 실행 프로필이 정한다([guides/configuration.md](../guides/configuration.md)): `dev-real`·`deploy`는 Azure, `dev-fake`·`test-voice`·`eval-voice`는 FakeSpeech, `test-text`·`eval-text`는 음성 끔(텍스트 WS 경로, `ENABLE_TEST_API=1` 필요). 채용 건의 `voice_policy.provider`가 실행 공급자와 다르면 시작을 거부한다.
 - Azure 설정은 `infra/.env`에만 둔다. 새 DB는 `infra/db/schema.sql`을 적용하고, 기존 로컬 DB는 [DB 가이드](../guides/database.md)를 따른다.
 - FakeSpeech TTS는 짧은 무음 WAV이고 한국어 음질 검증이 아니다. 내부 `/internal/test/voice-transcript`로 받아 적을 글만 지정하고, 음성 프로필의 화면 테스트는 실제 브라우저의 녹음·업로드·재생 이벤트를 거친다. Fake 통과를 실제 공급자 검증으로 보지 않는다.
-- 알려진 한계: 끼어들기(barge-in)는 없다. 음성 경로의 지연(말 끝 → 다음 동료 목소리)과 실제 Azure 한국어 품질은 측정 기록이 없다.
+- 알려진 한계는 [features.md](../features.md) "알려진 제한과 구현 결정"의 "음성 끼어들기·지연" 행이 정본이다.
