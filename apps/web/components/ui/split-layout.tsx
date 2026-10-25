@@ -9,6 +9,7 @@
 import {
   Fragment,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -30,7 +31,8 @@ export type Weights = Record<string, number>;
 export type Overrides = Record<string, { key: string; weights: Weights }>;
 
 /** 칸 id → 크기 모드. 없으면 비율(weight) */
-export type PaneModes = Record<string, "fit" | "square">;
+/** 숫자는 부모 분할 방향으로 고정 크기(px): 늘거나 줄지 않고, 옆 경계도 끌 수 없다 */
+export type PaneModes = Record<string, "fit" | "square" | number>;
 
 const DEFAULT_MIN_PX = 160;
 /** 키보드로 한 번에 옮기는 양(두 칸 합의 비율) */
@@ -165,6 +167,7 @@ type ItemProps = Omit<SplitLayoutProps, "tree" | "className"> & { node: SplitNod
 
 function itemStyle(hidden: boolean, weight: number, mode: PaneModes[string] | undefined) {
   if (hidden) return { flexGrow: 0, flexShrink: 1, flexBasis: 0 };
+  if (typeof mode === "number") return { flexGrow: 0, flexShrink: 0, flexBasis: `${mode}px` };
   // fit·square는 늘지 않고 내용(또는 폭)만큼 차지하며, 자리가 모자라면 줄어든다
   if (mode === "fit") return { flexGrow: 0, flexShrink: 1, flexBasis: "auto" };
   if (mode === "square")
@@ -174,12 +177,28 @@ function itemStyle(hidden: boolean, weight: number, mode: PaneModes[string] | un
 
 function Item({ node, weight, ...rest }: ItemProps) {
   const hidden = !(weight > 0);
+  const ref = useRef<HTMLDivElement>(null);
+  const wasHidden = useRef(hidden);
+  // 숨어 있던 칸이 생기면 잠깐 떠오르며 테두리가 빛난다(어느 칸이 새로 들어왔는지 보이게, globals.css .split-enter)
+  useEffect(() => {
+    const el = ref.current;
+    const appeared = wasHidden.current && !hidden;
+    wasHidden.current = hidden;
+    if (!el || !appeared) return;
+    el.classList.remove("split-enter");
+    void el.offsetWidth;
+    el.classList.add("split-enter");
+    const done = () => el.classList.remove("split-enter");
+    el.addEventListener("animationend", done, { once: true });
+    return () => el.removeEventListener("animationend", done);
+  }, [hidden]);
   // 자리만 차지하고 보이는 칸이 하나도 없는 분할(예: 비어 있는 오른쪽 열)도 낭독·키보드에서 뺀다
   const empty =
     node.kind === "split" && node.children.every((child) => !((rest.weights[child.id] ?? 0) > 0));
   const mode = rest.modes?.[node.id];
   return (
     <div
+      ref={ref}
       data-split-item={node.id}
       data-mode={(!hidden && mode) || undefined}
       // 숨긴 칸은 키보드·낭독에서 빠진다. 내용은 남겨 다시 보일 때 스크롤·입력이 그대로다
@@ -187,7 +206,7 @@ function Item({ node, weight, ...rest }: ItemProps) {
       aria-hidden={hidden || empty || undefined}
       style={itemStyle(hidden, weight, mode)}
       className={cn(
-        "split-item flex min-h-0 min-w-0 overflow-hidden",
+        "split-item relative flex min-h-0 min-w-0 overflow-hidden",
         hidden ? "pointer-events-none opacity-0" : "opacity-100",
       )}
     >
@@ -215,6 +234,9 @@ function Split({
       {node.children.map((child, i) => {
         const j = nextVisible(i);
         const gutter = i < node.children.length - 1;
+        // 고정 크기 칸과 맞닿은 경계는 간격만 두고 끌 수 없다
+        const fixed = (id: string) => typeof rest.modes?.[id] === "number";
+        const spaced = visible[i] && j >= 0;
         return (
           <Fragment key={child.id}>
             <Item node={child} weight={weights[child.id] ?? 0} {...rest} />
@@ -223,7 +245,8 @@ function Split({
                 split={node}
                 a={child}
                 b={j >= 0 ? node.children[j] : null}
-                active={visible[i] && j >= 0}
+                active={spaced && !fixed(child.id) && !fixed(node.children[j].id)}
+                spaced={spaced}
                 {...rest}
               />
             )}
@@ -239,6 +262,7 @@ function Gutter({
   a,
   b,
   active,
+  spaced = active,
   weights,
   onResize,
   onReset,
@@ -247,6 +271,8 @@ function Gutter({
   a: SplitNode;
   b: SplitNode | null;
   active: boolean;
+  /** 두 칸 사이에 간격을 둘지(고정 크기 칸 옆은 간격만 있고 끌 수 없다) */
+  spaced?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const row = split.dir === "row";
@@ -340,8 +366,8 @@ function Gutter({
       data-active={active || undefined}
       className={cn(
         "split-gutter group relative flex shrink-0 touch-none items-center justify-center outline-none",
-        row ? "cursor-col-resize" : "cursor-row-resize",
-        active ? (row ? "w-3" : "h-3") : row ? "w-0" : "h-0",
+        active ? (row ? "cursor-col-resize" : "cursor-row-resize") : "cursor-default",
+        spaced ? (row ? "w-3" : "h-3") : row ? "w-0" : "h-0",
       )}
     >
       {/* 평소에는 보이지 않고, 올리거나 끌거나 포커스하면 가는 선이 나타난다 */}

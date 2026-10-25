@@ -1,6 +1,6 @@
 "use client";
 
-import { Hand, Info, Square, TriangleAlert, WifiOff } from "lucide-react";
+import { Info, Square, TriangleAlert, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { API_URL, ApiError, api } from "@/lib/api";
 import { Button, cn } from "@/components/ui";
@@ -22,6 +22,7 @@ import {
 import { MicLevel } from "./mic-level";
 import { MICROPHONE_HELP, isMicrophoneError, requestMicrophone } from "./microphone";
 import { finishOnce, normalize } from "./recorder";
+import { HandSymbol, type SeatStatus } from "./status-symbols";
 import { startPcmStream, type PcmStream } from "./streamer";
 
 type Item = {
@@ -87,6 +88,8 @@ function thinkLeft(snap: VoiceSnapshot): number {
   return Math.max(0, (Date.parse(snap.think_deadline_at) - Date.parse(snap.server_now)) / 1000);
 }
 const SEATS = new Set(["p1", "p2", "p3"]);
+/** 최근 발언 칸에 두는 발언 수(오래된 것은 위로 흐려지며 스크롤로 본다) */
+const TALK_LIMIT = 30;
 /** 안내(진행을 막지 않는 정보)를 보여 주는 시간(ms). 오류와 달리 저절로 사라진다 */
 const NOTICE_MS = 6000;
 /** 단계(또는 세션)가 끝나 서버가 이 차례의 녹음·제출을 받지 않는 경우 */
@@ -1084,11 +1087,15 @@ export function useVoiceTurn(props: Props) {
     }),
     [props.snap, heardIds, speaking],
   );
-  const recent = heard.messages
-    .filter((m) => m.sender === "candidate" || SEATS.has(m.sender))
-    .filter((m) => m.content)
-    .slice(-10)
-    .reverse();
+  // 최근 발언(가운데 집중 칸): 들은 동료 발언과 지원자 발언, 오래된 것부터. 재생 중인 발언은 말한 데까지
+  const talk = useMemo(
+    () =>
+      heard.messages
+        .filter((m) => m.sender === "candidate" || SEATS.has(m.sender))
+        .filter((m) => m.content)
+        .slice(-TALK_LIMIT),
+    [heard.messages],
+  );
 
   const phase = props.snap.session.phase;
   // 토론 중(기획안 단계·종료 전)
@@ -1124,6 +1131,17 @@ export function useVoiceTurn(props: Props) {
   // 말하는(준비하는) 동료 이름: 재생 중인 자리, 없으면 맨 앞 발언의 자리
   const speakerName = nameOf(active) ?? nameOf(voice?.items?.[0]?.seat);
   const recording = debating && voice?.state === "USER_SPEAKING";
+  // 자리별 상태 표시(프로필 카드): 말하는 동료, 준비 중인 동료, 지원자의 녹음·손 듦·내 차례
+  const seatStatus = useMemo(() => {
+    const out: Partial<Record<string, SeatStatus>> = {};
+    const preparing = voice?.state === "AI_GENERATING" ? voice.items?.[0]?.seat : undefined;
+    if (active) out[active] = "speaking";
+    else if (preparing) out[preparing] = "preparing";
+    if (recording) out.candidate = "recording";
+    else if (debating && voice?.hand) out.candidate = "hand";
+    else if (canSpeak) out.candidate = "myturn";
+    return out;
+  }, [active, voice, recording, debating, canSpeak]);
   const disconnected = !props.locked && !props.connected && !!props.reconnecting;
   const statusText = disconnected
     ? "연결이 끊겼어요. 다시 연결하는 중…"
@@ -1270,10 +1288,15 @@ export function useVoiceTurn(props: Props) {
                 </Button>
               </>
             ) : (
-              <Button variant="secondary" onClick={() => void raiseHand(voice, true)}>
-                <Hand size={16} aria-hidden />
-                손들기
-              </Button>
+              <>
+                <Button variant="secondary" onClick={() => void raiseHand(voice, true)}>
+                  <HandSymbol size={16} />
+                  손들기
+                </Button>
+                <p className="text-caption text-muted">
+                  동료가 말하는 중에 끼어들고 싶을 때 눌러요. 지금 발언이 끝나면 내 차례가 와요
+                </p>
+              </>
             )}
           </div>
         )}
@@ -1339,16 +1362,6 @@ export function useVoiceTurn(props: Props) {
           음성 참여 시작
         </Button>
       )}
-      <details className="border-t border-line pt-2">
-        <summary className="cursor-pointer text-footnote font-medium">최근 발언</summary>
-        <ol className="mt-2 max-h-48 space-y-2 overflow-y-auto text-footnote">
-          {recent.map((m) => (
-            <li key={m.id}>
-              <strong>{nameOf(m.sender) ?? "지원자"}</strong>: {m.content}
-            </li>
-          ))}
-        </ol>
-      </details>
     </section>
   );
 
@@ -1360,6 +1373,11 @@ export function useVoiceTurn(props: Props) {
     /** 들은 만큼만 보이는 대화(토론방용) */
     chatSnap: heard,
     currentCaption: speaking,
+    /** 최근 발언(가운데 집중 칸, 오래된 것부터)과 지금 재생 중인 발언 id */
+    talk,
+    liveMessageId: speaking?.id ?? null,
+    /** 자리별 상태 표시(프로필 카드) */
+    seatStatus,
     /** 지원자 차례가 한 번이라도 왔는지·지금 녹음 중인지(칸 펼치기·프로필 강조용) */
     candidateTurn: !!voice && CANDIDATE_STATES.has(voice.state),
     recording: voice?.state === "USER_SPEAKING",

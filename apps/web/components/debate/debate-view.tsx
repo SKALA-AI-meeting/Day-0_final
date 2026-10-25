@@ -40,6 +40,7 @@ import { PHASE_LABEL, clock, warnSeconds } from "./state";
 import { PHASES, type EndReason, type Seat, type StateSnapshot } from "./types";
 import { useDebateSession, type SessionAuth } from "./use-session";
 import { MemoPad } from "./voice/memo-pad";
+import { RecentTalk } from "./voice/recent-talk";
 import { useVoiceTurn } from "./voice/voice-room";
 import { sentences } from "./voice/caption";
 
@@ -421,14 +422,16 @@ export function DebateView({
             </div>
           ),
           summary: <PhaseSummary snap={snap} />,
-          // 가운데 칸: 4명 프로필(2x2, 말하는 사람 강조, 칸을 가득 채움) + 바로 아래 차례·녹음·손들기 조작
+          // 가운데 칸: 위 4명 프로필(한 줄, 상태 표시), 가운데 최근 발언(집중, 남는 높이 전부),
+          // 아래 차례·녹음·손들기 조작
           chat: voiceEnabled ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden">
-              <div className="flex min-h-0 flex-1">
+              <div className="flex h-[clamp(132px,24%,200px)] shrink-0">
                 <ProfileStage
                   snap={voice.chatSnap}
                   speaking={speaking}
-                  fill
+                  strip
+                  status={voice.seatStatus}
                   voice={voice.mic}
                   candidateTalking={voice.recording}
                   caption={
@@ -438,7 +441,13 @@ export function DebateView({
                   onSkipIntro={() => setIntroDone(true)}
                 />
               </div>
-              <div className="max-h-[60%] shrink-0 overflow-y-auto rounded-xl border border-line bg-surface p-4">
+              <RecentTalk
+                className="min-h-0 flex-1"
+                messages={voice.talk}
+                participants={snap.participants}
+                liveId={voice.liveMessageId}
+              />
+              <div className="max-h-[45%] shrink-0 overflow-y-auto rounded-xl border border-line bg-surface p-4">
                 {voice.controls}
               </div>
             </div>

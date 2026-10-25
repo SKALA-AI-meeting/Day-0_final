@@ -14,6 +14,7 @@ import { resolutionLabel } from "@/lib/resolution";
 import { VOICE_ENABLED } from "./link-screens";
 import { PHASE_LABEL, SLOT_LABEL, officeTime } from "./state";
 import type { Participant, Phase, Seat, StateSnapshot } from "./types";
+import { SeatStatusBadge, type SeatStatus } from "./voice/status-symbols";
 import { LevelGlow, useVoiceState, type VoiceSource } from "./voice-ui";
 
 export function ProfileStage({
@@ -25,6 +26,8 @@ export function ProfileStage({
   candidateTalking = false,
   caption = "",
   fill = false,
+  strip = false,
+  status = {},
   onJump,
 }: {
   snap: StateSnapshot;
@@ -38,6 +41,10 @@ export function ProfileStage({
   caption?: string;
   /** 칸을 가득 채운다(음성 토론 가운데 칸). 정사각형으로 줄이지 않아 아래 조작부와 사이에 빈 띠가 생기지 않는다 */
   fill?: boolean;
+  /** 한 줄(1x4)로 낮게 놓는다. 가운데 칸의 나머지를 최근 발언에 준다. 자막은 최근 발언 쪽이 보인다 */
+  strip?: boolean;
+  /** 자리별 음성 상태(발언 중·준비 중·녹음 중·손 듦·내 차례). 없으면 speaking으로 정한다 */
+  status?: Partial<Record<string, SeatStatus>>;
   /** 프로필 안 메시지를 누르면 토론방의 그 말풍선으로. 토론방이 숨어 있으면 없음 */
   onJump?: (messageId: string) => void;
 }) {
@@ -58,7 +65,7 @@ export function ProfileStage({
         aria-label="참여자"
         className="@container flex flex-col gap-[3cqmin] rounded-xl border border-line bg-surface p-[3cqmin]"
         style={
-          fill
+          fill || strip
             ? { width: "100%", height: "100%" }
             : { width: "min(100cqw, 100cqh, 760px)", height: "min(100cqw, 100cqh, 760px)" }
         }
@@ -79,15 +86,21 @@ export function ProfileStage({
         <p aria-live="polite" aria-atomic="true" className="sr-only" data-testid="caption-live">
           {captionSpeaker ? `${captionSpeaker.display_name}: ${caption}` : ""}
         </p>
-        <ul className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-[3cqmin]">
+        <ul
+          className={cn(
+            "grid min-h-0 flex-1 gap-[3cqmin]",
+            strip ? "grid-cols-4 grid-rows-1" : "grid-cols-2 grid-rows-2",
+          )}
+        >
           {people.map((person) => (
             <ProfileTile
               key={person.id}
               person={person}
               snap={snap}
               speaking={person.id === "candidate" ? talking : speaking.includes(person.id as Seat)}
+              status={status[person.id]}
               voice={person.id === "candidate" && talking ? voice : null}
-              caption={speaking.includes(person.id as Seat) ? caption : ""}
+              caption={!strip && speaking.includes(person.id as Seat) ? caption : ""}
               onJump={onJump}
             />
           ))}
@@ -101,6 +114,7 @@ function ProfileTile({
   person,
   snap,
   speaking,
+  status: given,
   voice,
   caption,
   onJump,
@@ -108,6 +122,7 @@ function ProfileTile({
   person: Participant;
   snap: StateSnapshot;
   speaking: boolean;
+  status?: SeatStatus;
   /** 지원자가 말하는 중일 때만: 소리 크기만큼 빛난다 */
   voice: VoiceSource | null;
   caption: string;
@@ -115,21 +130,28 @@ function ProfileTile({
 }) {
   const me = person.id === "candidate";
   const [open, setOpen] = useState(false);
+  // 상태 표시: 받은 상태가 먼저, 없으면 말하는 중(지원자는 녹음 중)
+  const status: SeatStatus | undefined =
+    given ?? (speaking ? (me ? "recording" : "speaking") : undefined);
   return (
     <li className="min-h-0 min-w-0">
       <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger
           aria-label={`${person.display_name} 프로필 보기`}
           data-speaking={speaking || undefined}
+          data-status={status}
           className={cn(
-            "press relative flex size-full flex-col items-center justify-center gap-[5cqmin] overflow-visible rounded-lg bg-surface-sunken [container-type:size]",
+            "profile-tile press relative flex size-full flex-col items-center justify-center gap-[5cqmin] overflow-visible rounded-lg bg-surface-sunken [container-type:size]",
             "transition-shadow duration-200 hover:bg-line/40 data-[popup-open]:ring-2 data-[popup-open]:ring-accent/50",
             speaking && (me ? "ring-2 ring-danger" : "ring-2 ring-accent"),
           )}
         >
           {voice && <LevelGlow voice={voice} />}
+          {status && (
+            <SeatStatusBadge status={status} className="absolute top-[4cqmin] right-[4cqmin]" />
+          )}
           <span
-            className="block"
+            className="profile-avatar block"
             style={{ width: "44cqmin", height: "44cqmin", fontSize: "18cqmin" }}
           >
             <Avatar

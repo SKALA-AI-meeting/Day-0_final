@@ -95,7 +95,8 @@ export function stageFlags({
   return {
     intro,
     proposalPhase: !intro && proposalPhase,
-    summary: !intro && confirmed,
+    // 진행 상황은 크기를 고정해 두므로 토론방이 열리면 늘 보인다(한 단계가 끝나기 전에는 지금 단계 안내만)
+    summary: !intro,
     voice: !intro && voice,
     decisions: show("decisions"),
     proposal: show("proposal"),
@@ -112,16 +113,17 @@ export function stageEpoch(flags: StageFlags) {
 export function stageWeights(flags: StageFlags): Weights {
   if (flags.intro) return { left: 1, profiles: 1 };
   const p = flags.proposalPhase || flags.proposal;
-  const anyRight = flags.decisions || flags.proposal || flags.library;
+  // 크기 우선순위: 고정(메모·진행 상황, stageModes) → 가운데 말하기·최근 발언(가장 넓게, 늘 같은 비율)
+  // → 오른쪽 하는 일(결정 사항 내용 높이·기획안) → 자료·AI 어시스턴트. 오른쪽 칸을 끄면 그만큼 가운데가 넓어진다
+  const count = [flags.decisions, flags.proposal, flags.library].filter(Boolean).length;
   return {
-    left: 0.85,
+    left: 1,
     // 음성 토론은 4명 프로필을 가운데 말하기 칸에 크게 두므로 인사 뒤 왼쪽 프로필 칸은 숨긴다
     profiles: flags.voice ? 0 : 1,
     voice: flags.voice ? 1 : 0,
     summary: flags.summary ? 1 : 0,
     chat: p ? 2 : 2.4,
-    // 오른쪽이 비어 있어도 같은 폭을 두어 토론방이 가운데에 오게 한다
-    right: p ? 2.2 : anyRight ? 1.7 : 0.85,
+    right: count === 0 ? 0 : p ? 2.2 : count === 1 ? 1.2 : 1.7,
     // 결정 사항은 내용 높이만큼(stageModes), 비율은 보이기 여부와 끌기 시작점에만 쓴다
     decisions: flags.decisions ? 1 : 0,
     proposal: flags.proposal ? 1.5 : 0,
@@ -129,7 +131,16 @@ export function stageWeights(flags: StageFlags): Weights {
   };
 }
 
-/** 인사 화면이 아니면 프로필은 왼쪽 열 폭만큼의 정사각형, 결정 사항은 내용 높이만큼 */
+/** 왼쪽 열(메모·진행 상황) 폭과 진행 상황 높이(px). 오른쪽 칸을 켜고 꺼도 바뀌지 않는다 */
+export const LEFT_PX = 272;
+export const SUMMARY_PX = 210;
+
+/**
+ * 인사 화면이 아니면 왼쪽 열 폭과 진행 상황 높이를 고정하고(끌 수 없음), 프로필은 왼쪽 열 폭만큼의
+ * 정사각형, 결정 사항은 내용 높이만큼
+ */
 export function stageModes(flags: StageFlags): PaneModes {
-  return flags.intro ? {} : { profiles: "square", decisions: "fit" };
+  return flags.intro
+    ? {}
+    : { left: LEFT_PX, summary: SUMMARY_PX, profiles: "square", decisions: "fit" };
 }
