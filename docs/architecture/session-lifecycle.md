@@ -82,7 +82,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 
 ### 기획안 작성과 제출
 
-1. 지원자가 우측 기획안 탭에 혼자 쓴다(`PUT /sessions/{id}/proposal`, 디바운스 저장. 진행 중 언제든 저장 가능, 제출은 proposal 단계에서만). AI 동료는 채팅으로만 기여한다(물어보면 내용 제공, 요청하면 debate-mcp `get_draft`로 초안을 읽고 의견).
+1. 지원자가 우측 기획안 탭에 혼자 쓴다(`PUT /sessions/{id}/proposal`, 디바운스 저장. 진행 중 언제든 저장 가능, 제출은 proposal 단계에서만). 음성 모드에서는 동료에게 새 발언권이 없고 AI 어시스턴트만 돕는다. 텍스트 시험 모드(`VOICE_ENABLED=0`)에서는 AI 동료가 채팅으로 기여한다(물어보면 내용 제공, 요청하면 debate-mcp `get_draft`로 초안을 읽고 의견).
 2. 제출(`POST /sessions/{id}/proposal/submit`) 또는 `ends_at` 도달 → `SessionService.submit(reason)`: 한 트랜잭션에서 초안을 제출본으로 고정(`proposals.submitted`, 자동 제출이면 `auto_submitted=true`) → `status=completed`·`phase=completed`·`completed_at`·`ended_at`(커밋) → WS `session.ended{submitted∣timeout}`. 메일박스의 남은 자극은 상태 검사로 `skipped`. 중간 상태는 없다.
 3. api가 RabbitMQ `report.generate`에 `{session_id, attempt, eval_round}` 발행(persistent, publisher confirm 뒤 `report_enqueued_at` 기록). 비어 있으면 스케줄러가 60초마다 재발행.
 
