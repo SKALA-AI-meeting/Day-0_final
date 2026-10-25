@@ -64,7 +64,7 @@ test("전달 안내는 상태 변화와 무관하게 3초 유지된다", () => {
   vi.useRealTimers();
 });
 
-test("저장 대기 표시는 턴·epoch·상태·발언·단계 변화에서 리셋된다", () => {
+test("저장 대기 표시는 턴·epoch·상태·단계 변화에서만 리셋되고 발언이 먼저 사라져도 유지된다", () => {
   const previous = {
     turn_id: "t1",
     epoch: "e1",
@@ -73,12 +73,19 @@ test("저장 대기 표시는 턴·epoch·상태·발언·단계 변화에서 �
   } as VoiceSnapshot;
   const next = (change: Partial<VoiceSnapshot>) => ({ ...previous, ...change }) as VoiceSnapshot;
   expect(shouldResetAwaitingSaved(previous, next({}), false)).toBe(false);
+  // 전달 직후 발언이 먼저 사라지고 메시지가 아직 오지 않은 순간: 내 칸을 유지한다(깜빡임 방지)
+  expect(
+    shouldResetAwaitingSaved(
+      previous,
+      next({ utterance: undefined, state: "AI_GENERATING" }),
+      false,
+    ),
+  ).toBe(false);
   for (const change of [
     { turn_id: "t2" },
     { epoch: "e2" },
     { state: "AI_SPEAKING" },
     { state: "USER_READY" },
-    { utterance: undefined },
   ])
     expect(shouldResetAwaitingSaved(previous, next(change), false)).toBe(true);
   expect(shouldResetAwaitingSaved(previous, next({}), true)).toBe(true);

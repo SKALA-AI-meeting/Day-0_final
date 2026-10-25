@@ -1,4 +1,7 @@
-"""채용 건에 복사되는 음성 정책. 런타임에서 누락 정책을 env로 보충하지 않는다."""
+"""채용 건에 복사되는 음성 정책. 런타임에서 누락 정책을 env로 보충하지 않는다.
+
+예전 채용 건에 남은 think_seconds(자동 녹음 대기)는 더 읽지 않는다. 모든 차례는 직접 눌러 시작한다.
+"""
 
 import os
 
@@ -9,9 +12,6 @@ def pinned_policy() -> dict:
     seconds = int(os.getenv("VOICE_USER_TURN_SECONDS", "60"))
     if not 1 <= seconds <= 60:
         raise ValueError("VOICE_USER_TURN_SECONDS must be 1..60")
-    think = int(os.getenv("VOICE_THINK_SECONDS", "5"))
-    if not 0 <= think <= 60:
-        raise ValueError("VOICE_THINK_SECONDS must be 0..60")
     hold = int(os.getenv("VOICE_TURN_HOLD_SECONDS", "20"))
     if not 5 <= hold <= 120:
         raise ValueError("VOICE_TURN_HOLD_SECONDS must be 5..120")
@@ -26,7 +26,6 @@ def pinned_policy() -> dict:
         "version": "azure-f0-v1" if provider == "azure" else "fake-v1",
         "provider": provider,
         "user_turn_seconds": seconds,
-        "think_seconds": think,
         "turn_hold_seconds": hold,
         "confirm_seconds": confirm,
         "forced_wait_seconds": forced_wait,

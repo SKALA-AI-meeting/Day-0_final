@@ -149,7 +149,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 351개(live 3개 포함, `make test`는 live를 뺀다).
+총 355개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -592,11 +592,13 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_voice.py</code> (34)</summary>
+<details><summary><code>tests/test_voice.py</code> (38)</summary>
 
 - `test_voice_playback_barrier_and_single_message`
-- `test_voice_edited_submit_keeps_recognition_and_turn_fence` ×2
+- `test_voice_submit_rejects_text_other_than_recognition` ×2
+- `test_voice_submit_accepts_recognition_with_spaces_and_turn_fence`
 - `test_voice_too_long_submit_is_rejected_and_turn_kept`
+- `test_voice_too_long_rerecord_is_not_counted`
 - `test_voice_heard_ids_follow_playback_end`
 - `test_voice_plays_first_ready_while_next_is_made`
 - `test_voice_normal_turn_waits_for_press`
@@ -625,6 +627,8 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_voice_forced_turn_before_phase_ends`
 - `test_voice_short_turn_near_deadline_is_announced`
 - `test_voice_recording_cut_by_deadline_still_submits`
+- `test_voice_short_session_forced_turn_waits_for_half_phase`
+- `test_voice_full_session_forced_turn_keeps_lead`
 - `test_voice_no_forced_turn_after_candidate_spoke`
 - `test_quota_scope_auto_uses_utc_month`
 

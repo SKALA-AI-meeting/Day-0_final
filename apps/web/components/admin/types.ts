@@ -256,6 +256,5 @@ export type RecordEntry = {
     | "connection_gap";
   by: Sender;
   summary: string;
-  stt_transcript?: string;
   ref: RecordRef;
 };

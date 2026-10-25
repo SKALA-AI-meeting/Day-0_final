@@ -25,8 +25,8 @@ async def voice_ctx(ctx, monkeypatch):
     ctx.settings = replace(ctx.settings, voice_enabled=False)
 
 
-async def setup(api, ctx):
-    sess = await api.new_session()
+async def setup(api, ctx, minutes: int = 60):
+    sess = await api.new_session(minutes)
     async with ctx.session_factory() as db:
         state = await controller.row(db, sess.id)
         state.data = {**state.data, "epoch": "test"}
@@ -98,7 +98,8 @@ async def test_voice_playback_barrier_and_single_message(api, voice_ctx):
         ).all()
         assert len(mine) == 1
         assert mine[0].meta["source"] == "voice"
-        assert mine[0].meta["edited"] is False  # 고치지 않은 인식 글
+        # 제출 글이 곧 받아 적은 글이라 인식 원문·수정 여부를 따로 두지 않는다
+        assert "stt_transcript" not in mine[0].meta and "edited" not in mine[0].meta
 
 
 @pytest.mark.parametrize(
@@ -108,47 +109,57 @@ async def test_voice_playback_barrier_and_single_message(api, voice_ctx):
         ("", "마이크 없이 직접 쓴 의견입니다"),
     ],
 )
-async def test_voice_edited_submit_keeps_recognition_and_turn_fence(
+async def test_voice_submit_rejects_text_other_than_recognition(
     api, voice_ctx, recognition, submitted
 ):
+    """받아 적은 글을 고쳐 보내거나 빈 인식에 직접 쓴 글은 발언권을 쓰지 않고 거부한다."""
     sess = await setup(api, voice_ctx)
     voice_ctx.speech.transcript = recognition
     snap = await snapshot(api, voice_ctx, sess)
-    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
-    start = (await post(api, sess, "capture", turn)).json()
-    assert (
-        await post(
-            api,
-            sess,
-            "audio",
-            {
-                **turn,
-                "utterance_id": start["utterance_id"],
-                "audio_base64": base64.b64encode(silence()).decode(),
-                "stop_reason": "button",
-            },
-        )
-    ).status_code == 200
-    await voice_ctx.drain_spawned()
-    snap = await snapshot(api, voice_ctx, sess)
+    start, snap = await record_once(api, voice_ctx, sess, snap)
     assert snap["utterance"]["status"] == ("ready" if recognition else "empty")
-    # 수정하는 동안 보일 제출 마감: ready는 녹음 마감 + 처리 여유, empty는 내 차례 끝
-    # (둘 다 단계 마감 이내)
-    async with voice_ctx.session_factory() as db:
-        session = await db.get(Session, sess.id)
-        limit = min(session.phase_deadline_at, session.ends_at)
-    expected = (
-        controller.at(start["speech_deadline_at"])
-        + timedelta(seconds=controller.PROCESSING_GRACE_SECONDS)
-        if recognition
-        else controller.at(snap["turn_until_at"])
-    )
-    assert controller.at(snap["utterance"]["submit_deadline_at"]) == min(limit, expected)
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
     payload = {
         "client_msg_id": start["utterance_id"],
         "content": submitted,
         "voice_turn_id": turn["turn_id"],
         "epoch": turn["epoch"],
+    }
+    mark = api.mark(sess)
+    await handle_send(voice_ctx, sess.id, payload)
+    errors = [f for f in api.frames_since(sess, mark) if f["type"] == "error"]
+    assert [e["payload"]["code"] for e in errors] == ["voice_payload_mismatch"]
+    async with voice_ctx.session_factory() as db:
+        mine = (
+            await db.scalars(
+                select(Message).where(Message.session_id == sess.id, Message.sender == "candidate")
+            )
+        ).all()
+        assert mine == []
+        assert (await db.get(SpeechJob, uuid.UUID(start["utterance_id"]))).data["status"] == (
+            "ready" if recognition else "empty"
+        )
+
+
+async def test_voice_submit_accepts_recognition_with_spaces_and_turn_fence(api, voice_ctx):
+    """받아 적은 글은 앞뒤 공백만 달라도 받고, 다른 턴·발언 id는 거부한다. 기록 본문은 제출 글."""
+    sess = await setup(api, voice_ctx)
+    snap = await snapshot(api, voice_ctx, sess)
+    start, snap = await record_once(api, voice_ctx, sess, snap)
+    recognition = snap["utterance"]["transcript"]
+    # 제출 마감: 녹음 마감 + 처리 여유(단계 마감 이내)
+    async with voice_ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        limit = min(session.phase_deadline_at, session.ends_at)
+    expected = controller.at(start["speech_deadline_at"]) + timedelta(
+        seconds=controller.PROCESSING_GRACE_SECONDS
+    )
+    assert controller.at(snap["utterance"]["submit_deadline_at"]) == min(limit, expected)
+    payload = {
+        "client_msg_id": start["utterance_id"],
+        "content": f"  {recognition} ",
+        "voice_turn_id": snap["turn_id"],
+        "epoch": snap["epoch"],
     }
     async with voice_ctx.session_factory() as db:
         session = await db.get(Session, sess.id)
@@ -170,56 +181,72 @@ async def test_voice_edited_submit_keeps_recognition_and_turn_fence(
                 select(Message).where(Message.session_id == sess.id, Message.sender == "candidate")
             )
         ).all()
-        assert len(mine) == 1
-        assert mine[0].content == submitted
-        assert mine[0].meta["stt_transcript"] == recognition
-        assert mine[0].meta["edited"] is True
-        # 관리자 전체 기록: 본문은 제출 글, 고친 경우에만 원래 인식 글을 함께 준다
+        assert [m.content for m in mine] == [recognition]
         entry = next(
             e
             for e in await reports.record(db, await db.get(Session, sess.id))
             if e["ref"]["id"] == str(mine[0].id)
         )
-        assert entry["summary"] == submitted
-        assert entry["stt_transcript"] == recognition
+        assert entry["summary"] == recognition
+        assert "stt_transcript" not in entry
 
 
 async def test_voice_too_long_submit_is_rejected_and_turn_kept(api, voice_ctx):
-    """받아 적은 글을 길게 고쳐도 서버가 상한을 넘는 발언은 받지 않고, 줄여 다시 보내면 들어간다."""
+    """상한을 넘게 받아 적힌 발언은 서버도 받지 않고 발언권을 소비하지 않는다."""
     sess = await setup(api, voice_ctx)
+    voice_ctx.speech.transcript = "가" * (debate.CANDIDATE_MESSAGE_MAX_CHARS + 1)
     snap = await snapshot(api, voice_ctx, sess)
-    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
-    start = (await post(api, sess, "capture", turn)).json()
-    audio = {
-        **turn,
-        "utterance_id": start["utterance_id"],
-        "audio_base64": base64.b64encode(silence()).decode(),
-        "stop_reason": "button",
-    }
-    assert (await post(api, sess, "audio", audio)).status_code == 200
-    await voice_ctx.drain_spawned()
-    await snapshot(api, voice_ctx, sess)
+    start, snap = await record_once(api, voice_ctx, sess, snap)
     payload = {
         "client_msg_id": start["utterance_id"],
-        "voice_turn_id": turn["turn_id"],
-        "epoch": turn["epoch"],
+        "content": snap["utterance"]["transcript"],
+        "voice_turn_id": snap["turn_id"],
+        "epoch": snap["epoch"],
     }
     mark = api.mark(sess)
-    long = "가" * (debate.CANDIDATE_MESSAGE_MAX_CHARS + 1)
-    await handle_send(voice_ctx, sess.id, {**payload, "content": long})
+    await handle_send(voice_ctx, sess.id, payload)
     errors = [f for f in api.frames_since(sess, mark) if f["type"] == "error"]
     assert [e["payload"]["code"] for e in errors] == ["invalid_input"]
     snap = await snapshot(api, voice_ctx, sess)
     assert snap["utterance"]["status"] == "ready"  # 발언권을 소비하지 않음
-    fits = "나" * debate.CANDIDATE_MESSAGE_MAX_CHARS
-    await handle_send(voice_ctx, sess.id, {**payload, "content": fits})
-    async with voice_ctx.session_factory() as db:
-        mine = (
-            await db.scalars(
-                select(Message).where(Message.session_id == sess.id, Message.sender == "candidate")
-            )
-        ).all()
-        assert [m.content for m in mine] == [fits]
+
+
+async def test_voice_too_long_rerecord_is_not_counted(api, voice_ctx):
+    """상한을 넘는 글을 버리는 다시 말하기는 일반 다시 말하기(한 번)와 따로 세어
+    LONG_RERECORD_LIMIT번까지 된다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    ctx.speech.transcript = "가" * (debate.CANDIDATE_MESSAGE_MAX_CHARS + 1)
+    snap = await snapshot(api, ctx, sess)
+    for _ in range(controller.LONG_RERECORD_LIMIT - 1):
+        _start, snap = await record_once(api, ctx, sess, snap)
+        turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+        r = await post(api, sess, "rerecord", {**turn, "job_id": snap["utterance"]["id"]})
+        assert r.status_code == 200, r.text
+        assert not r.json().get("rerecorded")
+        snap = r.json()
+    ctx.speech.transcript = "물에 관한 의견입니다"
+    _start, snap = await record_once(api, ctx, sess, snap)
+    r = await post(api, sess, "rerecord", {**turn, "job_id": snap["utterance"]["id"]})
+    assert r.status_code == 200, r.text
+    assert r.json()["rerecorded"] is True
+    _start, snap = await record_once(api, ctx, sess, r.json())
+    r = await post(api, sess, "rerecord", {**turn, "job_id": snap["utterance"]["id"]})
+    assert r.status_code == 409
+    assert r.json()["error"]["code"] == "voice_retry_exhausted"
+    # 일반 다시 말하기를 쓴 뒤에도 상한 초과 글은 다시 말할 수 있다
+    ctx.speech.transcript = "가" * (debate.CANDIDATE_MESSAGE_MAX_CHARS + 1)
+    async with ctx.session_factory() as db:
+        job = await db.get(SpeechJob, uuid.UUID(snap["utterance"]["id"]))
+        job.data = {**job.data, "transcript": ctx.speech.transcript}
+        await db.commit()
+    r = await post(api, sess, "rerecord", {**turn, "job_id": snap["utterance"]["id"]})
+    assert r.status_code == 200, r.text
+    # 상한 초과 다시 말하기도 한도가 있어 차례를 계속 붙잡지 못한다
+    _start, snap = await record_once(api, ctx, sess, r.json())
+    r = await post(api, sess, "rerecord", {**turn, "job_id": snap["utterance"]["id"]})
+    assert r.status_code == 409
+    assert r.json()["error"]["code"] == "voice_retry_exhausted"
 
 
 async def test_voice_heard_ids_follow_playback_end(api, voice_ctx):
@@ -855,7 +882,7 @@ async def test_voice_playback_end_after_phase_change_counts_as_heard(api, voice_
 
 
 async def test_voice_hand_raise_takes_turn_after_current(api, voice_ctx):
-    """손들면 지금 발언은 끝까지 듣고, 줄 선 발언은 취소된 뒤 내 차례(생각 시간 뒤 자동 녹음)."""
+    """손들면 지금 발언은 끝까지 듣고, 줄 선 발언은 취소된 뒤 내 차례(직접 눌러 시작)."""
     ctx = voice_ctx
     sess = await setup(api, ctx)
     first, _second, snap = await ready_two(api, ctx, sess)
@@ -874,8 +901,9 @@ async def test_voice_hand_raise_takes_turn_after_current(api, voice_ctx):
     assert snap["priority"] == "hand"
     assert snap["items"] == []
     assert snap["heard_message_ids"] == [first["id"]]
-    wait = controller.at(snap["think_deadline_at"]) - controller.at(snap["ready_at"])
-    assert wait.total_seconds() == 5  # 손들기도 생각 시간(기본 5초) 뒤 자동 녹음
+    assert "think_deadline_at" not in snap  # 손들기도 자동 녹음 없음
+    hold = controller.at(snap["turn_until_at"]) - controller.at(snap["ready_at"])
+    assert hold.total_seconds() == 20  # 일반 차례와 같은 유지 시간
     start, _ = await record_once(api, ctx, sess, snap)
     async with ctx.session_factory() as db:
         job = await db.get(SpeechJob, uuid.UUID(start["utterance_id"]))
@@ -927,25 +955,30 @@ async def test_voice_hand_turn_not_stolen_and_stale_not_replayed(api, voice_ctx)
 
 
 async def near_deadline(ctx, sess, seconds: float):
+    """단계가 충분히 진행돼(10분 단계) 마감까지 seconds초 남은 상태."""
     async with ctx.session_factory() as db:
         s = await db.get(Session, sess.id)
         s.phase_deadline_at = ctx.clock.now() + timedelta(seconds=seconds)
+        s.phase_started_at = s.phase_deadline_at - timedelta(minutes=10)
         await db.commit()
 
 
 async def test_voice_forced_turn_before_phase_ends(api, voice_ctx):
-    """이 단계 지원자 발언이 없고 마감까지 105초(30+5+60+10) 이하면 동료 발언을 넘기고 강제한다."""
+    """이 단계 지원자 발언이 없고 마감까지 100초(30+60+10) 이하면 동료 발언을 넘기고 강제한다."""
     ctx = voice_ctx
     sess = await setup(api, ctx)
     await ready_two(api, ctx, sess)
-    await near_deadline(ctx, sess, 110)
+    await near_deadline(ctx, sess, 105)
     snap = await snapshot(api, ctx, sess)
-    assert not snap.get("priority")  # 아직 105초보다 많이 남음
-    await near_deadline(ctx, sess, 100)
+    assert not snap.get("priority")  # 아직 100초보다 많이 남음
+    await near_deadline(ctx, sess, 99)
     snap = await snapshot(api, ctx, sess)
     assert snap["state"] == "USER_READY"
     assert snap["priority"] == "forced"
     assert snap["items"] == []
+    assert "think_deadline_at" not in snap  # 강제 차례도 직접 눌러 시작
+    hold = controller.at(snap["turn_until_at"]) - controller.at(snap["ready_at"])
+    assert hold.total_seconds() == 20
     start, _ = await record_once(api, ctx, sess, snap)
     async with ctx.session_factory() as db:
         job = await db.get(SpeechJob, uuid.UUID(start["utterance_id"]))
@@ -959,7 +992,7 @@ async def test_voice_short_turn_near_deadline_is_announced(api, voice_ctx):
     await near_deadline(ctx, sess, 30)
     snap = await snapshot(api, ctx, sess)
     assert snap["priority"] == "forced"
-    assert snap["speech_limit_seconds"] in (14, 15)  # 생각 5초 뒤 시작, 마감 10초 전까지
+    assert snap["speech_limit_seconds"] in (19, 20)  # 지금 누르면 마감 10초 전까지
     turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
     start = (await post(api, sess, "capture", turn)).json()
     given = controller.at(start["speech_deadline_at"]) - controller.at(start["speech_started_at"])
@@ -987,6 +1020,39 @@ async def test_voice_recording_cut_by_deadline_still_submits(api, voice_ctx, clo
         "stop_reason": "timeout",
     }
     assert (await post(api, sess, "audio", body)).status_code == 200
+
+
+async def test_voice_short_session_forced_turn_waits_for_half_phase(api, voice_ctx, clock):
+    """15분 세션 키워드 단계(150초)는 lead(100초)가 길어, 단계 절반(75초)이 지난 뒤에만 강제한다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx, minutes=15)
+    async with ctx.session_factory() as db:
+        s = await db.get(Session, sess.id)
+        length = (s.phase_deadline_at - s.phase_started_at).total_seconds()
+    assert round(length) == 150
+    snap = await snapshot(api, ctx, sess)
+    assert not snap.get("priority")  # 단계 시작 직후
+    clock.advance(seconds=55)  # 남은 95초: lead(100초) 안이지만 단계 절반 전
+    snap = await snapshot(api, ctx, sess)
+    assert not snap.get("priority")
+    clock.advance(seconds=21)  # 남은 74초: 단계 절반이 지남
+    snap = await snapshot(api, ctx, sess)
+    assert snap["state"] == "USER_READY"
+    assert snap["priority"] == "forced"
+    assert "think_deadline_at" not in snap
+
+
+async def test_voice_full_session_forced_turn_keeps_lead(api, voice_ctx, clock):
+    """60분 세션 키워드 단계(600초)는 단계 절반보다 lead(100초)가 짧아 마감 100초 전에 강제한다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    await snapshot(api, ctx, sess)
+    clock.advance(seconds=495)  # 남은 105초
+    snap = await snapshot(api, ctx, sess)
+    assert not snap.get("priority")
+    clock.advance(seconds=6)  # 남은 99초
+    snap = await snapshot(api, ctx, sess)
+    assert snap["priority"] == "forced"
 
 
 async def test_voice_no_forced_turn_after_candidate_spoke(api, voice_ctx):

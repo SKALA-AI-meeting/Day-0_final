@@ -1113,8 +1113,6 @@ SHAPES: dict[str, Any] = {
             "type": RECORD_TYPE,
             "by": SENDER,
             "summary": str,
-            # 음성 지원자 메시지를 고친 경우에만: 원래 인식 글(빈 문자열 가능)
-            "stt_transcript?": str,
             "ref": RECORD_REF,
         }
     ],
@@ -1309,7 +1307,6 @@ SHAPES["voice_state"] = {
     "speech_started_at?": str,
     "speech_deadline_at?": str,
     "heard_message_ids?": [str],
-    "think_deadline_at?": str,
     "turn_until_at?": str,
     "speech_limit_seconds?": int,
     "rerecorded?": bool,
