@@ -507,6 +507,18 @@ def test_fixed_phrases_match_doc():
     assert set(fp["notices"]) >= {"evaluation", "staging", "future", "identity"}
 
 
+def test_greeting_is_neutral_and_covers_seats(guard):
+    """세션 시작 인사는 세 자리 모두 있고, 이름·지원자 이름만 치환하며 성향·평가 말이 없다."""
+    _, groups = guard
+    greeting = load("prompts/shared/fixed_phrases.yaml")["greeting"]
+    assert list(greeting) == ["p1", "p2", "p3"]
+    for seat, text in greeting.items():
+        assert "{name}" in text and "{candidate}님" in text, seat
+        filled = text.format(name="강한결", candidate="하늘")
+        assert not re.search(r"고집|소극|비판|동조|발산|평가|점수|합격", filled), seat
+        assert not _hits(groups, filled), (seat, _hits(groups, filled))
+
+
 def test_stance_fallback_covers_seats(personas):
     sf = load("prompts/persona/stance_fallback.yaml")
     persuadable = {p["id"]: bool(p.get("persuadable")) for p in personas["session"]}

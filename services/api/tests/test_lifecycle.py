@@ -19,7 +19,17 @@ async def test_start_creates_slots_draft_notice_and_phase_started(api, ctx, runn
     async with ctx.session_factory() as db:
         slots = (await db.scalars(select(Slot).where(Slot.session_id == sess.id))).all()
         proposal = await db.get(Proposal, sess.id)
-        notice = await db.scalar(select(Message).where(Message.session_id == sess.id))
+        notice = await db.scalar(
+            select(Message).where(Message.session_id == sess.id, Message.sender == "system")
+        )
+        # 첫 단계 안내 앞에 동료 셋의 시작 인사가 있다(test_greeting.py)
+        greeted = (
+            await db.scalars(
+                select(Message.sender).where(
+                    Message.session_id == sess.id, Message.meta["kind"].astext == "greeting"
+                )
+            )
+        ).all()
     assert sorted((s.phase, s.status) for s in slots) == [
         ("keyword", "empty"),
         ("problem", "empty"),
@@ -27,6 +37,7 @@ async def test_start_creates_slots_draft_notice_and_phase_started(api, ctx, runn
     ]
     assert proposal.revision == 0 and set(proposal.sections) >= {"idea_credit", "keyword"}
     assert notice.sender == "system" and "물·불·나무·바람" in notice.content
+    assert sorted(greeted) == ["p1", "p2", "p3"]
     assert runner.types() == ["phase_started"]
 
 

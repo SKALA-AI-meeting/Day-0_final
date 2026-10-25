@@ -39,6 +39,7 @@
 | 칸 확정 | (session_id, phase). 이미 confirmed면 같은 run_id 재요청은 기존 칸, 다르면 409 `slot_confirmed` |
 | 합의 채우기(`fill_slot`) | 칸 확정과 공지 메시지가 한 트랜잭션. 공지는 (session_id, run_id, seq 5), `meta.kind = "consensus_fill"`. 같은 run_id 재호출은 단계가 이미 넘어갔어도 기존 칸·공지를 돌려준다 |
 | 시간 초과 채우기 | (session_id, phase). 공지 메시지는 run_id = `uuid5(session_id, "timeout:"+phase)`, seq 0 |
+| 세션 시작 인사 | 시작과 같은 트랜잭션. 동료 메시지 3개는 run_id = `uuid5(session_id, "greeting")`, seq 0~2(p1~p3), `meta.kind = "greeting"` |
 | 카드 관찰 | (session_id, card_id) |
 | 카드 진행(`session_cards`) | (session_id, card_id). `delivered_seats`는 자리 집합(중복 추가 무시), `locked_option_id`는 처음 한 번만 |
 | 평가 실행(`save_evaluation`) | (session_id, run_id). 같은 run_id의 `evaluation_runs` 행이 있으면 저장하지 않고 기존 결과 반환(재시도 이어하기·리포트 재생성 재사용). 차원 행 unique는 (session_id, dimension_id, run_id) |

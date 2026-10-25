@@ -59,6 +59,11 @@ Classifier = Callable[..., Awaitable[tuple[dict[str, Any], bool]]]
 # ---- 조회 ----------------------------------------------------------------------------------------
 
 
+def not_greeting():
+    """세션 시작 인사(meta.kind greeting)를 뺀다. 발언 수·첫 발언·카드 이끎 차례에 세지 않는다."""
+    return func.coalesce(Message.meta["kind"].astext, "") != "greeting"
+
+
 async def phase_options(db: AsyncSession, session_id: uuid.UUID, phase: str) -> list[Option]:
     rows = await db.scalars(
         select(Option)
@@ -954,6 +959,7 @@ async def debate_state(
                     Message.phase == phase,
                     Message.channel == "room",
                     Message.sender.in_(SEATS),
+                    not_greeting(),
                 )
                 .group_by(Message.sender)
             )
@@ -969,6 +975,7 @@ async def debate_state(
                     Message.phase == phase,
                     Message.channel == "room",
                     Message.sender.in_(SEATS),
+                    not_greeting(),
                 )
                 .group_by(Message.sender)
             )
@@ -1129,6 +1136,7 @@ async def _spoken_since(
             Message.phase == trigger.phase,
             Message.sender.in_(("p1", "p2", "p3")),
             Message.created_at >= trigger.created_at,
+            not_greeting(),
         )
         .group_by(Message.sender)
     )

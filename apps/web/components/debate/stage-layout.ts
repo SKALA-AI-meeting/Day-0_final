@@ -21,7 +21,19 @@ export const STAGE_TREE: SplitNode = {
         { kind: "pane", id: "summary", minPx: 120 },
       ],
     },
-    { kind: "pane", id: "chat", minPx: 360 },
+    {
+      // 가운데 칸. 음성 토론은 프로필 줄·최근 발언·조작부를 세로로 나누고(경계를 끌어 높이 조절),
+      // 글 토론은 토론방(chat) 하나다
+      kind: "split",
+      id: "center",
+      dir: "col",
+      children: [
+        { kind: "pane", id: "people", minPx: 96 },
+        { kind: "pane", id: "talk", minPx: 140 },
+        { kind: "pane", id: "controls", minPx: 120 },
+        { kind: "pane", id: "chat", minPx: 360 },
+      ],
+    },
     {
       kind: "split",
       id: "right",
@@ -122,7 +134,12 @@ export function stageWeights(flags: StageFlags): Weights {
     profiles: flags.voice ? 0 : 1,
     voice: flags.voice ? 1 : 0,
     summary: flags.summary ? 1 : 0,
-    chat: p ? 2 : 2.4,
+    center: p ? 2 : 2.4,
+    // 가운데 안: 최근 발언이 가장 넓고, 프로필 줄은 낮게, 조작부는 내용 높이만큼(stageModes)
+    people: flags.voice ? 0.7 : 0,
+    talk: flags.voice ? 2 : 0,
+    controls: flags.voice ? 1 : 0,
+    chat: flags.voice ? 0 : 1,
     right: count === 0 ? 0 : p ? 2.2 : count === 1 ? 1.2 : 1.7,
     // 결정 사항은 내용 높이만큼(stageModes), 비율은 보이기 여부와 끌기 시작점에만 쓴다
     decisions: flags.decisions ? 1 : 0,
@@ -142,5 +159,11 @@ export const SUMMARY_PX = 210;
 export function stageModes(flags: StageFlags): PaneModes {
   return flags.intro
     ? {}
-    : { left: LEFT_PX, summary: SUMMARY_PX, profiles: "square", decisions: "fit" };
+    : {
+        left: LEFT_PX,
+        summary: SUMMARY_PX,
+        profiles: "square",
+        decisions: "fit",
+        controls: "fit",
+      };
 }

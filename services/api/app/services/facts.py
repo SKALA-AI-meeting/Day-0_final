@@ -159,7 +159,7 @@ def message_facts(
     시작부터의 초, 반올림 없음)이 있으면 그 값을, 없으면 `t_min`을 쓴다(메시지·호출 모두 같은 키).
     - `addressed_to`: 의도 분류가 기록한 부른 자리
     - `reply_to`: 부른 자리가 있으면 그 자리들의 직전 메시지, 없으면 직전 AI 동료 메시지
-      (없으면 null)
+      (없으면 null). 세션 시작 인사(`meta.kind` greeting)는 대상이 아니다
     - `decided_before`: 이 메시지보다 먼저 확정된 칸의 단계. 칸 확정이 단계를 넘기므로 메시지의
       단계(`messages.phase`)보다 앞 단계의 확정 칸이다
     - `paste_suspect`: 이 메시지 전에 받은 어시스턴트 답과 글자가 많이 겹치면 `{call_id, overlap}`
@@ -172,7 +172,14 @@ def message_facts(
             continue
         addressed = list((m.get("intent") or {}).get("addressed_to") or [])
         targets = set(addressed) or set(AI_SEATS)
-        reply = next((p["id"] for p in reversed(messages[:index]) if p["sender"] in targets), None)
+        reply = next(
+            (
+                p["id"]
+                for p in reversed(messages[:index])
+                if p["sender"] in targets and (p.get("meta") or {}).get("kind") != "greeting"
+            ),
+            None,
+        )
         best = None
         for call in calls:
             if _when(call) is None or _when(call) >= _when(m):
@@ -428,6 +435,7 @@ async def compute(db: AsyncSession, session: Session, position: Position) -> dic
                 "sender": m.sender,
                 "content": m.content,
                 "phase": m.phase,
+                "meta": m.meta or {},
                 "t_min": t_min(session, m.created_at) or 0.0,
                 "at": _seconds(session, m.created_at),
                 "intent": {"addressed_to": list(intents[m.id].addressed_to)}

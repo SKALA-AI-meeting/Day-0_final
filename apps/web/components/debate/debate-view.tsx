@@ -276,8 +276,8 @@ function PaneToggles({
   );
 }
 
-/** 인사 차례를 기다리는 최대 시간. 지나면 토론방을 연다 */
-const INTRO_MAX_MS = 15_000;
+/** 인사 차례를 기다리는 최대 시간. 지나면 토론방을 연다(음성은 동료 셋의 인사 낭독이 들어가는 길이) */
+const INTRO_MAX_MS = 30_000;
 
 const ENDED_TEXT: Record<EndReason, string> = {
   submitted: "제출했어요. 세션이 끝났습니다.",
@@ -329,12 +329,17 @@ export function DebateView({
     },
   });
   const speaking: Seat[] = voice.speakingSeat ? [voice.speakingSeat] : [];
+  // 프로필 카드 자막: 재생 중인 발언의 말한 데까지 중 마지막 문장
+  const captionLine = voice.currentCaption
+    ? (sentences(voice.currentCaption.text).at(-1) ?? "")
+    : "";
 
   // 인사 차례: TTS가 붙기 전에는 [바로 대화하기]나 대기 시간(INTRO_MAX_MS)으로 끝낸다
   const [introDone, setIntroDone] = useState(false);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>("materials");
   const flags = stageFlags({
-    snap,
+    // 음성에서는 들은 발언 기준이다: 동료 셋의 인사를 다 들을 때까지 프로필 카드를 크게 둔다
+    snap: voiceEnabled ? voice.chatSnap : snap,
     // 음성에서는 지원자 차례가 처음 오면 토론방(대화 기록)을 연다
     candidateSpoke: voice.candidateTurn || snap.messages.some((m) => m.sender === "candidate"),
     introDone,
@@ -411,6 +416,8 @@ export function DebateView({
             <ProfileStage
               snap={voice.chatSnap}
               speaking={speaking}
+              status={voice.seatStatus}
+              caption={captionLine}
               intro={flags.intro}
               onSkipIntro={() => setIntroDone(true)}
             />
@@ -422,36 +429,36 @@ export function DebateView({
             </div>
           ),
           summary: <PhaseSummary snap={snap} />,
-          // 가운데 칸: 위 4명 프로필(한 줄, 상태 표시), 가운데 최근 발언(집중, 남는 높이 전부),
-          // 아래 차례·녹음·손들기 조작
-          chat: voiceEnabled ? (
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden">
-              <div className="flex h-[clamp(132px,24%,200px)] shrink-0">
-                <ProfileStage
-                  snap={voice.chatSnap}
-                  speaking={speaking}
-                  strip
-                  status={voice.seatStatus}
-                  voice={voice.mic}
-                  candidateTalking={voice.recording}
-                  caption={
-                    voice.currentCaption ? (sentences(voice.currentCaption.text).at(-1) ?? "") : ""
-                  }
-                  intro={false}
-                  onSkipIntro={() => setIntroDone(true)}
-                />
-              </div>
-              <RecentTalk
-                className="min-h-0 flex-1"
-                messages={voice.talk}
-                participants={snap.participants}
-                liveId={voice.liveMessageId}
-              />
-              <div className="max-h-[45%] shrink-0 overflow-y-auto rounded-xl border border-line bg-surface p-4">
-                {voice.controls}
-              </div>
+          // 가운데 칸(음성): 위 4명 프로필(한 줄, 상태 표시)·최근 발언(집중)·차례·녹음·손들기 조작.
+          // 세 칸 사이 경계를 끌어 높이를 바꾼다(stage-layout STAGE_TREE center)
+          people: (
+            <ProfileStage
+              snap={voice.chatSnap}
+              speaking={speaking}
+              strip
+              status={voice.seatStatus}
+              voice={voice.mic}
+              candidateTalking={voice.recording}
+              caption={captionLine}
+              intro={false}
+              onSkipIntro={() => setIntroDone(true)}
+            />
+          ),
+          talk: (
+            <RecentTalk
+              className="min-h-0 flex-1"
+              messages={voice.talk}
+              participants={snap.participants}
+              liveId={voice.liveMessageId}
+            />
+          ),
+          controls: (
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto rounded-xl border border-line bg-surface p-4">
+              {voice.controls}
             </div>
-          ) : (
+          ),
+          // 가운데 칸(글): 토론방
+          chat: (
             <ChatRoom
               snap={snap}
               pending={view.pending}

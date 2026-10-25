@@ -154,6 +154,8 @@ async def enter_phase(
         fx.emit("materials.opened", {"keyword": info["label"], "materials": info["materials"]})
     if new_phase == "proposal":
         await _prefill_proposal(db, session)
+    if reason == "start":
+        await _greet(db, session, scenario, fx, clock)
     remaining = sc.remaining_text((session.phase_deadline_at - now).total_seconds())
     keywords = "·".join(o["label"] for o in sc.keyword_options(scenario))
     content = scenario["phrases"]["stage_start"][new_phase].format(
@@ -174,6 +176,40 @@ async def enter_phase(
     run_id = uuid.uuid5(session.id, "phase:" + new_phase)
     if await queue_run(db, session, stimulus, run_id, clock.now()):
         fx.stimuli.append((stimulus, run_id))
+
+
+GREETING_SEATS = ("p1", "p2", "p3")
+
+
+async def _greet(
+    db: AsyncSession, session: Session, scenario: dict[str, Any], fx: Effects, clock: Clock
+) -> None:
+    """세션 시작 인사: 첫 단계 안내 앞에 AI 동료 셋이 고정 문구(채용 건 복사본
+    phrases.greeting)로 한 마디씩 게시한다. LLM을 거치지 않아 모든 지원자가 같은 인사를 받는다.
+    발언 수·첫 발언 집계에서는 빠진다(meta.kind greeting, debate.py). 인사 문구가 없는 옛 채용 건은
+    건너뛴다."""
+    lines = (scenario.get("phrases") or {}).get("greeting") or {}
+    if not lines:
+        return
+    names = {s["seat"]: s["name"] for s in scenario.get("seats", [])}
+    candidate = session.display_name or "지원자"
+    run_id = uuid.uuid5(session.id, "greeting")
+    for seq, seat in enumerate(GREETING_SEATS):
+        if not lines.get(seat):
+            continue
+        content = lines[seat].format(name=names.get(seat, seat), candidate=candidate)
+        message, created = await save_message(
+            db,
+            session,
+            sender=seat,
+            content=content,
+            run_id=run_id,
+            seq=seq,
+            now=clock.now(),
+            meta={"kind": "greeting"},
+        )
+        if created:
+            fx.emit("message.new", serialize_message(session, message))
 
 
 async def advance_phase(

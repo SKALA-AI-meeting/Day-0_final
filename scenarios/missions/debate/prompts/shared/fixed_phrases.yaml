@@ -19,6 +19,13 @@ timeout_fill:
 # 침묵 초대(서지안). 골격만 고정이고 실제 문장은 페르소나가 만들 수 있다
 silence_invite: "{candidate}님은 어떻게 생각하세요?"
 
+# 세션 시작 인사(api가 첫 단계 안내 앞에 AI 동료 자리로 게시, LLM 없음). {name}은 그 자리 동료 이름.
+# 세 문장 모두 같은 결의 중립 인사다(성향·입장·평가를 드러내지 않음). 음성 모드에서는 이 순서로 읽는다
+greeting:
+  p1: "안녕하세요, 저는 {name}입니다. {candidate}님, 오늘 잘 부탁드려요."
+  p2: "반가워요, {name}입니다. {candidate}님, 같이 좋은 기획 만들어 봐요."
+  p3: "안녕하세요, {name}입니다. {candidate}님, 편하게 이야기 나눠요."
+
 # 시스템 안내
 time_warning: 이 단계 {remaining} 남았어요.
 stage_start:                         # [초안] 단계 이름·할 일·남은 시간

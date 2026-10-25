@@ -13,7 +13,7 @@ from app.services import debate, reports
 from app.services.common import ServiceError
 from app.voice import controller, quota
 from app.voice.speech import FakeSpeech, pcm, silence
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 
 @pytest.fixture
@@ -25,9 +25,16 @@ async def voice_ctx(ctx, monkeypatch):
     ctx.settings = replace(ctx.settings, voice_enabled=False)
 
 
-async def setup(api, ctx):
+async def setup(api, ctx, greet: bool = False):
     sess = await api.new_session()
     async with ctx.session_factory() as db:
+        if not greet:
+            # 차례 규칙 테스트는 시작 인사(음성이 맨 앞에 선다) 없이 본다. 인사는 greet=True로 본다
+            await db.execute(
+                delete(Message).where(
+                    Message.session_id == sess.id, Message.meta["kind"].astext == "greeting"
+                )
+            )
         state = await controller.row(db, sess.id)
         state.data = {**state.data, "epoch": "test"}
         await db.commit()
@@ -1063,3 +1070,18 @@ async def test_voice_text_fallback_not_for_speaker_failure(api, voice_ctx):
     assert (await post(api, sess, "playback", {**body, "outcome": "error"})).status_code == 200
     r = await post(api, sess, "playback", {**body, "outcome": "text"})
     assert r.status_code == 409
+
+
+async def test_voice_greetings_play_first_in_seat_order(api, voice_ctx):
+    """세션 시작 인사 셋은 첫 단계 동료 발언보다 먼저, p1→p2→p3 순서로 읽는다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx, greet=True)
+    await snapshot(api, ctx, sess)
+    snap = await snapshot(api, ctx, sess)
+    assert [i["seat"] for i in snap["items"][:3]] == ["p1", "p2", "p3"]
+    async with ctx.session_factory() as db:
+        kinds = {
+            str(m.id): m.meta.get("kind")
+            for m in (await db.scalars(select(Message).where(Message.session_id == sess.id)))
+        }
+    assert [kinds[i["message_id"]] for i in snap["items"][:3]] == ["greeting"] * 3

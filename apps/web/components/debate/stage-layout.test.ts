@@ -45,19 +45,23 @@ test("세션 첫 화면은 프로필 카드만 크게 보이고, 지원자 차�
     summary: true,
   });
   const w = stageWeights(talk);
-  expect(w.chat).toBeGreaterThan(w.right);
+  expect(w.center).toBeGreaterThan(w.right);
+  // 음성 토론의 가운데는 프로필 줄·최근 발언·조작부 세 칸이고 최근 발언이 가장 넓다
+  expect(w.talk).toBeGreaterThan(w.people);
+  expect(w.chat).toBe(0);
   // 메모·진행 상황(왼쪽 열)은 크기를 고정하고, 결정 사항은 내용 높이만큼
   expect(stageModes(talk)).toEqual({
     left: LEFT_PX,
     summary: SUMMARY_PX,
     profiles: "square",
     decisions: "fit",
+    controls: "fit",
   });
   // 오른쪽 칸을 모두 끄면 오른쪽 열이 사라지고 가운데가 그 자리를 쓴다(가운데 비율은 그대로)
   const empty = stageWeights(stageFlags(input({ introDone: true, pinned: { decisions: false } })));
   expect(empty.decisions).toBe(0);
   expect(empty.right).toBe(0);
-  expect(empty.chat).toBe(w.chat);
+  expect(empty.center).toBe(w.center);
 });
 
 test("자료가 열리면 결정 사항 아래에 자료·AI 어시스턴트 묶음이 생긴다", () => {
