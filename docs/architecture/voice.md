@@ -50,11 +50,20 @@ TtsService·SttService는 토론 에이전트와 독립 인터페이스다. 기�
 
 ## OpenAI 공급자(`VOICE_PROVIDER=openai`)
 
-`dev-real` 프로필은 Azure 대신 OpenAI 음성을 쓴다. 어댑터는 `services/api/app/voice/speech.py`의 `OpenAISpeech`이고, 화면·턴 제어·저장 경로는 Azure와 같다(공급자 객체만 바뀜).
+`VOICE_PROVIDER=openai`이면 Azure 대신 OpenAI 음성을 쓴다(제한 키 프로젝트에 음성 모델 권한이 있어야 함). 어댑터는 `services/api/app/voice/speech.py`의 `OpenAISpeech`이고, 화면·턴 제어·저장 경로는 Azure와 같다(공급자 객체만 바뀜).
 
 - 받아 적기: `/v1/audio/transcriptions`에 완성 WAV(PCM16 mono 16kHz)를 한 번에 보낸다. 모델 `MODEL_STT`(기본 `gpt-4o-mini-transcribe`), `language=ko`. 구문 목록(동료 이름 등)은 `prompt`로 넘긴다. 말하는 동안 받아 적기(`live.py`)도 같은 메서드를 조각마다 부른다.
 - 읽기: `/v1/audio/speech`에 `response_format=pcm`(24kHz)으로 받아 길이가 맞는 WAV 머리를 붙인다. 모델 `MODEL_TTS`(기본 `gpt-4o-mini-tts`). 목소리는 자리별 고정(p1 `ash`, p2 `coral`, p3 `sage`)이고 말투 지시는 세 자리 모두 같다.
 - 키: 제한 키(`OPENAI_API_KEY`)의 음성 허용 목록(`app/agent/llm/roles.py` `RESTRICTED_SPEECH_MODELS`). 목록 밖 모델이나 빈 키는 `voice_unavailable`로 멈춘다. `verify()`는 외부 호출 없이 설정만 본다. 모델 권한이 없는 프로젝트는 실제 호출에서 403이 나고 그 작업은 `voice_speech_failed`가 된다.
 - 비용: F0 무료 등급이 아니라 사용량 과금이다. 채용 건 정책은 `version: openai-v1`, `sku: null`, `paid_budget_usd: null`로 복사되고, 작업 기록은 `billing_status: metered`, `net_cost_usd: null`이다. 사용량 원장은 `openai:<기간>`이며 월 한도·동시 1세션·분당 TTS 15회 제한은 Azure와 같다.
 - 정책이 다른 공급자로 만든 채용 건은 시작할 수 없다(`candidate.py`). OpenAI로 바꾼 뒤에는 새 채용 건을 시드한다.
+
+## Gemini 공급자(`VOICE_PROVIDER=gemini`)
+
+`dev-real` 프로필의 음성 공급자다. 어댑터는 `speech.py`의 `GeminiSpeech`이고 키는 기존 규칙(gemini-* → `GEMINI_API_KEY`)을 따른다.
+
+- 받아 적기: `models/{MODEL_STT}:generateContent`에 완성 WAV를 인라인 오디오로 보내고 "들리는 그대로 받아 적어라(다듬기·요약 금지, 말소리가 없으면 빈 문자열)" 지시를 붙인다. 기본 `gemini-3.5-flash-lite`, temperature 0. 전용 음성 인식이 아니라 생성 모델이므로 말을 다듬거나 지어낼 위험이 있다(전사는 평가 근거라 실제 발언으로 확인한다). 구문 목록은 지시에 붙인다.
+- 읽기: TTS 모델(기본 `gemini-2.5-flash-preview-tts`)에 `responseModalities: AUDIO`와 자리별 고정 목소리(p1 `Charon`, p2 `Kore`, p3 `Orus`)를 보낸다. 원시 PCM(`audio/L16;rate=24000`)이면 WAV 머리를 붙이고, WAV로 오면 그대로 쓴다. 말투 지시는 세 자리 모두 같다. 10/25 시험에서 한 문장에 약 5초가 걸렸다.
+- 비용·정책: 사용량 과금. 정책 `version: gemini-v1`, 원장 `gemini:<기간>`, 과금 표시는 OpenAI와 같다(`metered`).
+- 데이터: Gemini API 무료 티어는 입력을 Google이 제품 개선에 쓸 수 있다. 실제 지원자 음성에 쓰기 전에 키 프로젝트의 결제 티어를 확인한다. 동의 화면은 처리 업체를 "Google Gemini"로 적는다(`NEXT_PUBLIC_VOICE_PROVIDER`).
 

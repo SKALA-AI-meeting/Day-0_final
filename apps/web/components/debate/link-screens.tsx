@@ -22,7 +22,8 @@ export const VOICE_ENABLED = !["0", "false"].includes(
 
 /** 음성을 처리하는 외부 서비스 이름(동의 화면). 빌드 시점의 VOICE_PROVIDER를 따른다 */
 const VOICE_PROCESSOR =
-  process.env.NEXT_PUBLIC_VOICE_PROVIDER === "openai" ? "OpenAI" : "Azure Speech";
+  { openai: "OpenAI", gemini: "Google Gemini" }[process.env.NEXT_PUBLIC_VOICE_PROVIDER ?? ""] ??
+  "Azure Speech";
 
 export const NAME_MAX = 20;
 

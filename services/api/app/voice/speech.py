@@ -1,10 +1,11 @@
 """완성 파일 기반 음성 어댑터(Azure F0·OpenAI). 부분 인식 결과는 외부로 전달하지 않는다.
 
 VOICE_PROVIDER가 공급자를 고른다: azure(F0, 유료 폴백 없음), openai(제한 키, 사용량 과금),
-fake(개발·테스트).
+gemini(GEMINI_API_KEY, 사용량 과금), fake(개발·테스트).
 """
 
 import asyncio
+import base64
 import io
 import json
 import logging
@@ -33,8 +34,25 @@ OPENAI_SPEECH_INSTRUCTIONS = (
 )
 
 
+# Gemini 목소리(prebuilt). 자리(p1~p3)에 고정하고 페르소나 성향과 연결하지 않는다
+GEMINI_VOICES = {"p1": "Charon", "p2": "Kore", "p3": "Orus"}
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+GEMINI_STT_MODEL = "gemini-3.5-flash-lite"
+GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+GEMINI_TTS_RATE = 24000  # mimeType에 rate가 없을 때(audio/L16;codec=pcm;rate=24000이 기본)
+# 받아 적기 지시. 생성 모델이라 다듬기·요약·지어내기를 막는다(전사가 평가 근거가 된다)
+GEMINI_STT_PROMPT = (
+    "이 녹음을 한국어로 들리는 그대로 받아 적어라. 말한 내용만 출력하고 설명·따옴표·요약을 붙이지"
+    " 마라. 말을 고치거나 매끄럽게 다듬지 말고, 말소리가 없으면 빈 문자열을 출력하라."
+)
+# 사용량 과금 공급자(F0 무료 등급이 아님): 정책 예산·과금 표시가 다르다
+METERED_PROVIDERS = frozenset({"openai", "gemini"})
+
+
 def voices_for(provider: str) -> dict[str, str]:
     """채용 건 정책에 복사할 자리별 목소리"""
+    if provider == "gemini":
+        return dict(GEMINI_VOICES)
     return dict(OPENAI_VOICES if provider == "openai" else VOICES)
 
 
@@ -327,6 +345,96 @@ class OpenAISpeech:
         return str(response.json().get("text", "")).strip()
 
 
+class GeminiSpeech:
+    """Gemini 음성: 받아 적기는 오디오 입력 generateContent, 읽기는 TTS 모델(AUDIO 응답).
+
+    키는 기존 규칙(gemini-* → GEMINI_API_KEY, app/agent/llm/roles.py key_for)을 따르고,
+    모델은 MODEL_STT·MODEL_TTS로 바꾼다. 사용량 과금이다.
+    """
+
+    def __init__(self) -> None:
+        self.stt_model = os.getenv("MODEL_STT") or GEMINI_STT_MODEL
+        self.tts_model = os.getenv("MODEL_TTS") or GEMINI_TTS_MODEL
+
+    def _key(self, model: str) -> str:
+        from app.agent.llm.roles import key_for
+
+        if not model.startswith("gemini-"):
+            raise ServiceError(503, "voice_unavailable", "Gemini 음성 모델이 아닙니다")
+        try:
+            return key_for(model)[0]
+        except ValueError as exc:
+            raise ServiceError(503, "voice_unavailable", "Gemini 음성 설정이 필요합니다") from exc
+
+    async def verify(self) -> None:
+        """키와 모델 설정만 확인한다(외부 호출 없음)."""
+        self._key(self.stt_model)
+        self._key(self.tts_model)
+
+    async def _generate(self, model: str, body: dict, timeout: float) -> dict:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{GEMINI_URL}/{model}:generateContent",
+                headers={"x-goog-api-key": self._key(model)},
+                json=body,
+            )
+            response.raise_for_status()
+        return response.json()
+
+    async def synthesize(self, text: str, voice: str) -> bytes:
+        if voice not in GEMINI_VOICES.values():
+            raise ServiceError(422, "voice_policy_mismatch", "허용되지 않은 voice")
+        body = {
+            # 말투 지시는 세 자리 모두 같다(성향이 목소리로 드러나지 않게)
+            "contents": [{"parts": [{"text": f"{OPENAI_SPEECH_INSTRUCTIONS}\n\n{text}"}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}},
+            },
+        }
+        data = await self._generate(self.tts_model, body, timeout=60)
+        part = data["candidates"][0]["content"]["parts"][0]["inlineData"]
+        audio = base64.b64decode(part["data"])
+        # 모델에 따라 WAV(audio/wav)나 원시 PCM(audio/L16;rate=…)으로 온다
+        if audio[:4] == b"RIFF":
+            return audio
+        mime = part.get("mimeType", "")
+        rate = int(mime.split("rate=")[-1].split(";")[0]) if "rate=" in mime else GEMINI_TTS_RATE
+        return wav_from_pcm(audio, rate)
+
+    async def transcribe(self, audio: bytes, phrases: Sequence[str] = ()) -> str:
+        """완성 WAV를 한 번에 받아 적는다.
+
+        phrases(동료 이름 등)는 지시에 붙여 그 단어로 알아듣게 돕는다.
+        """
+        pcm(audio)
+        prompt = GEMINI_STT_PROMPT
+        if phrases:
+            prompt += " 나올 수 있는 이름·단어: " + ", ".join(phrases) + "."
+        body = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": "audio/wav",
+                                "data": base64.b64encode(audio).decode(),
+                            }
+                        },
+                    ]
+                }
+            ],
+            "generationConfig": {"temperature": 0},
+        }
+        data = await self._generate(self.stt_model, body, timeout=60)
+        candidates = data.get("candidates") or []
+        if not candidates:
+            return ""
+        parts = candidates[0].get("content", {}).get("parts", [])
+        return "".join(p.get("text", "") for p in parts).strip().strip('"').strip()
+
+
 def provider():
     name = os.getenv("VOICE_PROVIDER", "azure")
     if name == "fake":
@@ -335,6 +443,8 @@ def provider():
         return FakeSpeech()
     if name == "openai":
         return OpenAISpeech()
+    if name == "gemini":
+        return GeminiSpeech()
     if name != "azure":
         raise ServiceError(503, "voice_unavailable", "지원하지 않는 음성 공급자")
     return AzureSpeech()

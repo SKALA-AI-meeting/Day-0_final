@@ -687,8 +687,8 @@ async def run_job(ctx, job_id):
                 job.data = {**job.data, "status": "canceled"}
                 await db.commit()
                 return
-            # Azure F0는 무료 등급, OpenAI는 사용량 과금이라 비용을 여기서 확정하지 않는다
-            metered = os.getenv("VOICE_PROVIDER", "azure") == "openai"
+            # Azure F0는 무료 등급, OpenAI·Gemini는 사용량 과금이라 비용을 여기서 확정하지 않는다
+            metered = os.getenv("VOICE_PROVIDER", "azure") in ("openai", "gemini")
             extra = {
                 "status": "error" if error else "ready",
                 "error": error,

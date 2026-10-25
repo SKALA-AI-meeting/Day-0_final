@@ -511,3 +511,9 @@ V6·V7의 공식 자료 비교·비용 계산·독립 인터페이스·차단 �
 |---|---|---|
 | `dev-real`의 음성을 Azure F0에서 OpenAI(`VOICE_PROVIDER=openai`, STT `gpt-4o-mini-transcribe`·TTS `gpt-4o-mini-tts`)로 바꾼다. 음성 모델은 제한 키(`OPENAI_API_KEY`)의 별도 허용 목록 `RESTRICTED_SPEECH_MODELS`로만 고르며 LLM 역할 모델로는 쓸 수 없다. `deploy`는 Azure를 유지한다 | Azure F0 키·리소스 확인 없이 기존 제한 키 하나로 실제 음성 경로를 시험하기 위해서다(사용자 결정). 공급자 객체만 바꾸면 턴 제어·저장·화면은 그대로다 | 개인 키 경로: 키 규칙에서 없앴다. 브라우저 음성 인식: 크롬이 음성을 외부로 보내고 브라우저마다 다르다. Azure 유지: 키·F0 리소스가 없어 dev에서 음성이 막힌다 |
 
+## 2026-10-25 개발 음성 공급자를 Gemini로
+
+| 결정 | 이유 | 대안과 기각 이유 |
+|---|---|---|
+| `dev-real`의 음성을 Gemini(`VOICE_PROVIDER=gemini`, STT `gemini-3.5-flash-lite`·TTS `gemini-2.5-flash-preview-tts`, 키 `GEMINI_API_KEY`)로 돌린다. OpenAI 음성 공급자는 코드에 남긴다 | 제한 키 프로젝트가 OpenAI 음성 모델 5개를 모두 403으로 막아, 이미 있는 Gemini 키로 실제 음성 경로를 시험한다(사용자 결정). 키 규칙(gemini-* → GEMINI_API_KEY)을 바꾸지 않아도 된다 | OpenAI: 모델 권한이 열리면 `VOICE_PROVIDER=openai`로 바로 쓴다. Azure: 키·F0 리소스가 없다. 위험: 생성 모델 전사의 다듬기·지어내기, TTS 지연(문장당 약 5초), 무료 티어 데이터 사용 — 실제 지원자에게 쓰기 전에 확인한다 |
+

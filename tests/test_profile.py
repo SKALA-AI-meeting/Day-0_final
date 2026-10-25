@@ -60,7 +60,7 @@ def test_voice_profile_modes_and_deploy_guard(root):
         "test-voice": "fake",
         "eval-text": "off",
         "eval-voice": "fake",
-        "dev-real": "openai",
+        "dev-real": "gemini",
         "deploy": "azure",
     }
     for name, mode in expected.items():
@@ -72,7 +72,7 @@ def test_voice_profile_modes_and_deploy_guard(root):
             if mode == "azure"
             else "AZURE_SPEECH_KEY" not in p.describe()
         )
-        assert ("OpenAI 음성" in p.describe()) == (mode == "openai")
+        assert ("Gemini 음성" in p.describe()) == (mode == "gemini")
     path = root / "infra" / "profiles" / "deploy.env"
     path.write_text(
         path.read_text("utf-8").replace("VOICE_PROVIDER=azure", "VOICE_PROVIDER=fake"), "utf-8"
