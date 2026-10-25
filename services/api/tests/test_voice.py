@@ -886,3 +886,18 @@ async def test_voice_no_forced_turn_after_candidate_spoke(api, voice_ctx):
     snap = await snapshot(api, ctx, sess)
     assert snap["state"] == "AI_SPEAKING"
     assert not snap.get("priority")
+
+
+def test_quota_scope_auto_uses_utc_month(monkeypatch):
+    from datetime import UTC, datetime
+
+    monkeypatch.setenv("AZURE_SPEECH_RESOURCE_ID", "res")
+    monkeypatch.setenv("VOICE_QUOTA_PERIOD", "auto")
+    jan = quota.scope(datetime(2026, 1, 31, 23, 59, tzinfo=UTC))
+    feb = quota.scope(datetime(2026, 2, 1, 0, 0, tzinfo=UTC))
+    assert (jan, feb) == ("res:2026-01", "res:2026-02")
+    monkeypatch.setenv("VOICE_QUOTA_PERIOD", "fixed-id")
+    assert quota.scope(datetime(2026, 2, 1, tzinfo=UTC)) == "res:fixed-id"
+    monkeypatch.setenv("VOICE_QUOTA_PERIOD", "")
+    with pytest.raises(ServiceError):
+        quota.scope(datetime(2026, 2, 1, tzinfo=UTC))
