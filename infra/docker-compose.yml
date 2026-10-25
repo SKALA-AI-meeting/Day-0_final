@@ -59,7 +59,7 @@ services:
       assessment-mcp: { condition: service_healthy }
     volumes:
       - ../scenarios:/scenarios:ro
-      - hfcache:/models   # 로컬 받아 적기(VOICE_STT_PROVIDER=whisper) 모델. rag-mcp와 같은 캐시 볼륨
+      - hfcache:/models   # 로컬 받아 적기(whisper)·읽기(supertonic) 모델. rag-mcp와 같은 캐시 볼륨
 
   debate-mcp:
     build: ../services/debate-mcp

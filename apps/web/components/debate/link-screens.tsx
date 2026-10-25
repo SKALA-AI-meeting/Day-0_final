@@ -44,10 +44,19 @@ const VOICE_STT =
   process.env.NEXT_PUBLIC_VOICE_STT_PROVIDER || process.env.NEXT_PUBLIC_VOICE_PROVIDER;
 const VOICE_TTS =
   process.env.NEXT_PUBLIC_VOICE_TTS_PROVIDER || process.env.NEXT_PUBLIC_VOICE_PROVIDER;
+/** 이 서비스 서버에서 돌리는 로컬 공급자(받아 적기 whisper, 읽기 supertonic) */
+const LOCAL_SERVER = "이 서비스 서버(외부 전송 없음)";
+const LOCAL_STT = VOICE_STT === "whisper";
+const LOCAL_TTS = VOICE_TTS === "supertonic";
+const processorName = (name: string | undefined) => PROCESSOR_NAMES[name ?? ""] ?? "Azure Speech";
 const VOICE_PROCESSOR =
-  VOICE_STT === "whisper"
-    ? `이 서비스 서버(외부 전송 없음)에서 받아 적고, AI 동료 음성은 ${PROCESSOR_NAMES[VOICE_TTS ?? ""] ?? "Azure Speech"}`
-    : (PROCESSOR_NAMES[VOICE_STT ?? ""] ?? "Azure Speech");
+  LOCAL_STT && LOCAL_TTS
+    ? LOCAL_SERVER
+    : LOCAL_STT
+      ? `${LOCAL_SERVER}에서 받아 적고, AI 동료 음성은 ${processorName(VOICE_TTS)}`
+      : LOCAL_TTS
+        ? `${processorName(VOICE_STT)}에서 받아 적고, AI 동료 음성은 ${LOCAL_SERVER}`
+        : processorName(VOICE_STT);
 
 export const NAME_MAX = 20;
 
