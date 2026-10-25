@@ -19,7 +19,7 @@
 | 근거 | 현재 구조 | 음성 전환에 필요한 차이 |
 |---|---|---|
 | [AGENTS.md](../../AGENTS.md), [overview.md](overview.md) | API 단일 프로세스, DB 쓰기 API 소유, MCP 3개와 워커 분리 | Voice Turn Controller는 API의 별도 모듈. 음성 전용 서비스·MCP·LLM 에이전트를 추가하지 않음 |
-| [agents.md](agents.md), `services/api/app/agent/debate/graph.py` | `load → cards → turn → respond → guard → stance_check → wait_typing → apply → fill`; 실행당 화자 0~2명 | 화자 수·순서는 그래프가 계속 결정. Controller는 그래프 결과의 전달 순서와 발언권만 관리 |
+| [agents.md](agents.md), `services/api/app/agent/debate/graph.py` | `load → cards → turn → respond → guard → stance_check → wait_typing → apply → fill`; 실행당 화자 0~2명(`turn_elapsed`는 0~1명) | 화자 수·순서는 그래프가 계속 결정. Controller는 그래프 결과의 전달 순서와 발언권만 관리 |
 | [harness.md](harness.md) | 역할별 LLM 5개, 토론 그래프는 체크포인터 없이 DB 재로딩, 워커만 PostgresSaver | 역할 모델·프롬프트·LLM 복구 그대로. 음성 상태는 별도 DB 기록으로 복구 |
 | [session-lifecycle.md](session-lifecycle.md), `app/mailbox.py` | 자극 5종 직렬 실행, `agent_runs` 영속 기록, 게시 직전 generation 검사 | 사용자 턴 예약 중에는 새 AI 실행을 보류. 실행 완료와 재생 완료를 별도 기록 |
 | [ws.md](../contracts/ws.md), `app/routers/ws.py` | `message.ack`는 저장 확인, `message.new`는 게시. `typing.stop`은 완료 신호가 아님 | 음성 배치의 닫힘과 항목별 재생 확인을 추가. 기존 이벤트만으로 완료 추정 금지 |
@@ -117,7 +117,7 @@ MVP는 **묶음의 생성·TTS 준비를 마친 뒤 순차 재생**한다. 첫 �
 | 화자 0명·메시지 0개 | `batch.closed`에 빈 목록과 완료 상태 기록 → 즉시 `USER_READY`. 무음 TTS·임의 안내 발언 생성 없음 |
 | 화자 0명·합의 공지 있음 | `fill` 공지 1개를 manifest에 포함. 일반 화자 0명이어도 바로 마이크를 열지 않음 |
 | 화자 1명 | 해당 자리 최종 메시지 재생 후 완료 장벽 확인 |
-| 화자 2명 이상 항목 | 기존 그래프는 여전히 최대 2명. 선택 순서·게시 순서대로 재생하고 공지는 마지막. 구현 큐는 복수 run의 항목도 순서대로 처리 |
+| 화자 2명 이상 항목 | 기존 그래프는 여전히 최대 2명(지원자 차례가 넘어간 `turn_elapsed`는 1명). 선택 순서·게시 순서대로 재생하고 공지는 마지막. 구현 큐는 복수 run의 항목도 순서대로 처리 |
 | 한 자리 생성 실패 | 기존 페르소나 실패 정책에 따라 그 발언 생략. 남은 메시지만 manifest에 담음. TTS 오류를 LLM 실패 횟수로 세지 않음 |
 | stale generation으로 남은 화자 취소 | 게시하지 않은 항목은 manifest에 넣지 않음. 이미 취소된 항목의 늦은 TTS 결과·ended 확인은 무시 |
 | TTS·재생 실패 | 실패를 `ended`로 바꾸지 않음. 7장의 제한된 복구 후에도 실패하면 사용자 발언권 부여 보류 |

@@ -41,7 +41,7 @@ PHASE_NAMES = {
     "proposal": "기획안 작성",
 }
 OUTPUT_RULE = (
-    '출력은 JSON 객체 하나다: {"content": "게시할 1~3문장", "proposes": null 또는 '
+    '출력은 JSON 객체 하나다: {"content": "게시할 1~2문장", "proposes": null 또는 '
     '{"scenario_option_key": "키", "label": "라벨"}, "stance": null 또는 '
     '{"option_id": "안 id 또는 키", "stance": "support" 또는 "oppose"}}. '
     "stance는 이번 발언이 어떤 안의 지지·반대를 새로 밝히거나 되풀이해 밝힐 때만 채운다. "

@@ -10,8 +10,10 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.masking import mask
 from app.models import AgentRun, Invite, Message, Position, SpeechJob, VoiceState
+from app.services import scenario as sc
 from app.services.common import ServiceError, conflict, iso
 from app.services.debate import CANDIDATE_MESSAGE_MAX_CHARS
+from app.services.phases import keyword_key
 from app.voice import live, quota
 from app.voice.speech import pcm
 
@@ -41,6 +43,26 @@ def name_phrases(position) -> list[str]:
         given = name[1:] if len(name) >= 3 else name
         phrases += [name, given, f"{name}님", f"{given}님"]
     return phrases
+
+
+# 구문 목록 상한. Azure 구문 목록(phrase list)은 500개까지 받으므로 그 안에서 자른다. 지금 넣는 값은
+# 이름 12개 + 키워드 후보 + 한 단계 안 라벨이라 수십 개를 넘지 않는다
+MAX_STT_PHRASES = 500
+
+
+def stt_phrases(position, phase: str, keyword: str | None) -> list[str]:
+    """받아 적기 구문 목록: 동료 이름, 키워드 후보 라벨, 현재 단계의 카탈로그 안 라벨.
+
+    모두 채용 건 복사본(`positions.scenario`)에서 읽는다. 짧은 키워드(물·불)나 안 라벨을 비슷한
+    소리의 다른 말로 적으면 의도 분류·안 연결이 놓치므로 받아 적는 단계에서 그 말로 알아듣게 돕는다.
+    문제 상황·해결책 안은 확정된 키워드(`keyword`)의 것만 넣는다(키워드 전이면 없음).
+    """
+    scenario = position.scenario
+    phrases = name_phrases(position)
+    phrases += [o["label"] for o in sc.keyword_options(scenario)]
+    if phase != "keyword":
+        phrases += [o["label"] for o in sc.catalog_options(scenario, phase, keyword)]
+    return list(dict.fromkeys(p for p in phrases if p))[:MAX_STT_PHRASES]
 
 
 def ready_hold(position) -> timedelta:
@@ -485,7 +507,7 @@ async def capture(db, session, position, body, now):
                 "deadline": iso(deadline),
                 "turn_kind": turn_kind,
                 "hand": hand_turn,
-                "phrases": name_phrases(position),
+                "phrases": stt_phrases(position, session.phase, await keyword_key(db, session.id)),
             },
         )
     )

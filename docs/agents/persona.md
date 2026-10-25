@@ -12,6 +12,7 @@
 
 - 구조화 출력 `{content, proposes?, stance?}`([contracts/mcp.md](../contracts/mcp.md)) → guard·stance_check 통과 뒤 `post_message`·`propose_option`·`set_stance`
 - 걸리면 재생성 1회 → 자리별 안전 문구 또는 계획 일치 고정 문구(`messages.meta.guard`·`meta.stance_check`)
+- 발언은 음성으로 재생되므로 1~2문장·120자 안쪽, 요점 하나다. 첫마디를 앞 발언을 받는 상투어("OO님 말씀처럼")로 시작하지 않고, 바로 앞 화자와 같은 문장 구조·같은 근거를 되풀이하지 않는다(`common_rules.md` "말하는 방식", 프롬프트 규칙이며 게시 전 코드 검사는 없다). guard 400자는 안전 상한이다
 
 ## 데이터 파일 (`scenarios/missions/debate/`)
 
@@ -47,4 +48,4 @@
 
 ## 알려진 한계
 
-- 오인용: 동료가 다른 참여자의 말을 실제보다 세게 옮길 수 있다. 예: 지원자가 "캠페인은 효과가 오래 안 가지 않나요?"라고 물었는데 동료가 "OO님 말씀처럼 캠페인은 일시적인 효과가 있을 수 있지만"으로 받는다(질문을 주장으로). 주로 "OO님 말씀처럼"으로 이어 붙이는 생성 단계의 습관이며 게시 전에 거르지 않는다. 측정 방법과 수치는 [tests/e2e/records/misattribution-experiment-20261024.md](../../tests/e2e/records/misattribution-experiment-20261024.md), 결정은 [decisions.md](../decisions.md) 2026-10-24 "인용 검사를 빼고 오인용을 알려진 한계로 둔다". 후속 이슈에서 다룬다.
+- 오인용: 동료가 다른 참여자의 말을 실제보다 세게 옮길 수 있다. 예: 지원자가 "캠페인은 효과가 오래 안 가지 않나요?"라고 물었는데 동료가 "OO님 말씀처럼 캠페인은 일시적인 효과가 있을 수 있지만"으로 받는다(질문을 주장으로). 주로 "OO님 말씀처럼"으로 이어 붙이는 생성 단계의 습관이며 게시 전에 거르지 않는다. 측정 방법과 수치는 [tests/e2e/records/misattribution-experiment-20261024.md](../../tests/e2e/records/misattribution-experiment-20261024.md), 결정은 [decisions.md](../decisions.md) 2026-10-24 "인용 검사를 빼고 오인용을 알려진 한계로 둔다". 2026-10-25부터 공통 규칙이 앞 발언을 받는 상투어로 첫마디를 시작하지 않게 하지만(프롬프트 규칙), 효과는 아직 실측하지 않았다. 후속 이슈에서 다룬다.

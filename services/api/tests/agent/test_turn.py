@@ -501,3 +501,13 @@ def test_excluded_seats_is_a_name_fact_check(catalog):
     assert rules.excluded_seats("서지안 말고요", ["p3"], catalog) == ["p3"]
     assert rules.excluded_seats("지안님 빼고", ["p3"], catalog) == ["p3"]
     assert rules.excluded_seats("3번은 보류", ["p3"], catalog) == []
+
+
+async def test_turn_elapsed_has_one_speaker(harness):
+    """지원자 차례가 넘어간 자극은 한 명만 말한다. 남은 지명은 다음 실행으로 넘긴다."""
+    h = harness("keyword")
+    h.candidate("한결님, 하람님 생각은 어떠세요?", intent_of("question", to=("p1", "p2")))
+    run = await h.run("turn_elapsed")
+    assert [s["seat"] for s in run.decision["speakers"]] == ["p1"]
+    assert [q["seat"] for q in run.decision["queued"]] == ["p2"]
+    assert len(h.posted()) == 1
