@@ -53,15 +53,13 @@ export type VoiceSnapshot = {
     message_id?: string;
     /** 받아 적은 글을 자동 제출하는 시각. 예전 채용 건이면 없음(바로 제출) */
     confirm_deadline_at?: string;
-    /** 이 발언을 제출할 수 있는 마지막 시각(ready·empty). 지나면 발언이 버려진다 */
+    /** 이 발언을 제출할 수 있는 마지막 시각(ready). 지나면 발언이 버려진다 */
     submit_deadline_at?: string;
   };
   /** 이 차례에서 다시 녹음을 이미 썼는지 */
   rerecorded?: boolean;
   /** 재생이 끝난 동료 발언 id. 상태 조회(GET)에만 있다 */
   heard_message_ids?: string[];
-  /** 녹음을 자동으로 시작할 시각(손들기·강제 차례는 생각 시간 뒤). 일반 차례는 없음(직접 누름) */
-  think_deadline_at?: string;
   /** 내 차례를 지켜 주는 끝 시각. 지나면 동료가 이어 말한다 */
   turn_until_at?: string;
   /** 마감이 가까워 이번 녹음이 발언 한도보다 짧을 때만: 말할 수 있는 초 */
@@ -75,11 +73,6 @@ export type VoiceSnapshot = {
 function secondsUntil(snap: VoiceSnapshot, at?: string): number {
   if (!at) return 0;
   return Math.max(0, (Date.parse(at) - Date.parse(snap.server_now)) / 1000);
-}
-/** 자동 녹음까지 남은 초. 일반 차례(직접 누름)면 0 */
-function thinkLeft(snap: VoiceSnapshot): number {
-  if (!snap.think_deadline_at) return 0;
-  return Math.max(0, (Date.parse(snap.think_deadline_at) - Date.parse(snap.server_now)) / 1000);
 }
 /** 안내(진행을 막지 않는 정보)를 보여 주는 시간(ms). 오류와 달리 저절로 사라진다 */
 const NOTICE_MS = 6000;
@@ -115,6 +108,8 @@ export function displayedSeat(
     return "candidate";
   return active ?? lastColleague;
 }
+/** 전달 대기(내 칸 유지)를 풀 때: 차례·연결·단계가 바뀌었거나 동료 재생·내 차례로 넘어감.
+ * 전달 직후 발언(utterance)이 먼저 사라지고 메시지가 아직 안 온 순간에는 풀지 않는다(큰 칸 깜빡임). */
 export function shouldResetAwaitingSaved(
   previous: VoiceSnapshot | null,
   next: VoiceSnapshot,
@@ -124,8 +119,7 @@ export function shouldResetAwaitingSaved(
     phaseChanged ||
     (!!previous && (previous.turn_id !== next.turn_id || previous.epoch !== next.epoch)) ||
     next.state === "AI_SPEAKING" ||
-    next.state === "USER_READY" ||
-    !next.utterance
+    next.state === "USER_READY"
   );
 }
 export function showRaisedHand(hand: unknown, priority?: "hand" | "forced"): boolean {
@@ -157,7 +151,7 @@ const LABEL: Record<string, string> = {
   TRANSCRIBING: "발언을 정리하고 있어요",
   PROCESSING: "발언을 전달하고 있어요",
 };
-/** 차례 유지·자동 녹음까지 남은 시간을 크게 줄이는 막대. 5초 이하면 경고 색 */
+/** 차례 유지 남은 시간을 크게 줄이는 막대. 5초 이하면 경고 색 */
 function Countdown({
   seconds,
   total,
@@ -302,7 +296,7 @@ export function EmptyRecognition({
   );
 }
 
-/** 손들기(차례 유지) 시간의 기본값(초). 서버가 시작 시각(ready_at)을 주지 않을 때 막대 길이에 쓴다 */
+/** 차례 유지 시간의 기본값(초). 서버가 시작 시각(ready_at)을 주지 않을 때 막대 길이에 쓴다 */
 const DEFAULT_HOLD_SECONDS = 20;
 
 /** 음성 토론의 차례·녹음·재생·확인 동작. 화면 조각과 상태를 돌려주고, 배치는 토론 화면(debate-view)이 정한다. */
@@ -820,20 +814,9 @@ export function useVoiceTurn(props: Props) {
           setAwaitingSaved(true);
           latest.current.onSend(p.id, p.text, p.turn, p.epoch);
         }
-        if (enabled && !error && !busy.current && next.epoch) {
-          if (next.state === "AI_SPEAKING") void play(next);
-          // 생각 시간 동안은 마이크를 켜지 않는다. "지금 발언하기"를 누르면 바로 녹음한다.
-          // 자동 녹음은 서버가 시각을 줄 때만(손들기·강제 차례). 일반 차례는 [발언하기]를 눌러야 시작한다.
-          if (
-            props.snap.session.phase !== "proposal" &&
-            next.state === "USER_READY" &&
-            !next.blocked_reason &&
-            next.speech_limit_seconds !== 0 &&
-            next.think_deadline_at &&
-            thinkLeft(next) <= 0
-          )
-            void record(next);
-        }
+        // 녹음은 자동으로 시작하지 않는다. 일반·손들기·강제 차례 모두 [발언하기]를 눌러 시작한다.
+        if (enabled && !error && !busy.current && next.epoch && next.state === "AI_SPEAKING")
+          void play(next);
       } catch {
         if (!disposed)
           setError({
@@ -864,7 +847,6 @@ export function useVoiceTurn(props: Props) {
     enabled,
     error,
     play,
-    record,
     stopMedia,
   ]);
 
@@ -1105,10 +1087,6 @@ export function useVoiceTurn(props: Props) {
     voice?.ready_at && voice.turn_until_at
       ? (Date.parse(voice.turn_until_at) - Date.parse(voice.ready_at)) / 1000
       : DEFAULT_HOLD_SECONDS;
-  const thinkTotal =
-    voice?.ready_at && voice.think_deadline_at
-      ? (Date.parse(voice.think_deadline_at) - Date.parse(voice.ready_at)) / 1000
-      : 5;
 
   // 음성 칸에 들어갈 조작부. 프로필 강조·대화 기록은 토론 화면이 그린다.
   const controls = (
@@ -1165,20 +1143,9 @@ export function useVoiceTurn(props: Props) {
             disabled={startDisabled}
             onClick={() => void record(voice)}
           >
-            {micPending
-              ? "마이크 권한 확인 중…"
-              : voice.think_deadline_at
-                ? "지금 발언하기"
-                : "발언하기"}
+            {micPending ? "마이크 권한 확인 중…" : "발언하기"}
           </Button>
-          {voice.think_deadline_at ? (
-            <Countdown
-              seconds={thinkLeft(voice)}
-              total={thinkTotal}
-              label="뒤 내 발언이 시작돼요"
-              valueText={`${Math.ceil(thinkLeft(voice))}초 뒤 내 발언이 시작돼요`}
-            />
-          ) : holdLeft > 0 ? (
+          {holdLeft > 0 ? (
             <Countdown
               seconds={holdLeft}
               total={holdTotal}

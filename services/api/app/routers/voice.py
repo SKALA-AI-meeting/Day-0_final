@@ -74,11 +74,8 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
             snap, pending = await controller.sync(db, session, position, ctx.clock.now())
             snap["heard_message_ids"] = await controller.heard_message_ids(db, session_id)
             if snap.get("state") == "USER_READY" and snap.get("ready_at"):
-                # 자동 녹음 시각(손들기·강제는 생각 시간 뒤). 일반 차례는 직접 눌러 없음
-                auto = controller.auto_start_at(position, snap)
-                if auto:
-                    snap["think_deadline_at"] = auto
-                hold = controller.ready_hold(position, snap)
+                # 모든 차례는 지원자가 [발언하기]로 시작한다(자동 녹음 없음)
+                hold = controller.ready_hold(position)
                 snap["turn_until_at"] = iso(controller.at(snap["ready_at"]) + hold)
                 # 마감이 가까워 발언 한도(60초)를 다 못 쓰면 녹음 전에 알린다
                 limit = controller.speech_limit_seconds(session, position, snap, ctx.clock.now())
@@ -122,15 +119,12 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
                             release_ready=False,
                         )
                         snap["turn_until_at"] = iso(
-                            controller.at(snap["ready_at"])
-                            + controller.ready_hold(position, state.data)
+                            controller.at(snap["ready_at"]) + controller.ready_hold(position)
                         )
-                    if job.data["status"] in ("ready", "empty"):
-                        # 수정하는 동안 남은 제출 시간을 보이게 한다(지나면 발언이 버려짐)
+                    if job.data["status"] == "ready":
+                        # 받아 적은 글을 제출할 수 있는 마지막 시각(지나면 발언이 버려짐)
                         snap["utterance"]["submit_deadline_at"] = iso(
-                            controller.submit_deadline(
-                                session, snap, job.data["status"], snap.get("turn_until_at")
-                            )
+                            controller.submit_deadline(session, snap)
                         )
             await db.commit()
     for jid in pending:
@@ -166,7 +160,7 @@ async def retry_stt(session_id: uuid.UUID, body: RetryIn, ctx: Ctx, _: Candidate
 
 @router.post("/sessions/{session_id}/voice/rerecord")
 async def rerecord(session_id: uuid.UUID, body: RetryIn, ctx: Ctx, _: Candidate):
-    """받아 적은 글을 제출하지 않고 버린 뒤 같은 차례에서 한 번 다시 녹음한다."""
+    """받아 적은 글을 버리고 같은 차례에서 다시 녹음한다(상한 초과 글은 횟수에 안 셈)."""
     async with ctx.ordered(session_id):
         async with ctx.session_factory() as db:
             session, _, _ = await load_context(db, session_id, lock=True)

@@ -11,22 +11,18 @@ from sqlalchemy.dialects.postgresql import insert
 from app.masking import mask
 from app.models import AgentRun, Invite, Message, Position, SpeechJob, VoiceState
 from app.services.common import ServiceError, conflict, iso
+from app.services.debate import CANDIDATE_MESSAGE_MAX_CHARS
 from app.voice import live, quota
 from app.voice.speech import pcm
 
 log = logging.getLogger(__name__)
 HOLD = {"USER_READY", "USER_SPEAKING", "TRANSCRIBING", "PROCESSING"}
-# 생각 시간이 끝난 뒤 화면이 녹음을 시작하기까지 기다려 주는 여유. 지나면 차례를 반납한다.
-READY_GRACE_SECONDS = 10
+# 일반 차례 유지 시간이 없던 예전 채용 건에 쓰는 값(VOICE_TURN_HOLD_SECONDS 기본과 같다)
+DEFAULT_TURN_HOLD_SECONDS = 20
 
 
 def at(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def think_seconds(position) -> int:
-    """채용 건에 고정된 생각 시간. 이 값이 없던 예전 채용 건은 0(바로 녹음)."""
-    return position.scenario["voice_policy"].get("think_seconds", 0)
 
 
 def confirm_seconds(position) -> int:
@@ -47,38 +43,22 @@ def name_phrases(position) -> list[str]:
     return phrases
 
 
-def manual_start(position) -> bool:
-    """일반 차례에서 지원자가 직접 [발언하기]로 녹음을 시작하는지(개정 V17). 예전 채용 건은 자동."""
-    return "turn_hold_seconds" in position.scenario["voice_policy"]
-
-
-def ready_hold(position, data: dict | None = None) -> timedelta:
+def ready_hold(position) -> timedelta:
     """내 차례(USER_READY)를 동료 발언·카드에 반납하지 않고 지켜 주는 시간.
 
-    손들기·강제 차례는 자동 시작 대기(생각 시간) + 여유,
-    일반 차례는 지원자가 직접 누를 때까지 기다리는 유지 시간(turn_hold_seconds)이다.
+    일반·손들기·강제 차례 모두 지원자가 [발언하기]를 누를 때까지 같은 유지 시간을 준다.
+    예전 채용 건에 남은 think_seconds는 읽지 않는다.
     """
-    priority = (data or {}).get("priority")
-    if priority not in ("hand", "forced") and manual_start(position):
-        return timedelta(seconds=position.scenario["voice_policy"]["turn_hold_seconds"])
-    return timedelta(seconds=think_seconds(position) + READY_GRACE_SECONDS)
+    policy = position.scenario["voice_policy"]
+    return timedelta(seconds=policy.get("turn_hold_seconds", DEFAULT_TURN_HOLD_SECONDS))
 
 
 def ready_expired(position, data: dict, now) -> bool:
     return (
         data.get("state") == "USER_READY"
         and bool(data.get("ready_at"))
-        and now >= at(data["ready_at"]) + ready_hold(position, data)
+        and now >= at(data["ready_at"]) + ready_hold(position)
     )
-
-
-def auto_start_at(position, data: dict) -> str | None:
-    """화면이 녹음을 자동으로 시작할 시각. 일반 차례(직접 누름)면 없음."""
-    ready = at(data["ready_at"])
-    priority = data.get("priority")
-    if priority in ("hand", "forced") or not manual_start(position):
-        return iso(ready + timedelta(seconds=think_seconds(position)))
-    return None
 
 
 # 녹음이 끝난 뒤 받아 적기·확인·제출에 남겨 두는 여유(초). 마감에 맞춰 잘린 녹음도
@@ -102,27 +82,22 @@ def speech_cutoff(session, data: dict) -> datetime:
 PROCESSING_GRACE_SECONDS = 100
 
 
-def submit_deadline(session, data: dict, status: str, turn_until_at: str | None) -> datetime:
-    """받아 적은 글(ready·empty)을 message.send로 제출할 수 있는 마지막 시각.
+def submit_deadline(session, data: dict) -> datetime:
+    """받아 적은 글(ready)을 message.send로 제출할 수 있는 마지막 시각.
 
-    단계 마감·세션 종료(validate)와, ready는 녹음 마감 + 처리 여유(sync가 발언을 버리는 시각),
-    empty는 내 차례를 지켜 주는 끝 시각 중 이른 것.
+    단계 마감·세션 종료(validate)와 녹음 마감 + 처리 여유(sync가 발언을 버리는 시각) 중 이른 것.
     """
     deadline = min(session.phase_deadline_at, session.ends_at)
-    if status == "ready" and data.get("speech_deadline_at"):
+    if data.get("speech_deadline_at"):
         grace = timedelta(seconds=PROCESSING_GRACE_SECONDS)
         deadline = min(deadline, at(data["speech_deadline_at"]) + grace)
-    if status == "empty" and turn_until_at:
-        deadline = min(deadline, at(turn_until_at))
     return deadline
 
 
 def speech_limit_seconds(session, position, data: dict, now) -> int | None:
     """내 차례에서 녹음을 시작하면 말할 수 있는 초. 발언 한도보다 짧을 때만(마감이 가까움) 준다."""
     turn = position.scenario["voice_policy"]["user_turn_seconds"]
-    auto = auto_start_at(position, data)
-    start = max(now, at(auto)) if auto else now
-    left = int((speech_cutoff(session, data) - start).total_seconds())
+    left = int((speech_cutoff(session, data) - now).total_seconds())
     return max(left, 0) if left < turn else None
 
 
@@ -130,26 +105,33 @@ NOTICE_KINDS = ("consensus_fill", "timeout_fill")
 DEBATE_PHASES = ("keyword", "problem", "solution")
 
 
-def forced_lead(position) -> timedelta:
+# 강제 차례는 단계 길이의 이 비율보다 일찍 오지 않는다. 짧은 세션에서 lead가 단계 길이에
+# 가까워 단계 시작 직후 끼어드는 것을 막는다(60분 세션 단계는 lead보다 훨씬 길어 영향 없음)
+FORCED_MAX_SHARE = 0.5
+
+
+def forced_lead(session, position) -> timedelta:
     """단계 마감 몇 초 전에 강제 차례를 줄지.
 
     지금 동료 발언이 끝나기를 기다리는 시간(forced_wait_seconds, 예전 채용 건은 0)
-    + 자동 시작 대기(생각 시간) + 발언 한도 + 여유.
+    + 발언 한도 + 여유. 단, 이번 단계 길이(시작~마감)의 FORCED_MAX_SHARE를 넘지 않는다.
     """
     policy = position.scenario["voice_policy"]
-    return timedelta(
+    lead = timedelta(
         seconds=policy.get("forced_wait_seconds", 0)
-        + think_seconds(position)
         + policy["user_turn_seconds"]
         + SUBMIT_MARGIN_SECONDS
     )
+    if session.phase_started_at:
+        lead = min(lead, (session.phase_deadline_at - session.phase_started_at) * FORCED_MAX_SHARE)
+    return lead
 
 
 async def needs_forced_turn(db, session, position, data, now) -> bool:
     """이 단계에 지원자 발언이 없고 마감이 가까우면 단계당 한 번 차례를 강제한다(개정 V16)."""
     if session.phase not in DEBATE_PHASES or data.get("forced_phase") == session.phase:
         return False
-    if now < session.phase_deadline_at - forced_lead(position):
+    if now < session.phase_deadline_at - forced_lead(session, position):
         return False
     spoke = await db.scalar(
         select(func.count())
@@ -575,13 +557,25 @@ async def transcribe_stt(speech, job_id, audio: bytes, data: dict) -> str:
     return await speech.transcribe(audio, data.get("phrases", []))
 
 
+# 상한을 넘은 글을 버리는 다시 말하기를 한 차례에 받는 횟수
+LONG_RERECORD_LIMIT = 2
+
+
+def too_long(job) -> bool:
+    """받아 적은 글이 발언 상한을 넘어 제출할 수 없는지(message.send가 invalid_input으로 거부)."""
+    return len((job.data.get("transcript") or "").strip()) > CANDIDATE_MESSAGE_MAX_CHARS
+
+
 async def rerecord(db, session, body, now):
-    """받아 적은 글을 제출하지 않고 버린 뒤, 같은 차례에서 한 번만 새로 녹음하게 한다(60초 새로)."""
+    """받아 적은 글을 제출하지 않고 버린 뒤 같은 차례에서 새로 녹음하게 한다(60초 새로).
+
+    한 차례에 한 번이다. 상한을 넘어 제출할 수 없는 글을 버리는 다시 말하기는 그 한 번에
+    세지 않고 따로 LONG_RERECORD_LIMIT번까지 받는다(매번 유지 시간이 새로 시작되므로
+    차례를 붙잡아 두지 못하게).
+    """
     state = await row(db, session.id)
     data = dict(state.data)
     validate(session, data, body.turn_id, body.epoch, now)
-    if data.get("rerecorded"):
-        raise conflict("voice_retry_exhausted")
     job = await db.get(SpeechJob, body.job_id)
     if (
         job is None
@@ -591,6 +585,12 @@ async def rerecord(db, session, body, now):
         or job.data.get("status") != "ready"
     ):
         raise conflict("voice_turn_conflict")
+    counted = not too_long(job)
+    long_rerecords = data.get("long_rerecords", 0)
+    if (counted and data.get("rerecorded")) or (
+        not counted and long_rerecords >= LONG_RERECORD_LIMIT
+    ):
+        raise conflict("voice_retry_exhausted")
     job.data = {**job.data, "status": "canceled", "error": "voice_rerecorded"}
     live.discard(str(job.id))
     # 앞 녹음의 마감을 지워야 capture가 발언 시간을 새로 준다
@@ -599,7 +599,8 @@ async def rerecord(db, session, body, now):
     data.update(
         state="USER_READY",
         ready_at=iso(now),
-        rerecorded=True,
+        rerecorded=bool(data.get("rerecorded")) or counted,
+        long_rerecords=long_rerecords + (0 if counted else 1),
         capture_count=0,
         release_ready=False,
         blocked_reason=None,
@@ -609,7 +610,10 @@ async def rerecord(db, session, body, now):
 
 
 async def submit(db, session, payload, now):
-    """기존 message.send 트랜잭션 안에서 전사·턴 fence와 단일 소비를 확인한다."""
+    """기존 message.send 트랜잭션 안에서 전사·턴 fence와 단일 소비를 확인한다.
+
+    받아 적은 글을 고쳐 보내거나 빈 인식에 직접 쓴 글은 받지 않는다(앞뒤 공백만 허용).
+    """
     state = await row(db, session.id)
     validate(session, state.data, payload.get("voice_turn_id"), payload.get("epoch"), now)
     try:
@@ -621,8 +625,9 @@ async def submit(db, session, payload, now):
         job is None
         or job.session_id != session.id
         or job.kind != "stt"
-        or job.data.get("status") not in ("ready", "empty")
+        or job.data.get("status") != "ready"
         or not mask(str(payload.get("content", "")).strip())
+        or str(payload.get("content", "")).strip() != (job.data.get("transcript") or "").strip()
         or state.data.get("utterance_id") != str(jid)
     ):
         raise conflict("voice_payload_mismatch")
