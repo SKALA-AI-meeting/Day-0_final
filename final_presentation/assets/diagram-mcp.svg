@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1172 400" width="1172" height="400" font-family="Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6B6A64"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B5532F"/></marker></defs>
+<rect x="10" y="40" width="260" height="130" rx="6" fill="#F0EEE6" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="140.0" y="100.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">동료 에이전트 3명</text>
+<text x="140.0" y="126.0" text-anchor="middle" font-size="16" fill="#6B6A64">고집형 · 소극형 · 비판형</text>
+<rect x="10" y="250" width="260" height="110" rx="6" fill="#F0EEE6" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="140.0" y="288.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">기록·평가 코드</text>
+<text x="140.0" y="314.0" text-anchor="middle" font-size="16" fill="#6B6A64">진행 매니저 규칙 노드</text>
+<text x="140.0" y="338.0" text-anchor="middle" font-size="16" fill="#6B6A64">리포트 워커</text>
+<rect x="470" y="20" width="320" height="100" rx="6" fill="#FAF9F5" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="630.0" y="65.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">debate-mcp</text>
+<text x="630.0" y="91.0" text-anchor="middle" font-size="16" fill="#6B6A64">토론 상태 조회 · 기록은 코드가</text>
+<rect x="470" y="140" width="320" height="100" rx="6" fill="#FAF9F5" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="630.0" y="185.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">rag-mcp</text>
+<text x="630.0" y="211.0" text-anchor="middle" font-size="16" fill="#6B6A64">확정된 키워드 자료만 검색</text>
+<rect x="470" y="270" width="320" height="110" rx="6" fill="#F5E3DA" stroke="#D97757" stroke-width="2.5"/>
+<text x="630.0" y="320.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">assessment-mcp</text>
+<text x="630.0" y="346.0" text-anchor="middle" font-size="16" fill="#6B6A64">관찰 기록 · 평가 척도</text>
+<line x1="270" y1="80" x2="468" y2="70" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<text x="370" y="62" text-anchor="middle" font-size="16" fill="#6B6A64" font-weight="700">조회만 허용</text>
+<line x1="270" y1="125" x2="468" y2="185" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<text x="370" y="142" text-anchor="middle" font-size="16" fill="#6B6A64" font-weight="700">허용</text>
+<line x1="270" y1="160" x2="440" y2="290" stroke="#B5532F" stroke-width="2.5" stroke-dasharray="7 6"/>
+<circle cx="448" cy="296" r="15" fill="#B5532F"/><path d="M441,289 L455,303 M455,289 L441,303" stroke="#FAF9F5" stroke-width="3"/>
+<text x="330" y="262" font-size="16" fill="#B5532F" font-weight="800" text-anchor="middle">차단</text>
+<line x1="270" y1="320" x2="468" y2="320" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<text x="370" y="308" text-anchor="middle" font-size="16" fill="#6B6A64" font-weight="700">토큰으로 허용</text>
+<rect x="850" y="120" width="312" height="180" rx="6" fill="#FAF9F5" stroke="#D97757" stroke-width="2"/>
+<text x="1006" y="158" font-size="20" fill="#141413" font-weight="800" text-anchor="middle">두 겹으로 막는다</text>
+<text x="872" y="200" font-size="17" fill="#141413" font-weight="600" text-anchor="start">① 노드별 도구 허용 목록</text>
+<text x="872" y="236" font-size="17" fill="#141413" font-weight="600" text-anchor="start">② assessment 전용 토큰</text>
+<text x="872" y="276" font-size="16" fill="#B5532F" font-weight="800" text-anchor="start">→ 기준을 보고 행동을 맞출 수 없다</text>
+</svg>

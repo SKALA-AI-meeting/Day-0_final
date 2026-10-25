@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1172 400" width="1172" height="400" font-family="Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6B6A64"/></marker><marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B5532F"/></marker></defs>
+<text x="10" y="30" font-size="18" fill="#B5532F" font-weight="800" text-anchor="start">토론 중 · 지원자 발언마다 (단계 시작·침묵·차례 넘김·카드 시각은 진행 매니저부터)</text>
+<rect x="10" y="56" width="177" height="110" rx="6" fill="#F0EEE6" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="98.5" y="106.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">지원자 발언</text>
+<text x="98.5" y="132.0" text-anchor="middle" font-size="16" fill="#6B6A64">음성 → 받아 적기</text>
+<rect x="205" y="56" width="177" height="110" rx="6" fill="#FAF9F5" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="293.5" y="106.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">의도 분류</text>
+<text x="293.5" y="132.0" text-anchor="middle" font-size="16" fill="#6B6A64">제안·동의·반대 등</text>
+<rect x="330" y="44" width="48" height="24" rx="12" fill="#D97757"/><text x="354" y="61" text-anchor="middle" font-size="16" font-weight="800" fill="#FAF9F5">LLM</text>
+<rect x="400" y="56" width="177" height="110" rx="6" fill="#F5E3DA" stroke="#D97757" stroke-width="2.5"/>
+<text x="488.5" y="106.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">진행 매니저</text>
+<text x="488.5" y="132.0" text-anchor="middle" font-size="16" fill="#6B6A64">말할 동료 0~2명</text>
+<rect x="525" y="44" width="48" height="24" rx="12" fill="#141413"/><text x="549" y="61" text-anchor="middle" font-size="16" font-weight="800" fill="#FAF9F5">코드</text>
+<rect x="595" y="56" width="177" height="110" rx="6" fill="#FAF9F5" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="683.5" y="106.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">동료 에이전트</text>
+<text x="683.5" y="132.0" text-anchor="middle" font-size="16" fill="#6B6A64">성향대로 발언</text>
+<rect x="720" y="44" width="48" height="24" rx="12" fill="#D97757"/><text x="744" y="61" text-anchor="middle" font-size="16" font-weight="800" fill="#FAF9F5">LLM</text>
+<rect x="790" y="56" width="177" height="110" rx="6" fill="#FAF9F5" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="878.5" y="106.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">가드 검사</text>
+<text x="878.5" y="132.0" text-anchor="middle" font-size="16" fill="#6B6A64">금지 표현·입장</text>
+<rect x="915" y="44" width="48" height="24" rx="12" fill="#141413"/><text x="939" y="61" text-anchor="middle" font-size="16" font-weight="800" fill="#FAF9F5">코드</text>
+<rect x="985" y="56" width="177" height="110" rx="6" fill="#F0EEE6" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="1073.5" y="106.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">게시</text>
+<text x="1073.5" y="132.0" text-anchor="middle" font-size="16" fill="#6B6A64">차례대로 음성 재생</text>
+<line x1="187" y1="111" x2="213" y2="111" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<line x1="382" y1="111" x2="408" y2="111" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<line x1="577" y1="111" x2="603" y2="111" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<line x1="772" y1="111" x2="798" y2="111" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<line x1="967" y1="111" x2="993" y2="111" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<text x="10" y="232" font-size="18" fill="#B5532F" font-weight="800" text-anchor="start">토론 후 · 세션이 끝나면</text>
+<rect x="10" y="258" width="177" height="110" rx="6" fill="#F0EEE6" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="98.5" y="308.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">세션 종료</text>
+<text x="98.5" y="334.0" text-anchor="middle" font-size="16" fill="#6B6A64">기획안 제출</text>
+<rect x="205" y="258" width="177" height="110" rx="6" fill="#FAF9F5" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="293.5" y="308.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">큐</text>
+<text x="293.5" y="334.0" text-anchor="middle" font-size="16" fill="#6B6A64">RabbitMQ</text>
+<rect x="330" y="246" width="48" height="24" rx="12" fill="#141413"/><text x="354" y="263" text-anchor="middle" font-size="16" font-weight="800" fill="#FAF9F5">코드</text>
+<rect x="400" y="258" width="177" height="110" rx="6" fill="#FAF9F5" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="488.5" y="308.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">사실 지표</text>
+<text x="488.5" y="334.0" text-anchor="middle" font-size="16" fill="#6B6A64">발언 수·칸 기록</text>
+<rect x="525" y="246" width="48" height="24" rx="12" fill="#141413"/><text x="549" y="263" text-anchor="middle" font-size="16" font-weight="800" fill="#FAF9F5">코드</text>
+<rect x="595" y="258" width="177" height="110" rx="6" fill="#FAF9F5" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="683.5" y="308.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">요소별 판단</text>
+<text x="683.5" y="334.0" text-anchor="middle" font-size="16" fill="#6B6A64">수준·근거·확신도</text>
+<rect x="720" y="246" width="48" height="24" rx="12" fill="#D97757"/><text x="744" y="263" text-anchor="middle" font-size="16" font-weight="800" fill="#FAF9F5">LLM</text>
+<rect x="790" y="258" width="177" height="110" rx="6" fill="#141413" stroke="#141413" stroke-width="1.5"/>
+<text x="878.5" y="308.0" text-anchor="middle" font-size="20" font-weight="800" fill="#FAF9F5">담당자 검토</text>
+<text x="878.5" y="334.0" text-anchor="middle" font-size="16" fill="#DEDCD3">여기서 멈춤</text>
+<rect x="985" y="258" width="177" height="110" rx="6" fill="#F0EEE6" stroke="#DEDCD3" stroke-width="1.5"/>
+<text x="1073.5" y="308.0" text-anchor="middle" font-size="20" font-weight="800" fill="#141413">확정</text>
+<text x="1073.5" y="334.0" text-anchor="middle" font-size="16" fill="#6B6A64">AI 값과 함께 저장</text>
+<line x1="187" y1="313" x2="213" y2="313" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<line x1="382" y1="313" x2="408" y2="313" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<line x1="577" y1="313" x2="603" y2="313" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<line x1="772" y1="313" x2="798" y2="313" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+<line x1="967" y1="313" x2="993" y2="313" stroke="#6B6A64" stroke-width="2" marker-end="url(#a)"/>
+</svg>

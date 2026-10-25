@@ -1,6 +1,7 @@
 line-length = 100
 target-version = "py312"
 # 문서(.md) 안의 코드 블록은 의사코드라 포맷 대상에서 뺀다(ruff는 Markdown 코드 블록도 포맷한다)
-extend-exclude = ["*.md"]
+# final_presentation/은 발표 자료 그림 생성 스크립트라 제품 코드 검사에서 뺀다
+extend-exclude = ["*.md", "final_presentation"]
 [lint]
 select = ["E", "F", "I", "B", "UP"]
