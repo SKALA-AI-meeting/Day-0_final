@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 111개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 112개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -231,6 +231,12 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - 자료가 열리면 결정 사항 아래에 자료·AI 어시스턴트 묶음이 생긴다
 - 기획안 단계는 오른쪽 위가 기획안으로 바뀌고 단계 안내가 왼쪽 아래에 남는다
 - 상단 바에서 직접 켜거나 끈 영역은 자동 판단보다 앞서고, 인사 화면에서는 무시된다
+
+</details>
+
+<details><summary><code>components/debate/tile-flip.test.ts</code> (1)</summary>
+
+- 작은 칸 자리에서 큰 칸 자리로 커지며 움직이고 끝은 제자리다
 
 </details>
 
