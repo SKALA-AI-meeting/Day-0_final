@@ -6,7 +6,7 @@ Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론해 키
 
 | 하고 싶은 일 | 먼저 읽을 문서 |
 |---|---|
-| 제품을 한 페이지로 훑기(공유용, 정본 아님) | [share/product-guide/index.html](share/product-guide/index.html). 결과 보고서는 [share/report.html](share/report.html)·[share/visual-report/index.html](share/visual-report/index.html) |
+| 제품을 한 페이지로 훑기(공유용, 정본 아님) | 화면 구조·상태 안내 [share/screen-guide/guide.html](share/screen-guide/guide.html)(PDF·흐름 영상 같은 폴더). 결과 보고서는 [share/report.html](share/report.html)·[share/visual-report/index.html](share/visual-report/index.html). [share/product-guide/index.html](share/product-guide/index.html)은 음성 전환 전(글 토론) 화면 기준이다 |
 | 처음 받아서 실행해 보기 | [guides/quickstart.md](guides/quickstart.md) → [guides/configuration.md](guides/configuration.md) |
 | 팀원이 실제 AI·음성으로 시연해 보고 의견 남기기 | [guides/team-test.md](guides/team-test.md) |
 | 테스트를 돌리고 범위를 알기 | [guides/testing.md](guides/testing.md), 가상 지원자로 AI 동작 재기 [guides/virtual-candidate.md](guides/virtual-candidate.md) |
@@ -60,5 +60,5 @@ docs/
 ├── contracts/       README(공통·인증) · api · ws · voice · internal · mcp · queue
 ├── services/        api · web · report-worker · mcp
 ├── guides/          quickstart · configuration · testing · virtual-candidate · team-test · database · scenario-changes · contributing
-└── share/           공유용 산출물(아키텍처 페이지·보고서·시각 보고서·제품 가이드). 정본이 아니다
+└── share/           공유용 산출물(아키텍처 페이지·보고서·시각 보고서·화면 안내·제품 가이드). 정본이 아니다
 ```
