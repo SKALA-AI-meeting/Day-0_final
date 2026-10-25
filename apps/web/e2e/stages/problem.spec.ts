@@ -1,7 +1,7 @@
 // problem: 수용 카드 발언 표시, advance{to: deadline} 뒤 시간 초과 결과(적용 규칙별 시스템 안내)와 입력 잠김
 import { expect, test } from "@playwright/test";
 
-import { type Seed, VOICE_ENABLED, advance, internalGet, seed, shot } from "./helpers";
+import { type Seed, VOICE_ENABLED, advance, internalGet, say, seed, shot } from "./helpers";
 
 let s: Seed;
 test.beforeAll(async () => {
@@ -14,9 +14,7 @@ test("수용 카드 발언 → 시간 초과 채우기 → 입력 닫힘", async
   await shot(page, "problem", "01-시작");
 
   if (VOICE_ENABLED) {
-    await expect(page.getByRole("button", { name: "발언 완료" })).toBeVisible();
-    await page.waitForTimeout(400);
-    await page.getByRole("button", { name: "발언 완료" }).click();
+    await say(page, "가뭄 문제도 함께 살펴봐요.");
   }
   // 카드 예정 시각(flexibility_majority·listening_pressure)을 당기면 고집형의 기준안 발언이 온다
   await advance(s.sessionId, "card:flexibility_majority");

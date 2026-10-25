@@ -17,7 +17,7 @@ from app.auth import decode_token
 from app.masking import mask
 from app.models import ConnectionGap, Message
 from app.services import debate
-from app.services.common import ServiceError, load_session, serialize_message
+from app.services.common import ServiceError, iso, load_session, serialize_message
 from app.services.context import AppContext
 
 router = APIRouter()
@@ -99,7 +99,12 @@ async def socket(websocket: WebSocket, session_id: uuid.UUID) -> None:
                 voice = await row(db, session_id)
                 data = {**voice.data, "epoch": str(uuid.uuid4())}
                 if data.get("state") == "USER_SPEAKING":
-                    data.update(state="USER_READY", blocked_reason="voice_interrupted")
+                    data.update(
+                        state="USER_READY",
+                        ready_at=iso(ctx.clock.now()),
+                        release_ready=False,
+                        blocked_reason="voice_interrupted",
+                    )
                 voice.data = data
                 await db.commit()
     await _mark_reconnected(ctx, session_id)

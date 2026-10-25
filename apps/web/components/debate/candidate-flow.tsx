@@ -17,6 +17,7 @@ import {
   WaitingScreen,
 } from "./link-screens";
 import { MockControls } from "./mock-controls";
+import { MICROPHONE_HELP, isMicrophoneError, requestMicrophone } from "./voice/microphone";
 import type { Debrief, EndReason, Entry, StateSnapshot, TokenResponse } from "./types";
 
 type Stage =
@@ -198,10 +199,7 @@ export function CandidateFlow({ token }: { token: string }) {
             setStage({ ...stage, pending: true, error: null });
             try {
               if (!MOCK && VOICE_ENABLED) {
-                const microphone = await navigator.mediaDevices.getUserMedia({
-                  audio: true,
-                  video: false,
-                });
+                const microphone = await requestMicrophone();
                 microphone.getTracks().forEach((track) => track.stop());
               }
               await api(`/s/${token}/start`, { method: "POST", token: sessionToken.current });
@@ -221,7 +219,9 @@ export function CandidateFlow({ token }: { token: string }) {
                   error:
                     error instanceof ApiError && error.code === "position_outdated"
                       ? error.message
-                      : "시작하지 못했어요. 다시 시도해 주세요.",
+                      : isMicrophoneError(error)
+                        ? MICROPHONE_HELP
+                        : "연결을 확인하고 다시 시도해 주세요.",
                 });
             }
           }}

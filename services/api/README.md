@@ -132,7 +132,7 @@ debate-mcp·assessment-mcp도 떠 있어야 토론 그래프와 리포트 평가
 - `services/session.py`·`phases.py`: 상태·단계 전이(SessionService), 누적 마감, 전환 프레임.
 - `services/debate.py`: 지원자 메시지 저장·generation, 의도 분류 반영, 안·입장, 칸 확정·합의 채우기, DebateState. `services/consensus.py`는 순수 판정 함수, `services/timeout.py`는 마감 채우기.
 - `agent/`: 역할 폴더 `manager/`(진행 매니저 규칙), `persona/`(토론 동료), `intent/`(의도 분류), `assistant/`(어시스턴트)와 역할을 잇는 `debate/`(토론 그래프·AgentRunner), 공용 `guard/`(금지 문구 검사), `llm/`(역할별 모델·fake), `mcp_client/`, `catalog.py`. 역할 폴더의 `README.md`가 그 역할이 읽는 데이터 파일을 적는다.
-- `mailbox.py`: 세션별 직렬 메일박스(agent_runs 상태로 멱등). `scheduler.py`: 5초 틱(마감·임박 안내·idle·card_due·자동 제출·run 재실행·outbox·purge).
+- `mailbox.py`: 세션별 직렬 메일박스(agent_runs 상태로 멱등). `scheduler.py`: 5초 틱(마감·임박 안내·idle·turn_elapsed·card_due·자동 제출·run 재실행·outbox·purge).
 - `services/test_sessions.py`: 테스트 API. 단계 시드 `scenarios/e2e/stages/<이름>.yaml`을 서비스 함수로 재생한다.
 - 테스트 도구: `tests/kit.py`(가짜 시계·기록 runner·고정 의도 분류·httpx ASGI 클라이언트).
 
@@ -149,7 +149,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 338개(live 3개 포함, `make test`는 live를 뺀다).
+총 346개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -591,12 +591,20 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_voice.py</code> (22)</summary>
+<details><summary><code>tests/test_voice.py</code> (30)</summary>
 
 - `test_voice_playback_barrier_and_single_message`
 - `test_voice_heard_ids_follow_playback_end`
 - `test_voice_plays_first_ready_while_next_is_made`
 - `test_voice_normal_turn_waits_for_press`
+- `test_two_hold_expiries_resume_colleagues_in_one_phase`
+- `test_hold_handoff_ignores_retry_and_stale_voice`
+- `test_two_empty_stt_results_handoff_after_retry_hold`
+- `test_next_ready_is_protected_after_turn_elapsed`
+- `test_stt_failure_retry_gets_fresh_hold_after_original_expires`
+- `test_proposal_voice_does_not_offer_a_turn`
+- `test_solution_turns_then_consensus_closes_microphone`
+- `test_proposal_plays_queued_previous_phase_utterance`
 - `test_voice_rerecord_once_with_fresh_time`
 - `test_voice_zero_speakers_stale_and_audio_validation`
 - `test_voice_quota_refuses_before_provider_and_other_session`

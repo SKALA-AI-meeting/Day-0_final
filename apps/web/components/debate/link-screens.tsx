@@ -332,7 +332,7 @@ export function WaitingScreen({
       )}
       <div>
         <Button loading={pending} onClick={onStart}>
-          시작하기
+          {error ? "다시 시도" : "시작하기"}
         </Button>
       </div>
     </Page>

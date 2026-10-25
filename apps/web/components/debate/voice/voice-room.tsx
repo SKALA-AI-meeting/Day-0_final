@@ -6,6 +6,8 @@ import { Button } from "@/components/ui";
 import type { Seat, StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
 import { sentences, spokenCount } from "./caption";
+import { canStartVoice, turnHoldNotice } from "./control-state";
+import { MICROPHONE_HELP, isMicrophoneError, requestMicrophone } from "./microphone";
 import { finishOnce, normalize } from "./recorder";
 import { startPcmStream, type PcmStream } from "./streamer";
 
@@ -92,6 +94,7 @@ type Props = {
   locked: boolean;
   onSend: (id: string, text: string, turn: string, epoch: string) => void;
   onBusy: (busy: boolean) => void;
+  onFocusProposal: () => void;
 };
 const LABEL: Record<string, string> = {
   AI_GENERATING: "동료가 발언을 준비하고 있어요",
@@ -115,6 +118,7 @@ export function useVoiceTurn(props: Props) {
   const [active, setActive] = useState<string | null>(null);
   const [remaining, setRemaining] = useState(60);
   const [level, setLevel] = useState(0);
+  const [micPending, setMicPending] = useState(false);
   const [heardIds, setHeardIds] = useState<string[]>([]);
   // 지금 재생 중인 동료 발언과, 대화 기록에 보여 줄 문장들(재생 위치까지)
   const [speaking, setSpeaking] = useState<{ id: string; text: string } | null>(null);
@@ -125,6 +129,8 @@ export function useVoiceTurn(props: Props) {
   const recorder = useRef<MediaRecorder | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
   const busy = useRef(false);
+  const waitingMic = useRef(false);
+  const currentTurn = useRef("");
   const finish = useRef<() => void>(() => {});
   const pendingAudio = useRef<Record<string, unknown> | null>(null);
   const pending = useRef<{
@@ -159,10 +165,19 @@ export function useVoiceTurn(props: Props) {
     stream.current = null;
     recorder.current = null;
     busy.current = false;
+    waitingMic.current = false;
   }, []);
 
   useEffect(() => {
-    if (!props.connected || props.locked) stopMedia();
+    if (!props.connected || props.locked) {
+      stopMedia();
+      // 연결 변경은 미디어를 즉시 닫고, 버튼 상태는 다음 작업에서 갱신한다.
+      const reset = window.setTimeout(() => setMicPending(false), 0);
+      return () => {
+        window.clearTimeout(reset);
+        stopMedia();
+      };
+    }
     return () => {
       stopMedia();
     };
@@ -177,16 +192,25 @@ export function useVoiceTurn(props: Props) {
     async (snap: VoiceSnapshot) => {
       if (busy.current || snap.turn_id === lastTurn.current) return;
       busy.current = true;
+      waitingMic.current = true;
+      setMicPending(true);
       const op = operation.current;
       try {
-        const mic = await navigator.mediaDevices.getUserMedia({
+        const mic = await requestMicrophone({
           audio: { channelCount: 1, echoCancellation: true },
           video: false,
         });
-        if (op !== operation.current) {
+        if (op !== operation.current || currentTurn.current !== snap.turn_id) {
           mic.getTracks().forEach((t) => t.stop());
+          if (op === operation.current) {
+            busy.current = false;
+            waitingMic.current = false;
+            setMicPending(false);
+          }
           return;
         }
+        waitingMic.current = false;
+        setMicPending(false);
         stream.current = mic;
         const start = await api<VoiceSnapshot>(`${path}/capture`, {
           method: "POST",
@@ -314,10 +338,14 @@ export function useVoiceTurn(props: Props) {
         };
         r.start();
       } catch (e) {
+        if (op !== operation.current) return;
+        waitingMic.current = false;
+        setMicPending(false);
         stream.current?.getTracks().forEach((t) => t.stop());
         busy.current = false;
         if (expired(e)) showNotice("단계 마감이 가까워 이번 단계에서는 더 말할 수 없어요.");
-        else setError("마이크를 사용할 수 없어요. 권한과 장치를 확인한 뒤 다시 시작해 주세요.");
+        else
+          setError(isMicrophoneError(e) ? MICROPHONE_HELP : "연결을 확인하고 다시 시도해 주세요.");
       }
     },
     [path, showNotice],
@@ -420,13 +448,14 @@ export function useVoiceTurn(props: Props) {
         const next = await api<VoiceSnapshot>(path, { token: token() });
         if (disposed) return;
         lastState = next.state;
+        currentTurn.current = next.turn_id;
         const nextFence = `${next.generation}:${next.epoch}`;
         if (fence.current && nextFence !== fence.current) stopMedia();
         fence.current = nextFence;
         const ids = next.heard_message_ids ?? [];
         setHeardIds((prev) => (prev.join() === ids.join() ? prev : ids));
         // 녹음 종료/업로드 중에는 서버의 직전 USER_SPEAKING 스냅샷을 표시하지 않는다.
-        if (!busy.current || player.current) setVoice(next);
+        if (!busy.current || waitingMic.current || player.current) setVoice(next);
         const u = next.utterance;
         // 받아 적은 글은 확인 시간 동안 보여 주고, [이대로 제출]을 누르거나 시간이 끝나면 제출한다
         const reviewed = confirmed.current === u?.id || confirmLeft(next) <= 0;
@@ -451,6 +480,7 @@ export function useVoiceTurn(props: Props) {
           // 생각 시간 동안은 마이크를 켜지 않는다. "지금 발언하기"를 누르면 바로 녹음한다.
           // 자동 녹음은 서버가 시각을 줄 때만(손들기·강제 차례). 일반 차례는 [발언하기]를 눌러야 시작한다.
           if (
+            props.snap.session.phase !== "proposal" &&
             next.state === "USER_READY" &&
             !next.blocked_reason &&
             next.speech_limit_seconds !== 0 &&
@@ -475,7 +505,18 @@ export function useVoiceTurn(props: Props) {
       disposed = true;
       clearInterval(timer);
     };
-  }, [path, props.enabled, props.connected, props.locked, enabled, error, play, record, stopMedia]);
+  }, [
+    path,
+    props.enabled,
+    props.connected,
+    props.locked,
+    props.snap.session.phase,
+    enabled,
+    error,
+    play,
+    record,
+    stopMedia,
+  ]);
 
   const resume = async () => {
     setError("");
@@ -594,18 +635,26 @@ export function useVoiceTurn(props: Props) {
   const controls = (
     <section aria-label="음성 회의" className="flex flex-col items-stretch gap-3">
       <p role="status" className="text-callout font-semibold">
-        {props.locked
-          ? "토론이 종료됐어요"
-          : review
-            ? "받아 적은 내용을 확인해 주세요"
-            : LABEL[voice?.state ?? "AI_GENERATING"]}
+        {props.snap.session.phase === "proposal" && !props.locked
+          ? "토론이 끝났어요. 정한 내용으로 기획안을 써 주세요"
+          : props.locked
+            ? "토론이 종료됐어요"
+            : review
+              ? "받아 적은 내용을 확인해 주세요"
+              : LABEL[voice?.state ?? "AI_GENERATING"]}
       </p>
-      {notice && (
+      {props.snap.session.phase === "proposal" && !props.locked && (
+        <Button variant="secondary" onClick={props.onFocusProposal}>
+          기획안으로 이동
+        </Button>
+      )}
+      {props.snap.session.phase !== "proposal" && notice && (
         <p role="status" className="text-footnote font-semibold text-warning">
           {notice}
         </p>
       )}
-      {!props.locked &&
+      {props.snap.session.phase !== "proposal" &&
+        !props.locked &&
         !error &&
         voice?.state === "USER_READY" &&
         !voice.blocked_reason &&
@@ -614,7 +663,8 @@ export function useVoiceTurn(props: Props) {
             단계 마감이 가까워 이번 단계에서는 더 말할 수 없어요
           </p>
         )}
-      {!props.locked &&
+      {props.snap.session.phase !== "proposal" &&
+        !props.locked &&
         !error &&
         voice?.state === "USER_READY" &&
         !voice.blocked_reason &&
@@ -625,13 +675,20 @@ export function useVoiceTurn(props: Props) {
                 이번 단계에서 아직 의견을 말하지 않았어요. 지금 말해 주세요
               </p>
             )}
-            <Button disabled={!props.connected} onClick={() => void record(voice)}>
-              {voice.think_deadline_at ? "지금 발언하기" : "발언하기"}
+            <Button
+              disabled={!props.connected || micPending || !canStartVoice(props.snap.session.phase)}
+              onClick={() => void record(voice)}
+            >
+              {micPending
+                ? "마이크 권한 확인 중…"
+                : voice.think_deadline_at
+                  ? "지금 발언하기"
+                  : "발언하기"}
             </Button>
             <p className="text-footnote text-muted tabular-nums">
               {voice.think_deadline_at
                 ? `${Math.ceil(thinkLeft(voice))}초 뒤 녹음이 자동으로 시작돼요`
-                : `${Math.ceil(secondsUntil(voice, voice.turn_until_at))}초 안에 시작하지 않으면 동료가 이어서 말해요`}
+                : turnHoldNotice(secondsUntil(voice, voice.turn_until_at))}
             </p>
             {voice.speech_limit_seconds !== undefined && (
               <p className="text-footnote font-semibold text-warning tabular-nums">
@@ -640,7 +697,8 @@ export function useVoiceTurn(props: Props) {
             )}
           </div>
         )}
-      {!props.locked &&
+      {props.snap.session.phase !== "proposal" &&
+        !props.locked &&
         !error &&
         (voice?.state === "AI_GENERATING" || voice?.state === "AI_SPEAKING") && (
           <div className="flex flex-col items-center gap-2">
@@ -660,7 +718,7 @@ export function useVoiceTurn(props: Props) {
             )}
           </div>
         )}
-      {review && voice && (
+      {props.snap.session.phase !== "proposal" && review && voice && (
         <div className="flex flex-col gap-2">
           <p className="rounded-xl border border-line bg-surface p-3">{review.transcript}</p>
           <div className="flex flex-wrap gap-2">
@@ -676,24 +734,28 @@ export function useVoiceTurn(props: Props) {
           </p>
         </div>
       )}
-      {!props.locked && voice?.state === "USER_SPEAKING" && (
-        <div className="flex flex-col gap-2">
-          <p className="tabular-nums">내 발언 {remaining}초 남음</p>
-          <meter min={0} max={100} value={level} aria-label="마이크 입력 음량" />
-          <Button onClick={() => finish.current()}>발언 완료</Button>
-          <p className="text-footnote text-muted">시간이 끝나면 자동으로 제출해요</p>
-        </div>
-      )}
-      {error && (
+      {props.snap.session.phase !== "proposal" &&
+        !props.locked &&
+        voice?.state === "USER_SPEAKING" && (
+          <div className="flex flex-col gap-2">
+            <p className="tabular-nums">내 발언 {remaining}초 남음</p>
+            <meter min={0} max={100} value={level} aria-label="마이크 입력 음량" />
+            <Button onClick={() => finish.current()}>발언 완료</Button>
+            <p className="text-footnote text-muted">시간이 끝나면 자동으로 제출해요</p>
+          </div>
+        )}
+      {props.snap.session.phase !== "proposal" && error && (
         <p role="alert" className="text-warning">
           {error}
         </p>
       )}
-      {(!enabled || error || voice?.blocked_reason) && !props.locked && (
-        <Button disabled={!props.connected} onClick={() => void resume()}>
-          {enabled ? "다시 시도 / 발언 시작" : "음성 참여 시작"}
-        </Button>
-      )}
+      {(!enabled || error || voice?.blocked_reason) &&
+        !props.locked &&
+        props.snap.session.phase !== "proposal" && (
+          <Button disabled={!props.connected} onClick={() => void resume()}>
+            {enabled ? "다시 시도" : "음성 참여 시작"}
+          </Button>
+        )}
     </section>
   );
 

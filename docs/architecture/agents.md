@@ -13,7 +13,7 @@ api의 다른 부분은 이 인터페이스만 본다. 구현 선택은 env `AGE
 ```python
 class AgentRunner(Protocol):
     async def run(self, session_id: UUID, stimulus: Stimulus, run_id: UUID) -> RunResult: ...
-# Stimulus = {type: "message"|"phase_started"|"idle"|"card_due", phase: str,
+# Stimulus = {type: "message"|"phase_started"|"idle"|"turn_elapsed"|"card_due", phase: str,
 #             generation: int, message_id?: UUID, card_id?: str}
 # generation: message 자극은 그 메시지 저장이 올린 값(enqueue 때 다시 읽지 않음), 그 밖의 자극은 enqueue 시점 값
 # RunResult = {ok: bool, fallback_used: bool, error?: str, decision: TurnDecision|None,
@@ -23,7 +23,7 @@ class AgentRunner(Protocol):
 - 그래프가 api에 기대는 것은 `SessionPorts`(api `ports.py`) 세 가지뿐이다: typing 전송(hub), generation 조회, 자극 enqueue. 나머지 읽기·쓰기는 MCP를 거친다.
 - 실행은 api 세션 **메일박스**가 한다(R5-1, [services/api.md](../services/api.md)). 자극은 세션마다 직렬로 처리되므로 그래프 안에 Lock이 없고 `lock_held`·`handled`도 없다.
 - `agent_runs`(run_id, graph=debate, stimulus, status, decision, usage). 멱등은 `agent_runs.status`와 DB 멱등 키만 쓴다. started로 200초(역할별 타임아웃 합 + 여유)를 넘긴 run은 스케줄러가 같은 run_id로 재실행한다.
-- 자극 4종과 run_id 규칙은 [architecture/session-lifecycle.md](session-lifecycle.md) "그래프 자극"이 정본이다: message는 api가 새로 발급, phase_started는 `uuid5(session, "phase:"+phase)`, card_due는 enqueue마다 새 uuid4(담당 전원 delivered까지 스케줄러가 다시 넣음, 카드당 최대 3회·30초 간격, 멱등은 `session_cards.delivered_seats`), idle은 스케줄러가 enqueue할 때마다 발급(침묵 초대 중복은 `invite_delivered`와 `is_invite` 409가 막음). `timeout` 자극과 `room_quiet`는 없다(R5-2·R5-3).
+- 자극 5종과 run_id 규칙은 [architecture/session-lifecycle.md](session-lifecycle.md) "그래프 자극"이 정본이다: message는 api가 새로 발급, phase_started는 `uuid5(session, "phase:"+phase)`, card_due는 enqueue마다 새 uuid4(담당 전원 delivered까지 스케줄러가 다시 넣음, 카드당 최대 3회·30초 간격, 멱등은 `session_cards.delivered_seats`), idle은 스케줄러가 enqueue할 때마다 발급(침묵 초대 중복은 `invite_delivered`와 `is_invite` 409가 막음), turn_elapsed는 음성 유지 시간 종료 때 초대가 이미 게시된 단계에서 새 uuid4로 발급. `timeout` 자극과 `room_quiet`는 없다(R5-2·R5-3).
 
 ## 토론 그래프 (`app/agent/debate/`)
 
@@ -78,8 +78,9 @@ load ─▶ cards ─▶ turn ─┬─ (화자마다) respond → guard → sta
 3. **지명 응답**: 아직 답하지 않은 지명이 있는 자리(이번 지원자 메시지 포함)가 오래 기다린 순서로 그 자리의 가장 최근 지명 메시지에 답한다. 자극 종류와 상관없이 적용한다. 화자 상한을 넘은 지명은 `queued`에 남기고 다음 run(다음 지원자 메시지·카드 시각·침묵 확인 중 먼저 오는 것)이 기록에서 다시 찾아 먼저 답한다. `stimulus=card_due`는 2·3으로만 화자를 정한다.
 4. `stimulus=message`: 전체 질문(intent=question, 이 메시지에 답하는 화자 없음)이면 소극형·비판형(뺀 자리 제외)이 답한다. `quiet`는 이름이 불렸거나 전체 질문일 때만 대상이 되고, 그 단계의 마지막 발언이 부르지 않은 지원자 질문(저장 의도 `question`)에 답한 것이고 그 뒤 말한 적이 없으면(새 맥락 없이 또 전체 질문을 받는 상태, `answered_open_question_last`) 전체 질문 화자에서 뺀다. 지명·카드 차례는 제한하지 않는다(C2 구현 세부). 답할 메시지가 정해지지 않은 화자(카드 화자)는 이번 지원자 메시지에 답한다.
 5. `stimulus=idle`이고 그 단계 `invite_delivered=false`: 침묵 초대 화자 1명(`invite=true`). 묻는 자리 = 우선순위 `agreeable > divergent > critic` 중 세션에 있는 첫 자리(`stubborn`·`quiet` 제외, 고정 자리에서는 서지안). 게시 때 `is_invite=true`. 지원자가 입력 중이라 게시하지 못하면 플래그가 그대로라 스케줄러가 다시 넣는다.
-6. `stimulus=phase_started`: 단계 첫 발언자 1~2명(시나리오 고정 입장을 가진 자리 중 `quiet` 제외, 첫 화자는 `reply_to` 없음). 문제 상황 단계는 고집형 한 명이고 카드 전이므로 입장을 밝히지 않는다(입장 계획, R5-4). proposal 단계는 화자 0명.
-7. **지원자 메시지에는 최소 1명**: 자극이 `message`이고 1~4로 그 메시지에 답하는 화자가 없으며 자리가 남았으면, 먼저 **카드 전 이끎 차례**가 남은 카드 담당(`steer_responder`: 그 단계에서 아직 시작되지 않은 `steer` 데이터가 있는 카드의 현재 담당 중 이 단계 발언이 2회 미만인 자리, 소극형·연속 3회 자리·뺀 자리 제외, 카드 순서 → 담당 순서)이 있으면 그 자리가 답한다(LLM 없음, 아래 "카드 이끎"). 없으면 턴 LLM(`MODEL_TURN`)이 답할 자리를 1~2명 고른다(R5-12의 "규칙 결과 0명일 때만"을 넓힘, 모든 단계). 입력은 DebateState 요약·최근 대화 10개·자리별 성향 한 줄·카드 선점 금지 목록·의도 분류. 턴 LLM이 실패하거나 0명을 고르거나 비용 상한을 넘었으면 기본 응답 자리(`default_responder`: 그 메시지 직전에 말한 AI 자리, 없으면 비판형 > 고집형)가 답한다. 둘 다 소극형·연속 3회 자리·뺀 자리는 고르지 않는다.
+6. `stimulus=turn_elapsed`: 음성 지원자 차례 유지 시간이 끝나고 초대가 이미 게시됐으면 비판형 우선으로 일반 동료 발언 1명을 고른다(`invite=false`).
+7. `stimulus=phase_started`: 단계 첫 발언자 1~2명(시나리오 고정 입장을 가진 자리 중 `quiet` 제외, 첫 화자는 `reply_to` 없음). 문제 상황 단계는 고집형 한 명이고 카드 전이므로 입장을 밝히지 않는다(입장 계획, R5-4). proposal 단계는 화자 0명.
+8. **지원자 메시지에는 최소 1명**: 자극이 `message`이고 1~4로 그 메시지에 답하는 화자가 없으며 자리가 남았으면, 먼저 **카드 전 이끎 차례**가 남은 카드 담당(`steer_responder`: 그 단계에서 아직 시작되지 않은 `steer` 데이터가 있는 카드의 현재 담당 중 이 단계 발언이 2회 미만인 자리, 소극형·연속 3회 자리·뺀 자리 제외, 카드 순서 → 담당 순서)이 있으면 그 자리가 답한다(LLM 없음, 아래 "카드 이끎"). 없으면 턴 LLM(`MODEL_TURN`)이 답할 자리를 1~2명 고른다(R5-12의 "규칙 결과 0명일 때만"을 넓힘, 모든 단계). 입력은 DebateState 요약·최근 대화 10개·자리별 성향 한 줄·카드 선점 금지 목록·의도 분류. 턴 LLM이 실패하거나 0명을 고르거나 비용 상한을 넘었으면 기본 응답 자리(`default_responder`: 그 메시지 직전에 말한 AI 자리, 없으면 비판형 > 고집형)가 답한다. 둘 다 소극형·연속 3회 자리·뺀 자리는 고르지 않는다.
 
 **둘째 화자의 답할 메시지**: 지원자 메시지 자극의 화자는 결정 때 정한 지원자 메시지에 답한다. 지원자 메시지가 아닌 자극(단계 시작·카드 시각)의 둘째 화자는 침묵 초대가 아니면 같은 run에서 첫 화자가 방금 게시한 발언에 답하고, 그 id를 게시 뒤 결정과 `meta.reply_to`에 채운다.
 

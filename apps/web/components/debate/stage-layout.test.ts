@@ -50,7 +50,7 @@ test("자료가 열리면 결정 사항 아래에 자료·AI 어시스턴트 묶
 });
 
 test("기획안 단계는 오른쪽 위가 기획안으로 바뀌고 단계 안내가 왼쪽 아래에 남는다", () => {
-  const flags = stageFlags(input({ snap: proposal as StateSnapshot }));
+  const flags = stageFlags(input({ snap: proposal as StateSnapshot, pinned: { proposal: false } }));
   expect(flags).toMatchObject({
     intro: false,
     proposalPhase: true,

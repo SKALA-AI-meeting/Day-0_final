@@ -6,7 +6,8 @@ from dataclasses import replace
 from datetime import timedelta
 
 import pytest
-from app.models import Message, Session, SpeechJob
+from app import scheduler
+from app.models import Message, Session, SpeechJob, VoiceState
 from app.routers.ws import handle_send
 from app.services.common import ServiceError
 from app.voice import controller, quota
@@ -155,8 +156,231 @@ async def test_voice_normal_turn_waits_for_press(api, voice_ctx, clock):
     snap = await snapshot(api, voice_ctx, sess)
     assert not snap.get("release_ready")
     clock.advance(seconds=2)
+    assert not await controller.blocked(voice_ctx, sess.id)  # GET 없이도 대기 실행을 푼다
     snap = await snapshot(api, voice_ctx, sess)
     assert snap["release_ready"] is True
+    # 실제 handoff 전에는 아직 지원자가 발언을 시작할 수 있다.
+    assert (
+        await post(api, sess, "capture", {"turn_id": snap["turn_id"], "epoch": snap["epoch"]})
+    ).status_code == 200
+
+
+async def test_two_hold_expiries_resume_colleagues_in_one_phase(api, voice_ctx, clock):
+    sess = await setup(api, voice_ctx)
+    first = await snapshot(api, voice_ctx, sess)
+    clock.advance(seconds=21)
+    await scheduler.tick_session(voice_ctx, sess.id)
+    await voice_ctx.mailboxes.drain()
+    assert voice_ctx.runner.calls[-1][1].type == "idle"
+    snap = await snapshot(api, voice_ctx, sess)
+    assert snap["turn_id"] != first["turn_id"]
+    # RecordingRunner는 발언을 게시하지 않으므로 빈 AI 차례 뒤 새 USER_READY가 된다.
+    assert snap["state"] == "USER_READY"
+    async with voice_ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        session.invite_delivered_phases = [*session.invite_delivered_phases, session.phase]
+        await db.commit()
+    clock.advance(seconds=21)
+    await scheduler.tick_session(voice_ctx, sess.id)
+    await voice_ctx.mailboxes.drain()
+    assert voice_ctx.runner.calls[-1][1].type == "turn_elapsed"
+    assert (await snapshot(api, voice_ctx, sess))["turn_id"] != snap["turn_id"]
+
+
+async def test_hold_handoff_ignores_retry_and_stale_voice(api, voice_ctx, clock):
+    sess = await setup(api, voice_ctx)
+    snap = await snapshot(api, voice_ctx, sess)
+    async with voice_ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        session.invite_delivered_phases = [*session.invite_delivered_phases, session.phase]
+        await db.commit()
+    clock.advance(seconds=19)
+    async with voice_ctx.session_factory() as db:
+        voice = await db.get(VoiceState, sess.id)
+        voice.data = {**snap, "blocked_reason": "empty", "release_ready": False}
+        await db.commit()
+    await scheduler.tick_session(voice_ctx, sess.id)
+    await voice_ctx.mailboxes.drain()
+    assert not [c for c in voice_ctx.runner.calls if c[1].type == "turn_elapsed"]
+
+    clock.advance(seconds=2)
+    await scheduler.tick_session(voice_ctx, sess.id)
+    await voice_ctx.mailboxes.drain()
+    assert voice_ctx.runner.calls[-1][1].type == "turn_elapsed"
+
+    for changes in (
+        {"generation": snap["generation"] - 1, "release_ready": True},
+        {"phase": "problem", "release_ready": True},
+    ):
+        async with voice_ctx.session_factory() as db:
+            voice = await db.get(VoiceState, sess.id)
+            voice.data = {**snap, **changes}
+            await db.commit()
+        before = len(voice_ctx.runner.calls)
+        await scheduler.tick_session(voice_ctx, sess.id)
+        await voice_ctx.mailboxes.drain()
+        assert len(voice_ctx.runner.calls) == before
+
+
+async def test_two_empty_stt_results_handoff_after_retry_hold(api, voice_ctx, clock):
+    sess = await setup(api, voice_ctx)
+    voice_ctx.speech.transcript = ""
+    async with voice_ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        session.invite_delivered_phases = [*session.invite_delivered_phases, session.phase]
+        await db.commit()
+
+    snap = await snapshot(api, voice_ctx, sess)
+    for attempt in range(2):
+        turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+        response = await post(api, sess, "capture", {**turn, "restart": attempt > 0})
+        assert response.status_code == 200, response.text
+        body = {
+            **turn,
+            "utterance_id": response.json()["utterance_id"],
+            "audio_base64": base64.b64encode(silence()).decode(),
+            "stop_reason": "button",
+        }
+        assert (await post(api, sess, "audio", body)).status_code == 200
+        await voice_ctx.drain_spawned()
+        snap = await snapshot(api, voice_ctx, sess)
+        assert snap["blocked_reason"] == "empty"
+        assert snap["state"] == "USER_READY"
+
+    assert snap["capture_count"] == 2
+    exhausted = await post(api, sess, "capture", turn)
+    assert exhausted.status_code == 409
+    assert exhausted.json()["error"]["code"] == "voice_retry_exhausted"
+    clock.advance(seconds=19)
+    await scheduler.tick_session(voice_ctx, sess.id)
+    await voice_ctx.mailboxes.drain()
+    assert not [c for c in voice_ctx.runner.calls if c[1].type == "turn_elapsed"]
+    clock.advance(seconds=2)
+    await scheduler.tick_session(voice_ctx, sess.id)
+    await voice_ctx.mailboxes.drain()
+    assert voice_ctx.runner.calls[-1][1].type == "turn_elapsed"
+
+
+async def test_next_ready_is_protected_after_turn_elapsed(api, voice_ctx, clock):
+    sess = await setup(api, voice_ctx)
+    first = await snapshot(api, voice_ctx, sess)
+    async with voice_ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        session.invite_delivered_phases = [*session.invite_delivered_phases, session.phase]
+        await db.commit()
+    clock.advance(seconds=21)
+    await scheduler.tick_session(voice_ctx, sess.id)
+    await voice_ctx.mailboxes.drain()
+    assert voice_ctx.runner.calls[-1][1].type == "turn_elapsed"
+
+    next_turn = await snapshot(api, voice_ctx, sess)
+    assert next_turn["state"] == "USER_READY"
+    assert next_turn["turn_id"] != first["turn_id"]
+    assert next_turn["blocked_reason"] is None
+    assert not next_turn.get("release_ready")
+    assert await controller.blocked(voice_ctx, sess.id)
+    await api.post_ai(sess, "p3", "카드 발언", card_ids=["persuasion_keyword"])
+    assert (await snapshot(api, voice_ctx, sess))["state"] == "USER_READY"
+
+
+async def test_stt_failure_retry_gets_fresh_hold_after_original_expires(api, voice_ctx, clock):
+    sess = await setup(api, voice_ctx)
+    snap = await snapshot(api, voice_ctx, sess)
+    start, snap = await record_once(api, voice_ctx, sess, snap)
+    clock.advance(seconds=21)
+    async with voice_ctx.session_factory() as db:
+        job = await db.get(SpeechJob, uuid.UUID(start["utterance_id"]))
+        job.data = {**job.data, "status": "empty"}
+        await db.commit()
+    retry = await snapshot(api, voice_ctx, sess)
+    assert retry["state"] == "USER_READY"
+    assert retry["blocked_reason"] == "empty"
+    assert controller.at(retry["ready_at"]) > controller.at(start["ready_at"])
+    turn = {"turn_id": retry["turn_id"], "epoch": retry["epoch"], "restart": True}
+    response = await post(api, sess, "capture", turn)
+    assert response.status_code == 200, response.text
+    assert response.json()["utterance_id"] != start["utterance_id"]
+
+
+async def test_proposal_voice_does_not_offer_a_turn(api, voice_ctx):
+    sess = await setup(api, voice_ctx)
+    async with voice_ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        session.phase = "proposal"
+        session.generation += 1
+        await db.commit()
+    snap = await snapshot(api, voice_ctx, sess)
+    assert snap["state"] != "USER_READY"
+    assert "turn_until_at" not in snap
+    assert (
+        await post(api, sess, "capture", {"turn_id": snap["turn_id"], "epoch": snap["epoch"]})
+    ).status_code == 409
+
+
+async def test_solution_turns_then_consensus_closes_microphone(api, voice_ctx, clock):
+    """카드 뒤 12초 간격의 두 발언은 가능하고, 해결책 확정 뒤에는 새 턴이 없다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    async with ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        session.phase = "solution"
+        session.generation += 1
+        await db.commit()
+    await api.post_ai(sess, "p3", "다른 해결책도 생각해 봐요", card_ids=["persuasion_solution"])
+    await snapshot(api, ctx, sess)  # 첫 조회에서 합성을 예약한다.
+    snap = await snapshot(api, ctx, sess)
+    item = snap["items"][0]
+    assert item["status"] == "ready"
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"], "job_id": item["id"]}
+    for outcome in ("start", "ended"):
+        assert (await post(api, sess, "playback", {**turn, "outcome": outcome})).status_code == 200
+
+    for index in range(2):
+        snap = await snapshot(api, ctx, sess)
+        assert snap["state"] == "USER_READY"
+        assert snap["phase"] == "solution"
+        assert not snap.get("release_ready")
+        start, snap = await record_once(api, ctx, sess, snap)
+        await handle_send(
+            ctx,
+            sess.id,
+            {
+                "client_msg_id": start["utterance_id"],
+                "content": snap["utterance"]["transcript"],
+                "voice_turn_id": snap["turn_id"],
+                "epoch": snap["epoch"],
+            },
+        )
+        await ctx.mailboxes.drain()
+        if index == 0:
+            clock.advance(seconds=12)
+
+    response = await api.confirm(sess, "solution", value="빗물 저금통·투수 포장 같은 생활 인프라")
+    assert response.status_code == 200, response.text
+    snap = await snapshot(api, ctx, sess)
+    assert snap["phase"] == "proposal"
+    assert snap["state"] != "USER_READY"
+    assert "turn_until_at" not in snap
+    assert (
+        await post(api, sess, "capture", {"turn_id": snap["turn_id"], "epoch": snap["epoch"]})
+    ).status_code == 409
+
+
+async def test_proposal_plays_queued_previous_phase_utterance(api, voice_ctx):
+    sess = await setup(api, voice_ctx)
+    message = await api.post_ai(sess, "p1", "앞 단계에서 정리한 내용이에요")
+    await snapshot(api, voice_ctx, sess)
+    async with voice_ctx.session_factory() as db:
+        session = await db.get(Session, sess.id)
+        session.phase = "proposal"
+        session.generation += 1
+        await db.commit()
+    snap = await snapshot(api, voice_ctx, sess)
+    assert snap["items"][0]["message_id"] == message["id"]
+    body = {"turn_id": snap["turn_id"], "epoch": snap["epoch"], "job_id": snap["items"][0]["id"]}
+    for outcome in ("start", "ended"):
+        assert (await post(api, sess, "playback", {**body, "outcome": outcome})).status_code == 200
+    assert message["id"] in (await snapshot(api, voice_ctx, sess))["heard_message_ids"]
 
 
 async def record_once(api, ctx, sess, snap):
@@ -190,7 +414,7 @@ async def test_voice_rerecord_once_with_fresh_time(api, voice_ctx, clock):
     r = await post(api, sess, "rerecord", {**turn, "job_id": u["id"]})
     assert r.status_code == 200, r.text
     assert r.json()["state"] == "USER_READY"
-    clock.advance(seconds=50)  # 앞 녹음 마감과 관계없이 60초를 새로 받는다
+    clock.advance(seconds=50)  # 실제 handoff 전에는 유지 시간이 지나도 다시 녹음할 수 있다
     second, snap = await record_once(api, ctx, sess, r.json())
     started = controller.at(second["speech_started_at"])
     assert (controller.at(second["speech_deadline_at"]) - started).total_seconds() == 60

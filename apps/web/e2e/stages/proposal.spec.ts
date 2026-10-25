@@ -10,6 +10,13 @@ test.beforeAll(async () => {
 
 test("디바운스 저장 → 제출 확인 → 잠김 → 디브리핑", async ({ page }) => {
   await page.goto(s.link);
+  await expect(page.getByRole("region", { name: "기획안" })).toBeVisible();
+  if (VOICE_ENABLED) {
+    await expect(page.getByText("토론이 끝났어요. 정한 내용으로 기획안을 써 주세요")).toBeVisible();
+    await expect(page.getByRole("button", { name: "발언하기" })).toHaveCount(0);
+    await page.getByRole("button", { name: "기획안으로 이동" }).click();
+    await expect(page.locator("[data-panel='proposal'] :focus")).toHaveCount(1);
+  }
   await tab(page, "기획안");
   const sections = page.locator("[data-panel='proposal']");
   // 앞 세 칸은 칸 결과로 채워져 있다

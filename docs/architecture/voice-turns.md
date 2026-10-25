@@ -21,7 +21,7 @@
 | [AGENTS.md](../../AGENTS.md), [overview.md](overview.md) | API 단일 프로세스, DB 쓰기 API 소유, MCP 3개와 워커 분리 | Voice Turn Controller는 API의 별도 모듈. 음성 전용 서비스·MCP·LLM 에이전트를 추가하지 않음 |
 | [agents.md](agents.md), `services/api/app/agent/debate/graph.py` | `load → cards → turn → respond → guard → stance_check → wait_typing → apply → fill`; 실행당 화자 0~2명 | 화자 수·순서는 그래프가 계속 결정. Controller는 그래프 결과의 전달 순서와 발언권만 관리 |
 | [harness.md](harness.md) | 역할별 LLM 5개, 토론 그래프는 체크포인터 없이 DB 재로딩, 워커만 PostgresSaver | 역할 모델·프롬프트·LLM 복구 그대로. 음성 상태는 별도 DB 기록으로 복구 |
-| [session-lifecycle.md](session-lifecycle.md), `app/mailbox.py` | 자극 4종 직렬 실행, `agent_runs` 영속 기록, 게시 직전 generation 검사 | 사용자 턴 예약 중에는 새 AI 실행을 보류. 실행 완료와 재생 완료를 별도 기록 |
+| [session-lifecycle.md](session-lifecycle.md), `app/mailbox.py` | 자극 5종 직렬 실행, `agent_runs` 영속 기록, 게시 직전 generation 검사 | 사용자 턴 예약 중에는 새 AI 실행을 보류. 실행 완료와 재생 완료를 별도 기록 |
 | [ws.md](../contracts/ws.md), `app/routers/ws.py` | `message.ack`는 저장 확인, `message.new`는 게시. `typing.stop`은 완료 신호가 아님 | 음성 배치의 닫힘과 항목별 재생 확인을 추가. 기존 이벤트만으로 완료 추정 금지 |
 | `app/services/debate.py`의 `save_candidate_message` | `client_msg_id` 멱등 확인 → 현재 `session.phase`로 저장 → generation 증가·run 예약 | 음성 턴·시도·원래 phase를 검증하는 진입 어댑터 필요. 늦은 STT를 현재 단계로 저장하면 안 됨 |
 | [scenario.md](../product/scenario.md), [rubric.md](../product/rubric.md) | 카드 전달은 메시지 게시 기준, 메시지 수·응답 간격은 텍스트 기준 | 게시와 재생 확인 분리. 음성 장애·처리 지연이 지원자 행동으로 해석되지 않도록 입력 보완 |
@@ -91,7 +91,7 @@ stateDiagram-v2
 |---|---|---|
 | `AI_GENERATING` | 실행 대상 run 집합을 서버가 닫고 전부 terminal, TTS 작업이 ready 또는 오류로 확정될 때까지 | 마이크 꺼짐. 생성 상태만 표시. 미검증 본문 노출 없음 |
 | `AI_SPEAKING` | 닫힌 재생 목록을 순서대로 재생. 각 항목의 브라우저 `ended` 확인이 서버에 저장되어야 성공 완료 | 단일 오디오만 재생. 자동재생 차단이면 재생 버튼, 발언 버튼 비활성 |
-| `USER_READY` | AI 완료 장벽 충족, 유효한 사용자 발언권 예약 | 마이크 트랙 준비·권한 확인 후 자동 녹음 시작. 권한/장치 보류 시 안내. 발언 카운트다운은 아직 시작 안 함 |
+| `USER_READY` | AI 완료 장벽 충족, 유효한 사용자 발언권 예약 | 일반 차례는 [발언하기]를 누른 뒤 마이크 트랙 준비·권한 확인. 손들기·강제 차례는 생각 시간 뒤 자동 시작. 권한 요청은 8초 제한과 재시도 안내. 발언 카운트다운은 아직 시작 안 함 |
 | `USER_SPEAKING` | 서버의 시작 허가 뒤 실제 recorder 시작 이벤트. 발언권당 유일한 활성 attempt | 마이크 활성, 발언 남은 시간·입력 음량·`발언 완료`. 무음으로 자동 종료하지 않음 |
 | `TRANSCRIBING` | stop을 한 번만 실행하고 최종 청크까지 모음 → 파일 제출·STT 확정 | 마이크 트랙 종료, 제출 중 표시. 부분 전사·다중 녹음 제출 금지 |
 | `PROCESSING` | STT 확정 본문으로 `message.send`, 동일 ID ack 대기 | 새 녹음·새 client ID 금지. ack는 그래프 완료를 뜻하지 않음 |
@@ -139,7 +139,7 @@ MVP는 **묶음의 생성·TTS 준비를 마친 뒤 순차 재생**한다. 첫 �
 
 ## 5. 메일박스·스케줄러·동시성
 
-기존 자극 `message`·`phase_started`·`idle`·`card_due`와 시나리오 화자 규칙을 유지한다. 음성 이벤트를 그래프의 새 자극으로 넣지 않고 Controller에서 처리한다.
+자극 `message`·`phase_started`·`idle`·`turn_elapsed`·`card_due`를 쓴다. 음성 차례 유지 시간이 끝나면 첫 초대는 `idle`, 이미 초대가 게시된 단계의 일반 동료 차례는 `turn_elapsed`로 재개한다. 이 동작은 단계당 침묵 초대 1회 규칙을 바꾸지 않는다.
 
 - `USER_READY`의 발언권 예약부터 `USER_SPEAKING`·`TRANSCRIBING`·`PROCESSING`까지 일반 AI 실행을 잠근다. 카드 예정 시각에 도달하면 due 기록을 남기되 사용자 발언 중 AI가 말하지 않는다. 새 자극은 DB `queued`로 보존하고 UI 대기만으로 복구하지 않는다.
 - 준비 상태에서는 생각 시간(`VOICE_THINK_SECONDS`, 기본 5초, 채용 건에 고정) 동안 마이크를 켜지 않고 "지금 발언하기" 버튼을 보인다. 버튼을 누르거나 생각 시간이 끝나면 녹음을 시작한다. 생각 시간 + 준비 유예 10초 동안 시작되지 않으면 예약을 반납하고 장애 안내 또는 보류 AI 자극을 처리한다. 발언 시작·예약 만료가 경합하면 같은 세션 순서 경계에서 한 쪽만 성공한다. 발언권이 회수되면 새 허가 없이 마이크를 켤 수 없다.
@@ -284,7 +284,7 @@ MVP는 **묶음의 생성·TTS 준비를 마친 뒤 순차 재생**한다. 첫 �
 
 - `chat.tsx`와 composer를 토론 화면에서 제거한다. 메시지 목록·입력창·말풍선 형태의 전사 기록을 대체 UI로 만들지 않는다. 내부 reducer의 메시지 데이터와 관리자 전체 기록·디브리핑의 근거 참조는 유지한다.
 - 사용자 차례에는 마이크 상태·음량·발언 남은 시간과 `발언 완료`를 표시한다. 자동 제출 안내, 장치 오류·음성 재생 재시도·연결 복구 상태는 기능 안내만 담는다.
-- 기존 단계 진행바·단계/세션 남은 시간·결정 사항·자료·기획안·제출/디브리핑 흐름을 유지한다. proposal 단계도 기존처럼 필요할 때 AI에게 음성으로 질문 가능하다. 시작 시 화자 0명이면 바로 발언 가능 상태가 된다.
+- 기존 단계 진행바·단계/세션 남은 시간·결정 사항·자료·기획안·제출/디브리핑 흐름을 유지한다. proposal 단계에는 기획안이 오른쪽 열 위에 항상 보이고, 음성 발언권 대신 작성 안내와 기획안으로 이동 버튼을 보인다. 토론 단계에서 시작 시 화자 0명이면 바로 발언 가능 상태가 된다.
 - 어시스턴트는 동료 3명이 포함된 공용 음성 큐에 참여시키지 않는다. 이번 기본안은 기존 별도 자료 도움 기능을 유지한다. '모든 텍스트 입력/응답 UI 제거'가 어시스턴트까지 의미하는지는 13장의 미확정 범위다.
 - 키보드로 발언 완료·재생 재시도에 접근하고 음량·차례를 색만으로 알리지 않는다. 자막/청각 접근성 제공 방식은 채팅 UI 제거 요구와 함께 검토한다.
 
