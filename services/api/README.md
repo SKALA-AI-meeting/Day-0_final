@@ -46,7 +46,7 @@ env의 의미·기본값은 `config.py`(`get_settings`)와 `agent/llm/roles.py`,
 ```
 cp infra/.env.example infra/.env                              # 비밀값 채움(처음 한 번)
 cp infra/.env infra/.env.local                                # 서비스 주소를 localhost로(처음 한 번)
-make infra-up                                                 # postgres 5432, rabbitmq 5672, rag-mcp 9102
+make up SCOPE=infra                                           # postgres 5432, rabbitmq 5672, rag-mcp 9102
 uv run --directory services/api python -m app.run --reload    # 8000 + 8001 + 스케줄러(한 프로세스)
 ```
 
@@ -138,12 +138,12 @@ debate-mcp·assessment-mcp도 떠 있어야 토론 그래프와 리포트 평가
 
 ## 테스트
 
-pytest 단위·통합 테스트다. LLM·MCP·RabbitMQ는 mock이고, DB 테스트는 `make infra-up`의 postgres에 실행마다 임시 DB(`dayzero_test_<랜덤>`)를 만들어 쓴다(postgres가 없으면 DB 테스트만 건너뛴다). `live` 표시는 실제 LLM을 부르는 테스트로 `make test`에서 빠지고 `make test-live`로 따로 돈다.
+pytest 단위·통합 테스트다. LLM·MCP·RabbitMQ는 mock이고, DB 테스트는 `make up SCOPE=infra`의 postgres에 실행마다 임시 DB(`dayzero_test_<랜덤>`)를 만들어 쓴다(postgres가 없으면 DB 테스트만 건너뛴다). `live` 표시는 실제 LLM을 부르는 테스트로 `make test`에서 빠지고 `make eval PROFILE=eval-text SUITE=api ALLOW_API=1`로 따로 돈다.
 
 ```
 make test                                              # 전체 서비스 단위 테스트
 uv run --directory services/api pytest -q -m "not live"   # 이 서비스만
-make test-live                                         # live 테스트(OPENAI_API_KEY 필요, 비용 발생)
+make eval PROFILE=eval-text SUITE=api ALLOW_API=1      # live 테스트(제한 키 OPENAI_API_KEY 필요, 비용 발생)
 ```
 
 <!-- gen:tests -->

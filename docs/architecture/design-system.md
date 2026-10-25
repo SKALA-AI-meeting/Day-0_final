@@ -83,30 +83,45 @@ AI 동료 틴트는 **자리**(`p1`·`p2`·`p3`)에 붙고 페르소나 유형�
 
 ## 컴포넌트
 
-`components/ui/`(button, card, badge, status-badge, status-pill, chip, avatar, tabs, field, confirm-dialog, empty-state, menu, toaster, wordmark)를 토큰만 바꿔 살리고 아래를 더하거나 고친다.
+공용 요소는 `apps/web/components/ui/`(Button, Card, Badge, StatusBadge, StatusPill, Chip, Avatar·AvatarGroup, Tabs, Input·Select·Textarea(`field.tsx`), ConfirmDialog, EmptyState, DropMenu(`menu.tsx`), Toaster, Wordmark, LevelChip, ConfidenceTag, SplitLayout)에 두고 토큰만 쓴다. 화면 컴포넌트는 지원자 쪽 `components/debate/`(음성 회의는 `components/debate/voice/`), 관리자 쪽 `components/admin/`이다.
+
+**공용(`components/ui/`)**
 
 | 컴포넌트 | 쓰임 | 비고 |
 |---|---|---|
-| Avatar | AI 동료: `avatar_url` 프로필 이미지. 지원자: 표시 이름 첫 글자 이니셜(seat-candidate 바탕, on-seat 글자). 크기 20/28/36 | **원형 크롭·고정 크기·`object-fit: cover`**. 특정 비율·화풍·배경에 의존하는 스타일 금지. 이미지 없음·로드 실패면 같은 크기 이니셜(seat 색 + on-seat). 이미지는 임시이며 교체해도 코드 변경 없음(D13-3) |
-| AvatarGroup | 헤더·대기 화면 참여자 목록 | 겹침 -6px, 각 아바타에 이름 툴팁 |
-| MessageBubble | iMessage식 말풍선. 지원자 오른쪽 bubble-candidate + on-bubble-candidate, AI 동료 왼쪽 bubble-p1~p3 + on-bubble | 묶음 첫 메시지 위에 이름(caption, muted), 끝 메시지 옆에 Avatar 28. 최대 폭 70%. 모서리 radius-bubble, 붙는 쪽 radius-bubble-tail. 보내는 중(ack 전) 60% 불투명 |
-| SystemNotice | 단계 시작·마감 임박·확정 결과·자료 열림·접속 끊김 | 가운데 정렬 footnote muted, 말풍선 없음. 시각 구분선도 같은 모양 |
-| TypingIndicator | "OO님이 입력 중" | 그 자리 틴트의 작은 말풍선 안 점 세 개 + 이름 글자. 점 애니메이션은 opacity만 |
-| PhaseBar | 상단 4단계 진행 | 분절 표시, 현재 단계 accent 글자 semibold, 지난 단계는 결과 아이콘(✓ 합의 / 시계 시간 초과) + 글자. 시각 없음 |
-| Timer | "이 단계 12:40 남음" | tabular-nums, 2분 전 warning 색 전환 1회. 오피스 시각을 같은 줄에 붙이지 않는다(R7) |
-| SegmentedTabs | 우측 패널 탭(결정 사항·자료·AI 어시스턴트·기획안), 세션 길이 선택(60·15분) | 기존 tabs를 분절 컨트롤 모양으로. 배지는 작은 accent 점 + 숫자 |
-| ConsensusPanel / SlotResult / SlotInput | 화면 이름 "결정 사항": 결과 줄 목록과 현재 정할 항목 입력·[이걸로 정하기] | 결과 줄은 구분선 목록(카드 아님), 시각 없음. SlotInput은 field(keyword는 분절 버튼 4개, 고른 버튼은 accent-soft 면·accent 글자·체크 아이콘) + 주 버튼(accent-fill + on-accent). 현재 정할 항목은 callout semibold 라벨, "지금 정할 항목" accent 칩, 왼쪽 2px accent 막대로 표시. 주 버튼 비활성은 surface-sunken 면·muted 글자, 처리 중은 면을 유지하고 회전 아이콘 |
-| MaterialList / MarkdownViewer | 자료 목록·잠금 상태, 읽기 전용 Markdown | 본문 폭 최대 68자, 제목 위계는 타이포 표 |
-| AssistantPanel | 요청·응답·인용 칩·복사 | 말풍선 아님. 반짝이·로봇 아이콘 금지 |
-| ProposalEditor | 기획안 6칸·저장 시각·[제출] | 칸 제목 callout semibold, 칸 설명 한 줄(footnote muted, 예: `idea_credit` "이 기획에 반영된 의견과 그 의견을 낸 사람"), textarea는 placeholder "여기에 적어요"와 1px subtle 테두리(포커스 시 accent 테두리·링). 제출 확인·제출 중에는 readOnly로만 막고 모양을 유지하며, 제출 뒤에는 테두리 없는 sunken 바탕·ink 글자(빈 칸은 "비어 있음")와 [제출] 대신 "제출했어요" 표시 |
-| EvidenceItem | 리포트 근거(`msg:`·`slot:`·`proposal:`, 맥락용 `contribution:`·AI 동료 메시지) | 메시지 근거는 MessageBubble 축소판 재사용(같은 틴트·이름·아바타). 누르면 원문·앞 5·뒤 3 맥락 펼침, 근거 메시지 accent-soft 강조. 맥락 참조는 "맥락" 칩과 보조색 |
-| LevelChip | 요소·차원 수준 "수준 N (1~5)" / 목록용 "설득 3", 기록 없음은 사유 문장 | 숫자 tabular, 수준별 색 구분 없이 중립 톤(높고 낮음을 색으로 서열화하지 않음). 담당자 조정 값은 "담당자 조정됨" 글자 동반 |
+| Avatar·AvatarGroup | AI 동료: `avatar_url` 프로필 이미지. 지원자: 표시 이름 첫 글자 이니셜(seat-candidate 바탕, on-seat 글자). 그룹은 대기 화면 참여자 목록 | **원형 크롭·고정 크기·`object-fit: cover`**. 특정 비율·화풍·배경에 의존하는 스타일 금지. 이미지 없음·로드 실패면 같은 크기 이니셜. 이미지는 교체해도 코드 변경 없음(D13-3). 그룹은 겹침 -6px, 이름 툴팁 |
+| Tabs | 오른쪽 패널 탭(자료·AI 어시스턴트 등) | 분절 컨트롤 모양, 배지는 작은 accent 점 + 숫자 |
+| LevelChip | 요소·차원 수준 "수준 N (1~5)" / 목록용 "설득 3", 기록 없음은 사유 문장 | 숫자 tabular, 수준별 색 구분 없이 중립 톤(높고 낮음을 색으로 서열화하지 않음). 담당자 조정 값은 "담당자 조정됨" 표시 동반 |
 | ConfidenceTag | 차원 확신도 높음/보통/낮음 | 아이콘 + 글자. 낮음은 warning 톤 글자 "근거 약함, 원문 확인 권장" |
-| DimensionRow | 리포트 차원: 수준 칩·확신도·판단 이유·근거·차원 단위 조정(수준 분절 컨트롤 또는 기록 없음 사유 + 메모 필수) | 접힘 기본, 구분선 목록. 자동 값과 담당자 값·메모를 나란히 |
-| Timeline | 리포트 토론 흐름 띠 | 단계 4칸·칸 결과·카드 표식("설계된 장면" 칩, R1) |
-| Toast | 저장·충돌·제출 안내 | Sonner, 하단 가운데, 그림자 최소 |
+| SplitLayout | 토론 화면의 칸 나누기(왼쪽 메모·가운데 회의·오른쪽 결정 사항과 자료) | 칸 사이 끌어서 폭 조절, 칸 숨기기 |
+| Toaster | 저장·충돌·제출 안내 | Sonner, 하단 가운데, 그림자 최소 |
 
-`globals.css`의 `part1~5`·`part*-ink`·`person-*` 토큰은 `components/ui/chip.tsx`·`avatar.tsx`가 아직 참조한다. StatusPill은 관리자 목록 상태 표시로만 쓴다.
+**지원자 화면(`components/debate/`)**
+
+| 컴포넌트 | 쓰임 | 비고 |
+|---|---|---|
+| ProfileStage·ProfileCard(`profile-stage.tsx`) | 음성 회의의 발표자 보기: 현재 화자를 큰 칸, 나머지 세 명을 아래 줄. 다른 화면은 2x2 | 말하는 사람 강조는 세 동료가 같은 모양(성향을 드러내지 않음). 재생 중 문장 자막과 방금 한 말 한 문장을 큰 칸에. 지원자는 녹음 중 음량만큼 빛남(LevelGlow) |
+| 음성 조작부(`voice/voice-room.tsx`: VoiceAlert·VoiceNotices·Countdown) | 상태 한 줄, [발언하기]·[발언 완료]·손들기·다시 말하기, 내 차례 유지 시간 | 유지 시간은 큰 숫자 + 줄어드는 막대. 진행을 막는 오류는 경고 아이콘·제목·할 일 문장·버튼 하나, 막지 않는 안내는 회색 한 줄 6초. 음량은 LevelBars(`voice-ui.tsx`) |
+| MemoPad(`voice/memo-pad.tsx`) | 왼쪽 칸 메모장 | 이 브라우저에만 저장, 평가에 쓰지 않음 |
+| PhaseBar·Timer(`debate-view.tsx`) | 상단 4단계 진행, "이 단계 12:40 남음" | 현재 단계 accent 글자 semibold, 지난 단계는 결과 아이콘(✓ 합의 / 시계 시간 초과) + 글자. Timer는 tabular-nums, 2분 전 warning 색 전환 1회. 오피스 시각을 같은 줄에 붙이지 않는다(R7) |
+| PhaseSummary(`profile-stage.tsx`) | 왼쪽 아래 단계 안내 | |
+| DecisionPanel·SlotInput(`decision-panel.tsx`) | 화면 이름 "결정 사항": 결과 줄 목록과 현재 정할 항목 입력·[이걸로 정하기] | 결과 줄은 구분선 목록(카드 아님), 시각 없음. keyword는 분절 버튼 4개(고른 버튼은 accent-soft 면·accent 글자·체크 아이콘) + 주 버튼(accent-fill + on-accent). 현재 정할 항목은 "지금 정할 항목" accent 칩과 왼쪽 2px accent 막대. 비활성은 surface-sunken 면·muted 글자, 처리 중은 면 유지 + 회전 아이콘 |
+| MaterialsPanel·Markdown(`side-panels.tsx`·`markdown.tsx`) | 자료 목록·잠금 상태, 읽기 전용 Markdown | 본문 폭 최대 68자, 제목 위계는 타이포 표 |
+| AssistantPanel·AssistantMarkdown | 요청·응답·인용 칩·복사 | 말풍선 아님. 반짝이·로봇 아이콘 금지 |
+| ProposalEditor(`proposal-editor.tsx`) | 기획안 6칸·저장 시각·[제출] | 칸 제목 callout semibold, 칸 설명 한 줄(footnote muted), textarea는 placeholder "여기에 적어요"와 1px subtle 테두리(포커스 시 accent). 제출 확인·제출 중에는 readOnly로만 막고 모양 유지, 제출 뒤에는 테두리 없는 sunken 바탕·ink 글자(빈 칸은 "비어 있음")와 "제출했어요" |
+| EntryScreen·ConsentScreen·WaitingScreen·SessionGuide(`link-screens.tsx`), DebriefScreen | 입장·동의·대기·안내, 디브리핑 | 좁은 화면은 DesktopNotice |
+| ChatRoom·Composer·TypingIndicator(`chat.tsx`) | **텍스트 시험 모드(`VOICE_ENABLED=0`) 전용** 말풍선·입력창·"OO님이 입력 중" | 지원자 오른쪽 bubble-candidate, AI 동료 왼쪽 bubble-p1~p3. 묶음 첫 메시지 위 이름, 끝 메시지 옆 Avatar 28, 최대 폭 70%, radius-bubble. 보내는 중(ack 전) 60% 불투명. SystemNotice는 가운데 footnote muted. 음성 회의 화면에는 쓰지 않는다 |
+
+**관리자 화면(`components/admin/`)**
+
+| 컴포넌트 | 쓰임 | 비고 |
+|---|---|---|
+| PositionForm·PositionList | 채용 건 생성(세션 길이 Segmented 60·15분)·목록 | 요소 선택 UI 없음 |
+| CandidateTable·InviteForm·LevelChips | 지원자 목록·초대·수준 칩 | StatusPill은 목록 상태 표시로만 |
+| ReportView(`report-view.tsx`: Section·DimensionRow·EvidenceItem·MessageEvidenceItem·CardScene·FactsTable·AdjustPanel) | 리포트 요약·칸 결과·차원 판단·근거·카드 장면("설계된 장면" 칩)·사실 지표·조정 | 차원은 접힘 기본, 구분선 목록. 자동 값과 담당자 값·메모를 나란히. 메시지 근거는 이름·아바타와 함께, 누르면 원문·앞 5·뒤 3 맥락 펼침(근거 메시지 accent-soft). 맥락 참조는 "맥락" 칩과 보조색 |
+| RecordView·ReportFailed·AuthForm·AdminShell | 전체 기록, 리포트 실패 안내, 가입·로그인, 관리자 틀 | |
+
+`globals.css`의 `part1~5`·`part*-ink`·`person-*` 토큰은 `components/ui/chip.tsx`·`avatar.tsx`가 참조한다. StatusPill은 관리자 목록 상태 표시로만 쓴다.
 
 ## 아이콘
 

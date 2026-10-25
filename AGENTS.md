@@ -8,7 +8,7 @@
 2. [docs/README.md](docs/README.md): 목적별 문서 색인과 정본 관계
 3. 작업할 서비스의 README: `services/<이름>/README.md`, [apps/web/README.md](apps/web/README.md), [scripts/README.md](scripts/README.md)
 4. 관련 계약: [docs/contracts/](docs/contracts/README.md)(REST·WS·내부 API·MCP 도구·큐)
-5. AI 역할을 고칠 때: `docs/agents/`의 역할 문서([진행 매니저](docs/agents/manager.md) `manager`·[토론 동료](docs/agents/persona.md) `persona`·[의도 분류](docs/agents/intent.md) `intent`·[어시스턴트](docs/agents/assistant.md) `assistant`·[평가자](docs/agents/evaluator.md) `evaluator`). 프롬프트는 `scenarios/missions/debate/prompts/<역할>/`, 여러 역할이 함께 쓰는 고정 문장·금지 패턴은 `prompts/shared/`
+5. AI 역할을 고칠 때: `docs/agents/`의 역할 문서([진행 매니저](docs/agents/manager.md) `manager`·[토론 동료](docs/agents/persona.md) `persona`·[의도 분류](docs/agents/intent.md) `intent`·[어시스턴트](docs/agents/assistant.md) `assistant`·[평가자](docs/agents/evaluator.md) `evaluator`). 프롬프트는 `scenarios/missions/debate/prompts/<역할>/`, 여러 역할이 함께 쓰는 고정 문장·금지 패턴은 `scenarios/missions/debate/prompts/shared/`
 
 ## 정본
 

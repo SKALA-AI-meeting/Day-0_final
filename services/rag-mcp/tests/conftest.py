@@ -2,9 +2,9 @@
 
 - api 내부 앱은 httpx MockTransport로 흉내 낸다(실제 api를 띄우지 않는다).
 - 임베딩은 FakeEmbedder(텍스트 해시로 만든 1024차원 결정적 단위 벡터). 같은 텍스트면 코사인 1.
-- DB는 `make infra-up`으로 띄운 postgres(env `TEST_DATABASE_URL`, 기본 localhost)에 실행마다 임시 DB
-  (rag_test_<랜덤>)를 만들고 infra/db/schema.sql을 적용한 뒤 끝나면 지운다. 다른 worktree와 겹치지
-  않는다. postgres가 없으면 DB 테스트만 건너뛴다.
+- DB는 `make up SCOPE=infra`로 띄운 postgres(env `TEST_DATABASE_URL`, 기본 localhost)에
+  실행마다 임시 DB(rag_test_<랜덤>)를 만들고 infra/db/schema.sql을 적용한 뒤 끝나면 지운다.
+  다른 worktree와 겹치지 않는다. postgres가 없으면 DB 테스트만 건너뛴다.
 """
 
 import hashlib
@@ -55,7 +55,7 @@ async def database_url():
     try:
         admin = await asyncpg.connect(base, timeout=3)
     except (OSError, asyncpg.PostgresError) as exc:
-        pytest.skip(f"postgres 없음(make infra-up): {type(exc).__name__}")
+        pytest.skip(f"postgres 없음(make up SCOPE=infra): {type(exc).__name__}")
     try:
         await admin.execute(f'CREATE DATABASE "{name}"')
     finally:

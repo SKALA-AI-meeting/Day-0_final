@@ -186,7 +186,7 @@ agent(LLM, 도구 바인딩) ⇄ tools(search_materials·get_material) … 최�
 ## guard (`app/agent/guard/`)
 
 모든 LLM 생성 텍스트(페르소나·어시스턴트)에 코드에서 무조건 실행한다.
-- 패턴(`positions.scenario`의 `guard_patterns`, 카탈로그 `prompts/shared/guard_patterns.yaml`): 점수·합격·순위·평가·연출 언급, 평가 기준 질문 응답, 지원자 판정 표현("OO님은 경청을 잘하시네요" 류), 결론 대리 선언("이걸로 확정할게요" 류, 칸 채우기 공지 제외), 다른 자리 성향 이름, 미래 카드 암시.
+- 패턴(`positions.scenario`의 `guard_patterns`, 카탈로그 `scenarios/missions/debate/prompts/shared/guard_patterns.yaml`): 점수·합격·순위·평가·연출 언급, 평가 기준 질문 응답, 지원자 판정 표현("OO님은 경청을 잘하시네요" 류), 결론 대리 선언("이걸로 확정할게요" 류, 칸 채우기 공지 제외), 다른 자리 성향 이름, 미래 카드 암시.
 - 검사 전에 지원자 표시 이름을 가린다(이름 안의 글자가 패턴에 걸려 이름을 부른 발언이 막히지 않게, 예: 표시 이름 "합성-대본"의 "대본"). 동료 이름은 카탈로그 값이고 패턴이 직접 쓰므로 가리지 않는다.
 - 처리: 걸리면 같은 입력으로 재생성 1회 → 그래도 걸리면 자리별 안전 문구(`prompts/persona/safe_<type>.md`, 성향에 맞는 짧은 중립 문장, 한 줄에 하나)로 교체. 안전 문구와 입장 폴백 문구(`stance_fallback.yaml`의 `text`·`alternatives`)는 그 자리 최근 발언 3개와 겹치지 않는 첫 후보를 쓴다(모두 겹치면 가장 오래전에 쓴 후보). 400자 초과는 자른다. 결과는 `messages.meta.guard`에 기록.
 - 입력 쪽: 지원자 메시지 마스킹은 api가 저장 전에 한다.
@@ -216,7 +216,7 @@ agent(LLM, 도구 바인딩) ⇄ tools(search_materials·get_material) … 최�
 
 D18·D19 개정과 R5-14. 세션 종료 후 report-worker의 `evaluate` 노드에서 돈다. api 안의 모듈이 아니지만 프롬프트·LLM 규칙을 이 문서가 정한다. 판단 규칙·앵커·검증 규칙의 정본은 [product/rubric.md](../product/rubric.md)(2장 공통 판단 규칙, 3장 척도, 4장 경계표, 7장 출력 형식), 저장 형식은 [contracts/internal.md](../contracts/internal.md) `save_evaluation`이다. 원칙: AI 평가 에이전트가 공개된 척도로 근거를 들어 수준을 판단하고, 담당자가 그것을 참고해 최종 평가한다. 합격·불합격·순위·총점은 만들지 않는다.
 
-**호출 단위**: 요소마다 1회(5요소 고정이므로 기본 5회). 검증에 걸린 요소의 재요청 1회가 조건부로 더해진다(`evaluate.py`). 요소 요약은 LLM 없이 최종 차원 행에서 코드가 조립한다(결정 A2). 한 호출이 그 요소의 차원 3~4개를 모두 낸다. 다른 요소의 판단 결과·요약은 입력에 넣지 않는다(후광 방지). 모델 `MODEL_EVALUATOR`, temperature 0~0.2 **[초안]**, JSON 스키마 구조화 출력, 도구 바인딩 없음(입력은 워커가 미리 모은다).
+**호출 단위**: 요소마다 1회(5요소 고정이므로 기본 5회). 검증에 걸린 요소의 재요청 1회가 조건부로 더해진다(`evaluate.py`). 요소 요약은 LLM 없이 최종 차원 행에서 코드가 조립한다(결정 A2). 한 호출이 그 요소의 차원 3~4개를 모두 낸다. 다른 요소의 판단 결과·요약은 입력에 넣지 않는다(후광 방지). 모델 `MODEL_EVALUATOR`, temperature 0.1([harness.md](harness.md) "역할별 모델"), JSON 스키마 구조화 출력, 도구 바인딩 없음(입력은 워커가 미리 모은다).
 
 **프롬프트 구성**(순서 고정):
 

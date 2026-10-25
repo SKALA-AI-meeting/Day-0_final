@@ -1,6 +1,6 @@
 # 페르소나 유출·유도 질문 [초안] (docs/guides/testing.md). 응답은 안내문·기능 설명으로 답해야 하고 금지 내용이 없어야 한다.
-# 문장 정본·guard 검증은 scenarios/missions/debate/prompts/fixtures/{leak,verdict,preemption}.yaml(prompts 트랙).
-# 여기는 e2e 실행기가 실제 경로(WS·어시스턴트)로 묻는 7건이다. channel: room(동료 한 명 지정) | assistant.
+# 실제 경로(WS·어시스턴트)로 묻는 유출 질문 7건의 정본이다. scenarios/missions/debate/prompts/fixtures/leak.yaml은
+# 카탈로그 테스트만 읽는 별도 문장 세트로 이 파일의 복사본이 아니다. channel: room(동료 한 명 지정) | assistant.
 # must_not_regex: 응답에 걸리면 실패(Python re, IGNORECASE). expected_notice: prompts/shared/fixed_phrases.yaml notices 키(없으면 null).
 version: 1
 cases:

@@ -4,8 +4,8 @@
 - 평가 에이전트 BARS: 차원별 완전 일치·±1 일치율과 차이 분포, 근거 없는 수준 수
 - 유출·유도 질문: 금지 패턴 검사
 
-기본 테스트는 형태 검사만 하고, 채점 결과는 `make eval-live`가
-`records/eval-live-<일시>.md`에 남긴다.
+기본 테스트는 형태 검사만 하고, 채점 결과는
+`make eval PROFILE=eval-text SUITE=fixtures ALLOW_API=1`이 `records/eval-live-<일시>.md`에 남긴다.
 """
 
 import re

@@ -21,7 +21,7 @@
 | materials.opened | {keyword, materials: [{material_id, title}]} |
 | session.ended | {reason: "submitted"∣"timeout"∣"failed"∣"cancelled"}. submitted·timeout이면 이미 completed. 화면은 입력을 잠그고 [나가기]로 디브리핑(API 호출 없음) |
 | session.replaced | {} 뒤 close 4000 |
-| error | {code: `session_ending`∣`conflict`∣`invalid_input`, message}. 음성 세션의 `message.send`는 `voice_*` 코드(`voice_payload_mismatch` 등, [음성 계약](voice.md))도 쓴다 |
+| error | {code, message}. `message.send` 처리 중 서버 오류의 코드는 `voice_`로 시작하는 코드(`voice_payload_mismatch` 등, [음성 계약](voice.md))와 `session_ending`·`invalid_input`만 그대로 보내고, 그 밖의 오류 코드는 모두 `conflict`로 바꿔 보낸다(`message`는 원래 오류의 문장) |
 
 클라이언트 → 서버:
 

@@ -47,6 +47,12 @@ id: 메시지 `m-01~31`(어시스턴트 채널 `ma-1·2`), 안 `opt-kw-*`·`opt-
 | `ws_client_frames.json` | 클라이언트 message.send·typing |
 | `ws_error.json`, `ws_session_replaced.json` | 오류 프레임, 연결 교체 |
 
+## 음성
+
+| 파일 | 계약 |
+|---|---|
+| `voice_state.json` | GET /sessions/{id}/voice/state 응답(발언권 상태·재생 항목, [docs/contracts/voice.md](../../docs/contracts/voice.md)) |
+
 ## 관리자 REST
 
 | 파일 | 계약 |

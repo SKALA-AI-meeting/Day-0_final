@@ -1,6 +1,6 @@
 """api 단위 테스트 공용 픽스처(G-F 기반).
 
-DB 테스트는 `make infra-up`으로 띄운 postgres(127.0.0.1:5432)를 쓴다. 실행마다 임시 DB
+DB 테스트는 `make up SCOPE=infra`로 띄운 postgres(127.0.0.1:5432)를 쓴다. 실행마다 임시 DB
 (dayzero_test_<랜덤>)를 만들어 infra/db/schema.sql을 적용하고 끝나면 지운다. 여러 worktree가 같은
 postgres를 써도 겹치지 않는다. 접속 주소는 env `TEST_DATABASE_URL`(기본 localhost),
 postgres가 없으면 DB 테스트만 건너뛴다.
@@ -32,7 +32,7 @@ async def database_url():
     try:
         admin = await asyncpg.connect(_asyncpg_dsn(base), timeout=3)
     except (OSError, asyncpg.PostgresError) as exc:
-        pytest.skip(f"postgres 없음(make infra-up): {type(exc).__name__}")
+        pytest.skip(f"postgres 없음(make up SCOPE=infra): {type(exc).__name__}")
     try:
         await admin.execute(f'CREATE DATABASE "{name}"')
     finally:

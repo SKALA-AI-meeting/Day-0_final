@@ -111,7 +111,7 @@ make docs-check    # 생성 블록 최신 여부 + features.md 참조 검사
 |---|---|
 | 실행 위치 | 저장소 루트, `python3`만 필요(표준 라이브러리) |
 | 입력 | `infra/profiles/<PROFILE>.env`(비밀 아닌 선택값) + `infra/.env`(비밀값) + 기본값. 셸의 모드 변수(`LLM_FAKE`·`ENABLE_TEST_API`·`AGENT_RUNNER`·추적 플래그)가 프로필과 다르면 오류 |
-| 하위 명령 | `show [PROFILE]` 유효 모드 출력(목적·역할별 모델·키 **이름과 있음/없음**·테스트 API·compose 프로젝트·포트), `doctor [PROFILE] [--starting]` 출력 + 검사(deploy에 가짜 LLM·테스트 API 금지, 허용 목록 밖 모델·빈 키, `--starting`이면 실제 LLM에 `ALLOW_API=1` 요구), `get PROFILE KEY` 비밀 아닌 값 하나(Makefile용. 비밀 이름은 빈 줄), `render PROFILE [--starting] [--out]` compose용 합친 env 파일(`infra/.env.resolved-<프로필>`, git 무시), `exec PROFILE [--starting] [--need real∣fake] -- CMD…` 합친 env와 호스트 주소(`E2E_INTERNAL_URL`·`WEB_URL`·`SEED_DATABASE_URL` 등)로 명령 실행 |
+| 하위 명령 | `show [PROFILE]` 유효 모드 출력(목적·역할별 모델·키 **이름과 있음/없음**·테스트 API·compose 프로젝트·포트), `doctor [PROFILE] [--starting]` 출력 + 검사(deploy에 가짜 LLM·테스트 API 금지, 허용 목록 밖 모델·빈 키, `--starting`이면 실제 LLM에 `ALLOW_API=1` 요구), `get PROFILE KEY` 비밀 아닌 값 하나(Makefile용. 비밀 이름은 빈 줄), `render PROFILE [--starting] [--out]` compose용 합친 env 파일(`infra/.env.resolved-<프로필>`, git 무시), `exec PROFILE [--starting] [--need real\|fake] -- CMD…` 합친 env와 호스트 주소(`E2E_INTERNAL_URL`·`WEB_URL`·`SEED_DATABASE_URL` 등)로 명령 실행 |
 | 출력하지 않는 것 | 키·토큰·비밀번호 값. 외부 API 호출도 없다 |
 
 ```

@@ -2,8 +2,8 @@
 # 치환 변수: {option} 안 라벨, {candidate} 지원자 표시 이름, {stage} 단계 이름, {remaining} 남은 시간 문자열("2분", "30초"),
 #            {keywords} 키워드 후보 라벨 나열("물·불·나무·바람").
 # 조사 처리(로/으로 등)는 코드가 라벨 끝 글자로 고른다. 문서 골격의 "X로"는 {option}로 적는다.
-# 문서가 확정한 문장: consensus_fill(docs/architecture/agents.md·docs/contracts/README.md), timeout_fill(B4), time_warning 골격, silence_invite 골격,
-# invalid_keyword, assistant_locked. 나머지는 [초안].
+# 문서와 같은지 카탈로그 테스트(test_fixed_phrases_match_doc)가 보는 문장: consensus_fill·timeout_fill·silence_invite·time_warning·
+# invalid_keyword·assistant_locked·stage_start 키·notices 키.
 version: 1
 
 # 칸 채우기 공지(합의, 지지자 중 우선순위 자리 이름으로 fill_slot이 저장)
@@ -27,10 +27,10 @@ stage_start:                         # [초안] 단계 이름·할 일·남은 �
   solution: "해결책 단계예요. 정한 문제의 해결 방향 하나를 함께 정해 주세요. 이 단계 {remaining} 남았어요."
   proposal: "기획안 작성 단계예요. 오른쪽 기획안 탭이 열렸어요. 직접 기획안을 쓰고 제출해 주세요. 남은 시간 {remaining}."
 
-# 후보 밖 키워드를 회의에서 말했을 때 AI 동료의 받는 말 골격([초안] docs/product/scenario.md 1.4)
+# 후보 밖 키워드를 회의에서 말했을 때 AI 동료의 받는 말 골격(docs/product/scenario.md 1.4). 코드는 게시하지 않고 동료가 이 뜻으로 말한다
 invalid_keyword: 이번엔 네 개 중에서 골라야 해요.
 
-# 칸 확정 뒤 고집형의 받는 말(personas.yaml on_confirmed와 같은 문장)
+# 칸 확정 뒤 고집형의 받는 말(personas.yaml on_confirmed와 같은 문장). 코드가 읽지 않는 참고 문장
 stubborn_on_confirmed: 정해졌으니 따를게요.
 
 # 어시스턴트: 키워드 확정 전 자료 질문
@@ -48,7 +48,7 @@ notices:
   decide: 정하는 건 화면의 '결정 사항'에서 직접 하시면 돼요. 그 전에 어떤 안이 좋을지 같이 얘기해 봐요.
 
 # 지원자 메시지가 이 패턴(Python re, IGNORECASE)에 걸리면 그 run 첫 화자 발언 앞에 코드가 notices[키] 문장을 붙인다.
-# 화면 위치를 페르소나가 짐작해 말하지 않게 하기 위함(S4.5 playtest "어디서 고르나요?"). 페르소나는 이어지는 말만 쓴다.
+# 화면 위치를 페르소나가 짐작해 말하지 않게 하기 위함(예: "어디서 고르나요?"). 페르소나는 이어지는 말만 쓴다.
 notice_triggers:
   decide:
     - '어디서\s*(고르|골라|정하|정해|선택|확정|적|써)'
