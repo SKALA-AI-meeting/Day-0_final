@@ -98,6 +98,9 @@ async def test_fake_intent_rules(catalog):
         and out["target_option_id"] == "opt-fire"
         and out["confidence"] == "high"
     )
+    assert out["reservation"] is False  # 안을 직접 지목한 반대는 유보가 아니다
+    out = await classify("불은 아니에요. 효과가 약해요")
+    assert out["intent"] == "oppose" and out["reservation"] is True
     out = await classify("하람님 생각은요?")
     assert out["intent"] == "question" and out["addressed_to"] == ["p2"]
     assert (await classify("음 잘 모르겠네요"))["confidence"] == "low"

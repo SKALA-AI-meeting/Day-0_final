@@ -174,7 +174,8 @@ def _stance(data: dict[str, Any]) -> str:
 
 def _intent(messages: list[BaseMessage], _tools: Any) -> str:
     """키워드 규칙(가짜 모델): 보류 → withhold, 반대어 → oppose, 동의어 → agree, 안 라벨 → propose,
-    물음표 → question."""
+    물음표 → question.
+    "X은/는 반대예요"는 대상 X, reservation false(안을 직접 지목한 단정 반대)."""
     data = json.loads(_last_human(messages))
     if "초안" in data:
         return _stance(data)
@@ -199,6 +200,11 @@ def _intent(messages: list[BaseMessage], _tools: Any) -> str:
         intent = "question"
     else:
         intent = "other"
+    # "X은/는 반대예요"처럼 안을 직접 지목한 반대는 단정이다(양보·걱정을 덧붙인 유보가 아니다)
+    explicit = r"\s*[은는]?\s*반대(?![는은가]?\s*아니)"
+    explicit_oppose = bool(
+        intent == "oppose" and hit and re.search(re.escape(hit[0]) + explicit, text)
+    )
     addressed = [
         p["seat"]
         for p in data.get("참여자") or []
@@ -211,7 +217,7 @@ def _intent(messages: list[BaseMessage], _tools: Any) -> str:
         "new_option_label": None,
         "target": None,
         "confidence": "low",
-        "reservation": intent in ("oppose", "withhold"),
+        "reservation": intent in ("oppose", "withhold") and not explicit_oppose,
         "addressed_to": addressed,
         "excluded": [],
     }

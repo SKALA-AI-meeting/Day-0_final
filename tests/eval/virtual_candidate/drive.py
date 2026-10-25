@@ -137,6 +137,7 @@ class Driver:
         self.ws: Any = None
         self.voice_mode = values.get("VOICE_ENABLED", "1").lower() not in ("0", "false")
         self.voice_task: asyncio.Task | None = None
+        self.skipped: list[dict[str, str]] = []  # 수행하지 못해 건너뛴 장면(metrics.json의 driver)
         out.mkdir(parents=True, exist_ok=True)
         self.transcript = (out / "transcript.jsonl").open("a", encoding="utf-8")
         self.log_path = out / "log.md"
@@ -421,6 +422,14 @@ class Driver:
         value = next((s["value"] for s in slots if s["phase"] == "keyword" and s["value"]), None)
         return keyword_entry(value)
 
+    def driver_summary(self) -> dict[str, Any]:
+        injection = any(k["id"] == "S7-chat" for k in self.skipped)
+        return {
+            "voice_mode": self.voice_mode,
+            "skipped_scenes": self.skipped,
+            "injection_check": "not_reachable_in_voice_mode" if injection else "performed",
+        }
+
     # ---- 대본형 ------------------------------------------------------------------------------
 
     async def run_scripted(self, brief: dict[str, Any]) -> None:
@@ -454,6 +463,13 @@ class Driver:
         }
         intent = f"{scene['id']}"
         action = scene["action"]
+        if action == "say" and self.voice_mode and scene["phase"] == "proposal":
+            # 기획안 단계에는 음성 차례가 없다(decisions.md 2026-10-25): 기다리지 않고 건너뛴다
+            reason = "no_voice_turn_in_proposal"
+            self.skipped.append({"id": scene["id"], "reason": reason})
+            self.record("scene_skipped", scene=scene["id"], reason=reason)
+            self.log(f"장면 {scene['id']} 건너뜀", reason)
+            return
         if action == "say":
             await self.say(scene["text"].format(**fill), intent)
         elif action == "assistant":
@@ -755,6 +771,7 @@ async def main() -> None:
         data = export_session(driver.sid, values)
         (out / "session.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
         result = metrics.compute(data)
+        result["driver"] = driver.driver_summary()
         (out / "metrics.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), "utf-8")
         print(f"DONE {out}", flush=True)
     finally:
