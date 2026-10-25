@@ -24,11 +24,11 @@
 <path d="M550 400 L550 418" class="line" marker-end="url(#arrow)" />
 <rect x="140" y="418" width="820" height="73" rx="10" fill="#E5F4EC" stroke="#1F8A5B" stroke-width="1.5" />
 <text x="154" y="443" class="head">⑤ 지원자 발언</text>
-<text x="154" y="463" class="body">손들기 또는 발언하기 → USER_SPEAKING</text>
+<text x="154" y="463" class="body">[발언하기] → USER_SPEAKING (손들기는 다음 차례 예약)</text>
 <text x="154" y="481" class="body">최대 60초 WAV 업로드</text>
 <path d="M550 491 L550 509" class="line" marker-end="url(#arrow)" />
 <rect x="140" y="509" width="820" height="73" rx="10" fill="#FFFFFF" stroke="#8B939C" stroke-width="1.5" />
-<text x="154" y="534" class="head">⑥ STT와 전사 확인</text>
+<text x="154" y="534" class="head">⑥ STT 받아 적기</text>
 <text x="154" y="554" class="body">TRANSCRIBING → PROCESSING</text>
 <text x="154" y="572" class="body">글 비공개 · 바로 제출 · 최대 500자</text>
 <path d="M550 582 L550 600" class="line" marker-end="url(#arrow)" />

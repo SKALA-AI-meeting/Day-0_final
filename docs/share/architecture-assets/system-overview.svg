@@ -5,7 +5,7 @@
 <ns0:rect x="30" y="62" width="300" height="94" rx="10" fill="#E5F4EC" stroke="#1F8A5B" stroke-width="1.5" />
 <ns0:text x="44" y="87" class="head">브라우저 · Next.js</ns0:text>
 <ns0:text x="44" y="107" class="body">발표자 보기 · 자막 · 방금 한 말</ns0:text>
-<ns0:text x="44" y="125" class="body">메모 · 녹음 → 전사 확인 → WS 제출</ns0:text>
+<ns0:text x="44" y="125" class="body">메모 · 발언 → 받아 적기 → 바로 WS 제출</ns0:text>
 <ns0:rect x="400" y="62" width="330" height="94" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
 <ns0:text x="414" y="87" class="head">FastAPI · 공개 REST / WS</ns0:text>
 <ns0:text x="414" y="107" class="body">인증 · 세션 · 스케줄러 · /voice REST</ns0:text>
