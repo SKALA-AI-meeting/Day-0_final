@@ -263,7 +263,7 @@ env 이름(`MODEL_PERSONA`·`MODEL_TURN` 등)과 코드의 역할 키(`persona`�
 | 어시스턴트 | `MODEL_ASSISTANT` | assistant tool-calling 루프 |
 | 평가자 | `MODEL_EVALUATOR` | report-worker 평가 에이전트(요소별 차원 수준·근거·요약). 카드 장면 `cards[].scene`은 고정 문장이라 LLM을 쓰지 않는다 |
 
-비어 있으면 `OPENAI_MODEL`(기본 gpt-4o-mini). 키는 모델 id로 고른다(gpt-4o-mini → 제한 키, 그 외 gpt-* → 개인 키, gemini-* → Gemini 키). 규칙은 공용 LLM 래퍼(`app/agent/llm`, 워커는 같은 규칙의 사본) 한 곳이고, 래퍼가 호출마다 토큰과 환산 달러를 `usage.cost_usd`로 낸다(R5-11). 프롬프트·규칙 수정으로 안 되는 역할만 사용자 결정으로 올린다(`docs/decisions.md`). 역할별 타임아웃·재시도·temperature는 [harness.md](harness.md) "역할별 모델" 표가 정본이다.
+비어 있으면 `OPENAI_MODEL`(기본 gpt-4o-mini). 키는 모델 id로 고른다. 제한 키 허용 목록(`gpt-4o-mini`·`gpt-4.1-mini`·`gpt-5.4-mini`·`gpt-5.4-nano`·`gpt-5-nano`)은 `OPENAI_API_KEY`, `gemini-*`는 `GEMINI_API_KEY`를 쓴다. 목록 밖 `gpt-*`는 키가 있어도 설정 오류이고 개인 키·자동 대체 모델 경로는 없다. 규칙의 정본은 공용 LLM 래퍼(`app/agent/llm/roles.py`)이며 워커는 같은 허용 목록의 사본을 둔다. 래퍼가 호출마다 토큰과 환산 달러를 `usage.cost_usd`로 낸다(R5-11). 프롬프트·규칙 수정으로 안 되는 역할만 사용자 결정으로 허용 목록 안에서 올린다(`docs/decisions.md`). 역할별 타임아웃·재시도·temperature는 [harness.md](harness.md) "역할별 모델" 표가 정본이다.
 
 ### 결정적 LLM 모드 (`LLM_FAKE=1`)
 
