@@ -4,15 +4,18 @@
 // 음성 회의에서는 현재 화자를 크게, 나머지 세 명을 아래 가로 줄에 놓는다. 다른 화면은 2x2다.
 // 말하는 사람 강조는 세 동료 모두 같은 모양이다(성향을 드러내지 않음).
 // 지원자 자신은 말하기(녹음) 중에 소리 크기만큼 빛난다.
+// 큰 칸 주인이 바뀌거나 2x2 ↔ 발표자 보기로 바뀌면 칸이 제자리에서 새 자리로 움직인다(tile-flip.ts).
+// 칸 크기는 무대(목록) 크기 비율로만 정해지고 자막·상태 글자는 칸 안 고정 영역에 들어가 칸 크기를 바꾸지 않는다.
 import { Popover } from "@base-ui/react/popover";
 import { Hand } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Avatar, Button, cn } from "@/components/ui";
 import { resolutionLabel } from "@/lib/resolution";
 
 import { VOICE_ENABLED } from "./link-screens";
 import { PHASE_LABEL, SLOT_LABEL, officeTime } from "./state";
+import { useTileFlip } from "./tile-flip";
 import type { Participant, Phase, Seat, StateSnapshot } from "./types";
 import { LevelGlow, useVoiceState, type VoiceSource } from "./voice-ui";
 
@@ -60,6 +63,9 @@ export function ProfileStage({
   const captionSpeaker = caption
     ? people.find((p) => p.id !== "candidate" && speaking.includes(p.id as Seat))
     : undefined;
+  const presenter = fill && featuredSeat ? featuredSeat : null;
+  const list = useRef<HTMLUListElement>(null);
+  useTileFlip(list, presenter ?? "grid");
   return (
     <div className="flex size-full justify-center [container-type:size]">
       <section
@@ -88,21 +94,20 @@ export function ProfileStage({
           {captionSpeaker ? `${captionSpeaker.display_name}: ${caption}` : ""}
         </p>
         <ul
+          ref={list}
           className={cn(
             "min-h-0 flex-1",
-            fill && featuredSeat ? "relative" : "grid grid-cols-2 grid-rows-2 gap-[3cqmin]",
+            presenter ? "relative" : "grid grid-cols-2 grid-rows-2 gap-[3cqmin]",
           )}
         >
           {people.map((person) => (
             <ProfileTile
               key={person.id}
               position={
-                fill && featuredSeat
-                  ? person.id === featuredSeat
+                presenter
+                  ? person.id === presenter
                     ? -1
-                    : people
-                        .filter((p) => p.id !== featuredSeat)
-                        .findIndex((p) => p.id === person.id)
+                    : people.filter((p) => p.id !== presenter).findIndex((p) => p.id === person.id)
                   : undefined
               }
               person={person}
@@ -175,48 +180,55 @@ function ProfileTile({
           aria-label={`${person.display_name} 프로필 보기${hand ? " · 손 듦" : ""}`}
           data-speaking={speaking || undefined}
           className={cn(
-            "press relative flex size-full flex-col items-center justify-center gap-[5cqmin] overflow-visible rounded-lg bg-surface-sunken [container-type:size]",
+            "press relative flex size-full overflow-visible rounded-lg bg-surface-sunken [container-type:size]",
             "transition-shadow duration-200 hover:bg-line/40 data-[popup-open]:ring-2 data-[popup-open]:ring-accent/50",
             speaking && (me ? "ring-2 ring-danger" : "ring-2 ring-accent"),
           )}
         >
           {voice && <LevelGlow voice={voice} />}
+          {/* 칸 안 내용. 칸이 움직이는 동안 tile-flip이 거꾸로 늘려 찌그러지지 않게 한다 */}
           <span
-            className="block"
-            style={{ width: "44cqmin", height: "44cqmin", fontSize: "18cqmin" }}
+            data-tile-content
+            className="flex size-full flex-col items-center justify-center gap-[5cqmin]"
           >
-            <Avatar
-              size="fill"
-              seat={person.id}
-              src={person.avatar_url}
-              name={person.display_name}
-            />
-          </span>
-          {hand && (
-            <span className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-accent-soft px-2 py-1 text-footnote text-accent">
-              <Hand size={14} aria-hidden />손 듦
-            </span>
-          )}
-          <span
-            className="flex max-w-full flex-col items-center px-1 text-center leading-tight"
-            style={{ fontSize: "max(11px, 9cqmin)" }}
-          >
-            <span className="max-w-full truncate font-semibold">{person.display_name}</span>
-            <span className={cn("text-[0.8em]", speaking && me ? "text-danger" : "text-muted")}>
-              {speaking ? "발언 중" : me ? "나" : "AI 동료"}
-            </span>
-          </span>
-          {!me && (speaking || recentCaption) && (
             <span
-              aria-hidden="true"
-              className={cn(
-                "max-h-[5em] w-full overflow-y-auto px-2 text-center text-footnote",
-                !speaking && "text-muted opacity-65",
-              )}
+              className="block shrink-0"
+              style={{ width: "44cqmin", height: "44cqmin", fontSize: "18cqmin" }}
             >
-              {speaking ? caption : recentCaption}
+              <Avatar
+                size="fill"
+                seat={person.id}
+                src={person.avatar_url}
+                name={person.display_name}
+              />
             </span>
-          )}
+            {hand && (
+              <span className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-accent-soft px-2 py-1 text-footnote text-accent">
+                <Hand size={14} aria-hidden />손 듦
+              </span>
+            )}
+            <span
+              className="flex max-w-full flex-col items-center px-1 text-center leading-tight"
+              style={{ fontSize: "max(11px, 9cqmin)" }}
+            >
+              <span className="max-w-full truncate font-semibold">{person.display_name}</span>
+              <span className={cn("text-[0.8em]", speaking && me ? "text-danger" : "text-muted")}>
+                {speaking ? "발언 중" : me ? "나" : "AI 동료"}
+              </span>
+            </span>
+            {/* 자막: 큰 칸(동료)에는 비어 있어도 세 줄 높이를 비워 두어, 자막이 생기고 사라져도 아바타·이름이 움직이지 않는다 */}
+            {!me && (position === -1 || speaking || recentCaption) && (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "block h-[4.5em] w-full shrink-0 px-3 text-center text-footnote leading-normal",
+                  !speaking && "text-muted opacity-65",
+                )}
+              >
+                <span className="line-clamp-3">{speaking ? caption : recentCaption}</span>
+              </span>
+            )}
+          </span>
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner side="right" align="start" sideOffset={10} className="z-40">

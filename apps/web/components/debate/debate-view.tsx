@@ -419,10 +419,12 @@ export function DebateView({
             </div>
           ),
           summary: <PhaseSummary snap={snap} />,
-          // 가운데 칸: 4명 프로필(발언 시작 시 발표자 확대, 칸을 가득 채움) + 바로 아래 차례·녹음·손들기 조작
+          // 가운데 칸: 4명 프로필(발언 시작 시 발표자 확대, 칸을 가득 채움) + 바로 아래 차례·녹음·손들기 조작.
+          // 조작부 높이는 내용과 상관없이 고정(열 높이의 36%, 260~300px)이라 상태가 바뀌어도 위 프로필 칸 크기가 그대로다.
+          // 내용이 더 길면(안내가 여러 줄 겹칠 때) 조작부 안에서 스크롤한다.
           chat: voiceEnabled ? (
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden">
-              <div className="flex min-h-0 flex-1">
+            <div className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)_clamp(260px,36%,300px)] gap-3 overflow-hidden">
+              <div className="flex min-h-0">
                 <ProfileStage
                   snap={voice.chatSnap}
                   speaking={speaking}
@@ -439,7 +441,10 @@ export function DebateView({
                   onSkipIntro={() => setIntroDone(true)}
                 />
               </div>
-              <div className="max-h-[60%] shrink-0 overflow-y-auto rounded-xl border border-line bg-surface p-4">
+              <div
+                data-testid="voice-controls"
+                className="min-h-0 overflow-y-auto rounded-xl border border-line bg-surface p-4"
+              >
                 {voice.controls}
               </div>
             </div>
