@@ -25,7 +25,7 @@
 - 오피스 시각: `오피스 시각 = 09:00 + t_min × 60 / session_minutes`(분 단위 내림, "HH:MM"). 60분 세션은 09:00~10:00, 데모 15분도 같은 비율. API는 `t_min`과 `session_minutes`를 주고 표시 변환은 web이 한다. 지원자 화면은 남은 시간을 중심으로 보이고 오피스 시각은 메시지 타임스탬프에만 쓴다(같은 줄에 함께 쓰지 않음).
 - 세션 길이 `session_minutes` ∈ {60, 15}. 15분은 데모·e2e용 압축이고 모든 시각 값은 같은 비율로 환산한다(카드·유휴 오프셋은 최소 20초).
 - 참여자 id: `candidate`, `p1`·`p2`·`p3`(AI 동료 자리), `system`. **공개 API와 WS에는 자리 id와 표시 이름만 나가고 페르소나 유형은 나가지 않는다.** 자리 → 유형 대응은 `positions.scenario.seats`에 있고 관리자 리포트·디브리핑·내부 API만 본다.
-- 표시 이름·프로필(D13-3): 참여자·자리 객체는 `display_name`과 `avatar_url`을 가진다. 지원자는 `display_name`만(`sessions.display_name`, 동의 때 입력, 비우면 초대 별칭)이고 화면은 이니셜 아바타를 쓴다. AI 자리의 `display_name`은 `positions.scenario.seats[].name`, `avatar_url`은 같은 자리의 `avatar`(카탈로그 `personas.yaml`의 `avatar`, 파일은 `scenarios/missions/<id>/assets/avatars/`)로 만든 `/assets/missions/<mission_id>/avatars/<file>`이다. 이 경로는 공개 앱(8000)이 읽기 전용으로 서빙한다. 이미지는 임시이며 교체는 에셋 파일과 `avatar` 경로만 바꾼다. 관리자 리포트·목록은 별칭(`alias`)을 기본으로 쓴다.
+- 표시 이름·프로필: 참여자·자리 객체는 `display_name`과 `avatar_url`을 가진다. 지원자는 `display_name`만(`sessions.display_name`, 동의 때 입력, 비우면 초대 별칭)이고 화면은 이니셜 아바타를 쓴다. AI 자리의 `display_name`은 `positions.scenario.seats[].name`, `avatar_url`은 같은 자리의 `avatar`(카탈로그 `personas.yaml`의 `avatar`, 파일은 `scenarios/missions/<id>/assets/avatars/`)로 만든 `/assets/missions/<mission_id>/avatars/<file>`이다. 이 경로는 공개 앱(8000)이 읽기 전용으로 서빙한다. 이미지는 임시이며 교체는 에셋 파일과 `avatar` 경로만 바꾼다. 관리자 리포트·목록은 별칭(`alias`)을 기본으로 쓴다.
 - 단계 id: `keyword`, `problem`, `solution`, `proposal`. 앞 셋이 칸(slot)을 가진 토론 단계다.
 - 멱등: `Idempotency-Key` 헤더는 쓰지 않는다. 도메인 규칙과 아래 저장 키로만 보장하며 같은 키의 재요청은 기존 행을 돌려준다.
 
@@ -68,7 +68,7 @@ empty ──지원자 확정 / AI 합의 채우기 / api 시간 초과 채우기
 - keyword 칸은 버튼으로 후보 키(`option_key`, 예: `water`)를 보내 확정한다. 후보 밖 키면 422 `invalid_keyword`. 그 키의 안 행이 없으면 api가 만든다(proposer = candidate, source_message_id null).
 - 문제 상황·해결책 칸의 지원자 확정 값은 **결정적 규칙으로만** 안에 연결한다(확정 경로에 LLM 없음): ① 요청의 `option_key`가 그 단계의 기존 안 행의 `scenario_option_key`와 같거나 ② `value`를 정규화(위치와 관계없이 구두점 전부 제거, 연속 공백을 하나로, 앞뒤 공백 제거, 소문자. 예: `도심 폭우·침수` = `도심 폭우침수`)한 문자열이 그 단계 기존 안 라벨의 정규화 값과 같으면 그 안. 둘 다 아니면 `option_id=null`이고 새 안을 만들지 않는다(최초 제안자를 잘못 귀속하지 않기 위해).
 
-### 지원자 문구 (R7)
+### 지원자 문구
 
 지원자 화면 문구는 내부 용어 대신 지원자 말을 쓴다: 칸 → "정할 항목", 합의 패널 → "결정 사항", 확정 → "이걸로 정하기". API 필드 이름(`slot`·`confirm`)은 그대로다.
 

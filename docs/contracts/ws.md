@@ -14,7 +14,7 @@
 |---|---|
 | message.ack | {client_msg_id, message_id, run_id}. 메시지 저장 커밋 직후, 의도 분류 전에 보낸다 |
 | message.new | Message = {id, sender: candidate∣p1∣p2∣p3∣system, content, phase, is_invite, t_min, created_at, client_msg_id?}. `client_msg_id`는 지원자 메시지에만 있고 보낸 `message.send`의 값이다(음성은 발언 id). 화면은 ack를 놓쳐도 `/state`로 그 발언의 저장을 확인한다. 합의·시간 초과 채우기 공지는 `slot.confirmed` 바로 앞에 온다(시간 초과 안내는 `sender = system`) |
-| typing | {participant: p1∣p2∣p3, state: "start"∣"stop"}. 화면 "OO님이 입력 중…". start 뒤 30초 안에 stop이 없으면 화면이 끈다 |
+| typing | {participant: p1∣p2∣p3, state: "start"∣"stop"}. 텍스트 모드 화면만 "OO님이 입력 중…"을 보인다(음성 화면은 쓰지 않음). start 뒤 30초 안에 stop이 없으면 화면이 끈다 |
 | slot.confirmed | {phase, value, filled_by: candidate∣p1∣p2∣p3∣system(시간 초과), resolution: "consensus"∣"timeout", outcome: "consensus"∣"candidate_decision"∣"timeout", t_min} |
 | phase.changed | {phase, previous_phase, reason: "start"∣"confirmed"∣"timeout", phase_started_at, phase_deadline_at, t_min} |
 | timer | {phase, phase_deadline_at, phase_remaining_seconds, session_remaining_seconds}. 단계 전환 때와 60초마다(시계 보정). 화면은 로컬로 카운트다운 |
@@ -28,6 +28,6 @@
 | type | payload |
 |---|---|
 | message.send | {client_msg_id, content}. content는 앞뒤 공백을 뺀 1~500자(지원자 발언 상한, 텍스트·음성 공통). 비었거나 500자를 넘으면 저장하지 않고 error `invalid_input`(음성은 발언권도 소비하지 않아 같은 차례에 다시 말할 수 있다). 음성 세션의 content는 그 발언의 받아 적은 글과 같아야 한다([음성 계약](voice.md)). 토론방 하나라 채널 없음. 같은 client_msg_id 재전송은 기존 메시지로 ack. in_progress의 모든 단계에서 허용(proposal 단계 포함) |
-| typing | {state: "start"∣"stop"}. 지원자 입력 중 여부. 입력창에 글자가 있는 동안 **5초마다 `start`를 다시 보내 갱신**하고, 비거나 전송하면 `stop`. 서버는 저장하지 않고 메모리에 `candidate_typing_until = 마지막 start + 6초`를 둔다. `stop`이나 6초 동안 갱신 없음이면 입력 중이 아니다. 끼어들기 대기(최대 10초 뒤 미게시·재큐)와 스케줄러 enqueue 보류에만 쓴다 |
+| typing | {state: "start"∣"stop"}. 텍스트 모드 전용(음성 화면은 보내지 않음, [음성 계약](voice.md)). 지원자 입력 중 여부. 입력창에 글자가 있는 동안 **5초마다 `start`를 다시 보내 갱신**하고, 비거나 전송하면 `stop`. 서버는 저장하지 않고 메모리에 `candidate_typing_until = 마지막 start + 6초`를 둔다. `stop`이나 6초 동안 갱신 없음이면 입력 중이 아니다. 끼어들기 대기(최대 10초 뒤 미게시·재큐)와 스케줄러 enqueue 보류에만 쓴다 |
 
 close code: 4401(토큰 문제 → resume 후 재연결), 4403(다른 세션, 재연결 안 함), 4000(교체됨, 재연결 안 함). 같은 세션에 WS가 둘이면 마지막만 유효. 연결 없는 구간은 `connection_gaps`에 기록(평가하지 않음. 사실 지표·확신도 참고).

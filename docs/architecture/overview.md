@@ -102,6 +102,6 @@ docs/                     설계 문서(docs/README.md)
 | 성능 효율성 | 위 운영 목표. 자극당 화자 2명, 응답당 도구 3회, 검색 결과 3청크 |
 | 보안성 | 역할 분리 JWT, 모든 관리자 조회에 company_id, 초대 토큰 해시·72시간, 내부 API 미공개 포트 + 시크릿, assessment-mcp 별도 토큰, 비밀값 env |
 | 유지보수성 | 시나리오 데이터화, 서비스별 컨테이너, 계약 문서가 정본 |
-| 이식성 | Docker Compose 한 번에 기동. 외부 의존은 OpenAI·LangSmith뿐 |
+| 이식성 | Docker Compose 한 번에 기동. 외부 의존은 OpenAI(LLM), Azure Speech(음성 기본 모드, FakeSpeech 프로필에서는 없음), LangSmith(선택 trace), Gemini(`gemini-*` 모델을 고를 때만) |
 | 호환성 | MCP 표준 전송, REST·WebSocket 계약 문서화 |
 | 사용성 | 단계 진행바·남은 시간 상시 표시, 말하는 사람 강조·자막, 새로고침 없는 도착, 이어하기, 끊김 구간 표시 |

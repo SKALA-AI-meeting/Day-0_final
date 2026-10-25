@@ -25,7 +25,7 @@
 | 리포트 보기·차원 조정·검토 완료·인쇄 | `components/admin/report-view.tsx`, `review.ts` | [F-04, F-04a, F-04c, F-09](../../PRD.md) |
 | 전체 기록과 근거 이동 | `components/admin/record-view.tsx` | [F-05](../../PRD.md) |
 | 초대 링크 입장·동의·이어하기 | `components/debate/link-screens.tsx`, `candidate-flow.tsx` | [F-10, F-11, F-19](../../PRD.md) |
-| 음성 회의(발표자 보기·자막·발언하기·자동 제출·메모장) | `components/debate/voice/voice-room.tsx`, `profile-stage.tsx`, `voice/memo-pad.tsx`, `reducer.ts`, `lib/ws.ts` (`chat.tsx`는 테스트 텍스트 모드 전용) | [F-12](../../PRD.md) |
+| 음성 회의(발표자 보기·자막·발언하기·자동 제출·메모장) | `components/debate/voice/voice-room.tsx`, `components/debate/voice/memo-pad.tsx`, `components/debate/profile-stage.tsx`, `components/debate/tile-flip.ts`, `components/debate/reducer.ts`, `lib/ws.ts` (`components/debate/chat.tsx`는 테스트 텍스트 모드 전용) | [F-12](../../PRD.md) |
 | 결정 사항 패널과 확인 창 | `components/debate/decision-panel.tsx` | [F-13](../../PRD.md) |
 | 단계 진행바·남은 시간 | `components/debate/debate-view.tsx` | [F-14](../../PRD.md) |
 | 참고 자료 뷰어(Markdown), 어시스턴트 | `components/debate/side-panels.tsx`, `markdown.tsx` | [F-15, F-16](../../PRD.md) |
@@ -464,7 +464,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 토론 화면(`components/debate/debate-view.tsx`)은 크기를 바꿀 수 있는 분할 레이아웃이다. 음성 모드(기본)의 지원자 화면은 이 배치를 따른다.
 
-- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 가운데 칸이 음성 회의로 바뀐다. 처음에는 네 명이 2×2 균등 배치이고, 발언이 시작되면 그 사람의 큰 칸과 아래 참가자 세 칸으로 즉시 바뀐다(위치 이동 애니메이션 없음). 내 차례 대기 중에는 마지막 동료를 유지하고 내 발언·처리 중에 내 칸을 크게 보인다. 동료 발언 중 현재 문장을 자막으로 보이고 재생 후에는 마지막 문장 하나를 흐리게 남긴다. 아래에는 발언 조작([발언하기]·손들기·남은 시간·음량·[발언 완료])과 새 시스템 안내·제출 확인이 있다. 왼쪽은 지원자 메모장(`voice/memo-pad.tsx`, 이 브라우저에만 저장하고 서버·평가에 보내지 않음)과 첫 확정 뒤의 단계 안내(인사가 끝나면 왼쪽 프로필 칸은 비운다), 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
+- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 가운데 칸이 음성 회의로 바뀐다. 처음에는 네 명이 2×2 균등 배치이고, 발언이 시작되면 그 사람의 큰 칸과 아래 참가자 세 칸으로 바뀌고, 칸은 원래 자리에서 새 자리로 280ms 동안 옮겨 간다(`components/debate/tile-flip.ts`, 움직임 줄이기 설정이면 바로 바뀜). 내 차례 대기 중에는 마지막 동료를 유지하고 내 발언·처리 중에 내 칸을 크게 보인다. 동료 발언 중 현재 문장을 자막으로 보이고 재생 후에는 마지막 문장 하나를 흐리게 남긴다. 아래에는 발언 조작([발언하기]·손들기·남은 시간·음량·[발언 완료])과 새 시스템 안내·제출 확인이 있다. 왼쪽은 지원자 메모장(`voice/memo-pad.tsx`, 이 브라우저에만 저장하고 서버·평가에 보내지 않음)과 첫 확정 뒤의 단계 안내(인사가 끝나면 왼쪽 프로필 칸은 비운다), 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
 - 크기 조절: 영역 사이 경계를 끌거나 화살표 키로 바꾸고, 두 번 누르면 원래대로 돌아간다. 엔진은 `components/ui/split-layout.tsx`, 단계별 규칙은 `components/debate/stage-layout.ts`.
 - 말하기(STT): 내 차례(일반·손들기·강제, 자동 녹음 없음)에 20초 안에 [발언하기]나 Space로 시작해 최대 60초 말하고([발언 완료]와 타이머가 같은 종료 함수), 서버가 전사한 글을 보여 주거나 고치게 하지 않고 바로 전달한다(서버도 다른 글은 거부). 저장되면 "전달했어요"를 잠깐 보인다. 빈 인식 결과에는 [다시 말하기]를 안내한다. 구현은 `components/debate/voice/voice-room.tsx`·`recorder.ts`이고 계약은 [음성 계약](../../docs/contracts/voice.md)이다.
 - AI 동료 음성(TTS): 서버가 만든 검증된 AI 메시지를 순서대로 재생하고(실제 재생 종료를 확인한 뒤 다음 항목·내 차례), 말하는 동료를 프로필에서 강조하며 재생 중인 문장을 자막으로 보인다. 목소리는 자리별로 고정한다.

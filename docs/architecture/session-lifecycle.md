@@ -72,7 +72,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 | 사건 | 처리 |
 |---|---|
 | 지원자 확정 | `POST /sessions/{id}/slots/{phase}/confirm` → api가 칸을 `confirmed`(filled_by=candidate, resolution=consensus, 그 시점 지지 현황 스냅샷)로 바꾸고 다음 단계로 전환. 키워드는 버튼의 후보 키, 문제·해결책은 옵션 키·정규화 라벨 일치로만 안에 연결(LLM 없음) |
-| AI 합의 채우기 | 진행 매니저 `fill`의 `announce_fill` 분기 → `fill_slot{option_id, seat, content, run_id}`. api가 한 트랜잭션에서 `consensus.judge`(지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언, 대기 시간 없음)를 다시 검사하고 아니면 409 `no_consensus`(AI는 합의 전에 칸을 채울 수 없다, 아무것도 저장 안 함), 그 단계 카드가 아직 전달되지 않았으면 409 `card_pending`(결정 C3). 성공하면 칸 확정·공지 메시지(seq 5)·전환이 함께 커밋되므로 공지가 빠진 확정은 없다. 같은 run_id 재호출은 기존 결과 |
+| AI 합의 채우기 | 진행 매니저 `fill`의 `announce_fill` 분기 → `fill_slot{option_id, seat, content, run_id}`. api가 한 트랜잭션에서 `consensus.judge`(지원자 포함 3/4 지지이고 지원자의 그 단계 최신 발언이 그 안을 지지로 세는 발언, 대기 시간 없음)를 다시 검사하고 아니면 409 `no_consensus`(AI는 합의 전에 칸을 채울 수 없다, 아무것도 저장 안 함), 그 단계 카드가 아직 전달되지 않았으면 409 `card_pending`. 성공하면 칸 확정·공지 메시지(seq 5)·전환이 함께 커밋되므로 공지가 빠진 확정은 없다. 같은 run_id 재호출은 기존 결과 |
 | 단계 마감 | 스케줄러가 `now ≥ phase_deadline_at`이고 칸이 empty이면 **api `services/timeout.py`가 직접**: 시간 초과 선택 규칙으로 안을 고르고 적용된 규칙의 시나리오 고정 문장을 시스템 메시지로 저장, 칸 `confirmed{resolution: timeout, filled_by: system, timeout_rule}` → 전환. 그래프·LLM·MCP를 거치지 않는다 |
 | 전환 공통 | api `SessionService.advance_phase`: `phase`·`phase_started_at`·`phase_deadline_at` 갱신, `generation += 1`, 시스템 안내 메시지("지금 할 일"과 남은 시간, 시나리오 고정 문구) 저장, WS `slot.confirmed`·`phase.changed`·`timer`. keyword 확정이면 그 키워드 자료를 열고 WS `materials.opened`. proposal 시작이면 기획안 초안의 빈 칸(키워드·문제 상황·해결책)을 확정 칸 값으로 채운다. 이어서 `phase_started`를 메일박스에 넣기만 한다(기획안 단계 `phase_started` 실행이 `honesty_credit` 관찰을 남긴다) |
 | 마감 임박 | 단계 마감 `L/30` 전(60분 기준 2분, 압축 비율)에 시스템 안내 메시지 1건. 시점은 시나리오 데이터 |
@@ -122,7 +122,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 
 ## 그래프 자극 (stimulus)
 
-토론 그래프는 자극마다 한 번 실행된다. 자극은 아래 **5종**이고 `agent_runs.stimulus`·진행 매니저 결정의 `stimulus`·State 스냅샷 `active_runs[].stimulus`가 같은 값을 쓴다. `timeout`(api가 직접 채움)·`room_quiet`는 없다.
+토론 그래프는 자극마다 한 번 실행된다. 자극은 아래 **5종**이고 `agent_runs.stimulus`·진행 매니저 결정의 `stimulus`·State 스냅샷 `active_runs[].stimulus`가 같은 값을 쓴다.
 
 | type | 발생 | 함께 오는 값 | run_id |
 |---|---|---|---|

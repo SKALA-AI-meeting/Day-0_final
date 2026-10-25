@@ -73,7 +73,7 @@ LLM 없이 도는 모드가 세 가지 있고, 화면에 `[fake]` 표시가 붙�
 | 설정 | 무엇이 도나 | 채팅 모습 | 리포트 |
 |---|---|---|---|
 | api `AGENT_RUNNER=fake` | 가짜 러너. 토론 그래프가 돌지 않는다 | `[fake] 네, 그 의견 잘 들었어요.` 같은 고정 문장 | — |
-| api·report-worker `LLM_FAKE=1` | 토론 그래프·의도 분류·평가는 그대로 돌고 LLM 호출만 고정 응답 | **`[fake]` 없이** 자연스러운 문장이지만, 같은 자리가 단계마다 같은 입장 문장을 반복 | 지원자 메시지가 있으면 모든 차원이 첫 지원자 메시지를 근거로 수준 3, 없으면 기록 없음 |
+| api·report-worker `LLM_FAKE=1` | 토론 그래프·의도 분류·평가는 그대로 돌고 LLM 호출만 고정 응답 | **`[fake]` 없이** 자연스러운 문장이지만, 같은 자리가 단계마다 같은 입장 문장을 반복 | 차원마다 그 핵심 장면에 지원자 메시지가 있으면 첫 메시지를 근거로 수준 3, 없으면 기록 없음 |
 | web `NEXT_PUBLIC_MOCK=1`(로컬 `pnpm dev`만) | api 없이 `apps/web/mocks/`의 예시 데이터 | 예시 대화가 그대로 보이고 입력에 맞춰 바뀌지 않음 | 예시 리포트 |
 | `AGENT_RUNNER=session`, `LLM_FAKE`가 없거나 `0`, mock 아님 | 실제 LLM | 지원자 말에 맞춰 대답 | 실제 평가 |
 
@@ -81,11 +81,12 @@ LLM 없이 도는 모드가 세 가지 있고, 화면에 `[fake]` 표시가 붙�
 
 ### 설정 확인
 
-전체 compose(`make up`)로 띄웠을 때:
+전체 compose(`make up PROFILE=…`)로 띄웠을 때는 프로필이 정한 모드를 먼저 보고, 실행 중인 컨테이너 값도 확인한다(compose 프로젝트 `infra`, 격리 스택은 `dayzero-debate`):
 
 ```
-docker compose -f infra/docker-compose.yml --env-file infra/.env exec -T api env | grep -E '^(AGENT_RUNNER|LLM_FAKE)='
-docker compose -f infra/docker-compose.yml --env-file infra/.env exec -T report-worker env | grep -E '^LLM_FAKE='
+make profile PROFILE=dev-real
+docker exec "$(docker ps -q -f label=com.docker.compose.project=infra -f label=com.docker.compose.service=api)" env | grep -E '^(AGENT_RUNNER|LLM_FAKE)='
+docker exec "$(docker ps -q -f label=com.docker.compose.project=infra -f label=com.docker.compose.service=report-worker)" env | grep -E '^LLM_FAKE='
 ```
 
 `AGENT_RUNNER=session`이 나오고 `LLM_FAKE=1`이 없으면 설정은 실제 LLM이다(`LLM_FAKE` 줄 자체가 안 나와도 된다). web 컨테이너는 mock 없이 빌드된다.

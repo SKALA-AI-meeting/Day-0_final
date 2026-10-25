@@ -34,11 +34,11 @@ apps/web/
 |---|---|
 | `entry.json`·`entry_completed.json` | GET /s/{token} 응답(진행 전·완료 후) |
 | `state_keyword`·`state_problem`·`state_solution`·`state_proposal.json` | State 스냅샷 4벌. 캡처 지점을 바로 연다 |
-| `debate_script.json` | 15분 데모 재생 대본(R3): 모든 프레임에 세션 단위 `seq`, `message.new`(강한결·윤하람·서지안·system, 침묵 초대 `is_invite` 포함, 시간 초과 시스템 안내 1건), `typing` start/stop, `slot.confirmed`(consensus 1·timeout 1), `phase.changed`·`timer`, `materials.opened`, `session.ended`. 시각은 `t_min`. `slot.filled`는 없다 |
+| `debate_script.json` | 15분 데모 재생 대본: 모든 프레임에 세션 단위 `seq`, `message.new`(강한결·윤하람·서지안·system, 침묵 초대 `is_invite` 포함, 시간 초과 시스템 안내 1건), `typing` start/stop, `slot.confirmed`(consensus 1·timeout 1), `phase.changed`·`timer`, `materials.opened`, `session.ended`. 시각은 `t_min` |
 | `materials.json`·`material.json` | 자료 목록(잠김·열림)과 Markdown 본문 |
 | `assistant_response.json` | 어시스턴트 응답(인용 자료 포함) |
 | `proposal.json`·`proposal_submit.json` | Proposal과 제출 응답 |
-| `debrief.json`·`debrief_failed.json` | 디브리핑(R1 첫 문장·이의 제기 경로·카드 설명·요소 이름과 "이렇게 봅니다" 한 줄·내 발언 최대 3개(단계별 최장)·자리 성향·기획안·설문 2문항+자유 의견) |
+| `debrief.json`·`debrief_failed.json` | 디브리핑(첫 문장·이의 제기 경로·카드 설명·요소 이름과 "이렇게 봅니다" 한 줄·내 발언 최대 3개(단계별 최장)·자리 성향·기획안·설문 2문항+자유 의견) |
 | `admin_catalog.json` | 요소 5개 읽기용 설명·세션 길이 옵션(60·15). 선택 필드·`if_unselected` 없음 |
 | `admin_candidates.json` | 상태 묶음 5종 각 1행 이상, 요소별 수준 칩(1~5·기록 없음·담당자 조정 1행 이상)과 low 차원 수, 실패 행. 합계 필드 없음 |
 | `fixtures/sample-report.json` | Report(계약 형태): `elements[]` 5개(element·level·summary·dimension_count·no_record_count), `dimensions[]` 19개([product/rubric.md](../product/rubric.md) 3장 id, level·no_record_reason·evidence_refs·rationale·confidence, 확신도 high·medium·low 모두, 수준 4·5는 근거 2개 이상), 근거 참조 4종(`msg:`·`slot:`·`proposal:`·`contribution:`)과 메시지 근거의 앞 5·뒤 3 맥락, 기록 없음 사유 5종, 담당자 조정 차원 1개(memo 포함), 카드 6장(미발생 1), contribution_check, facts, ai_usage. 총점·합계 필드 없음 |
@@ -50,16 +50,15 @@ apps/web/
 
 ## 화면 검증 항목
 
-- 지원자 전 화면·전 상태가 mock으로 돈다: 입장(만료·취소·완료 링크), 동의 화면의 R1 형식 안내·R7 어시스턴트 문구·표시 이름 입력(기본값 입장 응답의 초대 이름)과 그 이름이 토론방·AI 동료 호칭에 쓰임, 동의 전 시작 불가, 대기 화면 레이아웃 그림과 시작 전 `/state`로 그린 이름만 보이는 팀 소개, 토론 세션, 디브리핑(R1 첫 문장·이의 제기 경로·카드 설명·내 발언 2~3개·성향 공개·기획안 열람·설문 2문항+자유 의견·문의), 재연결과 `seq` 누락 시 `/state` 복원.
-- 지원자 화면 용어: "칸"·"합의 패널"·"확정"이 지원자 화면 문구에 없고 "정할 항목"·"결정 사항"·"이걸로 정하기"를 쓴다(R7).
-- 토론 세션: 상단 4단계 진행바와 단계 남은 시간(로컬 카운트다운·`timer` 보정·2분 전 warning), 남은 시간과 오피스 시각이 한 줄에 함께 나오지 않음. 음성 모드(기본)의 토론 화면은 지원자와 AI 동료 3명의 프로필 4칸(말하는 사람 강조, 이름+프로필 이미지, 재생 중 문장 자막), [발언하기]·손들기, 인식 글 즉시 전달(빈 인식·500자 초과는 다시 말하기), 재생 중 자막과 방금 한 말, 왼쪽 메모장으로 구성하고 말풍선·입력창·입력 중 표시는 없다. 프로필 이미지는 비율이 다른 임시 파일에서도 원형 고정 크기로 보이고, 깨진 URL이면 이니셜로 대체. iMessage식 말풍선·입력 중 표시·`message.ack` 확정 표시는 테스트 텍스트 모드(`VOICE_ENABLED=0`)에서만 쓴다.
+- 지원자 전 화면·전 상태가 mock으로 돈다: 입장(만료·취소·완료 링크), 동의 화면의 형식 안내·어시스턴트 문구·표시 이름 입력(기본값 입장 응답의 초대 이름)과 그 이름이 토론방·AI 동료 호칭에 쓰임, 동의 전 시작 불가, 대기 화면 레이아웃 그림과 시작 전 `/state`로 그린 이름만 보이는 팀 소개, 토론 세션, 디브리핑(첫 문장·이의 제기 경로·카드 설명·내 발언 2~3개·성향 공개·기획안 열람·설문 2문항+자유 의견·문의), 재연결과 `seq` 누락 시 `/state` 복원.
+- 지원자 화면 용어: "칸"·"합의 패널"·"확정"이 지원자 화면 문구에 없고 "정할 항목"·"결정 사항"·"이걸로 정하기"를 쓴다.
+- 토론 세션: 상단 4단계 진행바와 단계 남은 시간(로컬 카운트다운·`timer` 보정·2분 전 warning), 남은 시간과 오피스 시각이 한 줄에 함께 나오지 않음. 음성 모드(기본)의 토론 화면 구성은 [`apps/web/README.md`](../../apps/web/README.md) "토론 화면 배치와 음성 회의"가 정본이다. 프로필 이미지는 비율이 다른 임시 파일에서도 원형 고정 크기로 보이고, 깨진 URL이면 이니셜로 대체. 말풍선·입력 중 표시·`message.ack` 확정 표시는 테스트 텍스트 모드(`VOICE_ENABLED=0`)에서만 쓴다.
 - 우측 4탭: 결정 사항에 결과 줄만(후보안·지지 현황·오피스 시각 없음), 현재 항목만 입력·[이걸로 정하기], `slot.confirmed` timeout 결과 표시(적용 규칙별 시스템 안내)와 입력 값 잠김; 입력 중 typing 5초 갱신; 자료 잠김 → `materials.opened`로 열림 → Markdown 뷰어; 어시스턴트 요청·인용·복사·한도 안내; 기획안 6칸 디바운스 저장, `idea_credit` 중립 안내 한 줄, 토론 단계 제출 비활성, 제출 확인 창 → 잠김 → [나가기] → 디브리핑, 자동 제출 한 줄.
 - 페르소나 유형이 **디브리핑 전** 지원자 화면과 응답에 없다: 디브리핑 컴포넌트·`debrief*.json`을 뺀 지원자 컴포넌트와 지원자 mock(`entry*`·`state_*`·`debate_script`·`materials`·`material`·`assistant_response`·`proposal*`)에서 `stubborn|quiet|critic|agreeable|divergent` grep 0건. 디브리핑은 성향 공개가 정상이다.
 - 관리자: 생성 화면은 이름·세션 길이(60·15)·요소 안내(읽기 전용, 선택 UI 없음)·샘플 리포트 링크, 링크 재발급과 재응시 초대가 구분된 행 액션, 지원자 목록 상태 묶음·요소별 수준 칩·low 차원 수(합계·정렬 없음)·실패 안내·삭제 예정일.
-- 리포트 draft가 mock으로: 머리의 "설계된 장면" 안내와 카드 칩(R1), 요약표의 요소 "수준 N (1~5)"·서술(합계 없음), 타임라인(칸 결과·지지 현황·최초 제안자·카드 발동), 요소 섹션의 차원별 수준·확신도·판단 이유·근거, low 차원의 "근거 약함, 원문 확인 권장", 근거 클릭 시 원문·앞뒤 맥락, 맥락 참조 구분, 기록 없음의 상태 칩(장면 없음·반응 없음·판단 보류)과 사유 6종 문장·요약표 상태별 개수·선결정 카드 표시, 머리의 용어 설명과 화면 용어 "세부 행동"(평가 문장 속 "차원"도 바꿔 보임, 결정 A3·A4), 기여 대조표, 사실 지표, 제출 기획안, 시간순 AI 활용. 차원 단위 조정(메모 없으면 저장 불가)과 요소 수준 재계산·"담당자 조정됨"·검토 완료 확인 창(`reviewer_name` 포함, 422 표시)·final 메모 추가. "기록에서 보기"가 기록 화면의 해당 줄을 하이라이트. 인쇄 미리보기에서 차원 전부 펼침. 화면·mock 어디에도 총점·합계·점수 표기가 없다.
-- D13-2: 라이트·다크 둘 다 동작, 말풍선·본문 대비 4.5:1 이상([architecture/design-system.md](../architecture/design-system.md) 대비 표), 이름이 항상 보여 색 없이도 화자 구분 가능, 그라데이션·반짝이·로봇 아이콘·네온·카드 반복 대시보드 없음, 그림자는 떠 있는 요소에만.
+- 리포트 draft가 mock으로: 머리의 "설계된 장면" 안내와 카드 칩, 요약표의 요소 "수준 N (1~5)"·서술(합계 없음), 타임라인(칸 결과·지지 현황·최초 제안자·카드 발동), 요소 섹션의 차원별 수준·확신도·판단 이유·근거, low 차원의 "근거 약함, 원문 확인 권장", 근거 클릭 시 원문·앞뒤 맥락, 맥락 참조 구분, 기록 없음의 상태 칩(장면 없음·반응 없음·판단 보류)과 사유 6종 문장·요약표 상태별 개수·선결정 카드 표시, 머리의 용어 설명과 화면 용어 "세부 행동"(평가 문장 속 "차원"도 바꿔 보임), 기여 대조표, 사실 지표, 제출 기획안, 시간순 AI 활용. 차원 단위 조정(메모 없으면 저장 불가)과 요소 수준 재계산·"담당자 조정됨"·검토 완료 확인 창(`reviewer_name` 포함, 422 표시)·final 메모 추가. "기록에서 보기"가 기록 화면의 해당 줄을 하이라이트. 인쇄 미리보기에서 차원 전부 펼침. 화면·mock 어디에도 총점·합계·점수 표기가 없다.
+- 디자인: 라이트·다크 둘 다 동작, 말풍선·본문 대비 4.5:1 이상([architecture/design-system.md](../architecture/design-system.md) 대비 표), 이름이 항상 보여 색 없이도 화자 구분 가능, [design-system.md](../architecture/design-system.md) "하지 않는 것" 목록 없음, 그림자는 떠 있는 요소에만.
 - 행동 유도 문구 없음, 보드·분업·파트 문서·팀장·개인 알림 흔적 없음: 지원자 컴포넌트·mock에서 `board.tsx|BoardColumn|division|my-docs|my_document|doc-viewer|manager|notices.test|office_script|slot.filled` grep 0건. 현행 이름 `SystemNotice`·`entry_notice`·`scoring_notice`·`retention_notice`와 "대시보드" 같은 일반 단어는 검사 대상이 아니다.
-- UX 결정대로 캡처 6장(진행 중 토론방·입력 중, 단계 전환, 자료 탭, 기획안 작성, 디브리핑, 리포트 요약+근거)을 라이트로 뜰 수 있고 다크 1장(토론방)을 함께 뜬다.
 - `review-animations`·`break-ui` 통과.
 
 같은 항목을 실제 api(`NEXT_PUBLIC_MOCK=0`)에서는 단계별 화면 테스트(`make e2e SUITE=stages PROFILE=test-text`, 가짜 LLM)로 확인한다([guides/testing.md](../guides/testing.md) "단계별 테스트").

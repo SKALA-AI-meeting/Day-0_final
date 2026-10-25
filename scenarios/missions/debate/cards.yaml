@@ -44,7 +44,6 @@ cards:
     offset_min: 3
     actor: [stubborn, critic]
     actor_mode: joint
-    locks_lead_option: true          # 이 시점에 기준안을 잠근다(mission.yaml lead_option)
     content: 이 시점에 기준안을 잠그고 두 사람이 기준안을 지지한다고 각자 밝힌다. 강한결은 확정 전 불변, 서지안은 설득 가능 규칙을 따른다. 지원자 안이 채택될 수 있다
     purpose: 동료 두 명이 같은 안을 서로 다른 이유로 각자 지지한다고 처음으로 밝히는 장면. 이번 발언에서 내 안의 지지를 말로 밝히고, 앞서 다른 동료가 든 이유와 겹치지 않는 내 이유 하나를 든다
     steer:
@@ -84,8 +83,6 @@ cards:
     actor: quiet
     actor_mode: single
     fixed_line: 저… 하나 생각한 게 있긴 한데… 아니에요, 먼저 얘기하세요.
-    silent_until_invited: true       # 이름이 불리거나 전체 질문이 올 때까지 말하지 않음
-    on_invited: s3_with_material     # 초대받으면 S3를 자료 근거와 함께
     content: '머뭇거리는 한 줄: "저… 하나 생각한 게 있긴 한데… 아니에요, 먼저 얘기하세요." 이후 지원자가 이름을 부르거나 전체에게 의견을 물을 때까지 말하지 않는다. 초대받으면 S3를 자료 근거와 함께 말한다'
     purpose: 한 동료가 생각이 있다고 머뭇거린 뒤 말을 거두는 장면(고정 한 줄). 그 뒤 이름이 불리거나 전체 질문이 올 때까지 말하지 않는다
     window: { start: card_message, end: "stage_end:solution", label: 머뭇거림 메시지부터 해결책 단계 끝까지 }

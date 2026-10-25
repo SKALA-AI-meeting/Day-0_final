@@ -33,7 +33,7 @@
 uv run --directory services/debate-mcp python -m debate_mcp     # 9101
 ```
 
-로컬 실행 env: `infra/.env.local`을 만들고 DB·큐·내부 API·MCP 주소를 `localhost`로 바꾼다(항목은 [configuration.md](../../docs/guides/configuration.md) "로컬 실행용 `infra/.env.local`"). 로컬 서비스는 `infra/.env.local` → `infra/.env` 순으로 읽는다. 컨테이너는 compose가 `API_INTERNAL_URL=http://api:8001`을 준다.
+로컬 실행 env는 [configuration.md](../../docs/guides/configuration.md) "로컬 실행용 `infra/.env.local`"을 따른다. 컨테이너는 compose가 `API_INTERNAL_URL=http://api:8001`을 준다.
 
 ## MCP 도구
 

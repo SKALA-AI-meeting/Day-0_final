@@ -1,6 +1,6 @@
 # MCP 서버 (debate·rag·assessment)
 
-세 서버 모두 Python FastMCP, Streamable HTTP. 도구 목록·입출력·오류 형식·허용 목록은 [contracts/mcp.md](../contracts/mcp.md) "MCP 도구"가 정본이다. MCP는 **debate-mcp(손)·rag-mcp(눈)·assessment-mcp(기록자)** 3개다(D11). scenario-mcp·웹 검색 MCP·가드 MCP는 두지 않는다(카탈로그는 debate-mcp로 충분, 웹 검색은 공정성·재현성 훼손, 출력 검사는 코드에서 무조건 실행).
+세 서버 모두 Python FastMCP, Streamable HTTP. 도구 목록·입출력·오류 형식·허용 목록은 [contracts/mcp.md](../contracts/mcp.md) "MCP 도구"가 정본이다. 아래 표는 도구와 내부 API의 대응·구현 메모이고, 입출력이 계약과 다르면 계약이 맞다. 서버별 도구 목록은 각 서비스 README의 생성 블록에도 있다. MCP는 **debate-mcp(손)·rag-mcp(눈)·assessment-mcp(기록자)** 3개다. scenario-mcp·웹 검색 MCP·가드 MCP는 두지 않는다(카탈로그는 debate-mcp로 충분, 웹 검색은 공정성·재현성 훼손, 출력 검사는 코드에서 무조건 실행).
 
 ## 공통
 
@@ -18,13 +18,13 @@
 
 | 도구 | 내부 API | 구분 | 메모 |
 |---|---|---|---|
-| get_debate_state | GET /debate_state + GET /sessions/{id} | 조회 | DebateState(현재 지지·칸·카드 진행·`invite_delivered`) + `seats: [{seat: candidate, display_name}, {seat, display_name, avatar_url}]`. 페르소나 유형 없음(내부 응답의 `persona_type`을 빼고 전달). 그래프 load가 부르고, 페르소나에게는 도구가 아니라 컨텍스트로 미리 넣는다(R5-12). 그때 `card_progress`·`cost_left`는 그래프가 뺀다. 페르소나에 도구로 바인딩하지 않는다 |
+| get_debate_state | GET /debate_state + GET /sessions/{id} | 조회 | DebateState(현재 지지·칸·카드 진행·`invite_delivered`) + `seats: [{seat: candidate, display_name}, {seat, display_name, avatar_url}]`. 페르소나 유형 없음(내부 응답의 `persona_type`을 빼고 전달). 그래프 load가 부르고, 페르소나에게는 도구가 아니라 컨텍스트로 미리 넣는다. 그때 `card_progress`·`cost_left`는 그래프가 뺀다. 페르소나에 도구로 바인딩하지 않는다 |
 | get_transcript | GET /messages | 조회 | `[{id, sender, content, phase, is_invite, t_min}]`. meta·intent·origin 없음. limit 기본 30 |
 | get_draft | GET /proposal | 조회 | 기획안 초안. 페르소나에는 proposal 단계에서만 바인딩. report-worker는 이 도구가 아니라 같은 내부 API로 제출본을 직접 읽는다 |
-| post_message | POST /messages | 변경 | sender p1∣p2∣p3∣system. (run_id, seq) 멱등. `is_invite`면 api가 그 단계 `invite_delivered`를 켠다(두 번째 `conflict`). `card_ids`(배열)가 있으면 api가 카드마다 그 화자를 `delivered_seats`에 더한다(R5-4, 공동 전달은 두 카드 id) |
-| propose_option | POST /options | 변경 | proposer p1∣p2∣p3. 시나리오 안은 `scenario_option_key`, 자유 안은 `source_message_id`로 멱등. 지원자가 같은 카탈로그 안을 먼저 말해 행이 있으면 그 행을 그대로 돌려준다(최초 제안자 보존, R5-6) |
+| post_message | POST /messages | 변경 | sender p1∣p2∣p3∣system. (run_id, seq) 멱등. `is_invite`면 api가 그 단계 `invite_delivered`를 켠다(두 번째 `conflict`). `card_ids`(배열)가 있으면 api가 카드마다 그 화자를 `delivered_seats`에 더한다(공동 전달은 두 카드 id) |
+| propose_option | POST /options | 변경 | proposer p1∣p2∣p3. 시나리오 안은 `scenario_option_key`, 자유 안은 `source_message_id`로 멱등. 지원자가 같은 카탈로그 안을 먼저 말해 행이 있으면 그 행을 그대로 돌려준다(최초 제안자 보존) |
 | set_stance | POST /stances | 변경 | participant p1∣p2∣p3, support∣oppose, source_message_id = 그 입장을 말한 자기 메시지 |
-| fill_slot | POST /slots/fill | 변경 | 입력 `{session_id, option_id, seat: p1∣p2∣p3, content, run_id}` → 출력 `{slot, phase, message}`. 합의 채우기 전용. 대상 단계는 option의 phase이고 `filled_by` 인자는 없다(`seat`가 공지 화자이자 `filled_by`, api가 `resolution: consensus`로 저장). `content`는 합의 공지 고정 문장이고 api가 칸 확정과 같은 트랜잭션에서 seq 5 메시지(`meta.kind=consensus_fill`)로 저장한다. 별도 `post_message`는 없다. 같은 run_id로 이미 확정됐으면 기존 칸과 공지를 그대로 돌려주고, 아니면 `conflict/phase_not_open` → `conflict/slot_confirmed` → `conflict/no_consensus` 순서로 검사한다. 409면 칸·공지 모두 저장되지 않는다. 시간 초과 채우기는 api가 그래프·MCP 없이 직접 한다(R5-2) |
+| fill_slot | POST /slots/fill | 변경 | 입력 `{session_id, option_id, seat: p1∣p2∣p3, content, run_id}` → 출력 `{slot, phase, message}`. 합의 채우기 전용. 대상 단계는 option의 phase이고 `filled_by` 인자는 없다(`seat`가 공지 화자이자 `filled_by`, api가 `resolution: consensus`로 저장). `content`는 합의 공지 고정 문장이고 api가 칸 확정과 같은 트랜잭션에서 seq 5 메시지(`meta.kind=consensus_fill`)로 저장한다. 별도 `post_message`는 없다. 같은 run_id로 이미 확정됐으면 기존 칸과 공지를 그대로 돌려주고, 아니면 `conflict/phase_not_open` → `conflict/slot_confirmed` → `conflict/no_consensus` 순서로 검사한다. 409면 칸·공지 모두 저장되지 않는다. 시간 초과 채우기는 api가 그래프·MCP 없이 직접 한다 |
 
 - 지원자의 안·입장은 api가 의도 분류로 직접 저장하므로 도구 입력에 `candidate`는 없다.
 
@@ -33,26 +33,26 @@
 | 도구 | 구분 | 메모 |
 |---|---|---|
 | search_materials | 조회 | `{session_id, query, top_k?=3}` → `[{material_id, title, chunk, score}]`. 내부 GET /materials로 잠금·확정 키워드(`keyword_key`)·catalog_version을 확인하고 같은 버전·같은 키워드 청크만 코사인 유사도 상위 k. 잠겨 있으면 `not_released`. 해당 버전 청크가 없으면 `upstream_unavailable`(재색인 필요) |
-| get_material | 조회 | `{session_id, material_id}` → 본문. 열린 자료가 아니면 `not_released`. 본문은 채용 건 `catalog_version`으로 DB에 시드된 원문(내부 API 경유, R5-18)이라 검색 청크와 같은 버전이다 |
-| reindex_materials | 변경(관리용) | `catalog_version`별로 시드된 자료 원문(원천은 `scenarios/missions/<id>/materials/<keyword>/*.md`)을 400자 청크로 나눠 BGE-M3(1024차원) 임베딩 → `material_chunks(material_id, keyword_key, chunk_no, content, embedding, model, catalog_version)`. 키 (catalog_version, material_id, chunk_no). 이전 버전 청크는 남겨 진행 중 채용 건이 자기 버전으로 검색. 에이전트에 노출하지 않음 |
+| get_material | 조회 | `{session_id, material_id}` → 본문. 열린 자료가 아니면 `not_released`. 본문은 채용 건 `catalog_version`으로 DB에 시드된 원문(내부 API 경유)이라 검색 청크와 같은 버전이다 |
+| reindex_materials | 변경(관리용) | 청크 규칙·색인 키(`index_version`)·옛 키 검색 순서는 [contracts/mcp.md](../contracts/mcp.md)가 정본이다. 임베딩은 BGE-M3(1024차원), 이전 키 행은 지우지 않아 먼저 만든 채용 건이 자기 색인으로 검색한다. 에이전트에 노출하지 않음 |
 
 - catalog_version은 api와 같은 함수(`scenarios/version.py`, 미션 폴더 전체 해시).
 - 모델 로드는 시작 시 1회. 컨테이너 메모리 3GB.
 
 ## assessment-mcp (`services/assessment-mcp/`, `:9103/mcp`)
 
-평가 입력 조회와 평가 결과 기록 전용(D18·D19 개정). 모든 요청에 `X-Assessment-Token`(env `ASSESSMENT_MCP_TOKEN`)이 있어야 하고 없거나 다르면 `forbidden`. 정확한 입출력과 내부 API 경로는 [contracts/mcp.md](../contracts/mcp.md) "MCP 도구"가 정본이다(아래 내부 API 열은 대응 관계 메모).
+평가 입력 조회와 평가 결과 기록 전용. 모든 요청에 `X-Assessment-Token`(env `ASSESSMENT_MCP_TOKEN`)이 있어야 하고 없거나 다르면 `forbidden`. 정확한 입출력과 내부 API 경로는 [contracts/mcp.md](../contracts/mcp.md) "MCP 도구"가 정본이다(아래 내부 API 열은 대응 관계 메모).
 
 | 도구 | 내부 API | 구분 | 호출자 | 메모 |
 |---|---|---|---|---|
-| record_observation | POST /observations | 변경 | 진행 매니저 결정적 노드 `apply`(첫 카드 발언 게시 직후)·`cards`(발언 없는 `honesty_credit`), 코드 호출 | 카드 발동 기록. 트리거는 시각 기반 `card_due`뿐이고(R5-4) 첫 카드 발언이 실제 게시된 뒤에만 카드마다 기록한다(공동 전달 메시지는 카드마다 1건). 입력은 계약대로 `{session_id, card_id, phase, trigger_message_id?, run_id}`. (session_id, card_id) 멱등 |
+| record_observation | POST /observations | 변경 | 진행 매니저 결정적 노드 `apply`(첫 카드 발언 게시 직후)·`cards`(발언 없는 `honesty_credit`), 코드 호출 | 카드 발동 기록. 트리거는 시각 기반 `card_due`뿐이고 첫 카드 발언이 실제 게시된 뒤에만 카드마다 기록한다(공동 전달 메시지는 카드마다 1건). 입력은 계약대로 `{session_id, card_id, phase, trigger_message_id?, run_id}`. (session_id, card_id) 멱등 |
 | get_rubric | GET /rubric | 조회 | 워커 collect | 세션 `positions.scenario`에 복사된 척도: 5요소 차원 19개의 id·정의·수준 1~5 앵커·기록 없음 사유·카드 창, `rubric_version` |
 | get_session_record | GET /sessions/{id}, /messages(전체, 페이지 반복), /slots, /proposal, /observations, /facts, /contributions | 조회 | 워커 collect | 평가 입력 묶음: 대화 전체(intent·origin 포함)·칸 기록(지지 현황 스냅샷)·기획안 제출본(`auto_submitted`)·카드 발생 observations·사실 지표·Contributions. 전용 엔드포인트 없이 기존 내부 GET을 모아 SessionRecord로 조립. completed 이후만(아니면 `conflict`) |
 | get_transcript_span | GET /transcript_span | 조회 | 워커 draft | 근거 메시지의 앞뒤 맥락(기본 앞 5·뒤 3). **리포트 표시용**이며 평가 판단 입력이 아니다 |
 | get_contributions | GET /contributions | 조회 | 워커 collect | 안별 최초 제안자·채택 여부(`contribution_check` 원천) |
-| save_evaluation | POST /internal/sessions/{id}/evaluations | 변경 | 워커 evaluate(코드 호출) | `{session_id, run_id, rubric_version, prompt_versions, model, dimensions[], elements[]}`(`prompt_versions`는 평가 프롬프트 파일별 개별 해시 맵, 형식 정본 [contracts/README.md](../contracts/README.md), R5-14). **멱등 키 `(session_id, run_id)`**: 같은 키 재호출은 저장하지 않고 `existing=true`와 기존 값. api가 차원 행과 `evaluation_runs` 한 행(요소 요약 `elements` 포함)을 한 트랜잭션으로 저장한다. 형식 위반은 `invalid_input` |
+| save_evaluation | POST /internal/sessions/{id}/evaluations | 변경 | 워커 evaluate(코드 호출) | `{session_id, run_id, rubric_version, prompt_versions, model, dimensions[], elements[]}`(`prompt_versions`는 평가 프롬프트 파일별 개별 해시 맵, 형식 정본 [contracts/README.md](../contracts/README.md)). **멱등 키 `(session_id, run_id)`**: 같은 키 재호출은 저장하지 않고 `existing=true`와 기존 값. api가 차원 행과 `evaluation_runs` 한 행(요소 요약 `elements` 포함)을 한 트랜잭션으로 저장한다. 형식 위반은 `invalid_input` |
 
-검증 책임(R5-14):
+검증 책임:
 
 | 검증 | 주체 | 위반 시 |
 |---|---|---|

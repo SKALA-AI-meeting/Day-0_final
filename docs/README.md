@@ -35,7 +35,7 @@ Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론해 키
 | 무엇 | 정본 | 따라 쓰는 곳 |
 |---|---|---|
 | 기획(목적·기능·원칙) | `PRD.md`(`PRD.html`은 `sh build/build.sh`로 생성) | 이 폴더 전체 |
-| 결정 이유와 대안 | [decisions.md](decisions.md) | 각 문서는 결정 ID(D·R)로 가리킨다 |
+| 결정 이유와 대안 | [decisions.md](decisions.md) | 각 문서는 현재 동작만 쓰고 필요할 때 decisions.md를 링크한다 |
 | 단계·시간·카드·페르소나·합의 규칙 | [product/scenario.md](product/scenario.md) | 계약은 필드만, 서비스 문서는 구현 위치만 |
 | 차원 id·앵커·기록 없음 사유·사실 지표·평가 판단 규칙 | [product/rubric.md](product/rubric.md) | 저장 형식은 contracts, 호출·복구는 services/report-worker |
 | 경로·필드·오류 코드·이벤트·도구 | [contracts/](contracts/README.md) | 예시 JSON은 `tests/fixtures/contracts/`(사본 `apps/web/mocks/fixtures/`) |
@@ -43,7 +43,10 @@ Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론해 키
 | 테이블과 컬럼 | [architecture/data-model.md](architecture/data-model.md) | DDL `infra/db/schema.sql` |
 | 하네스 8요소·역할별 모델 설정 | [architecture/harness.md](architecture/harness.md) | 코드 `roles.py` |
 | 역할별 데이터 파일·코드 입구 | [agents/](agents/manager.md)(역할 문서 5개) | 역할 폴더 README(`services/api/app/agent/<역할>/README.md`, 평가자는 `services/report-worker/README.md`) |
-| env 이름과 기본값 | `infra/.env.example`·각 서비스 `config.py` | [guides/configuration.md](guides/configuration.md)는 모드별 차이 |
+| env 이름·기본값·뜻 | `infra/.env.example` 주석·각 서비스 `config.py` | [guides/configuration.md](guides/configuration.md)는 모드별 차이와 읽는 곳 |
+| 실행 프로필 | [`infra/profiles/README.md`](../infra/profiles/README.md) | [guides/configuration.md](guides/configuration.md)는 해석 순서와 실행 모드 |
+| 음성 상태·오류·강제 차례 | [architecture/voice.md](architecture/voice.md) | 경로·필드·발언 길이·다시 말하기는 [contracts/voice.md](contracts/voice.md) |
+| 기능별 검증 테스트·알려진 제한 | [features.md](features.md) | 서비스 README의 생성 블록은 테스트 목록 |
 | 카탈로그 데이터 | `scenarios/missions/debate/` | 문서 표와 같은지 `make test`가 검사 |
 
 이름이 충돌하면 contracts(도구·이벤트·상태·경로) > data-model(테이블) > scenario(페르소나·카드) > rubric(평가) 순으로 따른다.
