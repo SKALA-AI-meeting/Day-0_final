@@ -610,6 +610,198 @@
   }
 }
 
+/*
+  화면 전환·등장(components/ui/motion.tsx). 토론 화면과 같은 결(ease-out, 떠오름·테두리 빛)로 다른 화면도 맞춘다.
+  정보를 한 번에 펼치지 않고 순서대로 들어오게 한다: .reveal은 --reveal-delay만큼 늦게 떠오른다.
+*/
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(3px);
+  }
+}
+.reveal {
+  animation: reveal 560ms var(--ease-out) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+/* 화면에 들어오기 전(RevealOnView). 인쇄에서는 보인다 */
+.reveal-wait {
+  opacity: 0;
+}
+/* 화면(단계) 전환: 앞으로 가면 오른쪽에서, 뒤로 가면 왼쪽에서 들어온다 */
+@keyframes screen-forward {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes screen-back {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+.screen-forward {
+  animation: screen-forward 520ms var(--ease-out) both;
+}
+.screen-back {
+  animation: screen-back 520ms var(--ease-out) both;
+}
+/* 체크포인트: 지난 단계 점은 체크가 그려지고, 지금 단계 점은 숨 쉬듯 빛난다 */
+.check-draw path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: check-draw 420ms var(--ease-out) forwards;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+@keyframes check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes checkpoint-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 45%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+.checkpoint-now {
+  animation: checkpoint-pulse 1.8s var(--ease-out) infinite;
+}
+.progress-fill {
+  transition: width 700ms var(--ease-out);
+}
+/* 새로 생긴 카드: 떠오르며 테두리가 한 번 빛난다(토론 화면 .split-enter와 같은 결) */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+.pop-in {
+  position: relative;
+  animation: pop-in 480ms var(--ease-out) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+.pop-in::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+  opacity: 0;
+  animation: split-ring 1100ms var(--ease-out) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+/* 접고 펴기: 높이를 0fr ↔ 1fr로 옮긴다(내용 높이를 몰라도 부드럽게) */
+.fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 420ms var(--ease-out),
+    opacity 300ms ease;
+}
+.fold[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.fold > * {
+  min-height: 0;
+  overflow: hidden;
+}
+/* 불러오는 중 자리표시: 옅은 빛이 지나간다 */
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+.shimmer {
+  background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--color-surface) 70%, transparent) 50%,
+      transparent 100%
+    )
+    var(--color-surface-sunken);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+/* 카드에 올리면 살짝 떠오른다(눌러 들어가는 목록 카드) */
+.lift {
+  transition:
+    transform 220ms var(--ease-out),
+    box-shadow 220ms var(--ease-out),
+    border-color 150ms ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-float);
+  border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-line));
+}
+/* 지원자·관리 화면 배경: 토론 화면 배경(.debate-backdrop)과 같은 번짐을 조금 더 옅게 */
+.page-backdrop {
+  background:
+    radial-gradient(
+      55% 45% at 0% 0%,
+      color-mix(in srgb, var(--color-accent) 8%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      45% 40% at 100% 100%,
+      color-mix(in srgb, var(--color-accent) 6%, transparent),
+      transparent 70%
+    ),
+    var(--color-canvas);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .screen-forward,
+  .screen-back,
+  .pop-in,
+  .pop-in::after,
+  .checkpoint-now,
+  .shimmer {
+    animation: none;
+  }
+  .check-draw path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .fold,
+  .progress-fill,
+  .lift {
+    transition: none;
+  }
+  .lift:hover {
+    transform: none;
+  }
+}
+@media print {
+  .reveal-wait,
+  .reveal,
+  .pop-in,
+  .screen-forward,
+  .screen-back {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+  .fold {
+    grid-template-rows: 1fr !important;
+    opacity: 1 !important;
+  }
+}
+
 /* 인쇄(리포트·전체 기록): 버튼·토글·링크 숨김, 접힌 소섹션은 화면 코드가 전부 펼친다 */
 @media print {
   /*

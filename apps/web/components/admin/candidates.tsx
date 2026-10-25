@@ -2,11 +2,24 @@
 
 // 채용 건 상세의 지원자 목록과 초대 폼. 상태 묶음 5종(필터 겸용), 요소별 수준 칩(합계·정렬 없음),
 // 확신도 low 차원 수, 출처, 실패 안내, 삭제 예정일, 링크 재발급과 재응시 초대를 구분한 행 액션.
-import { CircleAlert } from "lucide-react";
+import { ChevronDown, CircleAlert, CircleHelp, Copy, Link2 } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
-import { Button, Chip, cn, ConfirmDialog, EmptyState, Input, toast } from "@/components/ui";
+import {
+  Button,
+  Chip,
+  cn,
+  Collapse,
+  ConfirmDialog,
+  CountUp,
+  DrawnCheck,
+  EmptyState,
+  Input,
+  Reveal,
+  ScreenTransition,
+  toast,
+} from "@/components/ui";
 
 import { ELEMENT_SHORT, formatDateTime, PHASE_TEXT, purgeText } from "./format";
 import type { Candidate, DisplayGroup, InviteResult, PhaseId } from "./types";
@@ -102,16 +115,36 @@ type RowActions = {
 
 type Pending = { kind: "cancel" | "reissue" | "retake"; candidate: Candidate };
 
+// 카드 행의 칸 배치. 넓은 화면은 표처럼 한 줄, 좁은 화면은 위아래로 쌓인다
+const ROW_GRID =
+  "grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.35fr)_minmax(0,0.9fr)_8.5rem]";
+
+const GROUP_DOT: Record<DisplayGroup, string> = {
+  waiting: "bg-subtle",
+  in_progress: "bg-accent",
+  needs_review: "bg-warning",
+  done: "bg-success",
+  problem: "bg-danger",
+};
+
+/** 좁은 화면에서만 보이는 칸 이름(넓은 화면은 머리줄이 있다) */
+function CellLabel({ children }: { children: string }) {
+  return <span className="mb-1 block text-caption text-subtle lg:hidden">{children}</span>;
+}
+
 function Row({ c, onAsk, onRegenerate }: { c: Candidate } & RowActions) {
   const purge = purgeText(c.purge_at);
   return (
-    <tr className="align-top">
-      <td className="py-3 pr-4">
-        <div className="font-semibold break-all">{c.alias}</div>
+    <div className={cn(ROW_GRID, "rounded-xl border border-line bg-surface p-4 text-sm")}>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-semibold break-all">{c.alias}</span>
+          {c.previous_session_id && <Chip tone="outline">재응시</Chip>}
+        </div>
         <div className="text-sm break-all text-muted">{c.email}</div>
-        {c.previous_session_id && <Chip tone="outline">재응시</Chip>}
-      </td>
-      <td className="py-3 pr-4">
+      </div>
+      <div className="min-w-0">
+        <CellLabel>상태</CellLabel>
         <Chip tone={GROUP_TONE[c.display_group]}>{statusText(c)}</Chip>
         <div className="mt-1 flex flex-col text-xs text-muted tabular-nums">
           {c.started_at && <span>{formatDateTime(c.started_at)} 시작</span>}
@@ -122,17 +155,19 @@ function Row({ c, onAsk, onRegenerate }: { c: Candidate } & RowActions) {
           )}
           {c.reissued_at && <span>{formatDateTime(c.reissued_at)} 링크 재발급</span>}
         </div>
-      </td>
-      <td className="py-3 pr-4">
+      </div>
+      <div className="min-w-0">
+        <CellLabel>요소별 수준</CellLabel>
         <LevelChips c={c} />
-      </td>
-      <td className="py-3 pr-4 text-xs text-muted tabular-nums">
+      </div>
+      <div className="min-w-0 text-xs text-muted tabular-nums">
+        <CellLabel>기록</CellLabel>
         <div>메시지 {c.message_count}개</div>
         {c.last_activity_at && <div>마지막 활동 {formatDateTime(c.last_activity_at)}</div>}
         {purge && <div>{purge}</div>}
-      </td>
-      <td className="py-3">
-        <div className="flex flex-col items-end gap-1.5">
+      </div>
+      <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+        <div className="flex flex-wrap gap-1.5 lg:flex-col lg:items-end">
           {hasReport(c) && (
             <Link href={`/admin/sessions/${c.session_id}/report`}>
               <Button size="xs" variant={c.status === "report_ready" ? "primary" : "secondary"}>
@@ -174,10 +209,10 @@ function Row({ c, onAsk, onRegenerate }: { c: Candidate } & RowActions) {
           )}
         </div>
         {c.status === "failed" && c.next_action && (
-          <p className="mt-2 text-right text-xs text-danger">할 일 · {c.next_action}</p>
+          <p className="mt-2 text-xs text-danger lg:text-right">할 일 · {c.next_action}</p>
         )}
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
@@ -209,6 +244,15 @@ export type CandidateTableProps = {
   onRegenerate: (c: Candidate) => void;
 };
 
+const FILTERS: { id: DisplayGroup | "all"; label: string }[] = [
+  { id: "all", label: "전체" },
+  ...GROUPS,
+];
+
+/**
+ * 지원자 목록. 위 상태 칸(전체·대기·진행·검토 필요·완료·문제)이 개요 숫자이자 필터 토글이고,
+ * 필터를 바꾸면 목록이 그 방향으로 미끄러져 바뀌며 행이 차례로 떠오른다. 새로 초대한 행은 테두리가 한 번 빛난다.
+ */
 export function CandidateTable({
   candidates,
   onCancel,
@@ -218,72 +262,136 @@ export function CandidateTable({
 }: CandidateTableProps) {
   const [filter, setFilter] = useState<DisplayGroup | "all">("all");
   const [pending, setPending] = useState<Pending | null>(null);
+  const [help, setHelp] = useState(false);
+  // 처음 그릴 때 있던 행. 그 뒤에 생긴 행(새 초대·재응시)은 새 카드로 들어온다
+  const [initial] = useState(() => new Set(candidates.map((c) => c.session_id)));
 
   if (candidates.length === 0) {
-    return <EmptyState title="아직 초대한 지원자가 없습니다" />;
+    return (
+      <div className="rounded-xl border border-dashed border-line bg-surface">
+        <EmptyState
+          title="아직 초대한 지원자가 없습니다"
+          description="위에서 별칭과 이메일을 넣어 초대 링크를 만들어 보세요."
+        />
+      </div>
+    );
   }
-  const count = (g: DisplayGroup) => candidates.filter((c) => c.display_group === g).length;
+  const count = (g: DisplayGroup | "all") =>
+    g === "all" ? candidates.length : candidates.filter((c) => c.display_group === g).length;
   const groups = GROUPS.filter((g) => filter === "all" || g.id === filter);
+  // 보이는 행의 차례(묶음을 넘어 이어서 센다)
+  const order = new Map(
+    groups
+      .flatMap((g) => candidates.filter((c) => c.display_group === g.id))
+      .map((c, i) => [c.session_id, i]),
+  );
 
   return (
     <div className="flex flex-col gap-4">
-      <div role="group" aria-label="상태 필터" className="flex flex-wrap gap-1.5">
-        {[{ id: "all" as const, label: "전체" }, ...GROUPS].map((g) => (
-          <button
-            key={g.id}
-            type="button"
-            aria-pressed={filter === g.id}
-            onClick={() => setFilter(g.id)}
-            className={cn(
-              "rounded-md border px-2.5 py-1 text-sm",
-              filter === g.id
-                ? "border-accent bg-accent-soft text-accent-strong"
-                : "border-line bg-surface text-muted hover:bg-surface-sunken",
-            )}
-          >
-            {g.label}{" "}
-            <span className="tabular-nums">{g.id === "all" ? candidates.length : count(g.id)}</span>
-          </button>
-        ))}
-      </div>
-      <div className="text-sm text-muted">
-        <p>요소별 수준은 1~5 요약입니다. 목록은 수준이 아니라 초대한 순서로 보입니다.</p>
-        <p>{REISSUE_HELP}</p>
-        <p>{RETAKE_HELP}</p>
-      </div>
-      {groups.map((g) => {
-        const rows = candidates.filter((c) => c.display_group === g.id);
-        if (rows.length === 0) {
-          return filter === "all" ? null : (
-            <EmptyState key={g.id} title={`${g.label} 지원자 없음`} />
+      <div role="group" aria-label="상태 필터" className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {FILTERS.map((g, i) => {
+          const on = filter === g.id;
+          return (
+            <Reveal key={g.id} index={i} step={60}>
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => setFilter(g.id)}
+                className={cn(
+                  "press flex w-full flex-col items-start gap-0.5 rounded-xl border px-3 py-2 text-left transition-[background-color,border-color,color] duration-200",
+                  on
+                    ? "border-accent bg-accent-soft text-accent-strong"
+                    : "border-line bg-surface text-muted hover:border-accent/40 hover:text-ink",
+                )}
+              >
+                <span className="inline-flex items-center gap-1.5 text-footnote">
+                  {g.id !== "all" && (
+                    <span aria-hidden className={cn("size-1.5 rounded-full", GROUP_DOT[g.id])} />
+                  )}
+                  {g.label}
+                </span>
+                <span className="text-title3 font-semibold text-ink">
+                  <CountUp value={count(g.id)} />
+                </span>
+              </button>
+            </Reveal>
           );
-        }
-        return (
-          <section key={g.id} className="flex flex-col gap-1">
-            <h3 className="text-sm font-semibold text-muted">
-              {g.label} <span className="tabular-nums">{rows.length}</span>
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] table-fixed border-y border-line text-left text-sm">
-                <thead className="text-xs text-muted">
-                  <tr className="border-b border-line">
-                    <th className="py-2 w-[20%] font-medium">지원자</th>
-                    <th className="py-2 w-[20%] font-medium">상태</th>
-                    <th className="py-2 w-[26%] font-medium">요소별 수준</th>
-                    <th className="py-2 w-[18%] font-medium">기록</th>
-                    <th className="py-2 text-right font-medium">할 수 있는 일</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {rows.map((c) => (
-                    <Row key={c.session_id} c={c} onAsk={setPending} onRegenerate={onRegenerate} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        );
-      })}
+        })}
+      </div>
+      <div className="flex flex-col gap-1 text-sm text-muted">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p>요소별 수준은 1~5 요약입니다. 목록은 수준이 아니라 초대한 순서로 보입니다.</p>
+          <button
+            type="button"
+            aria-expanded={help}
+            onClick={() => setHelp((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-footnote text-accent hover:bg-accent-soft"
+          >
+            <CircleHelp aria-hidden className="size-3.5" />
+            버튼 안내
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                "size-3.5 transition-transform duration-300 motion-reduce:transition-none",
+                help && "rotate-180",
+              )}
+            />
+          </button>
+        </div>
+        <Collapse open={help}>
+          <div className="mt-1 flex flex-col gap-1 rounded-lg bg-surface-sunken px-3 py-2">
+            <p>{REISSUE_HELP}</p>
+            <p>{RETAKE_HELP}</p>
+          </div>
+        </Collapse>
+      </div>
+      <ScreenTransition
+        id={filter}
+        order={FILTERS.findIndex((f) => f.id === filter)}
+        className="flex flex-col gap-5"
+      >
+        {/* 넓은 화면의 머리줄 */}
+        <div aria-hidden className={cn(ROW_GRID, "hidden px-4 text-xs text-muted lg:grid")}>
+          <span>지원자</span>
+          <span>상태</span>
+          <span>요소별 수준</span>
+          <span>기록</span>
+          <span className="text-right">할 수 있는 일</span>
+        </div>
+        {groups.map((g) => {
+          const rows = candidates.filter((c) => c.display_group === g.id);
+          if (rows.length === 0) {
+            return filter === "all" ? null : (
+              <div key={g.id} className="rounded-xl border border-dashed border-line bg-surface">
+                <EmptyState title={`${g.label} 지원자 없음`} />
+              </div>
+            );
+          }
+          return (
+            <section key={g.id} aria-label={`${g.label} 지원자`} className="flex flex-col gap-2">
+              <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted">
+                <span aria-hidden className={cn("size-1.5 rounded-full", GROUP_DOT[g.id])} />
+                {g.label} <span className="tabular-nums">{rows.length}</span>
+              </h3>
+              <ul className="flex flex-col gap-2">
+                {rows.map((c) => (
+                  <Reveal
+                    as="li"
+                    key={c.session_id}
+                    kind={initial.has(c.session_id) ? "reveal" : "pop"}
+                    delay={
+                      initial.has(c.session_id) ? 120 + (order.get(c.session_id) ?? 0) * 60 : 0
+                    }
+                    className="rounded-xl"
+                  >
+                    <Row c={c} onAsk={setPending} onRegenerate={onRegenerate} />
+                  </Reveal>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+      </ScreenTransition>
       <ConfirmDialog
         open={pending != null}
         onOpenChange={(open) => !open && setPending(null)}
@@ -312,22 +420,31 @@ async function copy(text: string, what: string) {
   }
 }
 
-/** 초대·재발급·재응시 응답의 링크와 안내 문안(발송하지 않고 복사) */
+/** 초대·재발급·재응시 응답의 링크와 안내 문안(발송하지 않고 복사). 새로 생기면 테두리가 한 번 빛난다 */
 export function InviteResultBox({ title, result }: { title: string; result: InviteResult }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
-      <p className="text-sm">
-        <b className="font-semibold">{title}</b>
-        <span className="text-muted">
-          {" "}
-          · 자동 발송 없음, 복사해서 전달 · {formatDateTime(result.expires_at)} 만료
+    <div
+      key={result.invite_url + result.expires_at}
+      className="pop-in flex flex-col gap-3 rounded-xl border border-line bg-surface p-4"
+    >
+      <p className="flex items-start gap-2 text-sm">
+        <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
+          <DrawnCheck size={12} delay={200} />
+        </span>
+        <span>
+          <b className="font-semibold">{title}</b>
+          <span className="text-muted">
+            {" "}
+            · 자동 발송 없음, 복사해서 전달 · {formatDateTime(result.expires_at)} 만료
+          </span>
         </span>
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <code className="min-w-0 flex-1 rounded-md bg-surface-sunken px-3 py-2 text-sm break-all">
+        <code className="min-w-0 flex-1 basis-60 rounded-md bg-surface-sunken px-3 py-2 text-sm break-all">
           {result.invite_url}
         </code>
         <Button size="sm" variant="secondary" onClick={() => void copy(result.invite_url, "링크")}>
+          <Copy aria-hidden className="size-3.5" />
           링크 복사
         </Button>
         <Button
@@ -360,8 +477,8 @@ export function InviteForm({ takenAliases, pending, error, onInvite }: InviteFor
     onInvite({ alias: alias.trim(), email: email.trim() });
   };
   return (
-    <form className="flex flex-col gap-4" onSubmit={submit}>
-      <div className="grid gap-4 md:grid-cols-2">
+    <form className="flex flex-col gap-3" onSubmit={submit}>
+      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-start">
         <Input
           label="별칭"
           value={alias}
@@ -378,17 +495,17 @@ export function InviteForm({ takenAliases, pending, error, onInvite }: InviteFor
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-      </div>
-      {error && (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      )}
-      <div>
-        <Button type="submit" loading={pending} disabled={duplicate}>
+        {/* 라벨 줄 높이만큼 내려 입력 칸과 줄을 맞춘다 */}
+        <Button type="submit" loading={pending} disabled={duplicate} className="md:mt-[1.6rem]">
+          <Link2 aria-hidden className="size-4" />
           초대 링크 만들기
         </Button>
       </div>
+      {error && (
+        <p role="alert" className="pop-in rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

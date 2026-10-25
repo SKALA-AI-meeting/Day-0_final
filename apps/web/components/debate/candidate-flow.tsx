@@ -4,7 +4,7 @@
 // 재입장은 GET /s/{token}의 status로 갈린다: invited → 입장, in_progress → resume, 종료 뒤 → 디브리핑.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-import { Toaster } from "@/components/ui";
+import { Skeleton, Toaster } from "@/components/ui";
 import { api, ApiError, MOCK } from "@/lib/api";
 
 import { DebateView } from "./debate-view";
@@ -13,6 +13,7 @@ import {
   ConsentScreen,
   DesktopNotice,
   EntryScreen,
+  FlowFrame,
   LinkNotice,
   VOICE_ENABLED,
   WaitingScreen,
@@ -124,6 +125,11 @@ export function CandidateFlow({ token }: { token: string }) {
     void load();
   }, [load]);
 
+  // 단계가 바뀌면 새 화면을 맨 위에서 시작한다(앞 화면의 스크롤 위치를 끌고 오지 않음)
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [stage.kind]);
+
   const refreshToken = useCallback(async () => {
     try {
       const res = await api<TokenResponse>(`/s/${token}/resume`, { method: "POST" });
@@ -138,7 +144,19 @@ export function CandidateFlow({ token }: { token: string }) {
   let screen: ReactNode = null;
   switch (stage.kind) {
     case "loading":
-      screen = <div className="min-h-dvh" aria-busy />;
+      screen = (
+        <FlowFrame>
+          <div
+            className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center gap-4 px-6 py-16"
+            aria-busy
+          >
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-9 w-64" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        </FlowFrame>
+      );
       break;
     case "notice":
       screen = (
@@ -271,6 +289,20 @@ export function CandidateFlow({ token }: { token: string }) {
   // 토론 화면은 데스크톱 폭 전용이라 시작 전 화면에서 미리 안내한다
   if (narrow && (stage.kind === "entry" || stage.kind === "consent" || stage.kind === "waiting"))
     screen = <DesktopNotice />;
+  // 시작 전·마무리 화면은 같은 틀(상단 체크포인트) 안에서 본문만 바뀐다. 본문은 key로 새로 그려져 미끄러져 들어온다
+  else if (
+    stage.kind === "entry" ||
+    stage.kind === "consent" ||
+    stage.kind === "waiting" ||
+    stage.kind === "debrief"
+  )
+    screen = (
+      <FlowFrame current={stage.kind} done={stage.kind === "debrief"}>
+        <div key={stage.kind} className="flex flex-1 flex-col">
+          {screen}
+        </div>
+      </FlowFrame>
+    );
 
   return (
     <>

@@ -2,12 +2,14 @@
 
 // 리포트 화면. 검토 제출 뒤에는 final이 될 때까지 폴링하고, 오래 끝나지 않으면 같은 본문으로 확정만 다시 시도한다.
 // 주소에 ?print=1이면 인쇄 미리보기(차원 전부 펼침)로 그린다.
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
 import { adminApi, errorMessage, useLoad, useToken } from "@/components/admin/client";
 import { ReportFailed } from "@/components/admin/report-failed";
+import { ReportGenerating, ReportSkeleton } from "@/components/admin/report-loading";
 import { ReportView } from "@/components/admin/report-view";
 import {
   phaseOf,
@@ -106,21 +108,28 @@ function ReportPageBody() {
 
   return (
     <>
-      <div className="no-print mx-auto flex w-full max-w-3xl items-center gap-3 text-sm text-muted">
-        <Link href="/admin/positions" className="hover:underline">
-          ← 채용 건 목록
+      <div className="no-print reveal mx-auto flex w-full max-w-5xl items-center gap-3 text-sm text-muted">
+        <Link
+          href="/admin/positions"
+          className="inline-flex items-center gap-1 rounded-md px-1 hover:text-ink"
+        >
+          <ArrowLeft aria-hidden className="size-4" />
+          채용 건 목록
         </Link>
-        <Link href={`/admin/sessions/${id}/record`} className="ml-auto hover:underline">
+        <Link
+          href={`/admin/sessions/${id}/record`}
+          className="ml-auto inline-flex items-center gap-1 rounded-md px-1 hover:text-ink"
+        >
           전체 기록 보기
+          <ArrowRight aria-hidden className="size-4" />
         </Link>
       </div>
-      {screen === "generating" && (
-        <p role="status" className="mx-auto w-full max-w-3xl text-muted">
-          리포트를 만드는 중입니다. 준비되면 이 화면에 바로 나타납니다.
-        </p>
-      )}
+      {screen === "generating" && <ReportGenerating />}
       {missing && (
-        <p role="status" className="mx-auto w-full max-w-3xl text-muted">
+        <p
+          role="status"
+          className="reveal mx-auto w-full max-w-3xl rounded-xl border border-dashed border-line px-5 py-8 text-center text-muted"
+        >
           이 지원자의 리포트가 아직 없습니다.
         </p>
       )}
@@ -136,13 +145,17 @@ function ReportPageBody() {
         screen !== "failed" &&
         screen !== "missing" &&
         !(screen === "generating" && !reportTransient(error, code)) && (
-          <div role="alert" className="flex items-center gap-3 text-danger">
+          <div
+            role="alert"
+            className="pop-in mx-auto flex w-full max-w-3xl flex-wrap items-center gap-3 rounded-xl bg-danger-soft px-4 py-3 text-danger"
+          >
             <span>{error}</span>
-            <Button size="sm" variant="secondary" onClick={reload}>
+            <Button size="sm" variant="secondary" onClick={reload} className="ml-auto">
               다시 불러오기
             </Button>
           </div>
         )}
+      {screen === "empty" && !error && <ReportSkeleton />}
       {report && screen === "report" && (
         <ReportView
           report={report}

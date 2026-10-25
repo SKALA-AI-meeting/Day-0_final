@@ -10,7 +10,12 @@ export default function SampleRecordPage() {
   const report = sample as unknown as Report;
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-      <h1 className="text-title1 font-bold">전체 기록 (샘플)</h1>
+      <header className="reveal flex flex-col gap-1">
+        <p className="text-sm text-muted">{report.position.name}</p>
+        <h1 className="text-title1 font-bold">
+          전체 기록 <span className="text-muted">· 샘플</span>
+        </h1>
+      </header>
       <RecordView
         entries={record as RecordEntry[]}
         seats={report.seats}

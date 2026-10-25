@@ -3,10 +3,21 @@
 // 디브리핑: 한 열 문서. R1 첫 문장 → 이의 제기 경로 → 제출 확인 → 설문 → 결과를 보이지 않는 이유·기업이 보는 것·보관 →
 // 장면(카드) 설명 → 보는 요소 → 내 발언 돌아보기(접힘) → AI 동료 소개(여기서 처음 성향이 드러난다) → 기획안 열람(접힘).
 // 척도 세부·수준은 보이지 않는다.
-import { ChevronRight, CircleCheck, Copy } from "lucide-react";
+// 머리(체크가 그려지는 완료 표시)가 먼저 떠오르고, 개요(구역으로 가는 카드)가 차례로 들어온 뒤, 아래 구역은
+// 스크롤해 화면에 들어올 때마다 떠오른다.
+import { AlertTriangle, ChevronRight, CircleCheck, Copy } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { Avatar, Button, Wordmark, cn, toast } from "@/components/ui";
+import {
+  Avatar,
+  Button,
+  CountUp,
+  DrawnCheck,
+  Reveal,
+  RevealOnView,
+  cn,
+  toast,
+} from "@/components/ui";
 
 import { SECTION_META } from "./proposal-editor";
 import { PHASE_LABEL, officeTime } from "./state";
@@ -22,15 +33,22 @@ export function Section({
   title,
   children,
   collapsed,
+  id,
 }: {
   title: string;
   children: ReactNode;
   /** 긴 본문은 접어 두고 제목을 눌러 연다 */
   collapsed?: boolean;
+  /** 개요 카드에서 건너오는 구역 id */
+  id?: string;
 }) {
   if (collapsed)
     return (
-      <details className="group flex flex-col gap-4 border-t border-line pt-8">
+      <RevealOnView
+        as="details"
+        id={id}
+        className="group flex scroll-mt-20 flex-col gap-4 rounded-xl border border-line bg-surface p-6"
+      >
         <summary className="flex cursor-pointer list-none items-center gap-2 text-title2 font-semibold [&::-webkit-details-marker]:hidden">
           <ChevronRight
             size={18}
@@ -44,13 +62,17 @@ export function Section({
           </span>
         </summary>
         <div className="mt-4 flex flex-col gap-4">{children}</div>
-      </details>
+      </RevealOnView>
     );
   return (
-    <section className="flex flex-col gap-4 border-t border-line pt-8">
+    <RevealOnView
+      as="section"
+      id={id}
+      className="flex scroll-mt-20 flex-col gap-4 rounded-xl border border-line bg-surface p-6"
+    >
       <h2 className="text-title2 font-semibold">{title}</h2>
       {children}
-    </section>
+    </RevealOnView>
   );
 }
 
@@ -80,7 +102,7 @@ function Scale({
           disabled={disabled}
           onClick={() => onChange(n)}
           className={cn(
-            "w-12 rounded-[calc(var(--radius-md)-2px)] py-1.5 text-body tabular-nums",
+            "press w-12 rounded-[calc(var(--radius-md)-2px)] py-1.5 text-body tabular-nums transition-colors duration-200",
             value === n
               ? "border border-accent bg-accent-soft font-semibold text-accent"
               : "border border-transparent text-ink hover:bg-surface",
@@ -104,12 +126,32 @@ function Survey({
   const [comment, setComment] = useState("");
   const [done, setDone] = useState(survey.submitted);
   const [pending, setPending] = useState(false);
-  if (done) return <p className="text-muted">설문에 답해 주셔서 고마워요.</p>;
+  if (done)
+    return (
+      <p className="pop-in flex items-center gap-2 rounded-md bg-success-soft px-4 py-3 text-body text-ink">
+        <span className="flex size-5 items-center justify-center rounded-full bg-success text-on-accent">
+          <DrawnCheck size={12} />
+        </span>
+        설문에 답해 주셔서 고마워요.
+      </p>
+    );
+  const answered = Object.keys(answers).length + (comment.trim() ? 1 : 0);
   return (
     <div className="flex flex-col gap-5">
-      {survey.questions.map((q) =>
+      <div className="flex items-center gap-3" aria-hidden>
+        <div className="h-1 flex-1 overflow-hidden rounded-full bg-line">
+          <div
+            className="progress-fill h-full rounded-full bg-accent"
+            style={{ width: `${(answered / Math.max(1, survey.questions.length)) * 100}%` }}
+          />
+        </div>
+        <span className="text-caption text-muted tabular-nums">
+          {answered} / {survey.questions.length}
+        </span>
+      </div>
+      {survey.questions.map((q, i) =>
         q.kind === "scale" ? (
-          <div key={q.q} className="flex flex-col gap-2">
+          <Reveal key={q.q} index={i} className="flex flex-col gap-2">
             <p className="text-body">{q.text}</p>
             <Scale
               label={q.text}
@@ -118,9 +160,9 @@ function Survey({
               onChange={(value) => setAnswers((prev) => ({ ...prev, [q.q]: value }))}
             />
             <p className="text-caption text-muted">1 전혀 아니다 · 5 매우 그렇다</p>
-          </div>
+          </Reveal>
         ) : (
-          <label key={q.q} className="flex flex-col gap-2">
+          <Reveal as="label" key={q.q} index={i} className="flex flex-col gap-2">
             <span className="text-body">{q.text}</span>
             <textarea
               rows={3}
@@ -129,7 +171,7 @@ function Survey({
               onChange={(event) => setComment(event.target.value)}
               className="resize-none rounded-md border border-subtle bg-surface px-3 py-2 text-body outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30"
             />
-          </label>
+          </Reveal>
         ),
       )}
       <p className="text-caption text-muted">모든 문항은 건너뛸 수 있고, 한 번만 보낼 수 있어요.</p>
@@ -169,38 +211,105 @@ export function DebriefScreen({
   // 결과를 보이지 않는다는 첫 문장은 머리 안내에도 올리고, "평가와 기록"에는 전체 문구를 그대로 둔다
   const [scoringFirst] = introSentences(debrief.scoring_notice);
   const elementName = new Map(debrief.elements?.map((e) => [e.element, e]) ?? []);
+  const overview = failed
+    ? []
+    : [
+        { id: "debrief-survey", label: "종료 설문", count: debrief.survey.questions.length },
+        { id: "debrief-cards", label: "이번 세션의 장면", count: debrief.cards?.length ?? 0 },
+        { id: "debrief-elements", label: "보는 요소", count: debrief.elements?.length ?? 0 },
+        { id: "debrief-mine", label: "내 발언", count: debrief.my_messages?.length ?? 0 },
+        {
+          id: "debrief-seats",
+          label: "함께한 AI 동료",
+          count: debrief.seats?.filter((s) => s.seat !== "candidate").length ?? 0,
+        },
+      ].filter((item) => item.count > 0);
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-8 px-6 py-16">
-      <Wordmark className="h-5 self-start" />
-      <header className="flex flex-col gap-3">
-        <h1 className="text-large font-bold">{failed ? "세션이 중단됐어요" : "수고하셨습니다"}</h1>
+    <div className="screen-forward mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-12 sm:px-6">
+      <header className="flex flex-col gap-4">
+        <Reveal className="flex items-center gap-4">
+          <span
+            className={cn(
+              "pop-in flex size-12 shrink-0 items-center justify-center rounded-full",
+              failed ? "bg-warning-soft text-warning" : "bg-success text-on-accent",
+            )}
+          >
+            {failed ? (
+              <AlertTriangle size={22} aria-hidden />
+            ) : (
+              <DrawnCheck size={24} delay={260} />
+            )}
+          </span>
+          <h1 className="text-large font-bold tracking-tight">
+            {failed ? "세션이 중단됐어요" : "수고하셨습니다"}
+          </h1>
+        </Reveal>
         {endReason === "submitted" && !failed && (
-          <p className="flex items-center gap-2 rounded-md bg-success-soft px-4 py-3 text-callout font-semibold text-ink">
+          <Reveal
+            as="p"
+            index={1}
+            className="flex items-center gap-2 rounded-md bg-success-soft px-4 py-3 text-callout font-semibold text-ink"
+          >
             <CircleCheck size={16} className="shrink-0 text-success" aria-hidden />
             기획안을 제출했어요. 제출한 기획안은 아래에서 다시 볼 수 있어요.
-          </p>
+          </Reveal>
         )}
         {endReason === "timeout" && !failed && (
-          <p className="text-callout text-muted">시간이 끝나 지금 상태로 제출됐어요.</p>
+          <Reveal as="p" index={1} className="text-callout text-muted">
+            시간이 끝나 지금 상태로 제출됐어요.
+          </Reveal>
         )}
         {/* 첫 문장(R1 고정)은 따로 한 줄로 두고, 이어지는 설명은 다음 문단으로 */}
-        {introSentences(debrief.intro_notice).map((sentence) => (
-          <p key={sentence} className="text-callout leading-relaxed">
+        {introSentences(debrief.intro_notice).map((sentence, i) => (
+          <Reveal
+            as="p"
+            key={sentence}
+            delay={320 + i * 160}
+            className="text-callout leading-relaxed"
+          >
             {sentence}
-          </p>
+          </Reveal>
         ))}
-        {!failed && <p className="text-body text-muted">{scoringFirst}</p>}
-        <p className="text-body text-muted">{debrief.appeal_contact}</p>
+        {!failed && (
+          <Reveal as="p" delay={640} className="text-body text-muted">
+            {scoringFirst}
+          </Reveal>
+        )}
+        <Reveal as="p" delay={720} className="text-body text-muted">
+          {debrief.appeal_contact}
+        </Reveal>
       </header>
 
+      {overview.length > 0 && (
+        <nav aria-label="마무리 개요" className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {overview.map((item, i) => (
+            <Reveal
+              as="a"
+              key={item.id}
+              href={`#${item.id}`}
+              delay={860 + i * 90}
+              className="lift press flex flex-col gap-1 rounded-xl border border-line bg-surface px-4 py-3"
+            >
+              <span className="text-title2 font-semibold text-accent">
+                <CountUp value={item.count} />
+              </span>
+              <span className="text-footnote text-muted">{item.label}</span>
+            </Reveal>
+          ))}
+        </nav>
+      )}
+
       {failed ? (
-        <>
+        <Reveal
+          delay={860}
+          className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-6"
+        >
           <p className="text-body">담당자가 새 링크를 보낼 수 있습니다. {debrief.scoring_notice}</p>
           <p className="text-footnote text-muted">문의: {debrief.contact_email}</p>
-        </>
+        </Reveal>
       ) : (
         <>
-          <Section title="종료 설문 (건너뛰어도 돼요)">
+          <Section id="debrief-survey" title="종료 설문 (건너뛰어도 돼요)">
             <Survey survey={debrief.survey} onSubmit={onSurvey} />
           </Section>
           <Section title="평가와 기록">
@@ -215,7 +324,7 @@ export function DebriefScreen({
           </Section>
 
           {!!debrief.cards?.length && (
-            <Section title="이번 세션의 장면">
+            <Section id="debrief-cards" title="이번 세션의 장면">
               <ul className="flex flex-col divide-y divide-line">
                 {debrief.cards.map((card) => {
                   const element = elementName.get(card.element);
@@ -235,7 +344,7 @@ export function DebriefScreen({
           )}
 
           {!!debrief.elements?.length && (
-            <Section title="보는 요소">
+            <Section id="debrief-elements" title="보는 요소">
               <ul className="flex flex-col divide-y divide-line">
                 {debrief.elements.map((e) => (
                   <li key={e.element} className="flex flex-col gap-0.5 py-3 first:pt-0">
@@ -248,7 +357,7 @@ export function DebriefScreen({
           )}
 
           {!!debrief.my_messages?.length && (
-            <Section title="내 발언 돌아보기" collapsed>
+            <Section id="debrief-mine" title="내 발언 돌아보기" collapsed>
               <ul className="flex flex-col gap-4">
                 {debrief.my_messages.map((m) => (
                   <li key={m.id} className="flex flex-col items-end gap-1">
@@ -265,7 +374,7 @@ export function DebriefScreen({
           )}
 
           {!!debrief.seats?.length && (
-            <Section title="함께한 AI 동료">
+            <Section id="debrief-seats" title="함께한 AI 동료">
               <ul className="flex flex-col divide-y divide-line">
                 {debrief.seats
                   .filter((s) => s.seat !== "candidate")
@@ -323,6 +432,6 @@ export function DebriefScreen({
           )}
         </>
       )}
-    </main>
+    </div>
   );
 }
