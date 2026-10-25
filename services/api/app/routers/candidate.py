@@ -65,7 +65,7 @@ def entry_notice(minutes: int, contact: str, voice_enabled: bool = True) -> str:
         + "기획안은 혼자 작성해 제출합니다. "
         "토론 결과가 내 제안과 다를 수 있고, 안의 질이 아니라 과정의 태도를 봅니다. "
         "연결이 끊겨도 시간은 흐릅니다. 외부 도구는 막지 않지만 안의 AI 어시스턴트 요청·응답은 "
-        f"사실로 기록되며, AI가 평가 수준을 매기지 않습니다. 문의: {contact}"
+        f"사실로 기록되며, AI 어시스턴트는 평가에 관여하지 않습니다. 문의: {contact}"
     )
 
 

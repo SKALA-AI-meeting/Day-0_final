@@ -79,7 +79,7 @@ empty ──지원자 확정 / AI 합의 채우기 / api 시간 초과 채우기
 | 단계 | 호출 | 상태 | 토큰 |
 |---|---|---|---|
 | 초대 생성 | 관리자 POST /admin/positions/{id}/invites | sessions 행이 `invited`로 함께 생성됨 | 초대 토큰(링크에만, DB에는 해시) |
-| 링크 입장 | GET /s/{token} | 응답에 `session_id`·`default_display_name`(초대 별칭, 표시 이름 기본값) 포함. 시작 전 만료(72h) → 410 `expired`, 취소 → 410 `cancelled`. completed 이후·failed → 200에 `status`·`session_id`·`debrief_token`(디브리핑·제출본 열람·설문만, `ended_at` 후 7일). 입장 화면 고정 안내(`entry_notice`, 문구는 PRD): 60분 연속 진행·중간 휴식 없음·PC 권장·AI 동료 3명과 채팅으로 키워드 → 문제 상황 → 해결책을 정하고 기획안을 혼자 써서 제출·**토론 결과가 내 제안과 다를 수 있고 안의 질이 아니라 과정의 태도를 본다**·끊겨도 시간은 흐름·외부 도구는 막지 않되 안의 AI 어시스턴트 요청·응답은 사실로 기록되고 AI가 평가 수준을 매기지 않음·문의 창구 | 없음 |
+| 링크 입장 | GET /s/{token} | 응답에 `session_id`·`default_display_name`(초대 별칭, 표시 이름 기본값) 포함. 시작 전 만료(72h) → 410 `expired`, 취소 → 410 `cancelled`. completed 이후·failed → 200에 `status`·`session_id`·`debrief_token`(디브리핑·제출본 열람·설문만, `ended_at` 후 7일). 입장 화면 고정 안내(`entry_notice`, 문구는 PRD): 60분 연속 진행·중간 휴식 없음·PC 권장·AI 동료 3명과 채팅으로 키워드 → 문제 상황 → 해결책을 정하고 기획안을 혼자 써서 제출·**토론 결과가 내 제안과 다를 수 있고 안의 질이 아니라 과정의 태도를 본다**·끊겨도 시간은 흐름·외부 도구는 막지 않되 안의 AI 어시스턴트 요청·응답은 사실로 기록되고 AI 어시스턴트는 평가에 관여하지 않음·문의 창구 | 없음 |
 | 동의 | POST /s/{token}/consent {display_name?} | `consented_at`·`sessions.display_name` 기록(비우면 별칭, 시작 뒤에는 바꾸지 않음) | `{session_token, session_id}`. 세션 JWT 만료 = now + session_minutes + 120분 |
 | 시작 전 조회 | GET /sessions/{id}/state (Bearer) | 동의 뒤 시작 전(status invited)에도 허용: 참여자 이름·아바타, 단계 예산, 빈 칸·빈 메시지(시계 값은 null) | 같은 JWT |
 | 시작 | POST /s/{token}/start (Bearer) | `in_progress`, `phase=keyword`, started_at·ends_at·phase_deadline_at 확정, 칸 3행(empty)·기획안 초안 행 생성, 첫 시스템 안내 메시지 저장, `phase_started` 자극 enqueue. 시작 시점에 초대가 만료됐으면 410 `expired` | 같은 JWT |
