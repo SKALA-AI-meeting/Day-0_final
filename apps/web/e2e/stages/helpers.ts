@@ -168,15 +168,12 @@ export async function tab(page: Page, label: string): Promise<void> {
   const inLibrary = label === "자료" || label === "AI 어시스턴트";
   const area = inLibrary ? LIBRARY : label;
   const region = page.getByRole("region", { name: area, exact: true });
-  await expect(page.getByRole("group", { name: "영역 보이기" })).toBeVisible();
-  await expect(
-    region.or(page.getByRole("group", { name: "영역 보이기" }).getByRole("button", { name: area })),
-  ).toBeVisible();
+  const toggles = page.getByRole("group", { name: "영역 보이기" });
+  await expect(toggles).toBeVisible();
+  // 영역이 이미 보이면 그대로 쓰고, 아니면 상단 바 토글로 연다(영역과 토글을 or로 묶으면 둘 다 보일 때
+  // strict mode 위반이 난다). 토글 이름에는 "새 소식 N"이 붙을 수 있어 앞부분으로 찾는다
   if (!(await region.isVisible())) {
-    await page
-      .getByRole("group", { name: "영역 보이기" })
-      .getByRole("button", { name: area })
-      .click();
+    await toggles.getByRole("button", { name: area }).click();
   }
   await expect(region).toBeVisible();
   if (inLibrary) await region.getByRole("tab", { name: label }).click();

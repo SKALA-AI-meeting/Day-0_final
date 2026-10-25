@@ -106,14 +106,18 @@ endif
 measure:         ## [제한키·과금] 가상 지원자 15분 세션 1회(실 스택·실 모델): make measure PROFILE=eval-text MODE=scripted|autonomous ALLOW_API=1. 기록 tests/e2e/records/virtual/. 판정은 별도(docs/guides/testing.md "귀속 판정")
 	$(EXEC) --starting --need real -- uv run --project services/api python tests/eval/virtual_candidate/drive.py --mode $(or $(MODE),scripted)
 
-e2e:             ## [프로필 따라] 실 스택 e2e: make e2e SUITE=flow|auth|faults|stages PROFILE=… flow(기본): 대본 1회(SCRIPT=all_five). auth: 단언 8. faults: 장애 주입(가짜 LLM 전용, 인프라만). stages: Playwright 단계별 화면(STAGE=entry|…; test-text 권장)
+e2e:             ## [프로필 따라] 실 스택 e2e: make e2e SUITE=flow|auth|faults|stages PROFILE=… flow(기본): 대본 1회(SCRIPT=all_five). auth: 단언 8. faults: 장애 주입(가짜 LLM 전용, 인프라만). stages: Playwright 단계별 화면(STAGE=entry|…; test-text 권장, STAGE_RUNNER=docker면 Playwright 공식 이미지 안에서)
 ifeq ($(or $(SUITE),flow),auth)
 	$(EXEC) --starting -- uv run --project services/api python tests/e2e/run.py --auth
 else ifeq ($(or $(SUITE),flow),faults)
 	$(EXEC) --starting --need fake -- uv run --project services/api python tests/e2e/run.py --faults all
 else ifeq ($(or $(SUITE),flow),stages)
 	@[ "$(call pget,LLM_MODE)" != "live" ] || echo "실제 LLM 프로필: 결정적 LLM 문장에 맞춘 단언은 실제 모델에서 달라질 수 있다"
+ifeq ($(STAGE_RUNNER),docker)
+	$(EXEC) --starting -- env PROFILE=$(PROFILE) sh scripts/stage_e2e_docker.sh $(STAGE)
+else
 	$(EXEC) --starting -- sh -c 'cd apps/web && pnpm exec playwright test $(STAGE)'
+endif
 else
 	$(EXEC) --starting -- uv run --project services/api python tests/e2e/run.py --script $(or $(SCRIPT),all_five)
 endif

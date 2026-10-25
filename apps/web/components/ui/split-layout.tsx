@@ -174,14 +174,17 @@ function itemStyle(hidden: boolean, weight: number, mode: PaneModes[string] | un
 
 function Item({ node, weight, ...rest }: ItemProps) {
   const hidden = !(weight > 0);
+  // 자리만 차지하고 보이는 칸이 하나도 없는 분할(예: 비어 있는 오른쪽 열)도 낭독·키보드에서 뺀다
+  const empty =
+    node.kind === "split" && node.children.every((child) => !((rest.weights[child.id] ?? 0) > 0));
   const mode = rest.modes?.[node.id];
   return (
     <div
       data-split-item={node.id}
       data-mode={(!hidden && mode) || undefined}
       // 숨긴 칸은 키보드·낭독에서 빠진다. 내용은 남겨 다시 보일 때 스크롤·입력이 그대로다
-      inert={hidden}
-      aria-hidden={hidden || undefined}
+      inert={hidden || empty}
+      aria-hidden={hidden || empty || undefined}
       style={itemStyle(hidden, weight, mode)}
       className={cn(
         "split-item flex min-h-0 min-w-0 overflow-hidden",

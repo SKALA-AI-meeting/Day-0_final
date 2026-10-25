@@ -11,10 +11,15 @@ import type { SpeechPlayer, SpeechSnapshot } from "./speech";
 import { elapsedText, type VoiceInput, type VoiceState } from "./voice";
 
 const NOOP = () => () => {};
+
+/** 소리 크기 파형·빛이 구독하는 값. 말하기(VoiceInput)와 음성 토론 녹음(MicLevel)이 같이 쓴다 */
+export type LevelSource = Pick<VoiceInput, "subscribeLevel" | "getLevel" | "getHistory">;
+/** 프로필이 구독하는 마이크 상태 + 소리 크기 */
+export type VoiceSource = LevelSource & Pick<VoiceInput, "subscribe" | "getState">;
 const IDLE: VoiceState = { status: "idle", startedAt: null, error: null, disabled: false };
 const FLAT: number[] = [];
 
-export function useVoiceState(voice: VoiceInput | null): VoiceState {
+export function useVoiceState(voice: VoiceSource | null): VoiceState {
   return useSyncExternalStore(
     voice?.subscribe ?? NOOP,
     voice?.getState ?? (() => IDLE),
@@ -22,11 +27,11 @@ export function useVoiceState(voice: VoiceInput | null): VoiceState {
   );
 }
 
-function useVoiceLevel(voice: VoiceInput | null): number {
+function useVoiceLevel(voice: LevelSource | null): number {
   return useSyncExternalStore(voice?.subscribeLevel ?? NOOP, voice?.getLevel ?? (() => 0), () => 0);
 }
 
-function useVoiceHistory(voice: VoiceInput | null): number[] {
+function useVoiceHistory(voice: LevelSource | null): number[] {
   return useSyncExternalStore(
     voice?.subscribeLevel ?? NOOP,
     voice?.getHistory ?? (() => FLAT),
@@ -45,7 +50,7 @@ export function LevelBars({
   className,
   tone = "danger",
 }: {
-  voice: VoiceInput | null;
+  voice: LevelSource | null;
   className?: string;
   tone?: "danger" | "accent";
 }) {
@@ -88,7 +93,7 @@ export function Elapsed({
 }
 
 /** 소리 크기만큼 퍼지는 빛(말하기 끝내기 버튼·내 프로필 둘레) */
-export function LevelGlow({ voice, className }: { voice: VoiceInput | null; className?: string }) {
+export function LevelGlow({ voice, className }: { voice: LevelSource | null; className?: string }) {
   const level = useVoiceLevel(voice);
   return (
     <span

@@ -207,7 +207,7 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 | admin-report | `ended` 시드의 리포트 → 차원 1개 조정(메모) → 검토 완료 → 수준 재계산 표시 |
 
 - 기록: 핵심 시점 스크린샷은 `tests/e2e/records/stages/.artifacts/screenshots/<실행 ID>/<단계>/`에 격리하고, 기존 기준 캡처·`summary.md`는 `tests/e2e/records/stages/<단계>/`에서 유지한다. 테스트마다 영상(webm)·trace는 `tests/e2e/records/stages/.artifacts/<테스트>/`, 전체 HTML 리포트는 `tests/e2e/records/stages/html-report/`(둘 다 git 무시)에 남긴다. 스크린샷은 `docs/share/` 보고서 캡처의 원본이다.
-- 실행: `make e2e SUITE=stages PROFILE=test-text [STAGE=<단계>]`. 화면·api 흐름을 바꾸는 PR은 전 단계가 `test-text`(가짜 LLM)로 통과해야 한다.
+- 실행: `make e2e SUITE=stages PROFILE=test-text [STAGE=<단계>]`. 화면·api 흐름을 바꾸는 PR은 전 단계가 `test-text`(가짜 LLM)로 통과해야 한다. 음성 프로필(`test-voice`)은 `STAGE_RUNNER=docker`로 Playwright 이미지 안에서 돌린다(아래 "음성·텍스트 프로필 확인").
 
 ### 단계별 화면 테스트의 주의점
 
@@ -242,6 +242,7 @@ api 에이전트 테스트의 Harness(가짜 debate·rag MCP와 가짜 hub)에 �
 
 - `make up PROFILE=test-text` → `make seed PROFILE=test-text` → `make e2e SUITE=stages PROFILE=test-text`: 채팅 입력과 기존 텍스트 WS 흐름. 음성 전용 Playwright 사례는 건너뛴다.
 - `make up PROFILE=test-voice` → `make seed PROFILE=test-voice` → `make e2e SUITE=stages PROFILE=test-voice`: FakeSpeech와 실제 브라우저 녹음·재생 흐름. `tests/e2e/run.py` 대본도 이 프로필에서는 전사 API를 사용한다.
+- 음성 프로필의 단계별 화면 테스트는 `make e2e SUITE=stages STAGE_RUNNER=docker PROFILE=test-voice [STAGE=<단계>]`로 Playwright 공식 이미지(`mcr.microsoft.com/playwright:v<@playwright/test 버전>-noble`) 안에서 돌린다([scripts/stage_e2e_docker.sh](../../scripts/README.md)). macOS에서 마이크 권한이 없는 터미널 앱이 띄운 브라우저는 `getUserMedia`가 응답 없이 멈춰(권한 창도 뜨지 않음) 모든 spec이 시작 전 마이크 확인에서 실패하기 때문이다. 컨테이너 안 chromium은 fake 마이크를 쓰고, 웹·api·내부 포트는 socat으로 호스트에 넘긴다. 깨끗한 DB로 돌리려면 `docker volume rm dayzero-debate_pgdata` 뒤 `make up`·`make seed`를 한다.
 - `eval-text`·`eval-voice`는 실제 LLM을 호출하므로 실행 시 `ALLOW_API=1`이 필요하다. `report-worker`도 같은 프로필의 `LLM_FAKE`를 받는다.
 
 Docker가 없으면 API 단위 테스트와 `tests/test_profile.py`만 로컬에서 실행할 수 있다. DB fixture는 DB 연결이 없으면 skip된다.

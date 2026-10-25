@@ -39,13 +39,12 @@ export function MemoPad({ sessionId, locked }: { sessionId: string; locked: bool
       aria-label="메모"
       className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-surface p-4"
     >
-      <header className="flex items-baseline gap-2">
-        <h2 className="text-callout font-semibold">메모</h2>
-        <span className="text-footnote text-muted">
-          {saved
-            ? "이 브라우저에만 저장돼요 · 평가에 쓰이지 않아요"
-            : "저장할 수 없는 브라우저예요"}
-        </span>
+      {/* 좁은 칸에서도 제목이 세로로 꺾이지 않게 제목은 줄바꿈하지 않고, 안내는 제목 아래에 둔다 */}
+      <header className="flex flex-col gap-0.5">
+        <h2 className="shrink-0 text-callout font-semibold whitespace-nowrap">메모</h2>
+        <p className="text-caption text-muted">
+          {saved ? "평가 미사용 · 이 브라우저에만 저장" : "저장할 수 없는 브라우저예요"}
+        </p>
       </header>
       <textarea
         aria-label="메모 입력"

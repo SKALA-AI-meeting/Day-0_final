@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 104개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 107개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -252,10 +252,13 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>components/debate/voice/control-state.test.ts</code> (2)</summary>
+<details><summary><code>components/debate/voice/control-state.test.ts</code> (5)</summary>
 
 - 스케줄러가 차례를 넘기기 전에는 유지 시간 이후에도 녹음을 시작할 수 있다
 - 발언권 유지 시간이 끝나면 0초 대신 동료가 이어 말한다는 안내를 보인다
+- 막힌 차례는 이유마다 제목·할 일과 그 일을 하는 버튼 하나로 보이고, 내 차례가 아니면 버튼이 없다
+- Space 단축키는 글을 쓰는 곳·버튼에 포커스가 있으면 쓰지 않는다
+- 너무 긴 발언 오류는 비었다는 안내 대신 글자 수 안내를 보인다
 
 </details>
 
