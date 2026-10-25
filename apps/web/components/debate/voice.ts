@@ -1,13 +1,8 @@
 // 지원자 음성 입력(말하기). 마이크 소리를 브라우저 안에서만 듣고(소리 크기 애니메이션용), 녹음을 마치면
 // transcribe로 글자를 받아 입력창에 넣는다. 지원자는 그 글을 고쳐서 직접 보낸다(녹음은 저장하지 않음).
-// 글자 변환은 대체 순서를 따른다: 웹 서버 라우트(/api/voice/transcribe, NEXT_PUBLIC_VOICE_API=1) → mock 예시 문장
-// (NEXT_PUBLIC_MOCK=1) → 없음. 없으면 말하기를 숨기고, 쓰다가 FAIL_LIMIT번 연달아 실패하면 이번 화면에서 말하기를 꺼
-// 글자 입력만 남긴다. 어느 경우든 기존 글자 입력은 그대로 동작한다(prefixcon PC-14).
+// 글자 변환기는 바깥에서 받는다. 쓰다가 FAIL_LIMIT번 연달아 실패하면 이번 화면에서 말하기를 꺼
+// 글자 입력만 남긴다(prefixcon PC-14). 지금 화면은 이 클래스를 만들지 않고, 음성 모드는 api 서버 음성(voice/)을 쓴다.
 // 소리 크기는 화면 전체를 다시 그리지 않도록 따로 구독한다(subscribeLevel).
-import { MOCK } from "@/lib/api";
-
-/** 웹 서버의 음성 시험 라우트(STT·TTS)를 쓴다 */
-export const VOICE_API = process.env.NEXT_PUBLIC_VOICE_API === "1";
 
 export type VoiceStatus = "idle" | "starting" | "recording" | "testing" | "transcribing";
 export type VoiceError = "denied" | "unavailable" | "failed" | "off";
@@ -192,38 +187,6 @@ export class VoiceInput {
   }
 }
 
-const MOCK_SENTENCES = [
-  "제 생각에는 이 부분을 먼저 정하고 넘어가면 좋겠어요.",
-  "자료를 같이 보면서 근거를 하나씩 맞춰 보면 어떨까요?",
-  "다른 분들은 어떻게 생각하시는지도 듣고 싶어요.",
-];
-
-/** mock 전용 글자 변환: 녹음 길이와 상관없이 예시 문장을 돌아가며 준다 */
-function mockTranscribe(): Transcribe {
-  let i = 0;
-  return () =>
-    new Promise((resolve) =>
-      setTimeout(() => resolve(MOCK_SENTENCES[i++ % MOCK_SENTENCES.length]), 700),
-    );
-}
-
-/** 녹음 형식에 맞는 파일 이름(OpenAI는 확장자로 형식을 본다) */
-export function audioFileName(mimeType: string) {
-  if (mimeType.includes("mp4")) return "speech.mp4";
-  if (mimeType.includes("ogg")) return "speech.ogg";
-  if (mimeType.includes("wav")) return "speech.wav";
-  return "speech.webm";
-}
-
-/** 웹 서버 라우트로 녹음을 보내 글자를 받는다 */
-const serverTranscribe: Transcribe = async (audio) => {
-  const form = new FormData();
-  form.append("file", audio, audioFileName(audio.type));
-  const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
-  if (!res.ok) throw new Error(`transcribe ${res.status}`);
-  return ((await res.json()) as { text: string }).text;
-};
-
 /** 앞 변환이 실패하면 다음 변환으로 넘어간다. 모두 실패하면 마지막 오류를 던진다 */
 export function fallbackTranscribe(chain: Transcribe[]): Transcribe {
   return async (audio) => {
@@ -237,10 +200,4 @@ export function fallbackTranscribe(chain: Transcribe[]): Transcribe {
     }
     throw last;
   };
-}
-
-/** 지금 쓸 수 있는 글자 변환(대체 순서: 서버 → mock). 없으면 null */
-export function availableTranscribe(): Transcribe | null {
-  const chain = [...(VOICE_API ? [serverTranscribe] : []), ...(MOCK ? [mockTranscribe()] : [])];
-  return chain.length ? fallbackTranscribe(chain) : null;
 }

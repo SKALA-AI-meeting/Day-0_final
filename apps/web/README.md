@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 114개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 111개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -222,12 +222,6 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <details><summary><code>components/debate/saver.test.ts</code> (1)</summary>
 
 - flush는 진행 중인 저장이 끝날 때까지 기다리고, 실패하면 false라 제출이 멈춘다
-
-</details>
-
-<details><summary><code>components/debate/speech.test.ts</code> (1)</summary>
-
-- 음성을 ${FAIL_LIMIT}번 연달아 받지 못하면 AI 동료 음성을 끄고 더 요청하지 않는다
 
 </details>
 
@@ -381,13 +375,6 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>lib/voice-server.test.ts</code> (2)</summary>
-
-- 음성 모델 키 규칙: 음성 두 모델과 gpt-4o-mini는 제한 키, 그 밖의 gpt-*는 개인 키, 비면 멈춘다
-- VOICE_API=1이 아니면 음성 라우트는 닫혀 있다
-
-</details>
-
 <details><summary><code>lib/ws.test.ts</code> (2)</summary>
 
 - 재연결: 3초 뒤 다시 붙어 onOpen(reconnected)을 알리고, 4401은 재발급, 4000은 멈춘다
@@ -469,5 +456,3 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - 크기 조절: 영역 사이 경계를 끌거나 화살표 키로 바꾸고, 두 번 누르면 원래대로 돌아간다. 엔진은 `components/ui/split-layout.tsx`, 단계별 규칙은 `components/debate/stage-layout.ts`.
 - 말하기(STT): 일반 차례에 20초 안에 [발언하기]나 Space로 시작해 최대 60초 말하고([발언 완료]와 타이머가 같은 종료 함수), 서버가 전사한 글을 보여 주지 않고 바로 전달한다. 저장되면 "전달했어요"를 잠깐 보인다. 빈 인식 결과에는 [다시 말하기]를 안내한다. 구현은 `components/debate/voice/voice-room.tsx`·`recorder.ts`이고 계약은 [음성 계약](../../docs/contracts/voice.md)이다.
 - AI 동료 음성(TTS): 서버가 만든 검증된 AI 메시지를 순서대로 재생하고(실제 재생 종료를 확인한 뒤 다음 항목·내 차례), 말하는 동료를 프로필에서 강조하며 재생 중인 문장을 자막으로 보인다. 목소리는 자리별로 고정한다.
-- 대체 순서: `NEXT_PUBLIC_VOICE_API` 경로(웹 서버 라우트 글자 변환)와 `VoiceInput`·`VoicePanel`은 미연결(코드만 남음)이다. 현재 화면은 이 경로를 쓰지 않는다.
-- 켜는 법(미연결 코드): `NEXT_PUBLIC_VOICE_API=1`·`VOICE_API=1`로 `/api/voice/*` 라우트를 켤 수 있지만 토론 화면은 쓰지 않는다. 모델은 `MODEL_STT`·`MODEL_TTS`, 키 선택은 `lib/voice-server.ts`의 `voiceKey`.
