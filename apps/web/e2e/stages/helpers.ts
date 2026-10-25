@@ -81,7 +81,12 @@ export async function seed(startAt: StartAt): Promise<Seed> {
     session_token?: string;
     debrief_token?: string;
     admin_report_url?: string;
-  }>("POST", "/internal/test/sessions", { session_minutes: 15, start_at: startAt });
+  }>("POST", "/internal/test/sessions", {
+    session_minutes: 15,
+    start_at: startAt,
+    // 입장 화면의 기본 표시 이름으로 쓰이므로 실제 입장처럼 읽히는 이름을 준다
+    alias: "하늘",
+  });
   return {
     sessionId: made.session_id,
     link: new URL(made.invite_url).pathname,

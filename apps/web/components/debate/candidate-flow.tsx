@@ -11,10 +11,12 @@ import { DebateView } from "./debate-view";
 import { DebriefScreen } from "./debrief-screen";
 import {
   ConsentScreen,
+  DesktopNotice,
   EntryScreen,
   LinkNotice,
   VOICE_ENABLED,
   WaitingScreen,
+  useNarrowViewport,
 } from "./link-screens";
 import { MockControls } from "./mock-controls";
 import { MICROPHONE_HELP, isMicrophoneError, requestMicrophone } from "./voice/microphone";
@@ -66,6 +68,7 @@ function noticeFor(error: unknown): Stage {
 
 export function CandidateFlow({ token }: { token: string }) {
   const [stage, setStage] = useState<Stage>({ kind: "loading" });
+  const narrow = useNarrowViewport();
   const sessionToken = useRef<string>("");
   const sessionId = useRef<string>("");
 
@@ -265,6 +268,9 @@ export function CandidateFlow({ token }: { token: string }) {
       );
       break;
   }
+  // 토론 화면은 데스크톱 폭 전용이라 시작 전 화면에서 미리 안내한다
+  if (narrow && (stage.kind === "entry" || stage.kind === "consent" || stage.kind === "waiting"))
+    screen = <DesktopNotice />;
 
   return (
     <>

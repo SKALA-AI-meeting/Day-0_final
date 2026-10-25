@@ -3,7 +3,7 @@
 // 디브리핑: 한 열 문서. R1 첫 문장 → 이의 제기 경로 → 제출 확인 → 설문 → 결과를 보이지 않는 이유·기업이 보는 것·보관 →
 // 장면(카드) 설명 → 보는 요소 → 내 발언 돌아보기(접힘) → AI 동료 소개(여기서 처음 성향이 드러난다) → 기획안 열람(접힘).
 // 척도 세부·수준은 보이지 않는다.
-import { CircleCheck, Copy } from "lucide-react";
+import { ChevronRight, CircleCheck, Copy } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { Avatar, Button, Wordmark, cn, toast } from "@/components/ui";
@@ -18,7 +18,7 @@ const introSentences = (text: string) => {
   return cut > 0 && cut < text.length ? [text.slice(0, cut), text.slice(cut).trim()] : [text];
 };
 
-function Section({
+export function Section({
   title,
   children,
   collapsed,
@@ -31,8 +31,17 @@ function Section({
   if (collapsed)
     return (
       <details className="group flex flex-col gap-4 border-t border-line pt-8">
-        <summary className="cursor-pointer text-title2 font-semibold marker:text-muted">
-          {title} <span className="text-footnote font-normal text-muted">눌러서 펼치기</span>
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-title2 font-semibold [&::-webkit-details-marker]:hidden">
+          <ChevronRight
+            size={18}
+            aria-hidden
+            className="shrink-0 text-muted transition-transform group-open:rotate-90"
+          />
+          {title}
+          <span className="text-footnote font-normal text-muted">
+            <span className="group-open:hidden">눌러서 펼치기</span>
+            <span className="hidden group-open:inline">접기</span>
+          </span>
         </summary>
         <div className="mt-4 flex flex-col gap-4">{children}</div>
       </details>
