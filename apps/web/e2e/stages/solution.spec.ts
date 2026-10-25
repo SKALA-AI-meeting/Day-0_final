@@ -2,7 +2,7 @@
 // 반대가 남은 상태의 지원자 혼자 확정(solo_confirm)
 import { expect, test } from "@playwright/test";
 
-import { type Seed, advance, internalGet, say, seed, settle, shot } from "./helpers";
+import { type Seed, VOICE_ENABLED, advance, internalGet, say, seed, settle, shot } from "./helpers";
 
 type Slot = {
   phase: string;
@@ -59,12 +59,15 @@ test("silent: 침묵하면 idle 뒤 비판형 초대 메시지가 1건", async (
   await page.goto(s.link);
   await expect(page.locator('[data-slot-input="solution"]')).toBeVisible();
   await advance(s.sessionId, "idle");
+  // 초대는 다음 스케줄러 틱(5초)에 들어가고, 음성에서는 단계 시작 동료 발언의 재생이 끝난 뒤 게시돼
+  // 기본 15초를 넘길 수 있다(관측 약 16~20초)
   await expect
     .poll(
       async () =>
         (await internalGet<{ is_invite: boolean }[]>(s.sessionId, "/messages")).filter(
           (m) => m.is_invite,
         ).length,
+      { timeout: VOICE_ENABLED ? 45000 : 15000 },
     )
     .toBe(1);
   await shot(page, "solution", "03-침묵 초대");

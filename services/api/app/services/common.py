@@ -89,7 +89,7 @@ async def load_context(
 
 
 def serialize_message(session: Session, m: Message) -> dict[str, Any]:
-    return {
+    out = {
         "id": str(m.id),
         "sender": m.sender,
         "content": m.content,
@@ -98,6 +98,11 @@ def serialize_message(session: Session, m: Message) -> dict[str, Any]:
         "t_min": t_min(session, m.created_at) or 0.0,
         "created_at": iso(m.created_at),
     }
+    # 지원자 메시지만: 보낸 쪽의 client_msg_id(음성은 발언 id). 화면이 ack를 놓쳐도(재연결)
+    # /state로 그 발언이 저장됐는지 확인한다
+    if m.sender == "candidate" and m.client_msg_id:
+        out["client_msg_id"] = m.client_msg_id
+    return out
 
 
 def slot_outcome(slot: Slot) -> str | None:

@@ -14,8 +14,7 @@ import { resolutionLabel } from "@/lib/resolution";
 import { VOICE_ENABLED } from "./link-screens";
 import { PHASE_LABEL, SLOT_LABEL, officeTime } from "./state";
 import type { Participant, Phase, Seat, StateSnapshot } from "./types";
-import type { VoiceInput } from "./voice";
-import { LevelGlow, useVoiceState } from "./voice-ui";
+import { LevelGlow, useVoiceState, type VoiceSource } from "./voice-ui";
 
 export function ProfileStage({
   snap,
@@ -25,6 +24,7 @@ export function ProfileStage({
   voice = null,
   candidateTalking = false,
   caption = "",
+  fill = false,
   onJump,
 }: {
   snap: StateSnapshot;
@@ -32,10 +32,12 @@ export function ProfileStage({
   speaking: Seat[];
   intro: boolean;
   onSkipIntro: () => void;
-  voice?: VoiceInput | null;
+  voice?: VoiceSource | null;
   /** 음성 토론에서 지원자가 녹음 중인지(서버 발언권 기준). 지원자 칸을 말하는 중으로 강조한다 */
   candidateTalking?: boolean;
   caption?: string;
+  /** 칸을 가득 채운다(음성 토론 가운데 칸). 정사각형으로 줄이지 않아 아래 조작부와 사이에 빈 띠가 생기지 않는다 */
+  fill?: boolean;
   /** 프로필 안 메시지를 누르면 토론방의 그 말풍선으로. 토론방이 숨어 있으면 없음 */
   onJump?: (messageId: string) => void;
 }) {
@@ -55,7 +57,11 @@ export function ProfileStage({
       <section
         aria-label="참여자"
         className="@container flex flex-col gap-[3cqmin] rounded-xl border border-line bg-surface p-[3cqmin]"
-        style={{ width: "min(100cqw, 100cqh, 760px)", height: "min(100cqw, 100cqh, 760px)" }}
+        style={
+          fill
+            ? { width: "100%", height: "100%" }
+            : { width: "min(100cqw, 100cqh, 760px)", height: "min(100cqw, 100cqh, 760px)" }
+        }
       >
         {intro && (
           <header className="flex shrink-0 items-center gap-3 px-1 @max-sm:hidden">
@@ -103,7 +109,7 @@ function ProfileTile({
   snap: StateSnapshot;
   speaking: boolean;
   /** 지원자가 말하는 중일 때만: 소리 크기만큼 빛난다 */
-  voice: VoiceInput | null;
+  voice: VoiceSource | null;
   caption: string;
   onJump?: (messageId: string) => void;
 }) {

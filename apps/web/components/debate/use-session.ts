@@ -11,6 +11,7 @@ import { SessionSocket, type ConnectionStatus } from "@/lib/ws";
 import { submitBody } from "./proposal-editor";
 import { initialView, reduce, type PanelTab } from "./reducer";
 import { createSaver } from "./saver";
+import { CANDIDATE_MESSAGE_MAX_CHARS } from "./state";
 import type {
   AssistantResponse,
   EndReason,
@@ -40,6 +41,13 @@ const ERROR_TEXT: Record<string, string> = {
   assistant_limit: "이 세션의 요청 한도를 다 썼어요",
 };
 
+/** WS error 프레임 안내. 같은 invalid_input이라도 너무 긴 발언은 비었다고 하지 않는다 */
+export function frameErrorText({ code, message }: { code: string; message?: string }): string {
+  if (code === "invalid_input" && message === "too long")
+    return `발언이 너무 길어요. ${CANDIDATE_MESSAGE_MAX_CHARS}자 이내로 줄여 주세요`;
+  return ERROR_TEXT[code] ?? "잠시 뒤 다시 시도해 주세요";
+}
+
 const errorText = (error: unknown) =>
   error instanceof ApiError
     ? (ERROR_TEXT[error.code] ?? "잠시 뒤 다시 시도해 주세요")
@@ -53,6 +61,10 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
   const [now, setNow] = useState(() => Date.now());
   const [connection, setConnection] = useState<ConnectionStatus>("connecting");
   const socketRef = useRef<SessionSocket | null>(null);
+  // 저장 확인(message.ack)을 받은 client_msg_id. 음성 발언은 발언 id를 client_msg_id로 보낸다
+  const acked = useRef(new Set<string>());
+  // 마지막으로 /state 스냅샷을 받은 시각(재연결 뒤 따라잡았는지 판단)
+  const syncedAt = useRef(0);
   const authRef = useRef(auth);
   const path = `/sessions/${auth.sessionId}`;
 
@@ -60,6 +72,7 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
     try {
       const snap = await api<StateSnapshot>(`${path}/state`, { token: authRef.current.getToken() });
       dispatch({ type: "snapshot", snap, now: Date.now() });
+      syncedAt.current = Date.now();
     } catch {
       // 다음 연결·공백 때 다시 읽는다
     }
@@ -72,7 +85,8 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
       getToken: () => authRef.current.getToken(),
       refreshToken: () => authRef.current.refreshToken(),
       onFrame: (frame) => {
-        if (frame.type === "error") toast(ERROR_TEXT[frame.payload.code] ?? errorText(null));
+        if (frame.type === "error") toast(frameErrorText(frame.payload));
+        if (frame.type === "message.ack") acked.current.add(frame.payload.client_msg_id);
         dispatch({ type: "frame", frame, now: Date.now() });
       },
       onStatus: setConnection,
@@ -120,6 +134,11 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
   const sendTyping = useCallback((state: "start" | "stop") => {
     socketRef.current?.send({ type: "typing", payload: { state } });
   }, []);
+
+  /** 이 client_msg_id(음성은 발언 id)의 저장 확인을 받았는지 */
+  const wasAcked = useCallback((id: string) => acked.current.has(id), []);
+  /** 마지막 /state 동기화 시각(ms). 없으면 0 */
+  const lastSyncedAt = useCallback(() => syncedAt.current, []);
 
   const sendVoice = useCallback((id: string, content: string, turn: string, epoch: string) => {
     socketRef.current?.send({
@@ -281,6 +300,8 @@ export function useDebateSession(auth: SessionAuth, initial: StateSnapshot) {
     setTab: (tab: PanelTab) => dispatch({ type: "tab", tab }),
     sendMessage,
     sendVoice,
+    wasAcked,
+    lastSyncedAt,
     sendTyping,
     confirmSlot,
     openMaterial,

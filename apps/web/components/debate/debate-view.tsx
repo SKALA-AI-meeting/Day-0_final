@@ -312,8 +312,11 @@ export function DebateView({
     auth,
     snap,
     connected: session.connection === "open",
+    reconnecting: session.connection === "reconnecting",
     locked,
     onSend: session.sendVoice,
+    wasSaved: session.wasAcked,
+    lastSyncedAt: session.lastSyncedAt,
     onBusy: setVoiceBusy,
     onFocusProposal: () => {
       setPinned((prev) => ({ ...prev, proposal: true }));
@@ -418,13 +421,15 @@ export function DebateView({
             </div>
           ),
           summary: <PhaseSummary snap={snap} />,
-          // 가운데 칸: 4명 프로필(2x2, 말하는 사람 강조) + 차례·녹음·손들기 조작
+          // 가운데 칸: 4명 프로필(2x2, 말하는 사람 강조, 칸을 가득 채움) + 바로 아래 차례·녹음·손들기 조작
           chat: voiceEnabled ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden">
-              <div className="min-h-0 flex-1">
+              <div className="flex min-h-0 flex-1">
                 <ProfileStage
                   snap={voice.chatSnap}
                   speaking={speaking}
+                  fill
+                  voice={voice.mic}
                   candidateTalking={voice.recording}
                   caption={
                     voice.currentCaption ? (sentences(voice.currentCaption.text).at(-1) ?? "") : ""
@@ -433,7 +438,7 @@ export function DebateView({
                   onSkipIntro={() => setIntroDone(true)}
                 />
               </div>
-              <div className="shrink-0 rounded-xl border border-line bg-surface p-4">
+              <div className="max-h-[60%] shrink-0 overflow-y-auto rounded-xl border border-line bg-surface p-4">
                 {voice.controls}
               </div>
             </div>

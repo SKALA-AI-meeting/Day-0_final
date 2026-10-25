@@ -13,7 +13,7 @@
 | type | payload |
 |---|---|
 | message.ack | {client_msg_id, message_id, run_id}. 메시지 저장 커밋 직후, 의도 분류 전에 보낸다 |
-| message.new | Message = {id, sender: candidate∣p1∣p2∣p3∣system, content, phase, is_invite, t_min, created_at}. 합의·시간 초과 채우기 공지는 `slot.confirmed` 바로 앞에 온다(시간 초과 안내는 `sender = system`) |
+| message.new | Message = {id, sender: candidate∣p1∣p2∣p3∣system, content, phase, is_invite, t_min, created_at, client_msg_id?}. `client_msg_id`는 지원자 메시지에만 있고 보낸 `message.send`의 값이다(음성은 발언 id). 화면은 ack를 놓쳐도 `/state`로 그 발언의 저장을 확인한다. 합의·시간 초과 채우기 공지는 `slot.confirmed` 바로 앞에 온다(시간 초과 안내는 `sender = system`) |
 | typing | {participant: p1∣p2∣p3, state: "start"∣"stop"}. 화면 "OO님이 입력 중…". start 뒤 30초 안에 stop이 없으면 화면이 끈다 |
 | slot.confirmed | {phase, value, filled_by: candidate∣p1∣p2∣p3∣system(시간 초과), resolution: "consensus"∣"timeout", outcome: "consensus"∣"candidate_decision"∣"timeout", t_min} |
 | phase.changed | {phase, previous_phase, reason: "start"∣"confirmed"∣"timeout", phase_started_at, phase_deadline_at, t_min} |

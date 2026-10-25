@@ -11,6 +11,7 @@
 | `stage_advance.py` | 세션 시간 당기기 | `make stage-advance` |
 | `save_eval_fixture.py` | 끝난 세션의 SessionRecord를 eval 픽스처로 저장 | - |
 | `docs_gen.py` | README 생성 블록 갱신·검사, features.md 테스트 참조 검사 | `make docs-gen`, `make docs-check` |
+| `stage_e2e_docker.sh` | 단계별 화면 테스트를 Playwright 공식 이미지 안에서 실행(호스트 마이크 권한과 무관) | `make e2e SUITE=stages STAGE_RUNNER=docker` |
 | `profile.py` | 실행 프로필 해석: 유효 모드 출력·검사, compose용 env 파일 생성, 프로필 env로 명령 실행 | `make profile`, `make doctor`, `make up/down/seed/eval/measure/e2e/stage`가 내부에서 사용 |
 
 ## 스크립트별 사용
@@ -62,6 +63,20 @@ make stage STAGE=problem MIN=15 PROFILE=dev-fake
 
 ```
 make stage-advance SID=<세션 id> TO=deadline PROFILE=dev-fake
+```
+
+### stage_e2e_docker.sh
+
+| 항목 | 내용 |
+|---|---|
+| 실행 위치 | 저장소 루트(Docker 필요) |
+| 필요한 서비스 | 그 프로필의 격리 스택(`make up`·`make seed`) |
+| env | `PROFILE`(기본 test-voice), `INTERNAL_TOKEN`(없으면 `infra/.env.resolved-<프로필>`에서 읽고 출력하지 않음), `VOICE_ENABLED`(스택 env 파일 값을 쓰고, 따로 줬는데 다르면 멈춤), `WEB_URL`·`E2E_INTERNAL_URL`·`E2E_API_URL`(없으면 `E2E_PUBLIC_URL`)(포트를 컨테이너에서 호스트로 넘김, 포트가 없으면 80·443), `PLAYWRIGHT_IMAGE`(기본 `apps/web/package.json`의 `@playwright/test` 버전 이미지) |
+| 인자 | Playwright 인자(예: spec 이름) |
+| 하는 일 | 공식 Playwright 이미지에서 `apps/web`의 단계별 화면 테스트를 돈다. 컨테이너의 localhost 포트를 socat으로 `host.docker.internal`에 넘긴다. macOS에서 마이크 권한이 없는 터미널 앱이 띄운 브라우저는 `getUserMedia`가 끝나지 않아 음성 테스트가 멈추므로 이 경로를 쓴다 |
+
+```
+make e2e SUITE=stages STAGE_RUNNER=docker PROFILE=test-voice [STAGE=problem]
 ```
 
 ### save_eval_fixture.py
