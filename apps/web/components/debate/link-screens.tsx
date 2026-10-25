@@ -2,7 +2,7 @@
 
 // 토론방에 들어가기 전 화면: 링크 안내(만료·취소·없음), 입장, 동의(표시 이름·형식 안내), 대기(팀 소개).
 // 문구는 docs/product/user-flows.md "지원자: 입장·동의·대기". 페르소나 유형·성향 설명은 여기 없다.
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { Avatar, Button, Wordmark } from "@/components/ui";
 
@@ -14,13 +14,40 @@ export const FORMAT_NOTICE =
   "토론 결과가 내 제안과 다를 수 있어요. 안의 질은 평가하지 않으며, 그 과정의 태도를 봅니다.";
 /** R7 어시스턴트 안내(고정 문구) */
 export const ASSISTANT_NOTICE =
-  "AI가 평가 수준을 매기지 않으며, 요청·응답 기록은 담당자에게 사실로 제공됩니다.";
+  "AI 어시스턴트는 평가에 관여하지 않으며, 요청·응답 기록은 담당자에게 사실로 제공됩니다.";
 
 export const VOICE_ENABLED = !["0", "false"].includes(
   (process.env.NEXT_PUBLIC_VOICE_ENABLED ?? "1").toLowerCase(),
 );
 
 export const NAME_MAX = 20;
+
+/** 토론 화면의 최소 폭(debate-view의 min-w-[1024px])과 같다 */
+export const DESKTOP_MIN_WIDTH = 1024;
+const NARROW_QUERY = `(max-width: ${DESKTOP_MIN_WIDTH - 0.02}px)`;
+
+/** 화면 폭이 토론 화면 최소 폭보다 좁은지. 서버 렌더에서는 false */
+export function useNarrowViewport() {
+  return useSyncExternalStore(
+    (notify) => {
+      const query = window.matchMedia(NARROW_QUERY);
+      query.addEventListener("change", notify);
+      return () => query.removeEventListener("change", notify);
+    },
+    () => window.matchMedia(NARROW_QUERY).matches,
+    () => false,
+  );
+}
+
+/** 좁은 화면에서는 시작 전에 막는다(토론 화면은 가로 1024px 이상 데스크톱 전용) */
+export function DesktopNotice() {
+  return (
+    <LinkNotice
+      title="노트북이나 PC의 Chrome으로 열어 주세요"
+      description="이 토론은 화면 가로 폭이 넓은 데스크톱 브라우저에서 진행됩니다. 같은 링크를 노트북이나 PC의 Chrome으로 열어 주세요."
+    />
+  );
+}
 
 function Page({ children }: { children: ReactNode }) {
   return (
@@ -227,7 +254,7 @@ export function LayoutSketch() {
               ))}
             </div>
             <span className="text-caption text-muted">
-              {VOICE_ENABLED ? "내 발언 남은 시간 · 발언 완료" : "메시지 입력 · 보내기"}
+              {VOICE_ENABLED ? "내 차례 · 발언하기 · 손들기" : "메시지 입력 · 보내기"}
             </span>
           </div>
           <div className="flex flex-col gap-2 p-3">
@@ -286,7 +313,7 @@ export function SessionGuide({
       <LayoutSketch />
       <p className="text-body">
         {VOICE_ENABLED
-          ? "상단에는 이 단계의 남은 시간이 보입니다. 동료의 음성이 모두 끝나면 마이크가 켜집니다. 최대 60초 동안 말할 수 있고, 발언 완료를 누르면 바로 제출합니다."
+          ? "상단에는 이 단계의 남은 시간이 보입니다. 내 차례가 되면 발언하기를 눌러 최대 60초 동안 말하고, 받아 적은 글을 확인한 뒤 제출합니다. 동료의 말 중간에 끼어들려면 손들기를 누릅니다."
           : "상단에는 이 단계의 남은 시간이 보입니다. 토론방에 메시지를 입력하고 보내기를 눌러 의견을 전합니다."}
       </p>
     </div>

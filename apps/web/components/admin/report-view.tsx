@@ -121,8 +121,8 @@ function levelChip(level: Level | null, reason: NoRecordReason | null, adjusted?
   );
 }
 
-/** 발동하지 않은 카드 표시: 선결정이면 "선결정", 아니면 "이벤트 미발생" */
-const unfiredText = (card: ReportCard) => (card.preempted ? PREEMPTED_CARD : "이벤트 미발생");
+/** 발동하지 않은 카드 표시: 선결정이면 "선결정", 아니면 "장면 없음" */
+const unfiredText = (card: ReportCard) => (card.preempted ? PREEMPTED_CARD : "장면 없음");
 
 /** 머리의 용어 설명. 기본은 접힘, 인쇄에서는 펼친다 */
 function TermsGuide({ printing }: { printing: boolean }) {

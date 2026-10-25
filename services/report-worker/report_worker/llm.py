@@ -164,16 +164,16 @@ class FakeEvaluatorLLM:
                             "scene": credit_scene["id"] if credit_scene else "core",
                         }
                     ],
-                    "rationale": "고정 출력: 제출한 기여 기록을 근거로 중간 수준.",
-                    "summary_line": "고정 출력: 제출한 기여 기록으로 판단함",
+                    "rationale": "기획안에 아이디어 기여를 나눠 적어 중간 수준으로 봄.",
+                    "summary_line": "기여를 나눠 적은 기록이 근거",
                     "confidence": "medium",
                 }
             elif core["candidate_messages"]:
                 row = {
                     "level": 3,
                     "evidence": [{"ref": core["candidate_messages"][0], "scene": "core"}],
-                    "rationale": "고정 출력: 핵심 장면 지원자 메시지 한 건을 근거로 중간 수준.",
-                    "summary_line": "고정 출력: 핵심 장면 지원자 메시지 한 건으로 판단함",
+                    "rationale": "핵심 장면의 지원자 메시지에 이 행동이 드러나 중간 수준으로 봄.",
+                    "summary_line": "핵심 장면의 발언 한 건이 근거",
                     "confidence": "medium",
                 }
             else:
@@ -182,7 +182,7 @@ class FakeEvaluatorLLM:
                     "level": None,
                     "no_record_reason": reason,
                     "evidence": [],
-                    "rationale": "고정 출력: 핵심 장면에 지원자 메시지가 없다.",
+                    "rationale": "핵심 장면에 지원자 메시지가 없어 판단할 근거가 없음.",
                     "confidence": None,
                 }
             dimensions.append({"dimension_id": dimension["dimension_id"], **row})

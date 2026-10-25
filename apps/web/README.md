@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 93개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 98개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -140,7 +140,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - 사실 지표에 제출 때 빈 칸과 빈칸 경고 확인이 나오고, 칸 결과는 outcome으로 보인다
 - 기록 상태: 기록 없음 차원마다 장면 없음·반응 없음·판단 보류 표식과 사유, 요약표는 상태별 개수
 - 용어 설명과 화면 용어: 세부 행동·수준·확신도·상태·선결정·설계된 장면, 차원은 보이지 않는다
-- 카드 장면: 지원자 선확정으로 생기지 않은 카드는 이벤트 미발생 대신 선결정
+- 카드 장면: 지원자 선확정으로 생기지 않은 카드는 장면 없음 대신 선결정
 
 </details>
 
@@ -159,6 +159,12 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
+<details><summary><code>components/debate/debrief-screen.dom.test.tsx</code> (1)</summary>
+
+- 접힘 구역: 두 문구를 열림 상태 CSS로 번갈아 보이고 ChevronRight를 쓴다
+
+</details>
+
 <details><summary><code>components/debate/flow.test.ts</code> (4)</summary>
 
 - 15분 데모: 표시 이름이 토론방에 쓰이고, 정하기·자료·기획안·제출·디브리핑이 계약대로 이어진다
@@ -172,6 +178,15 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 - 자료 Markdown을 제목·목록·표·강조로 그리고 원문 HTML은 버린다
 - 어시스턴트 답은 굵게·목록·코드만 서식으로 그리고 링크·이미지·HTML·제목은 글자로 둔다
+
+</details>
+
+<details><summary><code>components/debate/outside-voice.dom.test.tsx</code> (4)</summary>
+
+- 가로 1024px 미만이면 노트북·PC Chrome 안내가 시작 전 화면을 막는다
+- 가로 1024px 이상이면 안내 없이 화면이 보인다
+- 어시스턴트 안내는 주어가 어시스턴트이고 평가 방식 문구와 모순되지 않는다
+- 프로필 카드: 음성 토론의 AI 동료는 말하는 중, 글 토론은 입력 중
 
 </details>
 

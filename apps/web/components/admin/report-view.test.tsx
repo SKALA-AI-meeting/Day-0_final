@@ -278,7 +278,7 @@ test("용어 설명과 화면 용어: 세부 행동·수준·확신도·상태·
   expect(judged(html)).toBe(false);
 });
 
-test("카드 장면: 지원자 선확정으로 생기지 않은 카드는 이벤트 미발생 대신 선결정", () => {
+test("카드 장면: 지원자 선확정으로 생기지 않은 카드는 장면 없음 대신 선결정", () => {
   const preempted: Report = {
     ...sample,
     cards: sample.cards.map((c) =>
@@ -287,7 +287,7 @@ test("카드 장면: 지원자 선확정으로 생기지 않은 카드는 이벤
   };
   const html = renderToStaticMarkup(<ReportView report={preempted} recordHref={href} sample />);
   expect(html).toContain(`>${PREEMPTED_CARD}</span>`);
-  // 이전 리포트(preempted 필드 없음)는 이벤트 미발생
+  // 이전 리포트(preempted 필드 없음)는 장면 없음
   const old: Report = {
     ...sample,
     cards: sample.cards.map((c) => {
@@ -298,5 +298,5 @@ test("카드 장면: 지원자 선확정으로 생기지 않은 카드는 이벤
   };
   const oldHtml = renderToStaticMarkup(<ReportView report={old} recordHref={href} sample />);
   expect(oldHtml).not.toContain(`>${PREEMPTED_CARD}</span>`);
-  expect(oldHtml).toContain(">이벤트 미발생</span>");
+  expect(oldHtml).toContain(">장면 없음</span>");
 });

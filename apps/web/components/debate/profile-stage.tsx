@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Avatar, Button, cn } from "@/components/ui";
 import { resolutionLabel } from "@/lib/resolution";
 
+import { VOICE_ENABLED } from "./link-screens";
 import { PHASE_LABEL, SLOT_LABEL, officeTime } from "./state";
 import type { Participant, Phase, Seat, StateSnapshot } from "./types";
 import type { VoiceInput } from "./voice";
@@ -153,16 +154,19 @@ function ProfileTile({
 }
 
 /** 프로필을 누르면 뜨는 정보: 이름·역할과 이번 단계에서 한 말(최근 3개). 성향·평가와 관련된 것은 보이지 않는다 */
-function ProfileCard({
+export function ProfileCard({
   person,
   snap,
   speaking,
   onJump,
+  voiceMode = VOICE_ENABLED,
 }: {
   person: Participant;
   snap: StateSnapshot;
   speaking: boolean;
   onJump?: (messageId: string) => void;
+  /** 음성 토론이면 AI 동료도 "말하는 중", 글 토론이면 "입력 중" */
+  voiceMode?: boolean;
 }) {
   const me = person.id === "candidate";
   const phase = snap.session.phase;
@@ -185,7 +189,7 @@ function ProfileCard({
       </div>
       {speaking && (
         <p className={cn("text-footnote font-medium", me ? "text-danger" : "text-accent")}>
-          {me ? "말하는 중이에요" : "지금 입력 중이에요"}
+          {me || voiceMode ? "말하는 중이에요" : "지금 입력 중이에요"}
         </p>
       )}
       <div className="flex flex-col gap-1.5 border-t border-line pt-3">
