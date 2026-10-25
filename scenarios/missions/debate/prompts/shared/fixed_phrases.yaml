@@ -27,7 +27,7 @@ stage_start:                         # [초안] 단계 이름·할 일·남은 �
   solution: "해결책 단계예요. 정한 문제의 해결 방향 하나를 함께 정해 주세요. 이 단계 {remaining} 남았어요."
   proposal: "기획안 작성 단계예요. 오른쪽 기획안 탭이 열렸어요. 직접 기획안을 쓰고 제출해 주세요. 남은 시간 {remaining}."
 
-# 후보 밖 키워드를 채팅에서 말했을 때 AI 동료의 받는 말 골격([초안] docs/product/scenario.md 1.4)
+# 후보 밖 키워드를 회의에서 말했을 때 AI 동료의 받는 말 골격([초안] docs/product/scenario.md 1.4)
 invalid_keyword: 이번엔 네 개 중에서 골라야 해요.
 
 # 칸 확정 뒤 고집형의 받는 말(personas.yaml on_confirmed와 같은 문장)

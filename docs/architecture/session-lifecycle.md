@@ -129,7 +129,7 @@ in_progress 안의 phase: `keyword → problem → solution → proposal → com
 | `message` | 지원자 room 메시지 저장 뒤(의도 분류는 메일박스가 이 자극을 처리할 때) | message_id | api가 새로 발급(uuid4) |
 | `phase_started` | 세션 시작·단계 전환 커밋 뒤 `advance_phase`가 넣음 | phase | `uuid5(session_id, "phase:"+phase)` |
 | `idle` | api 스케줄러. 토론 단계에서 침묵 초대 조건([product/scenario.md](../product/scenario.md) 3.1)이 참이고 그 단계 `invite_delivered`가 false | phase | enqueue마다 새로 발급(uuid4) |
-| `turn_elapsed` | 음성 `USER_READY` 유지 시간이 끝났고 그 단계의 침묵 초대가 이미 게시됨. 일반 동료 차례를 재개하며 초대 기록은 남기지 않음 | phase | enqueue마다 새로 발급(uuid4) |
+| `turn_elapsed` | 음성 `USER_READY` 유지 시간이 끝났고 그 단계의 침묵 초대가 이미 게시됨. 일반 동료 차례를 동료 1명으로 재개하며 초대 기록은 남기지 않음 | phase | enqueue마다 새로 발급(uuid4) |
 | `card_due` | api 스케줄러. 카드 예정 시각(단계 시작 + `offset_min`, 최소 20초) 도달 뒤 그 카드가 아직 `delivered`가 아님 | phase, card_id | enqueue마다 새로 발급(uuid4) |
 
 형식: `Stimulus = {type, phase, generation, message_id?, card_id?}`. `message` 자극의 `generation`은 **그 메시지 저장 트랜잭션이 올린 값**이다(enqueue 시점에 다시 읽지 않는다. 그사이 다른 메시지가 저장됐으면 이 자극은 낡은 자극이 된다). 다른 자극의 `generation`은 enqueue 시점의 `sessions.generation`. `message` 자극의 `phase`는 그 메시지의 `messages.phase`.

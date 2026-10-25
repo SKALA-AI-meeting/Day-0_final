@@ -15,6 +15,9 @@ from typing import Any
 from app.agent.catalog import DEBATE_PHASES, SEATS, Catalog
 
 MAX_SPEAKERS = 2
+# 지원자가 차례 유지 시간 안에 말하지 않아 넘어간 동료 차례(`turn_elapsed`)는 한 명만 말하고
+# 다시 지원자 차례로 돌린다(음성 회의에서 "들음 → 기다림 → 들음"이 길어지지 않게)
+STIMULUS_SPEAKER_LIMIT: dict[str, int] = {"turn_elapsed": 1}
 MAX_PRESSURE = 3
 CONSECUTIVE_LIMIT = 3
 
@@ -848,6 +851,11 @@ def default_responder(
     return next((s for s in SEATS if s not in skip), None)
 
 
+def speaker_limit(kind: str | None) -> int:
+    """자극 하나의 화자 상한. 지정이 없는 자극은 `MAX_SPEAKERS`."""
+    return STIMULUS_SPEAKER_LIMIT.get(kind or "", MAX_SPEAKERS)
+
+
 def rule_decision(
     stimulus: dict[str, Any],
     ds: dict[str, Any],
@@ -861,6 +869,7 @@ def rule_decision(
     """
     phase = stimulus["phase"]
     kind = stimulus["type"]
+    cap = speaker_limit(kind)
     decision: dict[str, Any] = {
         "stimulus": kind,
         "generation": stimulus.get("generation"),
@@ -894,7 +903,7 @@ def rule_decision(
     speakers: list[dict[str, Any]] = []
     fixed: set[str] = set()  # 고정 문장 카드 화자: 어떤 메시지에도 답하지 않는다(지명은 열린 채)
     # 2. 카드 화자(미전달 화자 이어 말하기 포함). 답하지 않은 지명이 있는 자리는 그 메시지에 답한다
-    for item in brief[:MAX_SPEAKERS]:
+    for item in brief[:cap]:
         if any((catalog.card(c) or {}).get("fixed_line") for c in item.card_ids):
             fixed.add(item.seat)
             speakers.append(speaker(item.seat, card_ids=item.card_ids))
@@ -907,7 +916,7 @@ def rule_decision(
             if seat in fixed:
                 decision["queued"].append({"seat": seat, "message_id": mid})
             continue
-        if len(speakers) < MAX_SPEAKERS:
+        if len(speakers) < cap:
             speakers.append(speaker(seat, reply_to=mid))
             used.add(seat)
         else:
@@ -932,7 +941,7 @@ def rule_decision(
                 excluded = [*excluded, quiet]
             for seat in (quiet, catalog.seat_of("critic")):
                 if seat and seat not in excluded and seat not in used:
-                    if len(speakers) < MAX_SPEAKERS:
+                    if len(speakers) < cap:
                         speakers.append(speaker(seat, reply_to=current))
                         used.add(seat)
             decision["reason"] = decision["reason"] or "전체 질문"
@@ -943,29 +952,29 @@ def rule_decision(
     # 4. 침묵 초대(단계당 1회, 고정 자리에서는 비판형)
     if kind == "idle" and phase in DEBATE_PHASES and not ds.get("invite_delivered"):
         inviter = catalog.seats_by_priority(["agreeable", "divergent", "critic"])
-        if inviter and inviter[0] not in used and len(speakers) < MAX_SPEAKERS:
+        if inviter and inviter[0] not in used and len(speakers) < cap:
             speakers.append(speaker(inviter[0], invite=True))
             decision["invite"] = True
             decision["reason"] = decision["reason"] or "지원자 침묵"
     if kind == "turn_elapsed" and phase in DEBATE_PHASES:
         seats = catalog.seats_by_priority(["critic", "stubborn", "quiet"])
-        if seats and seats[0] not in used and len(speakers) < MAX_SPEAKERS:
+        if seats and seats[0] not in used and len(speakers) < cap:
             speakers.append(speaker(seats[0]))
             decision["reason"] = decision["reason"] or "지원자 차례 종료"
     # 5. 단계 시작: 고정 입장 자리(소극형 제외). 문제 상황은 카드 전이라 고집형 한 명
     if kind == "phase_started":
         if phase == "problem":
             stubborn = catalog.seat_of("stubborn")
-            if stubborn and stubborn not in used and len(speakers) < MAX_SPEAKERS:
+            if stubborn and stubborn not in used and len(speakers) < cap:
                 speakers.append(speaker(stubborn))
         elif phase in ("keyword", "solution"):
             streak = recent_streak_seat(transcript)
             for seat in catalog.seats_by_priority(["stubborn", "critic"]):
-                if seat not in used and seat != streak and len(speakers) < MAX_SPEAKERS:
+                if seat not in used and seat != streak and len(speakers) < cap:
                     speakers.append(speaker(seat))
                     used.add(seat)
         decision["reason"] = decision["reason"] or "단계 시작"
-    decision["speakers"] = speakers[:MAX_SPEAKERS]
+    decision["speakers"] = speakers[:cap]
     return decision
 
 

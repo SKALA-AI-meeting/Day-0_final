@@ -7,7 +7,7 @@ from datetime import timedelta
 
 import pytest
 from app import scheduler
-from app.models import Message, Session, SpeechJob, VoiceState
+from app.models import Message, Position, Session, SpeechJob, VoiceState
 from app.routers.ws import handle_send
 from app.services import debate, reports
 from app.services.common import ServiceError
@@ -558,6 +558,8 @@ async def test_voice_rerecord_once_with_fresh_time(api, voice_ctx, clock):
     assert u["status"] == "ready"
     # 채용 건의 동료 이름이 받아 적기 구문 목록으로 넘어간다(이름 오인식 → 호명 누락 방지)
     assert {"윤하람", "하람님", "한결님", "지안님"} <= set(ctx.speech.phrases)
+    # 키워드 단계에는 키워드 후보도 넣는다(짧은 말 "물"·"불" 오인식 방지)
+    assert {"물", "불", "나무", "바람"} <= set(ctx.speech.phrases)
     wait = (controller.at(u["confirm_deadline_at"]) - ctx.clock.now()).total_seconds()
     assert 7.9 < wait <= 8  # 기본 확인 8초. 테스트 시계는 호출마다 마이크로초씩 흐른다
     turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
@@ -1090,3 +1092,23 @@ def test_quota_scope_auto_uses_utc_month(monkeypatch):
     monkeypatch.setenv("VOICE_QUOTA_PERIOD", "")
     with pytest.raises(ServiceError):
         quota.scope(datetime(2026, 2, 1, tzinfo=UTC))
+
+
+async def test_stt_phrases_follow_the_position_scenario(api, voice_ctx):
+    """받아 적기 구문 목록은 채용 건 복사본의 이름·키워드 후보·현재 단계 안 라벨이다(중복 없음)."""
+    sess = await setup(api, voice_ctx)
+    async with voice_ctx.session_factory() as db:
+        position = await db.get(Position, uuid.UUID(sess.position_id))
+    scenario = position.scenario
+    keywords = [scenario["keywords"][k]["label"] for k in scenario["keyword_order"]]
+    water = scenario["keywords"]["water"]
+    problems = [o["label"] for o in water["problems"]]
+    solutions = [o["label"] for o in water["solutions"]]
+
+    keyword_phase = controller.stt_phrases(position, "keyword", None)
+    assert set(keywords) <= set(keyword_phase) and not set(problems) & set(keyword_phase)
+    problem_phase = controller.stt_phrases(position, "problem", "water")
+    assert set(problems) <= set(problem_phase) and not set(solutions) & set(problem_phase)
+    solution_phase = controller.stt_phrases(position, "solution", "water")
+    assert set(solutions) <= set(solution_phase) and "강한결" in solution_phase
+    assert len(solution_phase) == len(set(solution_phase)) <= controller.MAX_STT_PHRASES

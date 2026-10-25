@@ -149,7 +149,7 @@ make test-live                                         # live 테스트(OPENAI_A
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-총 355개(live 3개 포함, `make test`는 live를 뺀다).
+총 357개(live 3개 포함, `make test`는 live를 뺀다).
 
 <details><summary><code>tests/agent/test_assistant.py</code> (44)</summary>
 
@@ -340,7 +340,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/agent/test_turn.py</code> (31)</summary>
+<details><summary><code>tests/agent/test_turn.py</code> (32)</summary>
 
 - `test_phase_started_keyword_pushers_and_problem_react`
 - `test_second_speaker_sees_the_first_speakers_line`
@@ -373,6 +373,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_excluded_seat_must_be_named_in_the_message`
 - `test_excluded_seat_named_without_honorific`
 - `test_excluded_seats_is_a_name_fact_check`
+- `test_turn_elapsed_has_one_speaker`
 
 </details>
 
@@ -592,7 +593,7 @@ make test-live                                         # live 테스트(OPENAI_A
 
 </details>
 
-<details><summary><code>tests/test_voice.py</code> (38)</summary>
+<details><summary><code>tests/test_voice.py</code> (39)</summary>
 
 - `test_voice_playback_barrier_and_single_message`
 - `test_voice_submit_rejects_text_other_than_recognition` ×2
@@ -631,6 +632,7 @@ make test-live                                         # live 테스트(OPENAI_A
 - `test_voice_full_session_forced_turn_keeps_lead`
 - `test_voice_no_forced_turn_after_candidate_spoke`
 - `test_quota_scope_auto_uses_utc_month`
+- `test_stt_phrases_follow_the_position_scenario`
 
 </details>
 

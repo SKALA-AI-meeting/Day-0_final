@@ -593,6 +593,29 @@ def test_guard_does_not_block_fixed_lines(guard, cards):
         assert not _hits(groups, text), (text, _hits(groups, text))
 
 
+def test_fixed_persona_lines_fit_spoken_length(cards, keywords):
+    """LLM 없이 나가는 동료 고정 문장(머뭇거림 한 줄·안전 문구·입장 고정 문구)도 공통 규칙의 발언
+    길이(음성으로 듣는 길이) 안이다. 입장 고정 문구는 가장 긴 안 라벨을 넣어 잰다."""
+    rules = (MISSION / "prompts/persona/common_rules.md").read_text(encoding="utf-8")
+    limit = int(re.search(r"(\d+)자 안쪽", rules).group(1))
+    labels = [kw["label"] for kw in keywords["keywords"]] + [
+        o["label"] for kw in keywords["keywords"] for o in (*kw["problems"], *kw["solutions"])
+    ]
+    longest = max(labels, key=len)
+    by = {c["card_id"]: c for c in cards["cards"]}
+    sf = load("prompts/persona/stance_fallback.yaml")
+    lines = [by["inclusion_silence"]["fixed_line"]]
+    for t in SESSION_TYPES:
+        safe = (MISSION / f"prompts/persona/safe_{t}.md").read_text(encoding="utf-8")
+        lines += [line.strip() for line in safe.splitlines() if line.strip()]
+        lines += [
+            text.replace("{option}", longest)
+            for v in sf[t].values()
+            for text in (v["text"], *(v.get("alternatives") or []))
+        ]
+    assert [text for text in lines if len(text) > limit] == []
+
+
 # ---------- fixtures ----------
 
 

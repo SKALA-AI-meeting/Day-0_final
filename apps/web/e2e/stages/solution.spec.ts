@@ -1,4 +1,4 @@
-// solution: AI 합의 공지 → 칸 확정, 침묵 시 advance{to: idle} 뒤 초대 메시지 1건(silent),
+// solution: 그 단계 카드 전달 뒤 지원자의 분명한 동의로 AI 합의 공지 → 칸 확정, 침묵 시 advance{to: idle} 뒤 초대 메시지 1건(silent),
 // 반대가 남은 상태의 지원자 혼자 확정(solo_confirm)
 import { expect, test } from "@playwright/test";
 
@@ -25,24 +25,46 @@ test.beforeEach(async () => {
 });
 
 test("AI 합의 채우기: 공지 메시지 → 결정 사항 칸 확정 → 기획안 단계", async ({ page }) => {
+  // 발언 4번·카드 대기·다음 동료 차례 대기가 겹쳐 음성에서는 기본 2분을 넘을 수 있다
+  test.slow();
   await page.goto(s.link);
   await expect(page.locator('[data-slot-input="solution"]')).toBeVisible();
   for (const text of [
-    `저는 ${S3}가 좋다고 생각해요.`,
+    `저는 ${S3}가 좋다고 생각해요.`, // 지원자 안 제안(서지안 설득 1회째)
     "윤하람님은 어떻게 생각하세요?", // 소극형 지명 → 소극형이 자기 안(S3)을 밝힌다
-    `${S2}은 아니에요. 효과가 오래 가지 않아요.`, // 서지안 설득: 반대·대안 2회 → 지원자 안으로 이동
-    `${S2}은 반대예요. 인프라가 더 낫다고 봐요.`,
+    `${S2}은 반대예요. 효과가 오래 가지 않아요.`, // 반대만 한 발언은 설득 횟수에 세지 않는다
   ]) {
     await say(page, text);
     await settle(s.sessionId);
   }
+  // 그 단계 카드(머뭇거림·반론)가 전달되기 전에는 합의 채움을 보류한다(card_pending). 반론 카드
+  // 시각까지 당기면 앞선 머뭇거림 카드도 함께 온다. 카드는 다음 스케줄러 틱에 들어가고 음성에서는
+  // 앞 발언 재생이 끝난 뒤 게시된다
+  await advance(s.sessionId, "card:persuasion_solution");
+  await expect
+    .poll(
+      async () =>
+        (await internalGet<{ card_id: string }[]>(s.sessionId, "/observations")).map(
+          (c) => c.card_id,
+        ),
+      { timeout: VOICE_ENABLED ? 60000 : 20000 },
+    )
+    .toEqual(expect.arrayContaining(["inclusion_silence", "persuasion_solution"]));
+  await settle(s.sessionId);
+  // S3에 대한 분명한 동의(유보 없음): 설득 2회째라 서지안이 S3로 옮기고(지원자 포함 3/4), 지원자의
+  // 그 단계 최신 발언이 S3 지지이므로 다음 실행에서 AI 동료가 합의를 채운다
+  await say(page, `저도 ${S3}에 동의해요. 그쪽으로 가요.`);
   await shot(page, "solution", "01-합의 직전");
 
+  // 서지안의 이동 발언과 채움이 서로 다른 실행이라(같은 실행의 AI 이동으로는 채우지 않는다) 음성에서는
+  // 다음 동료 차례(차례 유지 시간 뒤)까지 기다릴 수 있다
   await expect
-    .poll(async () =>
-      (await internalGet<{ content: string }[]>(s.sessionId, "/messages")).some((m) =>
-        /그럼 .+로 정리할게요/.test(m.content),
-      ),
+    .poll(
+      async () =>
+        (await internalGet<{ content: string }[]>(s.sessionId, "/messages")).some((m) =>
+          /그럼 .+로 정리할게요/.test(m.content),
+        ),
+      { timeout: VOICE_ENABLED ? 90000 : 20000 },
     )
     .toBeTruthy();
   const result = page.locator('[data-slot="solution"]');
