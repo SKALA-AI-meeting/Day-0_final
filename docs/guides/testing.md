@@ -26,7 +26,7 @@
 
 따로 만드는 env 파일은 없다. `test-text`·`test-voice`·`eval-text`·`eval-voice` 프로필이 포트(web 3100·api 8100·내부 8101·postgres 5442·rag 9112)·`WEB_ORIGIN`·`WEB_BASE_URL`·`NEXT_PUBLIC_*`(web 빌드 인자)·`ENABLE_TEST_API=1`·`AGENT_RUNNER=session`·추적 끔을 정하고 비밀값(`JWT_SECRET`·`INTERNAL_TOKEN`·`ASSESSMENT_MCP_TOKEN`, 실제 LLM이면 `OPENAI_API_KEY`)은 `infra/.env`에서 가져온다. 프로필은 `LLM_FAKE`와 `VOICE_ENABLED`·`VOICE_PROVIDER`를 함께 정하고, 바꿀 때는 그 프로필로 `make up`을 다시 해 api·report-worker를 새 env로 띄운다. 모델 캐시는 외부 볼륨 `infra_hfcache`를 쓴다(로컬 개발 모드에서 rag-mcp를 한 번 띄웠으면 이미 있다). 실행 모드별 포트·DB·env는 [configuration.md](configuration.md).
 
-격리 프로필의 FakeSpeech는 `VOICE_QUOTA_PERIOD=isolated-fake`로 테스트 원장을 구분한다. `test-text`·`eval-text`도 같은 값을 두지만 음성은 꺼져 있다. Azure 프로필은 이 값을 사용하지 않고 실제 Azure 자원의 할당량 초기화 기간을 확인해 `infra/.env`에 `VOICE_QUOTA_PERIOD`를 설정해야 한다. Compose는 프로필의 `VOICE_ENABLED`를 웹 빌드 인자 `NEXT_PUBLIC_VOICE_ENABLED`로 전달하므로 텍스트·음성 프로필을 바꾸면 웹을 다시 빌드한다.
+격리 프로필의 FakeSpeech는 `VOICE_QUOTA_PERIOD=isolated-fake`로 테스트 원장을 구분한다. `test-text`·`eval-text`도 같은 값을 두지만 음성은 꺼져 있다. Azure 프로필은 `infra/.env`의 `VOICE_QUOTA_PERIOD`(기본 `auto`, UTC 달마다 새 원장)를 쓴다. Compose는 프로필의 `VOICE_ENABLED`를 웹 빌드 인자 `NEXT_PUBLIC_VOICE_ENABLED`로 전달하므로 텍스트·음성 프로필을 바꾸면 웹을 다시 빌드한다.
 
 ## 단위
 

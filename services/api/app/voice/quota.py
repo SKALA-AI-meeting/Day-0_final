@@ -3,6 +3,7 @@
 import math
 import os
 import uuid
+from datetime import UTC
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -14,10 +15,12 @@ CAPS = {"tts": 400000, "stt": 14400}
 
 
 def scope(now) -> str:
-    # 경계에 두 달을 쓸 수 있는 문제를 피하려고 자원별 quota reset은 명시적으로 설정한다.
+    # 명시한 기간 ID는 그대로 쓴다. auto는 now 기준 UTC 연-월(YYYY-MM)이고, 빈 값은 오류다.
     period = os.getenv("VOICE_QUOTA_PERIOD", "")
     if not period:
         raise ServiceError(503, "voice_quota_unverified", "VOICE_QUOTA_PERIOD 확인이 필요합니다")
+    if period == "auto":
+        period = now.astimezone(UTC).strftime("%Y-%m")
     return os.getenv("AZURE_SPEECH_RESOURCE_ID", "fake") + ":" + period
 
 

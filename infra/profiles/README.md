@@ -14,4 +14,4 @@
 
 `VOICE_ENABLED=0`(`false`도 허용)은 테스트 API가 켜진 프로필에서만 허용한다. `VOICE_PROVIDER=fake`에서 만든 채용 건에는 fake 정책이 복사된다. 예전 Azure 정책 채용 건은 fake 음성 프로필에서 시작할 수 없으므로 새 채용 건을 시드한다. 어느 프로필도 개인 키를 쓰지 않는다.
 
-FakeSpeech 프로필(`dev-fake`·`test-text`·`test-voice`·`eval-text`·`eval-voice`)은 테스트 원장을 위해 `VOICE_QUOTA_PERIOD=isolated-fake`를 설정한다. Azure 프로필(`dev-real`·`deploy`)은 이 값을 쓰지 않으며, 운영자가 Azure 자원의 실제 할당량 초기화 기간을 확인해 `infra/.env`의 `VOICE_QUOTA_PERIOD`에 설정해야 한다. 웹 빌드는 compose가 프로필의 `VOICE_ENABLED`를 `NEXT_PUBLIC_VOICE_ENABLED` 빌드 인자로 전달하므로 모드를 바꾼 뒤 다시 빌드한다.
+FakeSpeech 프로필(`dev-fake`·`test-text`·`test-voice`·`eval-text`·`eval-voice`)은 테스트 원장을 위해 `VOICE_QUOTA_PERIOD=isolated-fake`를 설정한다. Azure 프로필(`dev-real`·`deploy`)은 이 값을 프로필에 두지 않고 `infra/.env`의 `VOICE_QUOTA_PERIOD`(`infra/.env.example` 기본 `auto`: UTC 달마다 새 원장)를 쓴다. 값이 비면 음성이 차단된다. 웹 빌드는 compose가 프로필의 `VOICE_ENABLED`를 `NEXT_PUBLIC_VOICE_ENABLED` 빌드 인자로 전달하므로 모드를 바꾼 뒤 다시 빌드한다.

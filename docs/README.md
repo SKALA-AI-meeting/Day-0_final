@@ -8,6 +8,7 @@ Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론해 키
 |---|---|
 | 제품을 한 페이지로 훑기(화면·규칙·동작·확장 출발점) | [share/product-guide/index.html](share/product-guide/index.html) |
 | 처음 받아서 실행해 보기 | [guides/quickstart.md](guides/quickstart.md) → [guides/configuration.md](guides/configuration.md) |
+| 팀원이 실제 AI·음성으로 시연해 보고 의견 남기기 | [guides/team-test.md](guides/team-test.md) |
 | 테스트를 돌리고 범위를 알기 | [guides/testing.md](guides/testing.md), 가상 지원자로 AI 동작 재기 [guides/virtual-candidate.md](guides/virtual-candidate.md) |
 | 기여 규칙(브랜치·PR·필수 검사·계약·DB 변경) | [guides/contributing.md](guides/contributing.md) |
 | 제품 규칙(단계·시간·페르소나·카드·합의) | [product/scenario.md](product/scenario.md) |
