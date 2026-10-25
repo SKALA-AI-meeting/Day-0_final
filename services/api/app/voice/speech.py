@@ -2,7 +2,8 @@
 
 VOICE_PROVIDER가 공급자를 고른다: azure(F0, 유료 폴백 없음), openai(제한 키, 사용량 과금),
 gemini(GEMINI_API_KEY, 사용량 과금), fake(개발·테스트). VOICE_STT_PROVIDER·VOICE_TTS_PROVIDER로
-받아 적기와 읽기를 서로 다른 공급자에 맡길 수 있다(예: 받아 적기 whisper(로컬), 읽기 gemini).
+받아 적기와 읽기를 서로 다른 공급자에 맡길 수 있다
+(예: 받아 적기 whisper(로컬), 읽기 supertonic(로컬)).
 """
 
 import asyncio
@@ -22,7 +23,10 @@ import httpx
 from app.services.common import ServiceError
 
 log = logging.getLogger(__name__)
-VOICES = {"p1": "ko-KR-InJoonNeural", "p2": "ko-KR-SunHiNeural", "p3": "ko-KR-BongJinNeural"}
+# 자리별 목소리 성별은 프로필 사진과 맞춘다: p1 강한결 남성, p2 윤하람·p3 서지안 여성
+VOICES = {"p1": "ko-KR-InJoonNeural", "p2": "ko-KR-SunHiNeural", "p3": "ko-KR-JiMinNeural"}
+# 예전 정책(p3 남성 목소리)을 복사해 둔 채용 건도 읽을 수 있게 검증에서만 받아 준다
+AZURE_LEGACY_VOICES = frozenset({"ko-KR-BongJinNeural"})
 # OpenAI 목소리. 자리(p1~p3)에 고정하고 페르소나 성향과 연결하지 않는다
 OPENAI_VOICES = {"p1": "ash", "p2": "coral", "p3": "sage"}
 OPENAI_URL = "https://api.openai.com/v1"
@@ -36,7 +40,8 @@ OPENAI_SPEECH_INSTRUCTIONS = (
 
 
 # Gemini 목소리(prebuilt). 자리(p1~p3)에 고정하고 페르소나 성향과 연결하지 않는다
-GEMINI_VOICES = {"p1": "Charon", "p2": "Kore", "p3": "Orus"}
+GEMINI_VOICES = {"p1": "Charon", "p2": "Kore", "p3": "Leda"}
+GEMINI_LEGACY_VOICES = frozenset({"Orus"})
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_STT_MODEL = "gemini-3.5-flash-lite"
 GEMINI_TTS_MODEL = "gemini-3.8-flash-lite-tts"
@@ -57,6 +62,8 @@ def voices_for(provider: str) -> dict[str, str]:
     """채용 건 정책에 복사할 자리별 목소리"""
     if provider == "gemini":
         return dict(GEMINI_VOICES)
+    if provider == "supertonic":
+        return dict(SUPERTONIC_VOICES)
     return dict(OPENAI_VOICES if provider == "openai" else VOICES)
 
 
@@ -182,7 +189,7 @@ class AzureSpeech:
                 raise ServiceError(503, "voice_unavailable", "Azure F0 소속 확인 실패") from exc
 
     async def synthesize(self, text: str, voice: str) -> bytes:
-        if voice not in VOICES.values():
+        if voice not in {*VOICES.values(), *AZURE_LEGACY_VOICES}:
             raise ServiceError(422, "voice_policy_mismatch", "허용되지 않은 voice")
         await self.verify()
         ssml = (
@@ -386,7 +393,7 @@ class GeminiSpeech:
         return response.json()
 
     async def synthesize(self, text: str, voice: str) -> bytes:
-        if voice not in GEMINI_VOICES.values():
+        if voice not in {*GEMINI_VOICES.values(), *GEMINI_LEGACY_VOICES}:
             raise ServiceError(422, "voice_policy_mismatch", "허용되지 않은 voice")
         # 말투 지시는 세 자리 모두 같다(성향이 목소리로 드러나지 않게). 알아듣는 모델에만 붙인다
         spoken = (
@@ -515,6 +522,73 @@ class WhisperSpeech:
             return await asyncio.to_thread(run)
 
 
+# 로컬 읽기(Supertonic, ONNX Runtime CPU). 목소리 M1~M5·F1~F5 중 자리별로 고정한다
+SUPERTONIC_VOICES = {"p1": "M1", "p2": "F1", "p3": "F2"}
+SUPERTONIC_MODEL = "supertonic-3"
+
+
+class SupertonicSpeech:
+    """로컬 읽기 전용(Supertonic). AI 동료 문장이 이 서버 밖으로 나가지 않고 과금이 없다.
+
+    모델은 처음 쓸 때 SUPERTONIC_CACHE(기본 /models/supertonic)에 내려받아 프로세스에 하나만 둔다.
+    CPU를 쓰므로 동시에 SUPERTONIC_CONCURRENCY개(기본 1)까지만 만든다. 받아 적기는 하지 않는다.
+    """
+
+    _engines: dict = {}
+    _load_lock = threading.Lock()
+
+    def __init__(self) -> None:
+        self.threads = int(os.getenv("SUPERTONIC_THREADS") or 4)
+        self.steps = int(os.getenv("SUPERTONIC_STEPS") or 5)
+        self.speed = float(os.getenv("SUPERTONIC_SPEED") or 1.0)
+        self.cache = os.getenv("SUPERTONIC_CACHE") or "/models/supertonic"
+        self._slots = asyncio.Semaphore(int(os.getenv("SUPERTONIC_CONCURRENCY") or 1))
+
+    def _engine(self):
+        """(TTS 엔진, 목소리별 스타일 사전). 스타일도 한 번만 읽는다."""
+        key = (self.cache, self.threads)
+        with self._load_lock:
+            if key not in self._engines:
+                from supertonic import TTS
+
+                tts = TTS(
+                    model=SUPERTONIC_MODEL,
+                    model_dir=self.cache,
+                    intra_op_num_threads=self.threads,
+                )
+                styles = {v: tts.get_voice_style(v) for v in SUPERTONIC_VOICES.values()}
+                self._engines[key] = (tts, styles)
+            return self._engines[key]
+
+    async def verify(self) -> None:
+        """모델을 적재해 둔다(처음 한 번은 내려받기 때문에 오래 걸린다)."""
+        try:
+            await asyncio.to_thread(self._engine)
+        except Exception as exc:
+            raise ServiceError(503, "voice_unavailable", "로컬 읽기 모델을 쓸 수 없습니다") from exc
+
+    async def synthesize(self, text: str, voice: str) -> bytes:
+        """한국어로 읽어 PCM16 mono WAV(모델 표본율, supertonic-3은 44.1kHz)로 돌려준다."""
+        if voice not in SUPERTONIC_VOICES.values():
+            raise ServiceError(422, "voice_policy_mismatch", "허용되지 않은 voice")
+
+        def run() -> bytes:
+            import numpy as np
+
+            tts, styles = self._engine()
+            wav, _ = tts.synthesize(
+                text, voice_style=styles[voice], lang="ko", total_steps=self.steps, speed=self.speed
+            )
+            samples = np.clip(np.asarray(wav, np.float32).reshape(-1), -1.0, 1.0)
+            return wav_from_pcm((samples * 32767).astype("<i2").tobytes(), int(tts.sample_rate))
+
+        async with self._slots:
+            return await asyncio.to_thread(run)
+
+    async def transcribe(self, audio: bytes, phrases: Sequence[str] = ()) -> str:
+        raise ServiceError(503, "voice_unavailable", "로컬 읽기 공급자는 받아 적기를 하지 않습니다")
+
+
 class SplitSpeech:
     """받아 적기와 읽기를 서로 다른 공급자에 맡긴다."""
 
@@ -551,12 +625,16 @@ def provider():
         return _provider(stt)
     if tts == "whisper":
         raise ServiceError(503, "voice_unavailable", "whisper는 받아 적기 전용입니다")
+    if stt == "supertonic":
+        raise ServiceError(503, "voice_unavailable", "supertonic은 읽기 전용입니다")
     return SplitSpeech(_provider(stt), _provider(tts))
 
 
 def _provider(name: str):
     if name == "whisper":
         return WhisperSpeech()
+    if name == "supertonic":
+        return SupertonicSpeech()
     if name == "fake":
         if os.getenv("LLM_FAKE") != "1" and os.getenv("ENABLE_TEST_API") != "1":
             raise ServiceError(503, "voice_unavailable", "FakeSpeech는 개발 모드 전용입니다")

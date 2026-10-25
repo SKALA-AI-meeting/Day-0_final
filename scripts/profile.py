@@ -214,10 +214,20 @@ class Profile:
             "whisper",
             "fake",
         ):
-            out.append("VOICE_STT_PROVIDER는 비움·azure·openai·gemini·whisper·fake 중 하나")
-        if self.get("VOICE_TTS_PROVIDER") not in ("", "azure", "openai", "gemini", "fake"):
             out.append(
-                "VOICE_TTS_PROVIDER는 비움·azure·openai·gemini·fake 중 하나"
+                "VOICE_STT_PROVIDER는 비움·azure·openai·gemini·whisper·fake 중 하나"
+                "(supertonic은 읽기 전용)"
+            )
+        if self.get("VOICE_TTS_PROVIDER") not in (
+            "",
+            "azure",
+            "openai",
+            "gemini",
+            "supertonic",
+            "fake",
+        ):
+            out.append(
+                "VOICE_TTS_PROVIDER는 비움·azure·openai·gemini·supertonic·fake 중 하나"
                 "(whisper는 받아 적기 전용)"
             )
         if self.voice_mode == "off" and self.get("ENABLE_TEST_API") != "1":
@@ -331,7 +341,7 @@ class Profile:
                 )
             )
         stt, tts = self.voice_parts
-        if self.voice_mode != "off" and {stt, tts} & {"openai", "gemini", "whisper"}:
+        if self.voice_mode != "off" and {stt, tts} & {"openai", "gemini", "whisper", "supertonic"}:
             parts = [("STT", stt, "MODEL_STT"), ("TTS", tts, "MODEL_TTS")]
             defaults = {
                 ("openai", "STT"): "gpt-4o-mini-transcribe",
@@ -345,6 +355,9 @@ class Profile:
                 if name == "whisper":
                     model = self.get("WHISPER_MODEL") or "large-v3-turbo"
                     shown.append(f"{part} whisper {model}(로컬, 키 없음)")
+                elif name == "supertonic":
+                    steps = self.get("SUPERTONIC_STEPS") or "5"
+                    shown.append(f"{part} supertonic-3 steps {steps}(로컬, 키 없음)")
                 elif name in keys:
                     model = self.get(model_env) or defaults[(name, part)]
                     has = self.has(keys[name]) or self.shell.get(keys[name])

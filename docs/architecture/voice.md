@@ -22,7 +22,7 @@
 
 ## Azure와 비용
 
-TtsService·SttService는 토론 에이전트와 독립 인터페이스다. 기본 어댑터는 Azure F0 일반 Neural TTS와 표준 한국어 STT다. p1 InJoon, p2 SunHi, p3 BongJin voice를 채용 건에 고정한다. 다른 공급자 자동 대체·S0 업그레이드는 없다. F0 조회와 listKeys로 자원·지역·키 소속을 확인하고 검증할 수 없으면 차단한다. 관리 자격증명에는 요금제 변경 권한을 주지 않는다. 외부 운영자가 요금제를 바꾸는 것은 앱 밖의 변경이므로 운영 중 F0 리소스를 변경하지 않는다.
+TtsService·SttService는 토론 에이전트와 독립 인터페이스다. 기본 어댑터는 Azure F0 일반 Neural TTS와 표준 한국어 STT다. p1 InJoon, p2 SunHi, p3 JiMin voice를 채용 건에 고정한다. 다른 공급자 자동 대체·S0 업그레이드는 없다. F0 조회와 listKeys로 자원·지역·키 소속을 확인하고 검증할 수 없으면 차단한다. 관리 자격증명에는 요금제 변경 권한을 주지 않는다. 외부 운영자가 요금제를 바꾸는 것은 앱 밖의 변경이므로 운영 중 F0 리소스를 변경하지 않는다.
 
 월 운영 한도는 전용 리소스 기준 TTS 400,000 문자·STT 14,400초다. 시작 시 60분 세션은 12,000문자/1,200초, 15분 세션은 3,000문자/300초를 예약하고 종료 세션의 미사용량을 반환한다. 실제 호출 전에 원장을 차감한다. 타임아웃·재시작으로 과금 여부가 불확실해도 차감을 되돌리지 않는다. 한도 초과·원장 장애는 호출 차단이다. TTS는 공용 15회/60초, 세션당 TTS 100회·STT 40회 제한이다. 클라우드 음성 시연은 한 세션만 허용한다. FakeSpeech는 내부 테스트 전용으로 여러 격리 세션을 허용한다.
 
@@ -63,7 +63,7 @@ TtsService·SttService는 토론 에이전트와 독립 인터페이스다. 기�
 `VOICE_PROVIDER=gemini`(또는 `VOICE_TTS_PROVIDER=gemini`)일 때의 공급자다. 어댑터는 `speech.py`의 `GeminiSpeech`이고 키는 기존 규칙(gemini-* → `GEMINI_API_KEY`)을 따른다.
 
 - 받아 적기: `models/{MODEL_STT}:generateContent`에 완성 WAV를 인라인 오디오로 보내고 "들리는 그대로 받아 적어라(다듬기·요약 금지, 말소리가 없으면 빈 문자열)" 지시를 붙인다. 기본 `gemini-3.5-flash-lite`, temperature 0. 전용 음성 인식이 아니라 생성 모델이므로 말을 다듬거나 지어낼 위험이 있다(전사는 평가 근거라 실제 발언으로 확인한다). 구문 목록은 지시에 붙인다.
-- 읽기: TTS 모델(기본 `gemini-2.5-flash-preview-tts`)에 `responseModalities: AUDIO`와 자리별 고정 목소리(p1 `Charon`, p2 `Kore`, p3 `Orus`)를 보낸다. 원시 PCM(`audio/L16;rate=24000`)이면 WAV 머리를 붙이고, WAV로 오면 그대로 쓴다. 말투 지시는 세 자리 모두 같다. 10/25 시험에서 한 문장에 약 5초가 걸렸다.
+- 읽기: TTS 모델(기본 `gemini-2.5-flash-preview-tts`)에 `responseModalities: AUDIO`와 자리별 고정 목소리(p1 `Charon`, p2 `Kore`, p3 `Leda`)를 보낸다. 원시 PCM(`audio/L16;rate=24000`)이면 WAV 머리를 붙이고, WAV로 오면 그대로 쓴다. 말투 지시는 세 자리 모두 같다. 10/25 시험에서 한 문장에 약 5초가 걸렸다.
 - 비용·정책: 사용량 과금. 정책 `version: gemini-v1`, 원장 `gemini:<기간>`, 과금 표시는 OpenAI와 같다(`metered`).
 - 데이터: Gemini API 무료 티어는 입력을 Google이 제품 개선에 쓸 수 있다. 실제 지원자 음성에 쓰기 전에 키 프로젝트의 결제 티어를 확인한다. 동의 화면은 처리 업체를 "Google Gemini"로 적는다(`NEXT_PUBLIC_VOICE_PROVIDER`).
 
@@ -71,7 +71,7 @@ TtsService·SttService는 토론 에이전트와 독립 인터페이스다. 기�
 
 두 값을 따로 주면 `SplitSpeech`가 받아 적기는 STT 공급자, 읽기는 TTS 공급자에 맡긴다(비우면 `VOICE_PROVIDER` 하나). 채용 건 정책의 `provider`는 `"<stt>+<tts>"`(예: `whisper+gemini`), 목소리는 읽기 공급자 것을 복사하고, 사용량 원장은 `<stt>+<tts>:<기간>`이다. 과금 표시는 그 작업을 맡은 쪽이 과금 공급자일 때만 `metered`다.
 
-`dev-real`은 받아 적기 `whisper`(로컬) + 읽기 `gemini`다.
+`dev-real`은 받아 적기 `whisper`(로컬) + 읽기 `supertonic`(로컬, 아래 "Supertonic 로컬 TTS")이다. 아래 읽기·동의 문구는 읽기를 `gemini`로 둘 때다.
 
 - 로컬 받아 적기(`WhisperSpeech`): faster-whisper(CPU int8)를 API 프로세스 안에서 돌린다. 모델 `WHISPER_MODEL`(기본 `large-v3-turbo`), 스레드 `WHISPER_THREADS`(기본 4), 빔 `WHISPER_BEAM`(기본 1), 동시 처리 `WHISPER_CONCURRENCY`(기본 1). 완성 WAV의 PCM을 배열로 넘기고, 구문 목록은 `initial_prompt`로 넘긴다. 모델은 첫 사용(세션 시작 확인 `verify`) 때 `/models/whisper`(compose `hfcache` 볼륨)에 내려받아 프로세스에 하나만 둔다. 지원자 소리는 서버 밖으로 나가지 않고 과금이 없다.
 - 읽기는 Gemini TTS로, 개인 Gemini 키에는 AI 동료가 만든 문장만 간다(지원자 음성·발언은 보내지 않는다).
@@ -95,3 +95,15 @@ TtsService·SttService는 토론 에이전트와 독립 인터페이스다. 기�
 - 세션을 시작하면 api가 키워드 단계 안내 앞에 AI 동료 3명의 인사(고정 문구, `meta.kind = "greeting"`)를 p1→p3 순서로 저장한다. 음성 모드는 다른 동료 발언처럼 이 순서로 음성 작업을 만들어 먼저 읽는다.
 - 화면은 들은 발언 기준(`chatSnap`)으로 세 동료의 인사를 다 들을 때까지 프로필 카드를 크게 둔다(인사 화면). 말하는 카드에 상태 심볼과 자막이 붙는다. [바로 대화하기]나 30초 대기로 먼저 끝낼 수 있다.
 - 인사는 발언권·발언 수·카드 차례·평가 사실에 영향을 주지 않는다(`debate.not_greeting`, `facts.message_facts`).
+
+## Supertonic 로컬 TTS(`VOICE_TTS_PROVIDER=supertonic`)
+
+읽기 전용 로컬 공급자다. 어댑터는 `speech.py`의 `SupertonicSpeech`이고 `supertonic` 패키지(supertonic-3, ONNX Runtime CPU)를 API 프로세스 안에서 돌린다. 키·과금이 없고 AI 동료 문장이 서버 밖으로 나가지 않는다. 받아 적기는 하지 않으므로 STT로 고르면 `voice_unavailable`이다(`whisper`가 읽기를 하지 않는 것과 같은 규칙).
+
+- 모델: 첫 사용(세션 시작 확인 `verify`) 때 `SUPERTONIC_CACHE`(기본 `/models/supertonic`, compose `hfcache` 볼륨)에 Hugging Face에서 내려받고, 엔진과 자리별 목소리 스타일을 프로세스에 하나만 둔다. 첫 적재는 약 12초, 그 뒤 적재는 약 0.5초다(10/25 Apple M5 측정).
+- 합성: `lang="ko"`, 디노이즈 단계 `SUPERTONIC_STEPS`(기본 5), 말 빠르기 `SUPERTONIC_SPEED`(기본 1.0), 스레드 `SUPERTONIC_THREADS`(기본 4), 동시 처리 `SUPERTONIC_CONCURRENCY`(기본 1). 스레드에서 돌려 이벤트 루프를 막지 않는다. 결과(float32)를 PCM16 mono WAV(모델 표본율 44.1kHz)로 바꿔 돌려준다. 재생 길이는 다른 공급자처럼 WAV 머리의 프레임 수로 계산한다.
+- 목소리: 자리별 고정 `p1 M1`(강한결, 남성), `p2 F1`(윤하람, 여성), `p3 F2`(서지안, 여성). 성별은 프로필 사진과 맞추고 페르소나 성향과 연결하지 않는다. 정책에 없는 목소리는 422 `voice_policy_mismatch`다.
+- 성능: 10/25 측정(Apple M5, 4스레드, 단계 5)에서 실시간 대비 약 0.10~0.13배(130자 문장 약 2초)였고, 합성 음성을 Whisper로 다시 받아 적은 글자 오류율은 표본 전부 0이었다.
+- 정책·원장: `dev-real`의 채용 건 정책은 `provider`·`version`이 `whisper+supertonic`·`whisper+supertonic-v1`, 목소리는 위 표, `sku` 없음, `paid_budget_usd` 0이다. 원장은 `whisper+supertonic:<기간>`이고 과금 표시는 `metered`가 아니다. 한 번에 한 세션·호출 수·분당 읽기 횟수 한도는 다른 실제 공급자와 같이 적용된다.
+- 동의 화면: 받아 적기 `whisper`와 읽기 `supertonic`이 함께면 음성을 "이 서비스 서버(외부 전송 없음)"에서 처리한다고 적는다(`NEXT_PUBLIC_VOICE_STT_PROVIDER`·`NEXT_PUBLIC_VOICE_TTS_PROVIDER`).
+- 목소리 성별 정정: 같은 기준으로 다른 공급자의 p3도 여성 목소리로 바꿨다(Azure `ko-KR-JiMinNeural`, Gemini `Leda`). 예전 정책(Azure `ko-KR-BongJinNeural`, Gemini `Orus`)을 복사한 채용 건은 검증에서 그대로 받아 그 목소리로 읽고, 새 목소리는 새 채용 건부터 쓴다.
