@@ -25,7 +25,7 @@
 | 리포트 보기·차원 조정·검토 완료·인쇄 | `components/admin/report-view.tsx`, `review.ts` | [F-04, F-04a, F-04c, F-09](../../PRD.md) |
 | 전체 기록과 근거 이동 | `components/admin/record-view.tsx` | [F-05](../../PRD.md) |
 | 초대 링크 입장·동의·이어하기 | `components/debate/link-screens.tsx`, `candidate-flow.tsx` | [F-10, F-11, F-19](../../PRD.md) |
-| 음성 회의(프로필 4칸·자막·발언하기·인식 글 확인/수정·최근 발언·메모장) | `components/debate/voice/voice-room.tsx`, `profile-stage.tsx`, `voice/memo-pad.tsx`, `reducer.ts`, `lib/ws.ts` (`chat.tsx`는 테스트 텍스트 모드 전용) | [F-12](../../PRD.md) |
+| 음성 회의(발표자 보기·자막·발언하기·자동 제출·메모장) | `components/debate/voice/voice-room.tsx`, `profile-stage.tsx`, `voice/memo-pad.tsx`, `reducer.ts`, `lib/ws.ts` (`chat.tsx`는 테스트 텍스트 모드 전용) | [F-12](../../PRD.md) |
 | 결정 사항 패널과 확인 창 | `components/debate/decision-panel.tsx` | [F-13](../../PRD.md) |
 | 단계 진행바·남은 시간 | `components/debate/debate-view.tsx` | [F-14](../../PRD.md) |
 | 참고 자료 뷰어(Markdown), 어시스턴트 | `components/debate/side-panels.tsx`, `markdown.tsx` | [F-15, F-16](../../PRD.md) |
@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 107개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 114개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -182,18 +182,22 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>components/debate/outside-voice.dom.test.tsx</code> (4)</summary>
+<details><summary><code>components/debate/outside-voice.dom.test.tsx</code> (5)</summary>
 
 - 가로 1024px 미만이면 노트북·PC Chrome 안내가 시작 전 화면을 막는다
 - 가로 1024px 이상이면 안내 없이 화면이 보인다
 - 어시스턴트 안내는 주어가 어시스턴트이고 평가 방식 문구와 모순되지 않는다
-- 프로필 카드: 음성 토론의 AI 동료는 말하는 중, 글 토론은 입력 중
+- 시작 전 안내는 발언 시간과 손들기 차례를 설명한다
+- 프로필 카드: 음성 토론은 이름·역할만, 글 토론은 입력 상태를 보인다
 
 </details>
 
-<details><summary><code>components/debate/profile-stage.dom.test.tsx</code> (1)</summary>
+<details><summary><code>components/debate/profile-stage.dom.test.tsx</code> (4)</summary>
 
 - 자막 영역은 발언 전후로 유지되고 내용만 바뀐다
+- 상태별 큰 칸은 실제 재생 동료와 마지막 동료만 기억한다
+- 처음 네 칸은 균등하고, 방금 한 말은 큰 칸에만 흐리게 남긴다
+- 발표자 위치를 바꿔도 프로필 칸을 유지하고 손든 지원자를 표시한다
 
 </details>
 
@@ -244,11 +248,10 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>components/debate/voice/confirm.dom.test.tsx</code> (3)</summary>
+<details><summary><code>components/debate/voice/confirm.dom.test.tsx</code> (2)</summary>
 
-- 받아 적은 글을 고쳐 제출하고 빈 인식 결과에도 직접 입력할 수 있다
-- 수정 중에는 남은 제출 시간과 글자 수를 보이고, 상한을 넘으면 제출을 막는다
-- 제출하지 못한 발언은 읽기 전용으로 남고 닫을 수 있다
+- 빈 인식 결과에는 전사 대신 다시 말하기를 보여 준다
+- 500자 초과 인식은 내용을 숨기고 짧게 다시 말하도록 안내한다
 
 </details>
 
@@ -272,6 +275,15 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <details><summary><code>components/debate/voice/microphone.test.ts</code> (1)</summary>
 
 - 응답하지 않는 마이크 권한 요청은 8초 뒤 끝나고 늦은 스트림을 닫는다
+
+</details>
+
+<details><summary><code>components/debate/voice/notices.dom.test.tsx</code> (4)</summary>
+
+- 새 시스템 안내만 한 줄로 보이고 동료 합의 발언은 중복 안내하지 않는다
+- 내 발언 저장 뒤 내용 없이 전달 확인 한 줄을 보인다
+- 전달 안내는 상태 변화와 무관하게 3초 유지된다
+- 저장 대기 표시는 턴·epoch·상태·발언·단계 변화에서 리셋된다
 
 </details>
 
@@ -453,9 +465,9 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 토론 화면(`components/debate/debate-view.tsx`)은 크기를 바꿀 수 있는 분할 레이아웃이다. 음성 모드(기본)의 지원자 화면은 이 배치를 따른다.
 
-- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 가운데 칸이 음성 회의로 바뀐다. 가운데는 지원자와 AI 동료 3명의 프로필 4칸(말하는 사람 강조, 동료 카드 아래 현재 문장 자막)과 아래의 발언 조작([발언하기]·손들기·남은 시간·음량·[발언 완료]·인식 글 확인/수정·[최근 발언])이다. 왼쪽은 지원자 메모장(`voice/memo-pad.tsx`, 이 브라우저에만 저장하고 서버·평가에 보내지 않음)과 첫 확정 뒤의 단계 안내(인사가 끝나면 왼쪽 프로필 칸은 비운다), 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
+- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 가운데 칸이 음성 회의로 바뀐다. 처음에는 네 명이 2×2 균등 배치이고, 발언이 시작되면 그 사람의 큰 칸과 아래 참가자 세 칸으로 즉시 바뀐다(위치 이동 애니메이션 없음). 내 차례 대기 중에는 마지막 동료를 유지하고 내 발언·처리 중에 내 칸을 크게 보인다. 동료 발언 중 현재 문장을 자막으로 보이고 재생 후에는 마지막 문장 하나를 흐리게 남긴다. 아래에는 발언 조작([발언하기]·손들기·남은 시간·음량·[발언 완료])과 새 시스템 안내·제출 확인이 있다. 왼쪽은 지원자 메모장(`voice/memo-pad.tsx`, 이 브라우저에만 저장하고 서버·평가에 보내지 않음)과 첫 확정 뒤의 단계 안내(인사가 끝나면 왼쪽 프로필 칸은 비운다), 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
 - 크기 조절: 영역 사이 경계를 끌거나 화살표 키로 바꾸고, 두 번 누르면 원래대로 돌아간다. 엔진은 `components/ui/split-layout.tsx`, 단계별 규칙은 `components/debate/stage-layout.ts`.
-- 말하기(STT): 일반 차례에 [발언하기]를 누르면 최대 60초 녹음하고(발언 완료 버튼과 타이머가 같은 종료 함수), 서버가 전사한 글을 기본 8초 동안 확인한 뒤 자동 제출한다. 수정하면 자동 제출이 멈추고 [발언 제출]을 눌러야 하며 입력은 500자로 막는다. 빈 인식 결과는 직접 입력한다. 구현은 `components/debate/voice/voice-room.tsx`·`recorder.ts`이고 계약은 [음성 계약](../../docs/contracts/voice.md)이다.
+- 말하기(STT): 일반 차례에 20초 안에 [발언하기]나 Space로 시작해 최대 60초 말하고([발언 완료]와 타이머가 같은 종료 함수), 서버가 전사한 글을 보여 주지 않고 바로 전달한다. 저장되면 "전달했어요"를 잠깐 보인다. 빈 인식 결과에는 [다시 말하기]를 안내한다. 구현은 `components/debate/voice/voice-room.tsx`·`recorder.ts`이고 계약은 [음성 계약](../../docs/contracts/voice.md)이다.
 - AI 동료 음성(TTS): 서버가 만든 검증된 AI 메시지를 순서대로 재생하고(실제 재생 종료를 확인한 뒤 다음 항목·내 차례), 말하는 동료를 프로필에서 강조하며 재생 중인 문장을 자막으로 보인다. 목소리는 자리별로 고정한다.
 - 대체 순서: `NEXT_PUBLIC_VOICE_API` 경로(웹 서버 라우트 글자 변환)와 `VoiceInput`·`VoicePanel`은 미연결(코드만 남음)이다. 현재 화면은 이 경로를 쓰지 않는다.
 - 켜는 법(미연결 코드): `NEXT_PUBLIC_VOICE_API=1`·`VOICE_API=1`로 `/api/voice/*` 라우트를 켤 수 있지만 토론 화면은 쓰지 않는다. 모델은 `MODEL_STT`·`MODEL_TTS`, 키 선택은 `lib/voice-server.ts`의 `voiceKey`.

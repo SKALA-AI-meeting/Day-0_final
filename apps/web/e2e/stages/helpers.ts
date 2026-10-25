@@ -138,6 +138,7 @@ export async function say(page: Page, text: string): Promise<void> {
   await expect(start.or(done)).toBeVisible({ timeout: 45000 });
   if (await start.isVisible()) await start.click();
   await expect(done).toBeVisible({ timeout: 45000 });
+  await expect(page.getByRole("status").filter({ hasText: "발언 중" }).first()).toBeVisible();
   await page.waitForTimeout(350);
   await page.getByRole("button", { name: "발언 완료" }).click();
   await expect
@@ -154,6 +155,7 @@ export async function say(page: Page, text: string): Promise<void> {
 /** 인사 화면(프로필 카드만 크게)이면 [바로 대화하기]로 토론방을 연다 */
 export async function enterRoom(page: Page): Promise<void> {
   const skip = page.getByRole("button", { name: "바로 대화하기" });
+  await expect(skip.or(room(page))).toBeVisible();
   if (await skip.isVisible()) await skip.click();
   await expect(room(page)).toBeVisible();
 }

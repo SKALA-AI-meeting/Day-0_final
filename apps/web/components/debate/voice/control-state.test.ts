@@ -14,13 +14,13 @@ test("발언권 유지 시간이 끝나면 0초 대신 동료가 이어 말한�
 
 test("막힌 차례는 이유마다 제목·할 일과 그 일을 하는 버튼 하나로 보이고, 내 차례가 아니면 버튼이 없다", () => {
   const failed = blockedTrouble("error", true)!;
-  expect(failed.title).toBe("발언을 글로 옮기지 못했어요");
-  expect(ACTION_LABEL[failed.action!]).toBe("다시 받아 적기");
+  expect(failed.title).toBe("발언을 확인하지 못했어요");
+  expect(ACTION_LABEL[failed.action!]).toBe("다시 확인하기");
   const dropped = blockedTrouble("voice_interrupted", true)!;
   expect(dropped.detail).toContain("끊긴 동안의 발언은 저장되지 않았어요");
-  expect(ACTION_LABEL[dropped.action!]).toBe("다시 녹음");
+  expect(ACTION_LABEL[dropped.action!]).toBe("다시 말하기");
   expect(blockedTrouble("voice_interrupted", false)!.action).toBeNull();
-  // 빈 인식 결과는 오류가 아니라 직접 입력 칸으로 보인다
+  // 빈 인식 결과는 오류가 아니라 다시 말하기 안내로 보인다
   expect(blockedTrouble("empty", true)).toBeNull();
   expect(Object.values(ACTION_LABEL).some((label) => label.includes("/"))).toBe(false);
 });

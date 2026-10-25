@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
-// 완료 기준: 좁은 화면 안내, 동의 화면 어시스턴트 문구, 디브리핑 접힘 문구, 음성/글 토론의 말하는 중 문구.
+// 완료 기준: 좁은 화면 안내, 동의 화면 어시스턴트 문구, 음성 프로필의 이름·역할 표시.
 import { Popover } from "@base-ui/react/popover";
 import { renderToStaticMarkup } from "react-dom/server";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test } from "vitest";
 
-import { ASSISTANT_NOTICE, DesktopNotice, useNarrowViewport } from "./link-screens";
+import { ASSISTANT_NOTICE, DesktopNotice, SessionGuide, useNarrowViewport } from "./link-screens";
 import { ProfileCard } from "./profile-stage";
 import type { Participant, StateSnapshot } from "./types";
 
@@ -59,17 +59,56 @@ test("어시스턴트 안내는 주어가 어시스턴트이고 평가 방식 �
   expect(ASSISTANT_NOTICE).not.toContain("평가 수준을 매기지");
 });
 
+test("시작 전 안내는 발언 시간과 손들기 차례를 설명한다", () => {
+  const guide = renderToStaticMarkup(
+    <SessionGuide
+      snap={
+        {
+          participants: [{ id: "candidate", display_name: "김지원" }],
+          phases: [
+            { phase: "keyword" },
+            { phase: "problem" },
+            { phase: "solution" },
+            { phase: "proposal", budget_min: 14 },
+          ],
+          session: {},
+        } as unknown as StateSnapshot
+      }
+    />,
+  );
+  expect(guide).toContain("말하는 사람이 크게 보여요");
+  expect(guide).toContain("정해진 시간 안에 [발언하기]");
+  expect(guide).toContain("최대 60초");
+  expect(guide).toContain("[발언 완료]");
+  expect(guide).toContain("내 말은 글로 보이지 않고 바로 전달돼요");
+  expect(guide).toContain("손들기는 다음 차례를 예약해요");
+});
+
 const person = { id: "p1", display_name: "강한결", avatar_url: null } as unknown as Participant;
 const snap = { messages: [], session: { phase: "keyword" } } as unknown as StateSnapshot;
 const card = (voiceMode: boolean) =>
   renderToStaticMarkup(
     <Popover.Root open>
-      <ProfileCard person={person} snap={snap} speaking voiceMode={voiceMode} />
+      <ProfileCard
+        person={person}
+        snap={
+          voiceMode
+            ? ({
+                ...snap,
+                messages: [{ sender: "p1", phase: "keyword", content: "숨길 발언" }],
+              } as StateSnapshot)
+            : snap
+        }
+        speaking
+        voiceMode={voiceMode}
+      />
     </Popover.Root>,
   );
 
-test("프로필 카드: 음성 토론의 AI 동료는 말하는 중, 글 토론은 입력 중", () => {
-  expect(card(true)).toContain("말하는 중이에요");
-  expect(card(true)).not.toContain("입력 중");
+test("프로필 카드: 음성 토론은 이름·역할만, 글 토론은 입력 상태를 보인다", () => {
+  expect(card(true)).toContain("AI 동료 · 사람 팀원 역할을 맡은 AI");
+  expect(card(true)).not.toContain("단계에서 한 말");
+  expect(card(true)).not.toContain("숨길 발언");
+  expect(card(true)).not.toContain("발언 중이에요");
   expect(card(false)).toContain("지금 입력 중이에요");
 });
