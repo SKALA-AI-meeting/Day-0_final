@@ -25,7 +25,7 @@ env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값�
 
 | | 로컬 개발(`SCOPE=infra`) | 전체 compose | 격리 스택 |
 |---|---|---|---|
-| 명령 | `make up SCOPE=infra` + 앱 로컬 실행([quickstart.md](quickstart.md)) | `make up PROFILE=dev-fake∣dev-real∣deploy` / `make down` | `make up PROFILE=test-text∣test-voice∣eval-text∣eval-voice` / `make down PROFILE=…` |
+| 명령 | `make up SCOPE=infra` + 앱 로컬 실행([quickstart.md](quickstart.md)) | `make up PROFILE=dev-fake`(또는 `dev-real`·`deploy`) / `make down` | `make up PROFILE=test-text`(또는 `test-voice`·`eval-text`·`eval-voice`) / `make down PROFILE=…` |
 | compose 파일 | `docker-compose.yml` + `docker-compose.dev.yml` | `docker-compose.yml` | `docker-compose.yml` + `docker-compose.e2e.yml`, 프로젝트 `dayzero-debate` |
 | 컨테이너 | postgres·rabbitmq·rag-mcp | 8개 전부 | 8개 전부 |
 | env 파일 | 컨테이너 `infra/.env.resolved-<프로필>`, 로컬 앱 `infra/.env.local` → `infra/.env`(모드 값은 프로필과 맞춘다) | `infra/.env.resolved-<프로필>` | `infra/.env.resolved-<프로필>` |
@@ -37,7 +37,7 @@ env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값�
 | rag-mcp(호스트) | `127.0.0.1:9102` | 열지 않음 | `127.0.0.1:9112` |
 | debate·assessment MCP | 로컬 9101·9103 | 컨테이너 네트워크만 | 컨테이너 네트워크만 |
 | rag-mcp가 부르는 내부 API | `http://host.docker.internal:8001`(로컬 api) | `http://api:8001` | `http://api:8001` |
-| 시드 | `make seed SCOPE=infra` | `make seed PROFILE=…`(compose 안 일회성 seed 서비스. 호스트에서는 닿지 않음) | `make seed PROFILE=test-text∣test-voice∣eval-text∣eval-voice`(호스트에서 5442·8100·9112로) |
+| 시드 | `make seed SCOPE=infra` | `make seed PROFILE=…`(compose 안 일회성 seed 서비스. 호스트에서는 닿지 않음) | `make seed PROFILE=test-text`(또는 `test-voice`·`eval-text`·`eval-voice`)(호스트에서 5442·8100·9112로) |
 | 테스트 API | `ENABLE_TEST_API=1`이면 `localhost:8001/internal/test/*` | 컨테이너 안에서만 | `127.0.0.1:8101/internal/test/*` |
 
 - **같은 DB·큐를 쓰는 api는 하나만 띄운다.** 세션 메일박스·WS 송신 큐·스케줄러가 api 프로세스 메모리에 있어 둘이면 같은 세션을 두 번 처리한다. 다른 DB·큐를 쓰는 격리 스택(위 e2e 스택)은 함께 띄워도 된다.
@@ -95,23 +95,25 @@ env 이름과 기본값의 예시는 `infra/.env.example`, 코드의 기본값�
 | `ENABLE_TEST_API` | api | `1`이면 `/internal/test/*`(단계 시드·시간 당기기). 운영은 비운다 |
 | `LLM_FAKE` | api·report-worker | `1`이면 LLM 호출만 결정적 고정 응답(`[fake]` 표시 없음). 지금 모드 확인은 [quickstart.md](quickstart.md) "7. 실제 LLM으로 돌고 있는지 확인하기" |
 | `LLM_FAULT` | api·report-worker | `<role>:timeout:<N>` 장애 주입(e2e 전용) |
-| `AGENT_RUNNER` | api | `session`(기본, 토론 그래프) ∣ `fake`(단위 테스트 주입용) |
-| `SESSION_COST_HARD_USD` | api | 토론 비용 하드 상한, 기본 `2`(`.env.example`에 없음) |
-| `CONTACT_EMAIL` | api | 입장·디브리핑 문의 창구, 기본 `recruit@example.com`(`.env.example`에 없음) |
+| `AGENT_RUNNER` | api | `session`(기본, 토론 그래프) 또는 `fake`(단위 테스트 주입용) |
+| `SESSION_COST_HARD_USD` | api | 토론 비용 하드 상한, 기본 `2` |
+| `CONTACT_EMAIL` | api | 입장·디브리핑 문의 창구, 기본 `recruit@example.com` |
 | `WEB_ORIGIN`, `WEB_BASE_URL` | api | CORS 허용 origin(쉼표 구분), 초대 링크의 웹 주소 |
 | `LANGCHAIN_TRACING_V2`, `LANGSMITH_TRACING`, `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT` | api·report-worker | LangSmith trace. 기본 끔, `test-text`·`eval-text` 프로필은 항상 `false` |
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_MOCK` | web(빌드 시점) | api·WS 주소, `1`이면 mock 모드 |
 | `API_PORT`, `WEB_PORT`, `RABBITMQ_UI_PORT` | compose | 공개 포트 번호 |
 | `SEED_DATABASE_URL`, `TEST_DATABASE_URL` | `scripts/seed.py`, api 테스트 | 위 "env를 읽는 순서" |
 | `WEB_URL`, `E2E_INTERNAL_URL`, `E2E_DATABASE_URL`, `E2E_RESTART_CMD` | Playwright·e2e 러너 | 대상 스택 주소, `restart` 대본의 재시작 명령 |
+| `HEARTBEAT_PATH` | report-worker | 생존 신호 파일 경로, 기본 `/tmp/heartbeat`(compose healthcheck가 읽음) |
 | `PLAYTEST_PORT` | playtest 드라이버 | 드라이버 서버 포트, 기본 9400 |
+| `VC_API_URL`·`VC_POSITION`·`VC_ADMIN_EMAIL`·`VC_ADMIN_PASSWORD`·`VC_MODEL`·`VC_PG_CONTAINER` | 가상 지원자 호스트 러너 | [virtual-candidate.md](virtual-candidate.md) |
 
 `.env.example`에 없는 키를 코드에 더하면 `.env.example`과 이 표를 함께 고친다.
 
 
 ## 음성 모드
 
-기본 `VOICE_PROVIDER=azure`는 F0만 허용한다. `AZURE_SPEECH_KEY`·`AZURE_SPEECH_REGION`·`AZURE_SPEECH_RESOURCE_ID`와 DefaultAzureCredential용 관리 ID 또는 서비스 계정 설정은 `.env`에만 둔다. F0 자원 조회·listKeys 권한이 필요하며 요금제 변경 권한은 주지 않는다. `VOICE_QUOTA_PERIOD`는 사용량 원장 기간 ID다. `auto`(`.env.example` 기본)는 UTC 연-월마다 새 원장이고, 다른 값은 그대로 기간 ID로 쓴다. 값이 없으면 음성 호출이 차단된다. `VOICE_USER_TURN_SECONDS` 기본 60(1~60)은 새 채용 건에 고정된다. `VOICE_TURN_HOLD_SECONDS` 기본 20(5~120)은 내 차례(일반·손들기·강제)를 지켜 주는 시간이다. 모든 차례는 자동 녹음 없이 지원자가 [발언하기]를 눌러 시작하고, 이 시간이 지나면 동료가 이어 말한다(손들기로 다시 잡을 수 있음). 크면 지원자가 생각할 시간이 늘지만 침묵이 길어지고, 작으면 반대다. 새 채용 건에 고정된다. `VOICE_CONFIRM_SECONDS` 기본 8(0~30)은 서버가 새 채용 건에 고정하는 확인 시각 설정이다. 현재 음성 화면은 이 시각을 기다리지 않고 받아 적은 글을 바로 제출한다. dev-fake 프로필은 0으로 설정한다. `VOICE_FORCED_WAIT_SECONDS` 기본 30(0~120)은 강제 차례(그 단계에서 아직 말하지 않은 지원자)가 지금 동료 발언이 끝나기를 기다릴 몫이고, 새 채용 건에 고정된다. 강제 차례는 단계 마감 "이 값 + 발언 한도 + 10초" 전에 오되, 단계 길이(시작~마감)의 절반보다 일찍 오지 않는다(짧은 세션에서 단계 시작 직후 끼어들지 않게). 크면 60초 발언이 마감에 잘릴 일이 줄지만 더 일찍 끼어들고, 작으면 반대다. 말하는 동안 받아 적기(`/voice/stream`)는 `VOICE_SEGMENT_SECONDS` 기본 10(4~30)초가 쌓이면 그 직전 `VOICE_SEGMENT_SEARCH_SECONDS` 기본 4초 안에서 소리가 가장 작은 `VOICE_SEGMENT_PAUSE_MS` 기본 300ms 구간(말이 멈춘 곳)을 찾아 잘라 미리 받아 적는다. SECONDS가 작으면 녹음 끝에 남는 꼬리가 짧아 기다림이 줄지만 요청이 늘고(무료 요금제 요청 한도), 크면 반대다. PAUSE가 너무 짧으면 단어 사이 짧은 틈에서 잘릴 수 있다. 채용 건에 고정하지 않는 운영 설정이다.
+기본 `VOICE_PROVIDER=azure`는 F0만 허용한다. `AZURE_SPEECH_KEY`·`AZURE_SPEECH_REGION`·`AZURE_SPEECH_RESOURCE_ID`와 DefaultAzureCredential용 관리 ID 또는 서비스 계정 설정은 `.env`에만 둔다. F0 자원 조회·listKeys 권한이 필요하며 요금제 변경 권한은 주지 않는다. `VOICE_QUOTA_PERIOD`는 사용량 원장 기간 ID다. `auto`(`.env.example` 기본)는 UTC 연-월마다 새 원장이고, 다른 값은 그대로 기간 ID로 쓴다. 값이 없으면 음성 호출이 차단된다. `VOICE_USER_TURN_SECONDS` 기본 60(1~60)은 새 채용 건에 고정된다. `VOICE_TURN_HOLD_SECONDS` 기본 20(5~120)은 내 차례(일반·손들기·강제)를 지켜 주는 시간이다. 모든 차례는 자동 녹음 없이 지원자가 [발언하기]를 눌러 시작하고, 이 시간이 지나면 동료가 이어 말한다(손들기로 다시 잡을 수 있음). 크면 지원자가 생각할 시간이 늘지만 침묵이 길어지고, 작으면 반대다. 새 채용 건에 고정된다. `VOICE_CONFIRM_SECONDS` 기본 8(0~30)은 서버가 새 채용 건에 고정하는 확인 시각 설정이다. 현재 음성 화면은 이 시각을 기다리지 않고 받아 적은 글을 바로 제출한다. `infra/.env.example`과 `test-voice`·`dev-real`·`deploy` 프로필은 0으로 둔다. `VOICE_FORCED_WAIT_SECONDS` 기본 30(0~120)은 강제 차례(그 단계에서 아직 말하지 않은 지원자)가 지금 동료 발언이 끝나기를 기다릴 몫이고, 새 채용 건에 고정된다. 강제 차례는 단계 마감 "이 값 + 발언 한도 + 10초" 전에 오되, 단계 길이(시작~마감)의 절반보다 일찍 오지 않는다(짧은 세션에서 단계 시작 직후 끼어들지 않게). 크면 60초 발언이 마감에 잘릴 일이 줄지만 더 일찍 끼어들고, 작으면 반대다. 말하는 동안 받아 적기(`/voice/stream`)는 `VOICE_SEGMENT_SECONDS` 기본 10(4~30)초가 쌓이면 그 직전 `VOICE_SEGMENT_SEARCH_SECONDS` 기본 4초 안에서 소리가 가장 작은 `VOICE_SEGMENT_PAUSE_MS` 기본 300ms 구간(말이 멈춘 곳)을 찾아 잘라 미리 받아 적는다. SECONDS가 작으면 녹음 끝에 남는 꼬리가 짧아 기다림이 줄지만 요청이 늘고(무료 요금제 요청 한도), 크면 반대다. PAUSE가 너무 짧으면 단어 사이 짧은 틈에서 잘릴 수 있다. 채용 건에 고정하지 않는 운영 설정이다.
 
 격리 e2e override는 API에 FakeSpeech·FakeLLM·테스트 API를 강제한다. 새 음성 스키마는 기존 볼륨에 자동 적용되지 않으므로 테스트/개발 DB를 구분하고 DB 가이드를 따른다. 실제 Azure 설정이 없어도 Fake 기반 검증은 가능하지만 음질·인식 정확도 검증과 구분한다.
 

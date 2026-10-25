@@ -6,7 +6,7 @@ Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론해 키
 
 | 하고 싶은 일 | 먼저 읽을 문서 |
 |---|---|
-| 제품을 한 페이지로 훑기(화면·규칙·동작·확장 출발점) | [share/product-guide/index.html](share/product-guide/index.html) |
+| 제품을 한 페이지로 훑기(공유용, 정본 아님) | [share/product-guide/index.html](share/product-guide/index.html). 결과 보고서는 [share/report.html](share/report.html)·[share/visual-report/index.html](share/visual-report/index.html) |
 | 처음 받아서 실행해 보기 | [guides/quickstart.md](guides/quickstart.md) → [guides/configuration.md](guides/configuration.md) |
 | 팀원이 실제 AI·음성으로 시연해 보고 의견 남기기 | [guides/team-test.md](guides/team-test.md) |
 | 테스트를 돌리고 범위를 알기 | [guides/testing.md](guides/testing.md), 가상 지원자로 AI 동작 재기 [guides/virtual-candidate.md](guides/virtual-candidate.md) |
@@ -18,9 +18,7 @@ Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론해 키
 | 세션 상태·실행 순서·메일박스·복구 | [architecture/session-lifecycle.md](architecture/session-lifecycle.md) |
 | 에이전트(토론 그래프·의도 분류·어시스턴트·평가 에이전트) | [architecture/agents.md](architecture/agents.md), [architecture/harness.md](architecture/harness.md) |
 | AI 역할 하나를 고치기(하는 일·입력·출력·데이터 파일·코드 입구·검증) | [agents/manager.md](agents/manager.md) 진행 매니저, [agents/persona.md](agents/persona.md) 토론 동료, [agents/intent.md](agents/intent.md) 의도 분류, [agents/assistant.md](agents/assistant.md) 어시스턴트, [agents/evaluator.md](agents/evaluator.md) 평가자 |
-| 음성 토론 현재 구현·설정·복구 | [architecture/voice.md](architecture/voice.md) |
-| 턴 기반 음성 토론 구조 | [architecture/voice-turns.md](architecture/voice-turns.md) |
-| 음성 모델 후보·무료 티어·비용 정책 | [architecture/voice-services.md](architecture/voice-services.md) |
+| 음성 토론(발언권 상태·화면·받아 적기·Azure 사용량·복구) | [architecture/voice.md](architecture/voice.md), 경로·오류 코드 [contracts/voice.md](contracts/voice.md) |
 | 권한 경계·비밀값 | [architecture/security.md](architecture/security.md) |
 | 테이블과 컬럼 | [architecture/data-model.md](architecture/data-model.md), 스키마 변경 [guides/database.md](guides/database.md) |
 | 디자인 토큰·컴포넌트 | [architecture/design-system.md](architecture/design-system.md) |
@@ -44,7 +42,7 @@ Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론해 키
 | 상태 전이·실행 순서·메일박스 | [architecture/session-lifecycle.md](architecture/session-lifecycle.md) | data-model은 저장 컬럼만 |
 | 테이블과 컬럼 | [architecture/data-model.md](architecture/data-model.md) | DDL `infra/db/schema.sql` |
 | 하네스 8요소·역할별 모델 설정 | [architecture/harness.md](architecture/harness.md) | 코드 `roles.py` |
-| 역할별 데이터 파일·코드 입구 | [agents/](agents/manager.md)(역할 문서 5개) | 역할 폴더 README(`services/api/app/agent/<역할>/README.md`) |
+| 역할별 데이터 파일·코드 입구 | [agents/](agents/manager.md)(역할 문서 5개) | 역할 폴더 README(`services/api/app/agent/<역할>/README.md`, 평가자는 `services/report-worker/README.md`) |
 | env 이름과 기본값 | `infra/.env.example`·각 서비스 `config.py` | [guides/configuration.md](guides/configuration.md)는 모드별 차이 |
 | 카탈로그 데이터 | `scenarios/missions/debate/` | 문서 표와 같은지 `make test`가 검사 |
 
@@ -57,10 +55,10 @@ docs/
 ├── README.md        이 색인
 ├── decisions.md     결정 기록(날짜·결정·이유·대안)
 ├── product/         scenario · rubric · user-flows
-├── architecture/    overview · session-lifecycle · security · harness · agents · data-model · design-system · deployment
+├── architecture/    overview · session-lifecycle · security · harness · agents · voice · data-model · design-system · deployment
 ├── agents/          역할별 문서: manager · persona · intent · assistant · evaluator
-├── contracts/       README(공통·인증) · api · ws · internal · mcp · queue
+├── contracts/       README(공통·인증) · api · ws · voice · internal · mcp · queue
 ├── services/        api · web · report-worker · mcp
-├── guides/          quickstart · configuration · testing · virtual-candidate · database · scenario-changes · contributing
+├── guides/          quickstart · configuration · testing · virtual-candidate · team-test · database · scenario-changes · contributing
 └── share/           공유용 산출물(아키텍처 페이지·보고서·시각 보고서·제품 가이드). 정본이 아니다
 ```

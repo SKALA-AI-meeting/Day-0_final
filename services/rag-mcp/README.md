@@ -29,20 +29,20 @@
 
 저장소 루트에서 실행한다. 포트는 9102 고정이라 컨테이너와 로컬 중 하나만 띄운다.
 
-**컨테이너로 쓸 때(기본)**: `make infra-up`이 postgres·rabbitmq와 함께 rag-mcp를 `127.0.0.1:9102`에 올린다. 컨테이너는 내부 API를 `http://host.docker.internal:8001`(로컬 api)로 부른다.
+**컨테이너로 쓸 때(기본)**: `make up SCOPE=infra`가 postgres·rabbitmq와 함께 rag-mcp를 `127.0.0.1:9102`에 올린다. 컨테이너는 내부 API를 `http://host.docker.internal:8001`(로컬 api)로 부른다.
 
 ```
-make infra-up                                                   # postgres 5432, rabbitmq 5672, rag-mcp 9102
-make seed                                                       # 자료 원문 시드 후 reindex_materials로 색인
+make up SCOPE=infra                                             # postgres 5432, rabbitmq 5672, rag-mcp 9102
+make seed SCOPE=infra                                           # 자료 원문 시드 후 reindex_materials로 색인
 ```
 
-**코드를 고치며 로컬로 띄울 때**: infra-up이 올린 rag-mcp 컨테이너를 먼저 내린다. 로컬 env는 `infra/.env.local`(`DATABASE_URL`·`API_INTERNAL_URL`을 localhost로, `HF_HOME`은 쓰기 가능한 로컬 폴더. 항목은 [configuration.md](../../docs/guides/configuration.md) "로컬 실행용 `infra/.env.local`").
+**코드를 고치며 로컬로 띄울 때**: `make up SCOPE=infra`가 올린 rag-mcp 컨테이너를 먼저 내린다. 로컬 env는 `infra/.env.local`(`DATABASE_URL`·`API_INTERNAL_URL`을 localhost로, `HF_HOME`은 쓰기 가능한 로컬 폴더. 항목은 [configuration.md](../../docs/guides/configuration.md) "로컬 실행용 `infra/.env.local`").
 
 ```
-make infra-up
+make up SCOPE=infra
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file infra/.env stop rag-mcp
 uv run --directory services/rag-mcp python -m rag_mcp           # 9102. 시작 시 BGE-M3 1회 로드(첫 실행은 약 2.3GB 다운로드, HF_HOME 캐시)
-make seed
+make seed SCOPE=infra
 ```
 
 ## MCP 도구
@@ -67,7 +67,7 @@ make seed
 
 ## 테스트
 
-pytest 단위 테스트다. 기본은 가짜 임베딩과 임시 DB(`rag_test_*`)를 쓰며 `make infra-up`의 postgres가 필요하다(없으면 DB 테스트를 건너뜀). `live` 표시는 실제 BGE-M3(CPU)를 로드하는 테스트로 `make test`에서 빠진다. 테스트용 DB 주소는 `TEST_DATABASE_URL`.
+pytest 단위 테스트다. 기본은 가짜 임베딩과 임시 DB(`rag_test_*`)를 쓰며 `make up SCOPE=infra`의 postgres가 필요하다(없으면 DB 테스트를 건너뜀). `live` 표시는 실제 BGE-M3(CPU)를 로드하는 테스트로 `make test`에서 빠진다. 테스트용 DB 주소는 `TEST_DATABASE_URL`.
 
 ```
 uv run --directory services/rag-mcp pytest -q               # 이 서비스만

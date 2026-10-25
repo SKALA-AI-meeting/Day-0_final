@@ -1,6 +1,6 @@
 """러너가 앱 프로세스를 직접 띄우는 실 스택(장애 주입용).
 
-인프라(postgres·rabbitmq·rag-mcp)는 `make infra-up`으로 떠 있어야 한다. 러너는 이 worktree의
+인프라(postgres·rabbitmq·rag-mcp)는 `make up SCOPE=infra`로 떠 있어야 한다. 러너는 이 worktree의
 api·debate-mcp·assessment-mcp·report-worker를 하위 프로세스로 띄우고, report-worker의
 `API_INTERNAL_URL`을 러너 안 프록시(faults.Proxy)로 돌린다. 끝나면 모든 앱 프로세스를 종료한다.
 web은 쓰지 않으므로 띄우지 않는다.

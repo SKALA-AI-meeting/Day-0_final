@@ -1,5 +1,5 @@
 # 개발용 override: 앱(api·debate-mcp·assessment-mcp·report-worker·web)은 로컬에서 돌리고 인프라와
-# 무거운 rag-mcp만 컨테이너로. `make infra-up`이 이 파일을 함께 쓴다. 포트는 127.0.0.1에만 바인딩한다.
+# 무거운 rag-mcp만 컨테이너로. `make up SCOPE=infra`가 이 파일을 함께 쓴다. 포트는 127.0.0.1에만 바인딩한다.
 services:
   postgres:
     ports:

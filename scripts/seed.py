@@ -5,8 +5,8 @@
 2. api(8000)로 관리자 가입·채용 건 생성(요소 선택 없음, 세션 길이만). `--skip-position`으로 건너뜀.
 3. rag-mcp(9102) `reindex_materials`로 같은 버전 청크 색인. `--skip-reindex`로 건너뜀.
 
-    make seed
-    make seed-compose       # 전체 compose(make up): compose 안 일회성 seed 서비스(포트 공개 없음)
+    make seed SCOPE=infra       # 로컬 개발(호스트 api 8000·postgres 5432·rag 9102)
+    make seed PROFILE=dev-fake  # 전체 compose: compose 안 일회성 seed 서비스(포트 공개 없음)
     uv run --project services/api python scripts/seed.py --minutes 15
     uv run --project services/api python scripts/seed.py --skip-position --skip-reindex   # 자료만
 """

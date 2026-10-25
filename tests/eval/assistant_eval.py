@@ -2,11 +2,12 @@
 
 질문(assistant_cases.yaml)마다 어시스턴트 답 {content, cited_material_ids, tool_calls}를
 받아 규칙으로 채점한다.
-- live(`make eval-live`): 실 스택 공개 API로 15분 데모 채용 건에 세션 하나를 만들고
+- live(`make eval PROFILE=eval-text SUITE=fixtures ALLOW_API=1`): 실 스택 공개 API로
+  15분 데모 채용 건에 세션 하나를 만들고
   키워드를 "물"로 확정해 자료를 연 뒤(지원자 확정 API) `POST /sessions/{id}/assistant`로
   묻는다. 실제 rag-mcp·실제 모델을 쓰고, 끝나면 세션을 취소한다. 관리자 계정은
   virtual_candidate/drive.py와 같은 seed 기본값(출력하지 않음).
-- mock(`make test-e2e`): api 에이전트 테스트의 가짜 rag와 FakeLLM으로 같은 채점 경로를 돈다.
+- mock(`make test SUITE=tools`): api 에이전트 테스트의 가짜 rag와 FakeLLM으로 같은 채점 경로를 돈다.
 
 채점(LLM 판정 없음):
 - 숫자: 답의 숫자 토큰(한 자리는 단위가 붙은 것만)이 열린 자료 원문의 숫자 토큰에 있는지
@@ -184,7 +185,7 @@ async def live_answers(cases: list[dict[str, Any]], keyword: str) -> list[dict[s
         position = newest_position(positions, name)
         if position is None:
             raise RuntimeError(
-                f'15분 채용 건 없음: {name} (make seed-compose SEED_ARGS="--minutes 15" 확인)'
+                f'15분 채용 건 없음: {name} (make seed PROFILE=… SEED_ARGS="--minutes 15" 확인)'
             )
         invite = await http.post(
             f"/admin/positions/{position['id']}/invites",

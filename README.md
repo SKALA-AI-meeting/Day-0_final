@@ -75,12 +75,12 @@ make stage STAGE=keyword MIN=15    # 단계 시드 세션의 초대 링크 출�
 
 | 명령 | 무엇을 보나 | 선행 조건 |
 |---|---|---|
-| `make test` | 계약 픽스처·프로필 해석기·카탈로그·서비스 5개 pytest·web vitest(LLM mock)와 e2e 러너·eval 픽스처 형태(가짜 api). `SUITE=unit∣tools`로 나눠 돌린다 | `uv`·`pnpm install`. api DB 테스트는 postgres가 없으면 skip |
+| `make test` | 계약 픽스처·프로필 해석기·카탈로그·서비스 5개 pytest·web vitest(LLM mock)와 e2e 러너·eval 픽스처 형태(가짜 api). `SUITE=unit\|tools`로 나눠 돌린다 | `uv`·`pnpm install`. api DB 테스트는 postgres가 없으면 skip |
 | `make lint` | ruff, web eslint·prettier | 없음 |
 | `make docs-check` | README 생성 블록과 features.md 테스트 참조가 코드와 같은지 | 없음 |
 | `make e2e SUITE=stages PROFILE=test-text` | 단계별 화면(Playwright) | 격리 스택(`make up PROFILE=test-text`·`make seed PROFILE=test-text`) |
 | `make e2e` | 실 스택 15분 세션 전체·리포트·검토 | 스택 기동·시드 |
-| `make eval PROFILE=eval-text SUITE=api∣fixtures ALLOW_API=1` | 실제 LLM 호출(의도 분류·평가 BARS·유출 질문·페르소나 품질) | 제한 API 키, `ALLOW_API=1` |
+| `make eval PROFILE=eval-text SUITE=api\|fixtures ALLOW_API=1` | 실제 LLM 호출(의도 분류·평가 BARS·유출 질문·페르소나 품질) | 제한 API 키, `ALLOW_API=1` |
 
 범위와 단언 목록은 [docs/guides/testing.md](docs/guides/testing.md).
 
@@ -92,13 +92,22 @@ make stage STAGE=keyword MIN=15    # 단계 시드 세션의 초대 링크 출�
 
 PRD의 지원자 흐름(입장·동의·토론 4단계·참고 자료·어시스턴트·기획안 제출·디브리핑)과 담당자 흐름(가입·채용 건·초대·지원자 목록·리포트·전체 기록·조정·검토 완료)이 MVP 범위에서 구현되어 있다. 참고 자료 관리와 면접 확인 질문 제안은 MVP 이후다.
 
-최근 검증 결과(2026-10-22):
+최종 측정(2026-10-25 13시대, 음성 PR 병합 뒤 main. 발표자 보기·차례 정책 변경(#33~#35)은 그 뒤 병합됐고 음성 경로만 바꾼다. `eval-text` 프로필·gpt-4o-mini·1회)과 음성 병합 직전 기준선이다. 가짜 음성 세션은 녹음 자동 시작이 남아 있던 차례 정책으로 돌았다. 표본이 작아 ±0.1 안쪽 차이는 방향만 본다.
 
-| 항목 | 결과 | 기록 |
-|---|---|---|
-| 단계별 화면 테스트(`make e2e SUITE=stages`) | 9/9 통과 | [stages/summary.md](tests/e2e/records/stages/summary.md) |
-| 15분 실제 LLM 세션 단언 | 8/8 통과 | [all_five-live-summary.md](tests/e2e/records/final-20261022/all_five-live-summary.md) |
-| 의도 분류 정확도(`make eval`, 목표 0.85) | 0.90 | [eval-live.md](tests/e2e/records/final-20261022/eval-live.md) |
-| 평가 BARS ±1 일치율 | 1.0 | [eval-live.md](tests/e2e/records/final-20261022/eval-live.md) |
+| 항목 | 기준선 | 최종 | 기록 |
+|---|---|---|---|
+| 의도 분류 20문장(목표 0.85) | 0.80 | 0.80 | [eval-live-20261025-1311.md](tests/e2e/records/eval-live-20261025-1311.md) |
+| 의도 분류 보류 세트 18문장 | 0.94 | 0.89 | 같은 기록 |
+| 어시스턴트 근거 12문항 | 12/12 | 12/12 | 같은 기록 |
+| 평가 BARS ±1 일치 | 1.0 | 1.0 | 같은 기록 |
+| 평가 BARS 장면 세션 정확 일치 | 0.57 | 0.62 | 같은 기록 |
+| 페르소나 응답률 | 0.906 | 0.938 | [eval-live-persona-20261025-131120-run.md](tests/e2e/records/eval-live-persona-20261025-131120-run.md) |
+| 이름 부름 응답 | 0.968 | 1.0 | 같은 기록 |
+| 답 안 한 지원자 메시지 | 0.094 | 0.057 | 같은 기록 |
+| 입장 폴백(게시 대비) | 12/91 | 6/88 | 같은 기록 |
+| 가상 세션 평가 실패(대본형 · 자율형, 19차원) | 0/19 · 4/19 | 3/19 · 1/19 | 가상 세션 기록은 git 밖(`tests/e2e/records/virtual/`) |
+| 카드 발동 · 전달(15분 가상 세션) | 6 · 5(텍스트) | 5 · 4(가짜 음성) | 위와 같음 |
 
-시각 보고서는 [docs/share/visual-report/index.html](docs/share/visual-report/index.html), 기능별 상태와 알려진 제한은 [docs/features.md](docs/features.md).
+기준선은 [baseline-pre-voice-20261025.md](tests/e2e/records/baseline-pre-voice-20261025.md), 같은 날 앞선 실행은 [eval-live-20261025-0908.md](tests/e2e/records/eval-live-20261025-0908.md)·[eval-live-persona-20261025-090837-run.md](tests/e2e/records/eval-live-persona-20261025-090837-run.md)다. 알려진 한계: 동료 발언의 오인용(약 11%, 제한 키로 쓸 수 있는 판정 모델 중 보정을 통과한 것이 없어 자동 채점 끔), 양보 뒤 결론 문장의 의도 분류 누락, 끼어들기(barge-in) 없음, 음성 경로 지연 미측정, 단계별 화면 테스트의 AI 합의 채우기 사례 실패(수정 진행 중). 기능별 상태는 [docs/features.md](docs/features.md) "MVP 이후·알려진 제한".
+
+결과 보고서(공유용)는 [docs/share/report.html](docs/share/report.html)·[report.pdf](docs/share/report.pdf), 시각 보고서는 [docs/share/visual-report/index.html](docs/share/visual-report/index.html).

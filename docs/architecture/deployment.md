@@ -15,8 +15,6 @@
 - postgres는 첫 기동 때만 `infra/db/schema.sql`을 `/docker-entrypoint-initdb.d`로 적용한다. 볼륨이 이미 있으면 다시 적용하지 않는다(스키마를 바꾼 뒤 절차는 [guides/database.md](../guides/database.md)).
 - 운영에 가까운 실행에서는 `ENABLE_TEST_API`·`LLM_FAKE`·`LLM_FAULT`를 비운다.
 
-## 환경변수 (`infra/.env.example`)
-
 ## RabbitMQ
 
 - exchange `dayzero`(direct). 큐 `report.generate`, `report.approve`(durable, DLX → `report.dlq`), `report.dlq`. 본문은 계약 "큐 메시지" 표.

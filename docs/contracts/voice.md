@@ -4,7 +4,7 @@
 
 | 메서드·접미 경로 | 요청 | 응답 |
 |---|---|---|
-| GET (접미 없음) | 없음 | 아래 VoiceState. 750ms polling(AI_GENERATING·TRANSCRIBING·PROCESSING 동안은 250ms). 재연결 시 먼저 일반 `/state`와 이 상태를 다시 조회 |
+| GET (접미 없음) | 없음 | 아래 VoiceState. 750ms polling(AI_GENERATING·TRANSCRIBING·PROCESSING 동안은 250ms). 재연결 시 먼저 일반 `/state`와 이 상태를 다시 조회. 채용 건 복사본에 `voice_policy`가 없으면 409 `position_outdated` |
 | POST `/capture` | `{turn_id, epoch, restart?:bool}` | 발언권 상태: utterance_id, speech_started_at, speech_deadline_at 포함. 동일 활성 발언의 중복 시작은 같은 ID. 차례가 이미 넘어간 뒤 이전 turn_id는 409 `voice_turn_conflict`, 단계·세션 마감 또는 녹음 시간이 남지 않으면 409 `voice_turn_expired` |
 | POST `/playback` | `{turn_id, epoch, job_id, outcome: start∣ended∣error∣retry}` | `{ok:true}`. 첫 미완료 항목만 처리. start 뒤 실제 ended 확인. heard 항목 ended 중복은 성공. start한 항목의 ended는 그사이 단계·차례가 바뀌어도 heard로 기록하고 성공(재생 중 단계 전환) |
 | POST `/audio` | `{turn_id, epoch, utterance_id, audio_base64, stop_reason: button∣timeout∣disconnect}` | `{utterance_id,status}`. PCM16 mono 16kHz WAV, 최대 60초·base64 2,600,000자. 동일 파일 해시로 멱등 |
@@ -17,9 +17,20 @@
 
 VoiceState는 `{turn_id, epoch, generation, phase, state, ready_at, server_now, items}`다. proposal 단계에는 `USER_READY`를 만들지 않고 새 발언권 요청은 409 `voice_turn_expired`다. GET(접미 없음) 응답에는 `heard_message_ids`(재생이 끝난 동료 발언의 메시지 id 목록, 전 단계 포함)가 더 있고, 화면은 이 목록으로 청취 여부를 확인한다. 재생 중인 동료의 문장을 큰 칸에 자막으로 보이고, 끝난 뒤 방금 한 말 한 문장만 남긴다. 기록 목록은 없다. 재생 중인 발언은 items의 `message_id`로 본문을 찾아 재생 위치까지의 문장만 보인다. state가 USER_READY면 `turn_until_at`(내 차례를 지켜 주는 끝 시각)이 있고, 단계 마감·세션 종료가 가까워 녹음을 `user_turn_seconds`만큼 못 하면 `speech_limit_seconds`(지금 녹음을 시작하면 말할 수 있는 초, 0이면 이번 단계에서 더 녹음할 수 없음)도 있다(개정 V18, 마감은 늘리지 않음). 녹음 마감(`speech_deadline_at`)은 단계 마감·세션 종료보다 10초(받아 적기·확인·제출 여유) 앞을 넘지 않아서, 마감에 맞춰 잘린 녹음도 단계가 끝나기 전에 제출된다. 그 10초 안에서는 `/capture`가 409 `voice_turn_expired`다. 녹음은 자동으로 시작하지 않는다. 일반·손들기·강제 차례 모두 지원자가 [발언하기]로 `/capture`하고, 지켜 주는 시간은 모두 ready_at부터 `voice_policy.turn_hold_seconds`(없던 예전 채용 건은 20초)다. 예전 채용 건 정책에 남은 `think_seconds`는 읽지 않는다. state는 AI_GENERATING·AI_SPEAKING·USER_READY·USER_SPEAKING·TRANSCRIBING·PROCESSING이다. items는 저장 순서의 `{id,message_id,seat,status,duration_ms,error}`이며 본문/평가 정보는 없다. 조건부 필드는 `blocked_reason`, `release_ready`, `utterance_id`, `speech_started_at`, `speech_deadline_at`, `utterance:{id,status,transcript,message_id,error,confirm_deadline_at?,submit_deadline_at?}`, `rerecorded`, `priority`(손들기·강제 차례), `hand`(든 손), `hand_turn`, `forced_phase`(그 단계 강제 차례를 이미 줌)이다. 강제 차례: 키워드·문제 상황·해결책 단계에서 그 단계 지원자 발언이 없고 단계 마감까지 남은 시간이 `min(forced_wait_seconds + user_turn_seconds + 10, 단계 길이 × 0.5)`초 이하가 되면(단계 길이는 `phase_started_at`부터 단계 마감까지, 기본 정책은 100초와 단계 절반 중 짧은 쪽), 동료 차례면 손들기와 같이(지금 발언 뒤 보호 발언만 듣고) 일반 내 차례면 그 자리에서 `priority: "forced"` 차례가 된다. 단계당 한 번이다. 지원자 메시지보다 먼저 만들어졌는데 재생이 시작되지 않은 동료 발언은 보호 발언이 아니면 재생하지 않는다(`error: superseded`). utterance가 ready 또는 empty면 `confirm_deadline_at`(받아 적기 완료 + 채용 건의 `voice_policy.confirm_seconds`)이 있고, ready면 `submit_deadline_at`도 있다. 음성 화면은 확인 시각을 기다리지 않고 ready 전사를 바로 `message.send`로 보낸다. 인식 글을 지원자에게 보이거나 고치는 입력 칸은 없다. empty 결과는 제출할 수 없고 [다시 말하기]로 같은 차례에서 다시 녹음한다(`/capture` restart). 500자를 넘는 ready 전사도 제출하지 않고 `/rerecord`로 짧게 다시 말하게 하며, 이 다시 말하기는 일반 다시 말하기 1회와 따로 차례당 2회까지다. `submit_deadline_at`은 단계·세션 마감과 녹음 마감 + 100초(서버 PROCESSING 유지 한도) 중 이른 시각이다. 저장 확인은 `client_msg_id`(= 발언 id)의 지원자 메시지로 판별하고 "전달했어요"를 3초 동안 보인다. 작업 상태는 queued·processing·ready·heard·error·empty·submitted·recording·canceled 중 해당 단계의 값이다. epoch는 WS 연결마다 바뀌며 연결 전에는 null일 수 있다.
 
-오류 봉투는 기존 `{error:{code,message}}`다. 409 `voice_turn_conflict`·`voice_turn_expired`·`voice_payload_mismatch`·`voice_retry_exhausted`·`voice_quota_exhausted`·`voice_capacity`·`voice_policy_mismatch`, 422 `voice_audio_invalid`, 429 `voice_rate_limited`, 503 `voice_unavailable`·`voice_quota_unverified`를 사용한다. 생성/전사 실패는 작업의 error로 기록한다. 마감 뒤 STT를 새 phase에 저장하지 않는다.
+오류 봉투는 기존 `{error:{code,message}}`다. 409 `voice_turn_conflict`·`voice_turn_expired`·`voice_payload_mismatch`·`voice_retry_exhausted`·`voice_quota_exhausted`·`voice_capacity`·`voice_policy_mismatch`, 422 `voice_audio_invalid`, 429 `voice_rate_limited`, 503 `voice_unavailable`·`voice_quota_unverified`를 사용한다. 생성/전사 실패는 작업의 error(`voice_speech_failed`, 재생 실패는 `voice_playback_failed`)로 기록하고 응답 오류로 내지 않는다. TTS 공급자는 요청한 voice가 서버의 자리별 voice 목록(`services/api/app/voice/speech.py` `VOICES`) 밖이면 내부에서 422 `voice_policy_mismatch`로 거부하며, 이것도 작업 error `voice_speech_failed`로 남는다. 시작 요청의 409 `voice_policy_mismatch`(채용 건 공급자와 실행 공급자 불일치)는 아래 "실행 모드". 마감 뒤 STT를 새 phase에 저장하지 않는다.
 
-`blocked_reason: "proposal_phase"`는 기획안 단계라 새 발언권을 주지 않는다는 뜻이고, `"voice_interrupted"`는 녹음 중 WebSocket 재연결로 발언을 다시 시작해야 한다는 뜻이다. 일반 `USER_READY`의 유지 시간이 지나도 스케줄러가 실제로 차례를 넘기기 전까지 `/capture`를 누를 수 있다. STT·녹음·연결 실패 후 재시도와 다시 녹음으로 `USER_READY`에 돌아오면 유지 시간이 새로 시작된다. 유지 시간이 끝나면 동료 차례가 매번 재개되며, 침묵 초대는 기존처럼 단계당 한 번이다. 기획안 단계로 넘어가기 전 이미 대기 중이던 동료 음성은 재생을 마치고 `heard_message_ids`에 남긴다.
+`blocked_reason`은 지금 발언권이 막혔거나 직전 녹음이 실패한 이유이고, 새 녹음(`/capture`)이 시작되면 지워진다. 값과 발생 조건은 다음이 전부다.
+
+| 값 | 발생 조건 | 상태 |
+|---|---|---|
+| `session_ending` | 세션이 진행 중이 아니거나 `ends_at`이 지남 | 그대로(새 발언권 없음) |
+| `proposal_phase` | 기획안 단계(토론 단계가 아님) | AI_GENERATING, `release_ready: true` |
+| `voice_interrupted` | 녹음 중(USER_SPEAKING) WebSocket이 다시 연결됨 → USER_READY. 또는 USER_SPEAKING·TRANSCRIBING·PROCESSING이 녹음 마감 + 100초(서버 PROCESSING 유지 한도)를 넘음 → AI_GENERATING | 위 둘 중 하나 |
+| `empty` | 받아 적기 결과가 비어 있음(STT 작업 `empty`) | USER_READY, 유지 시간 새로 시작 |
+| `error` | 받아 적기 실패(STT 작업 `error`) | USER_READY, 유지 시간 새로 시작 |
+| `voice_recording_failed` | `/abort`로 장치·파일 실패를 알림(녹음 작업은 `canceled`) | USER_READY, 유지 시간 새로 시작 |
+
+`blocked_reason`이 있는 USER_READY에서 `/capture`에 `restart: true`를 주면 실패한 녹음의 마감을 버리고 발언 시간을 새로 받는다(녹음 시작 횟수는 차례당 2회 상한을 유지, 넘으면 409 `voice_retry_exhausted`). 일반 `USER_READY`의 유지 시간이 지나도 스케줄러가 실제로 차례를 넘기기 전까지 `/capture`를 누를 수 있다. STT·녹음·연결 실패 후 재시도와 다시 녹음으로 `USER_READY`에 돌아오면 유지 시간이 새로 시작된다. 유지 시간이 끝나면 동료 차례가 매번 재개되며, 침묵 초대는 기존처럼 단계당 한 번이다. 기획안 단계로 넘어가기 전 이미 대기 중이던 동료 음성은 재생을 마치고 `heard_message_ids`에 남긴다.
 
 ## 최종 전사 제출
 

@@ -125,7 +125,7 @@ services:
       api: { condition: service_healthy }
       assessment-mcp: { condition: service_healthy }
 
-  seed:   # 일회성 시드(make seed-compose). 기본 up에는 뜨지 않고 compose 네트워크 안에서 postgres·api·rag-mcp에 닿는다
+  seed:   # 일회성 시드(make seed PROFILE=…). 기본 up에는 뜨지 않고 compose 네트워크 안에서 postgres·api·rag-mcp에 닿는다
     build: ../services/api
     profiles: ["tools"]
     environment:

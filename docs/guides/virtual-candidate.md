@@ -42,7 +42,7 @@ uv run --project services/api python tests/eval/virtual_candidate/metrics.py <se
 
 내보내기는 compose의 postgres 컨테이너에서 `psql`로 그 세션의 행만 읽는다(읽기 전용, 포트를 열지 않는다). 표는 sessions·positions(시나리오 복사본)·messages·message_intents·agent_runs·options·stances·slots·session_cards·observations·proposals·assistant_calls·material_views·connection_gaps·evaluation_runs·evaluations·reports이고, 초대 토큰 해시·이메일은 읽지 않는다.
 
-2026-10-23 저녁 이전에 기본값으로 돌린 기록(기준선 `tests/e2e/records/baseline-v1-20261023.md`와 그 뒤 가상 세션)은 기본 채용 건 이름이 시드가 만드는 이름과 달라 2026-10-22에 만든 "서비스기획 신입 (15분 데모)" 채용 건(그때의 시나리오 복사본)으로 진행됐다. 그 사이의 카탈로그·프롬프트 변경은 그 기록들의 세션에 반영되지 않았다(api 코드 변경은 반영됨).
+세션은 그 채용 건의 시나리오 복사본(카탈로그·프롬프트)으로 진행된다. 카탈로그·프롬프트를 바꾼 뒤 측정하려면 새로 시드한 채용 건을 쓴다([scenario-changes.md](scenario-changes.md)).
 
 ## 지표
 

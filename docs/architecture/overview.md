@@ -58,7 +58,7 @@ MCP 서버 세 개의 도구 함수는 모두 `async def`다(FastMCP는 동기 �
 | 흔한 구조 | Day Zero | 대응 |
 |---|---|---|
 | 변경 도구 앞에서 interrupt로 멈추고 승인 후 같은 thread 재개 | 리포트 그래프가 draft 뒤 interrupt로 멈추고, 담당자의 "검토 완료"가 큐로 같은 thread를 재개해 final을 저장 | 승인 대상은 "초안을 최종본으로 확정하는 저장"이다. 승인 전 final 저장은 api가 409로 막고, final은 승인한 draft와 해시가 같다 |
-| 질문을 202로 접수하고 SSE로 진행 이벤트 | WebSocket 양방향(동료가 먼저 말을 건다) | 접수 = `message.ack{run_id}`, 진행 = `typing{participant, start∣stop}`, 완료 = `message.new`. 재접속은 `/state` 스냅샷으로 복구 |
+| 질문을 202로 접수하고 SSE로 진행 이벤트 | WebSocket 양방향(동료가 먼저 말을 건다) | 접수 = `message.ack{run_id}`, 진행 = `typing{participant, start 또는 stop}`, 완료 = `message.new`. 재접속은 `/state` 스냅샷으로 복구 |
 | 화면·업무 서버·Agent 서버 분리 | Agent가 api 프로세스 안의 모듈 | 논리 계층은 나눈다(라우터 → SessionService → AgentRunner 인터페이스 → 그래프 → MCP 어댑터). 배포 단위만 합쳤고, 분리할 때의 경계는 `AgentRunner`다 |
 | Vue + Spring Boot | Next.js + FastAPI | FastAPI는 LangGraph와 같은 Python 프로세스에서 비동기 WS를 처리하고, Next.js는 관리자·지원자 화면을 한 앱의 경로로 둔다. 업무 규칙의 소유자는 FastAPI뿐이다 |
 
@@ -76,16 +76,20 @@ MCP 서버 세 개의 도구 함수는 모두 `async def`다(FastMCP는 동기 �
 ## 저장소 구조
 
 ```
-apps/web/                 Next.js
-services/api/             FastAPI + LangGraph (app/routers, app/agent/{debate,assistant,intent,guard,llm,mcp_client}, app/mailbox.py, app/scheduler.py, app/services/{timeout,budget}.py)
+apps/web/                 Next.js (app/ 경로, components/{debate,debate/voice,admin,ui,dev}, lib/)
+services/api/             FastAPI + LangGraph
+                          app/routers/{admin,candidate,internal,voice,ws}.py
+                          app/agent/{debate,manager,persona,intent,assistant,guard,llm,mcp_client}, catalog.py, factory.py, runner.py
+                          app/voice/{controller,policy,quota,speech,live}.py
+                          app/services/(timeout·budget·debate·scenario 등), app/mailbox.py, app/scheduler.py, app/hub.py
 services/debate-mcp/
 services/rag-mcp/
 services/assessment-mcp/
-services/report-worker/
+services/report-worker/   평가 에이전트(평가자 역할)
 scenarios/                시나리오 카탈로그(구조는 docs/product/scenario.md), version.py, e2e/ 대본·단계 시드
-scripts/                  seed.py, make_session.py, stage_advance.py, save_eval_fixture.py
+scripts/                  profile.py, seed.py, make_session.py, stage_advance.py, save_eval_fixture.py, docs_gen.py, stage_e2e_docker.sh
 tests/                    계약 픽스처, e2e/(러너·기록), eval/(실 모델 픽스처), playtest/
-infra/                    docker-compose.yml, docker-compose.dev.yml, docker-compose.e2e.yml, .env.example, db/schema.sql
+infra/                    docker-compose.yml, docker-compose.dev.yml, docker-compose.e2e.yml, profiles/, .env.example, db/schema.sql
 docs/                     설계 문서(docs/README.md)
 ```
 

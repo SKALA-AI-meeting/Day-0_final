@@ -30,7 +30,7 @@
 <rect x="140" y="509" width="820" height="73" rx="10" fill="#FFFFFF" stroke="#8B939C" stroke-width="1.5" />
 <text x="154" y="534" class="head">⑥ STT와 전사 확인</text>
 <text x="154" y="554" class="body">TRANSCRIBING → PROCESSING</text>
-<text x="154" y="572" class="body">8초 확인·편집 · 최대 500자</text>
+<text x="154" y="572" class="body">글 비공개 · 바로 제출 · 최대 500자</text>
 <path d="M550 582 L550 600" class="line" marker-end="url(#arrow)" />
 <rect x="140" y="600" width="820" height="73" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
 <text x="154" y="625" class="head">⑦ WS 메시지 저장</text>
