@@ -1,56 +1,39 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 736" width="1000" height="736"><style>
-.b-seat{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:.9}
-.b-agentstep{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.4}
-.b-topic2{fill:#FFFFFF;stroke:#D2D2D7;stroke-width:1}
-.edge-xd{stroke:#D70015;stroke-width:1.5;fill:none;stroke-dasharray:5 3}
-.xmark{stroke:#D70015;stroke-width:2.6;fill:none;stroke-linecap:round}
-text{font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;fill:#1D1D1F}
-.t{font-size:12.5px;font-weight:700}
-.s{font-size:10.5px;fill:#4A5263}
-.tier{font-size:12.5px;font-weight:700;fill:#0066CC}
-.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:9.5px;fill:#3C4556}
-.mono-s{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:8.6px;fill:#3C4556}
-.lab{font-size:10.5px;fill:#2F3746}
-.lab-t{font-size:10.5px;font-weight:700;fill:#1D1D1F}
-.lab-b{font-size:10.5px;fill:#D70015;font-weight:700}
-.lab-g{font-size:10.5px;fill:#6E6E73;font-weight:700}
-.st{font-size:10px;font-weight:700;fill:#0066CC;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
-.numt{font-size:10px;font-weight:700;fill:#fff}
-.halo{paint-order:stroke;stroke:#FFFFFF;stroke-width:3.2px;stroke-linejoin:round}
-.numc{fill:#0071E3}
-.edge{stroke:#3C4556;stroke-width:1.4;fill:none}
-.edge-d{stroke:#3C4556;stroke-width:1.3;fill:none;stroke-dasharray:4 3}
-.edge-x{stroke:#D70015;stroke-width:1.5;fill:none}
-.ah{fill:#3C4556}
-.ahx{fill:#D70015}
-.aho{fill:none;stroke:#3C4556;stroke-width:1.5;stroke-linejoin:round}
-.bnd{fill:none;stroke:#D70015;stroke-width:1.3;stroke-dasharray:7 4}
-.lbnd{fill:none;stroke:#9AA3AD;stroke-width:1.1;stroke-dasharray:3 3}
-.life{stroke:#9AA3AD;stroke-width:1;stroke-dasharray:4 4}
-.b-web{fill:#E5F4EC;stroke:#1F8A5B;stroke-width:1.4}
-.b-web-bar{stroke:#1F8A5B;stroke-width:1}
-.b-web-dot{fill:#1F8A5B}
-.b-api{fill:#FDECEB;stroke:#C4362F;stroke-width:1.4}
-.b-in{fill:#FFFFFF;stroke:#C4362F;stroke-width:1}
-.b-agent{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.6}
-.b-agent-in{fill:none;stroke:#5B3FB3;stroke-width:.8}
-.b-mcp{fill:#E8F0FD;stroke:#2459B8;stroke-width:1.4}
-.b-mq{fill:#FDF1DD;stroke:#B26A00;stroke-width:1.4}
-.b-topic{fill:#FFFFFF;stroke:#B26A00;stroke-width:1}
-.b-db{fill:#EEF0F3;stroke:#5F6873;stroke-width:1.4}
-.b-ext{fill:#FFFFFF;stroke:#8B939C;stroke-width:1.4;stroke-dasharray:5 3}
-.b-node{fill:#FFFFFF;stroke:#5F6873;stroke-width:1.3}
-.node-top{fill:#F1F3F6}
-.node-side{fill:#E3E7EC}
-.b-step{fill:#F3F6FB;stroke:#0071E3;stroke-width:1.2}
-.b-state{fill:#E8F2FD;stroke:#0071E3;stroke-width:1.2}
-.b-note{fill:#FFFBEF;stroke:#E2CF9E;stroke-width:1}
-.b-plug{fill:#FFFFFF;stroke:#5B3FB3;stroke-width:1.2}
-.plug{stroke:#5B3FB3;stroke-width:1.3}
-.plug-dot{fill:#5B3FB3}
-.axis{stroke:#5F6873;stroke-width:1.2}
-.tick{stroke:#9AA3AD;stroke-width:1}
-.dot{fill:#0071E3}
-.dot-rel{fill:#FFFFFF;stroke:#0071E3;stroke-width:1.5}
-</style><rect width="1000" height="736" fill="#FFFFFF"/><defs><marker id="mf-v3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker><marker id="mo-v3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" class="aho"/></marker><marker id="mx-v3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahx"/></marker></defs><rect x="14" y="330" width="972" height="270" rx="8" class="lbnd"/><text x="22.0" y="343.0" text-anchor="start" class="lab-g">화자마다 반복 · 최대 2명 · 1~3초 간격 · 지원자가 입력 중이면 최대 10초 대기, 그래도 입력 중이면 게시 없이 자극을 다시 enqueue</text><line x1="60" y1="58" x2="60" y2="736" class="life"/><line x1="182" y1="58" x2="182" y2="736" class="life"/><line x1="304" y1="58" x2="304" y2="736" class="life"/><line x1="430" y1="58" x2="430" y2="736" class="life"/><line x1="556" y1="58" x2="556" y2="736" class="life"/><line x1="690" y1="58" x2="690" y2="736" class="life"/><line x1="815" y1="58" x2="815" y2="736" class="life"/><line x1="932" y1="58" x2="932" y2="736" class="life"/><rect x="4.0" y="8" width="112" height="48" rx="7" class="b-web"/><line x1="4.0" y1="19" x2="116.0" y2="19" class="b-web-bar"/><circle cx="12.0" cy="13.5" r="2" class="b-web-dot"/><circle cx="19.0" cy="13.5" r="2" class="b-web-dot"/><circle cx="26.0" cy="13.5" r="2" class="b-web-dot"/><text x="60.0" y="34.5" text-anchor="middle" class="t">web</text><text x="60.0" y="49.5" text-anchor="middle" class="s">지원자 화면</text><rect x="126.0" y="10" width="112" height="44" rx="7" class="b-api"/><text x="182.0" y="29.0" text-anchor="middle" class="t">api</text><text x="182.0" y="44.0" text-anchor="middle" class="s">Session · 메일박스</text><rect x="248.0" y="10" width="112" height="44" rx="7" class="b-agent"/><text x="304.0" y="29.0" text-anchor="middle" class="t">의도 분류</text><text x="304.0" y="44.0" text-anchor="middle" class="s">MODEL_INTENT</text><rect x="374.0" y="10" width="112" height="44" rx="7" class="b-agent"/><text x="430.0" y="29.0" text-anchor="middle" class="t">턴 매니저</text><text x="430.0" y="44.0" text-anchor="middle" class="s">MODEL_TURN</text><rect x="500.0" y="10" width="112" height="44" rx="7" class="b-agent"/><text x="556.0" y="29.0" text-anchor="middle" class="t">페르소나 pN</text><text x="556.0" y="44.0" text-anchor="middle" class="s">MODEL_PERSONA</text><polygon points="634,10 744,10 751,32.0 744,54 634,54 627,32.0" class="b-mcp"/><text x="689.0" y="29.0" text-anchor="middle" class="t">debate-mcp</text><text x="689.0" y="44.0" text-anchor="middle" class="s">:9101</text><polygon points="759,10 869,10 876,32.0 869,54 759,54 752,32.0" class="b-mcp"/><text x="814.0" y="29.0" text-anchor="middle" class="t">rag-mcp</text><text x="814.0" y="44.0" text-anchor="middle" class="s">:9102</text><polygon points="876,10 986,10 993,32.0 986,54 876,54 869,32.0" class="b-mcp"/><text x="931.0" y="29.0" text-anchor="middle" class="t">assessment-mcp</text><text x="931.0" y="44.0" text-anchor="middle" class="s">:9103</text><line x1="60" y1="86" x2="180" y2="86" class="edge" marker-end="url(#mf-v3a)"/><text x="121.0" y="81.0" text-anchor="middle" class="lab halo">message.send{client_msg_id}</text><path d="M182,108 h18 v12 h-16" class="edge" marker-end="url(#mf-v3a)"/><text x="206.0" y="118.0" text-anchor="start" class="lab halo">큐 밖: 마스킹 · 저장 · generation +1 → message.ack(분류 전)</text><path d="M182,136 h18 v12 h-16" class="edge" marker-end="url(#mf-v3a)"/><text x="206.0" y="146.0" text-anchor="start" class="lab halo">메일박스 enqueue(message) → Task가 순서대로 꺼냄</text><line x1="182" y1="170" x2="302" y2="170" class="edge" marker-end="url(#mf-v3a)"/><text x="243.0" y="165.0" text-anchor="middle" class="lab halo">메시지 · messages.phase의 안 목록 · 카탈로그</text><line x1="304" y1="198" x2="184" y2="198" class="edge-d" marker-end="url(#mo-v3a)"/><text x="243.0" y="193.0" text-anchor="middle" class="lab halo">{intent, target, addressed_to, confidence}</text><path d="M182,220 h18 v12 h-16" class="edge" marker-end="url(#mf-v3a)"/><text x="206.0" y="230.0" text-anchor="start" class="lab halo">high만 지지 반영(참여자당 1개) · 낡은 자극도 여기까지</text><line x1="182" y1="254" x2="428" y2="254" class="edge" marker-end="url(#mf-v3a)"/><text x="306.0" y="249.0" text-anchor="middle" class="lab halo">run(message) · generation 낡으면 턴 · 발언 생략</text><line x1="430" y1="282" x2="688" y2="282" class="edge" marker-end="url(#mf-v3a)"/><text x="560.0" y="277.0" text-anchor="middle" class="lab halo">load · get_debate_state · get_transcript</text><path d="M430,304 h18 v12 h-16" class="edge" marker-end="url(#mf-v3a)"/><text x="454.0" y="314.0" text-anchor="start" class="lab halo">turn · 규칙 우선 → 0명이면 LLM · 화자 0~2명</text><line x1="430" y1="366" x2="62" y2="366" class="edge" marker-end="url(#mo-v3a)"/><text x="245.0" y="361.0" text-anchor="middle" class="lab halo">typing start</text><line x1="430" y1="394" x2="554" y2="394" class="edge" marker-end="url(#mf-v3a)"/><text x="493.0" y="389.0" text-anchor="middle" class="lab halo">respond(목적 · 고정 입장 · DebateState 주입)</text><line x1="556" y1="422" x2="813" y2="422" class="edge" marker-end="url(#mf-v3a)"/><text x="685.5" y="417.0" text-anchor="middle" class="lab halo">search_materials (열린 자료만)</text><path d="M556,444 h18 v12 h-16" class="edge" marker-end="url(#mf-v3a)"/><text x="580.0" y="454.0" text-anchor="start" class="lab halo">guard · stance_check → 재생성 1회 → 고정 문구</text><line x1="556" y1="478" x2="432" y2="478" class="edge-d" marker-end="url(#mo-v3a)"/><text x="493.0" y="473.0" text-anchor="middle" class="lab halo">{content, proposes?, stance?}</text><path d="M430,500 h18 v12 h-16" class="edge" marker-end="url(#mf-v3a)"/><text x="454.0" y="510.0" text-anchor="start" class="lab halo">게시 직전 generation 비교 → 바뀌었으면 남은 화자 버림</text><line x1="430" y1="534" x2="688" y2="534" class="edge" marker-end="url(#mf-v3a)"/><text x="560.0" y="529.0" text-anchor="middle" class="lab halo">apply · post_message{card_ids, expected_generation} · set_stance</text><line x1="690" y1="562" x2="184" y2="562" class="edge-x" marker-end="url(#mx-v3a)"/><text x="436.0" y="557.0" text-anchor="middle" class="lab halo">/internal 저장 (멱등 · stale이면 409) · 카드마다 delivered</text><line x1="182" y1="590" x2="62" y2="590" class="edge" marker-end="url(#mo-v3a)"/><text x="121.0" y="585.0" text-anchor="middle" class="lab halo">message.new{seq} · typing stop</text><line x1="430" y1="618" x2="930" y2="618" class="edge" marker-end="url(#mf-v3a)"/><text x="681.0" y="613.0" text-anchor="middle" class="lab halo">record_observation (카드마다 1건, 첫 카드 발언 뒤)</text><line x1="430" y1="646" x2="688" y2="646" class="edge" marker-end="url(#mf-v3a)"/><text x="560.0" y="641.0" text-anchor="middle" class="lab halo">fill 분기 · 지지 다시 읽기 → fill_slot{option_id, seat, content}</text><line x1="690" y1="674" x2="184" y2="674" class="edge-x" marker-end="url(#mx-v3a)"/><text x="436.0" y="669.0" text-anchor="middle" class="lab halo">한 트랜잭션: 재검사 → 칸 confirmed → 공지 저장 → generation +1 (409면 저장 없음)</text><line x1="182" y1="702" x2="62" y2="702" class="edge" marker-end="url(#mo-v3a)"/><text x="121.0" y="697.0" text-anchor="middle" class="lab halo">WS 푸시 4건</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="710" viewBox="0 0 1100 710" role="img" aria-label="음성 토론 턴 · 게시, 청취, 발언의 순서">
+<style>text{font-family:Apple SD Gothic Neo,Noto Sans KR,Malgun Gothic,sans-serif;fill:#1D1D1F}.title{font-size:20px;font-weight:700}.head{font-size:15px;font-weight:700}.body{font-size:12.5px}.small{font-size:11px;fill:#4A5263}.line{stroke:#4A5263;stroke-width:1.8;fill:none}.dash{stroke:#B25000;stroke-width:1.5;stroke-dasharray:5 4;fill:none}</style>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#4A5263" /></marker></defs>
+<text x="24" y="32" class="title">음성 토론 턴 · 게시, 청취, 발언의 순서</text>
+<rect x="140" y="54" width="820" height="73" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
+<text x="154" y="79" class="head">① 메일박스·토론 그래프</text>
+<text x="154" y="99" class="body">message / phase_started / idle / turn_elapsed / card_due</text>
+<text x="154" y="117" class="body">의도·화자 결정 · 미게시 카드 fill_held · 같은 run 재판정 없음</text>
+<path d="M550 127 L550 145" class="line" marker-end="url(#arrow)" />
+<rect x="140" y="145" width="820" height="73" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
+<text x="154" y="170" class="head">② Voice Turn Controller</text>
+<text x="154" y="190" class="body">AI_GENERATING → AI_SPEAKING</text>
+<text x="154" y="208" class="body">메일박스 보류: USER_READY 유지 · 녹음 · 전사 · 처리</text>
+<path d="M550 218 L550 236" class="line" marker-end="url(#arrow)" />
+<rect x="140" y="236" width="820" height="73" rx="10" fill="#FFFFFF" stroke="#8B939C" stroke-width="1.5" />
+<text x="154" y="261" class="head">③ Azure F0 TTS / FakeSpeech</text>
+<text x="154" y="281" class="body">guard · stance_check(MODEL_INTENT) 뒤 TTS</text>
+<text x="154" y="299" class="body">저장된 최종 발언을 순서대로 합성</text>
+<path d="M550 309 L550 327" class="line" marker-end="url(#arrow)" />
+<rect x="140" y="327" width="820" height="73" rx="10" fill="#E5F4EC" stroke="#1F8A5B" stroke-width="1.5" />
+<text x="154" y="352" class="head">④ 브라우저 재생 확인</text>
+<text x="154" y="372" class="body">/voice 조회: 보통 750ms · 처리 중 250ms</text>
+<text x="154" y="390" class="body">항목마다 start → 실제 ended · 마지막 뒤 USER_READY</text>
+<path d="M550 400 L550 418" class="line" marker-end="url(#arrow)" />
+<rect x="140" y="418" width="820" height="73" rx="10" fill="#E5F4EC" stroke="#1F8A5B" stroke-width="1.5" />
+<text x="154" y="443" class="head">⑤ 지원자 발언</text>
+<text x="154" y="463" class="body">손들기 또는 발언하기 → USER_SPEAKING</text>
+<text x="154" y="481" class="body">최대 60초 WAV 업로드</text>
+<path d="M550 491 L550 509" class="line" marker-end="url(#arrow)" />
+<rect x="140" y="509" width="820" height="73" rx="10" fill="#FFFFFF" stroke="#8B939C" stroke-width="1.5" />
+<text x="154" y="534" class="head">⑥ STT와 전사 확인</text>
+<text x="154" y="554" class="body">TRANSCRIBING → PROCESSING</text>
+<text x="154" y="572" class="body">8초 확인·편집 · 최대 500자</text>
+<path d="M550 582 L550 600" class="line" marker-end="url(#arrow)" />
+<rect x="140" y="600" width="820" height="73" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
+<text x="154" y="625" class="head">⑦ WS 메시지 저장</text>
+<text x="154" y="645" class="body">client_msg_id = utterance_id</text>
+<text x="154" y="663" class="body">generation 증가 → 새 message 자극</text>
+</svg>
