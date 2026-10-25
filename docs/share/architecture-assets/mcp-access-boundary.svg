@@ -1,40 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="565" viewBox="0 0 1100 565" role="img" aria-label="MCP 접근 경계 · 역할별 허용 도구와 토큰">
-<style>text{font-family:Apple SD Gothic Neo,Noto Sans KR,Malgun Gothic,sans-serif;fill:#1D1D1F}.title{font-size:20px;font-weight:700}.head{font-size:15px;font-weight:700}.body{font-size:12.5px}.small{font-size:11px;fill:#4A5263}.line{stroke:#4A5263;stroke-width:1.8;fill:none}.dash{stroke:#B25000;stroke-width:1.5;stroke-dasharray:5 4;fill:none}</style>
-<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="#4A5263" /></marker></defs>
-<text x="24" y="32" class="title">MCP 접근 경계 · 역할별 허용 도구와 토큰</text>
-<rect x="35" y="62" width="300" height="112" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<text x="49" y="87" class="head">동료 3명</text>
-<text x="49" y="107" class="body">debate: transcript · proposal draft</text>
-<text x="49" y="125" class="body">rag: search · material</text>
-<rect x="400" y="62" width="300" height="112" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<text x="414" y="87" class="head">진행 매니저 결정적 노드</text>
-<text x="414" y="107" class="body">debate: 상태·메시지·칸 변경</text>
-<text x="414" y="125" class="body">assessment: 카드 관찰 기록</text>
-<rect x="765" y="62" width="300" height="112" rx="10" fill="#FDF1DD" stroke="#B26A00" stroke-width="1.5" />
-<text x="779" y="87" class="head">report-worker 평가 에이전트</text>
-<text x="779" y="107" class="body">assessment: 기록·척도·결과</text>
-<text x="779" y="125" class="body">세션 종료 뒤에만 접근</text>
-<rect x="35" y="256" width="300" height="130" rx="10" fill="#E8F0FD" stroke="#2459B8" stroke-width="1.5" />
-<text x="49" y="281" class="head">debate-mcp · rag-mcp</text>
-<text x="49" y="301" class="body">토론 기록 reply_to 포함</text>
-<text x="49" y="319" class="body">자료 버전 고정 · 검색 색인</text>
-<rect x="400" y="256" width="300" height="130" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<text x="414" y="281" class="head">api /internal</text>
-<text x="414" y="301" class="body">X-Internal-Token · 업무 데이터 저장</text>
-<text x="414" y="319" class="body">debate-mcp → 내부 API → 업무 데이터</text>
-<rect x="765" y="256" width="300" height="130" rx="10" fill="#E8F0FD" stroke="#2459B8" stroke-width="1.5" />
-<text x="779" y="281" class="head">assessment-mcp</text>
-<text x="779" y="301" class="body">X-Assessment-Token 별도</text>
-<text x="779" y="319" class="body">관찰 · 평가 저장/조회</text>
-<path d="M185 174 L185 256" class="line" marker-end="url(#arrow)" />
-<text x="201" y="208" text-anchor="middle" class="small">조회</text>
-<text x="380" y="216" text-anchor="middle" class="small">debate 도구 전부</text>
-<path d="M915 174 L915 256" class="line" marker-end="url(#arrow)" />
-<text x="934" y="208" text-anchor="middle" class="small">평가</text>
-<path d="M335 320 L400 320" class="line" marker-end="url(#arrow)" />
-<path d="M765 320 L700 320" class="line" marker-end="url(#arrow)" />
-<rect x="35" y="435" width="1030" height="85" rx="10" fill="#FFFBEF" stroke="#E2CF9E" stroke-width="1.5" />
-<text x="49" y="460" class="head">동료의 평가 접근 차단</text>
-<text x="49" y="480" class="body">동료의 도구 허용 목록에 assessment-mcp가 없고 토큰도 발급하지 않습니다.</text>
-<text x="49" y="498" class="body">음성 경로는 새 MCP를 추가하지 않으며 업무 데이터 쓰기는 api를 거칩니다.</text>
-<path d="M470 174 L470 225 L300 225 L300 256" class="line" marker-end="url(#arrow)" /><path d="M635 174 L635 228 L805 228 L805 256" class="line" marker-end="url(#arrow)" /><text x="700" y="219" text-anchor="middle" class="small">record_observation</text></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 392" width="1000" height="392"><style>
+.b-seat{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:.9}
+.b-agentstep{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.4}
+.b-topic2{fill:#FFFFFF;stroke:#D2D2D7;stroke-width:1}
+.edge-xd{stroke:#D70015;stroke-width:1.5;fill:none;stroke-dasharray:5 3}
+.xmark{stroke:#D70015;stroke-width:2.6;fill:none;stroke-linecap:round}
+text{font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;fill:#1D1D1F}
+.t{font-size:12.5px;font-weight:700}
+.s{font-size:10.5px;fill:#4A5263}
+.tier{font-size:12.5px;font-weight:700;fill:#0066CC}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:9.5px;fill:#3C4556}
+.mono-s{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:8.6px;fill:#3C4556}
+.lab{font-size:10.5px;fill:#2F3746}
+.lab-t{font-size:10.5px;font-weight:700;fill:#1D1D1F}
+.lab-b{font-size:10.5px;fill:#D70015;font-weight:700}
+.lab-g{font-size:10.5px;fill:#6E6E73;font-weight:700}
+.st{font-size:10px;font-weight:700;fill:#0066CC;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.numt{font-size:10px;font-weight:700;fill:#fff}
+.halo{paint-order:stroke;stroke:#FFFFFF;stroke-width:3.2px;stroke-linejoin:round}
+.numc{fill:#0071E3}
+.edge{stroke:#3C4556;stroke-width:1.4;fill:none}
+.edge-d{stroke:#3C4556;stroke-width:1.3;fill:none;stroke-dasharray:4 3}
+.edge-x{stroke:#D70015;stroke-width:1.5;fill:none}
+.ah{fill:#3C4556}
+.ahx{fill:#D70015}
+.aho{fill:none;stroke:#3C4556;stroke-width:1.5;stroke-linejoin:round}
+.bnd{fill:none;stroke:#D70015;stroke-width:1.3;stroke-dasharray:7 4}
+.lbnd{fill:none;stroke:#9AA3AD;stroke-width:1.1;stroke-dasharray:3 3}
+.life{stroke:#9AA3AD;stroke-width:1;stroke-dasharray:4 4}
+.b-web{fill:#E5F4EC;stroke:#1F8A5B;stroke-width:1.4}
+.b-web-bar{stroke:#1F8A5B;stroke-width:1}
+.b-web-dot{fill:#1F8A5B}
+.b-api{fill:#FDECEB;stroke:#C4362F;stroke-width:1.4}
+.b-in{fill:#FFFFFF;stroke:#C4362F;stroke-width:1}
+.b-agent{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.6}
+.b-agent-in{fill:none;stroke:#5B3FB3;stroke-width:.8}
+.b-mcp{fill:#E8F0FD;stroke:#2459B8;stroke-width:1.4}
+.b-mq{fill:#FDF1DD;stroke:#B26A00;stroke-width:1.4}
+.b-topic{fill:#FFFFFF;stroke:#B26A00;stroke-width:1}
+.b-db{fill:#EEF0F3;stroke:#5F6873;stroke-width:1.4}
+.b-ext{fill:#FFFFFF;stroke:#8B939C;stroke-width:1.4;stroke-dasharray:5 3}
+.b-node{fill:#FFFFFF;stroke:#5F6873;stroke-width:1.3}
+.node-top{fill:#F1F3F6}
+.node-side{fill:#E3E7EC}
+.b-step{fill:#F3F6FB;stroke:#0071E3;stroke-width:1.2}
+.b-state{fill:#E8F2FD;stroke:#0071E3;stroke-width:1.2}
+.b-note{fill:#FFFBEF;stroke:#E2CF9E;stroke-width:1}
+.b-plug{fill:#FFFFFF;stroke:#5B3FB3;stroke-width:1.2}
+.plug{stroke:#5B3FB3;stroke-width:1.3}
+.plug-dot{fill:#5B3FB3}
+.axis{stroke:#5F6873;stroke-width:1.2}
+.tick{stroke:#9AA3AD;stroke-width:1}
+.dot{fill:#0071E3}
+.dot-rel{fill:#FFFFFF;stroke:#0071E3;stroke-width:1.5}
+</style><rect width="1000" height="392" fill="#FFFFFF"/><defs><marker id="mf-v4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker><marker id="mo-v4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" class="aho"/></marker><marker id="mx-v4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahx"/></marker></defs><rect x="20" y="22" width="380" height="262" rx="10" class="lbnd"/><text x="32.0" y="38.0" text-anchor="start" class="lab-g">api 프로세스 · 토론 그래프</text><rect x="40" y="50" width="340" height="72" rx="8" class="b-agent"/><text x="210.0" y="76.5" text-anchor="middle" class="t">진행 매니저 결정적 노드</text><text x="210.0" y="91.5" text-anchor="middle" class="s">load · cards · apply · fill (코드가 호출)</text><text x="210.0" y="104.5" text-anchor="middle" class="s">assessment 클라이언트 + 토큰은 cards · apply에만 주입</text><rect x="40" y="182" width="340" height="88" rx="8" class="b-agent"/><text x="210.0" y="210.0" text-anchor="middle" class="t">respond · 강한결 · 윤하람 · 서지안</text><text x="210.0" y="225.0" text-anchor="middle" class="s">바인딩: get_transcript · get_draft(proposal) · search_materials</text><text x="210.0" y="238.0" text-anchor="middle" class="s">get_material (응답당 3회) · DebateState는 컨텍스트 주입</text><text x="210.0" y="251.0" text-anchor="middle" class="s">debate · rag 클라이언트만 (assessment URL·토큰 없음)</text><rect x="40" y="316" width="340" height="62" rx="8" class="b-api"/><text x="210.0" y="337.5" text-anchor="middle" class="t">report-worker</text><text x="210.0" y="352.5" text-anchor="middle" class="s">assessment 클라이언트 + 토큰 · 허용 5개 (코드 호출)</text><text x="210.0" y="365.5" text-anchor="middle" class="s">평가 에이전트 LLM에는 도구 없음</text><polygon points="720,40 900,40 916,70.0 900,100 720,100 704,70.0" class="b-mcp"/><text x="810.0" y="67.0" text-anchor="middle" class="t">assessment-mcp</text><text x="810.0" y="82.0" text-anchor="middle" class="s">기록자 · 토큰 없으면 forbidden</text><polygon points="720,146 900,146 916,176.0 900,206 720,206 704,176.0" class="b-mcp"/><text x="810.0" y="173.0" text-anchor="middle" class="t">debate-mcp</text><text x="810.0" y="188.0" text-anchor="middle" class="s">손 · 변경은 결정적 노드만</text><polygon points="720,250 900,250 916,280.0 900,310 720,310 704,280.0" class="b-mcp"/><text x="810.0" y="277.0" text-anchor="middle" class="t">rag-mcp</text><text x="810.0" y="292.0" text-anchor="middle" class="s">눈 · 확정 키워드 자료만</text><line x1="380" y1="70" x2="703" y2="70" class="edge" marker-end="url(#mf-v4)"/><text x="540.0" y="64.0" text-anchor="middle" class="lab halo">record_observation (apply · cards)</text><polyline points="380,104 660,104 660,176 703,176" class="edge" marker-end="url(#mf-v4)"/><text x="668.0" y="132.0" text-anchor="start" class="lab halo">debate-mcp 도구 전부</text><line x1="380" y1="214" x2="703" y2="190" class="edge" marker-end="url(#mf-v4)"/><text x="400.0" y="202.0" text-anchor="start" class="lab halo">get_transcript · get_draft(proposal만)</text><line x1="380" y1="252" x2="703" y2="282" class="edge" marker-end="url(#mf-v4)"/><text x="420.0" y="278.0" text-anchor="start" class="lab halo">search_materials · get_material</text><polyline points="300,182 300,150 560,150" class="edge-xd"/><path d="M566,142 L582,158 M582,142 L566,158" class="xmark"/><text x="308.0" y="144.0" text-anchor="start" class="lab-b">assessment 도구 호출 시도</text><text x="308.0" y="168.0" text-anchor="start" class="lab-b">① 허용 목록 밖 → 그래프가 거부</text><text x="474.0" y="168.0" text-anchor="start" class="lab-b">② 토큰 없음 → forbidden</text><polyline points="380,347 970,347 970,70 917,70" class="edge" marker-end="url(#mf-v4)"/><text x="676.0" y="341.0" text-anchor="middle" class="lab halo">get_rubric · get_session_record · get_transcript_span · get_contributions · save_evaluation</text></svg>

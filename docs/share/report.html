@@ -217,20 +217,21 @@
   <div class="kicker"><b>2</b> &nbsp;시스템 아키텍처</div>
   <h2>2.1 전체 구성</h2>
   <p class="lede">브라우저는 api만 만나고, 음성은 api가 Azure와 주고받는다.</p>
-  <p class="bal">번호는 지원자 발언 한 번과 동료 응답 재생, 세션 종료 뒤 리포트까지의 처리 순서입니다. 빨간 화살표는 아래 계층이 api의 <span class="k">/internal</span>을 부르는 경로와 평가 기록 경계입니다.</p>
+  <p class="bal">번호는 지원자 발언 한 번과 동료 응답 재생, 세션 종료 뒤 리포트까지의 처리 순서입니다. 빨간 화살표는 아래 계층이 api의 <span class="k">/internal</span>을 부르는 예외 경로입니다.</p>
   <figure>
-    <img src="report-assets/system-overview.svg" alt="Day Zero 전체 구성도" style="width:94%;margin:auto">
+    <img src="report-assets/system-overview.svg" alt="Day Zero 전체 구성도" style="width:86%;margin:auto">
     <figcaption><b>그림 2-1</b>전체 구성도. 공개 포트는 web과 api뿐이고, MCP · 워커 · DB · 큐는 Compose 내부 네트워크에 있습니다. 음성 공급자는 테스트 프로필에서 FakeSpeech로 바뀝니다.</figcaption>
   </figure>
   <h3 style="margin-top:3mm"><span class="n">표 2-1</span>번호별 처리 흐름</h3>
   <table>
     <tr><th class="num" style="width:6%">번호</th><th style="width:23%">구간</th><th>처리 내용</th><th style="width:20%">프로토콜</th></tr>
-    <tr><td class="num">1</td><td>web → api</td><td>[발언하기] 발언권 요청, 녹음 WAV 한 파일 업로드, <span class="k">/voice</span> 750ms 조회</td><td>REST</td></tr>
-    <tr><td class="num">2</td><td>api ↔ Azure</td><td>STT로 받아 적고, 그 글 그대로 <span class="nw">message.send</span>(client_msg_id = utterance_id). 호출 전 사용량 원장 차감</td><td>HTTPS, WebSocket</td></tr>
-    <tr><td class="num">3</td><td>api 안</td><td>저장 · generation +1 → 메일박스가 자극을 꺼내 의도 분류 → 토론 그래프</td><td>프로세스 내부</td></tr>
-    <tr><td class="num">4·5</td><td>에이전트 → OpenAI · MCP</td><td>역할별 모델 호출, 허용된 MCP 도구. 변경 · 원문은 <span class="k">/internal</span>, 청크 검색만 pgvector 직접</td><td>HTTPS, MCP HTTP, SQL</td></tr>
-    <tr><td class="num">6</td><td>api → web</td><td>검증된 최종 발언만 TTS로 합성해 순서대로 재생, 항목마다 start · 실제 ended 확인 뒤 내 차례</td><td>REST, WebSocket</td></tr>
-    <tr><td class="num">7</td><td>api → 큐 → 워커</td><td>종료 뒤 리포트 작업 발행, 평가 저장, 리포트 저장. thread는 <span class="k">report:{session_id}:{eval_round}</span></td><td>AMQP, MCP, HTTP</td></tr>
+    <tr><td class="num">1</td><td>web → api</td><td>[발언하기] 발언권 요청, 녹음 WAV 업로드, 받아 적은 글 그대로 <span class="nw">message.send</span>(client_msg_id = utterance_id)</td><td>REST, WebSocket</td></tr>
+    <tr><td class="num">2·3</td><td>api → 의도 분류 · 그래프</td><td>같은 글인지 검증 · 저장 · generation +1 → 메일박스가 자극을 꺼내 분류하고 지지를 반영한 뒤 그래프 실행</td><td>프로세스 내부</td></tr>
+    <tr><td class="num">4·5</td><td>에이전트 → OpenAI · MCP</td><td>역할별 모델 호출, 허용된 MCP 도구 호출</td><td>HTTPS, MCP HTTP</td></tr>
+    <tr><td class="num">6·7</td><td>MCP → api · pgvector</td><td>변경 · 자료 원문은 <span class="k">/internal</span> 경유, 청크 검색만 pgvector 직접</td><td>HTTP :8001, SQL</td></tr>
+    <tr><td class="num">8</td><td>api → web</td><td>칸 확정 · 단계 전환을 seq 봉투로 푸시, 음성 상태는 <span class="k">/voice</span> 750ms 조회</td><td>WebSocket, REST</td></tr>
+    <tr><td class="num">9~11</td><td>api → 큐 → 워커</td><td>종료 뒤 리포트 작업 발행, 평가 저장, 리포트 저장. thread는 <span class="k">report:{session_id}:{eval_round}</span></td><td>AMQP, MCP, HTTP</td></tr>
+    <tr><td class="num">12</td><td>api → Azure</td><td>검증된 최종 발언만 TTS, 녹음은 STT. 호출 전 사용량 원장 차감</td><td>HTTPS</td></tr>
   </table>
   <div class="foot"><span>Day Zero 최종 보고서</span><span>05</span></div>
 </section>
@@ -304,7 +305,7 @@
   <p class="lede">동료 발언이 끝까지 재생된 뒤에야 지원자 차례가 열린다.</p>
   <p class="bal">음성 턴 컨트롤러는 토론 그래프 바깥에서 6개 상태를 관리합니다. 그래프 · 의도 분류 · guard · 합의 규칙은 텍스트 경로와 같고, 음성은 그 앞뒤에 녹음 · 받아 적기와 재생 확인을 붙입니다.</p>
   <figure>
-    <img src="report-assets/debate-turn-sequence.svg" alt="음성 토론 한 턴 상태 흐름">
+    <img src="report-assets/debate-turn-sequence.svg" alt="음성 토론 한 턴 시퀀스" style="width:92%;margin:auto">
     <figcaption><b>그림 3-2</b>음성 토론 한 턴. 동료 발언 재생 → 내 차례 → 녹음 → 받아 적기 → 그대로 제출 → 다음 그래프 실행이 한 바퀴입니다.</figcaption>
   </figure>
   <h3 style="margin-top:3mm"><span class="n">표 3-3</span>음성 턴 규칙</h3>

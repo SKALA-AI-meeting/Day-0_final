@@ -1,56 +1,56 @@
-<ns0:svg xmlns:ns0="http://www.w3.org/2000/svg" width="1100" height="650" viewBox="0 0 1100 650" role="img" aria-label="전체 구성 · 음성 회의부터 사람 검토까지">
-<ns0:style>text{font-family:Apple SD Gothic Neo,Noto Sans KR,Malgun Gothic,sans-serif;fill:#1D1D1F}.title{font-size:20px;font-weight:700}.head{font-size:15px;font-weight:700}.body{font-size:12.5px}.small{font-size:11px;fill:#4A5263}.line{stroke:#4A5263;stroke-width:1.8;fill:none}.dash{stroke:#B25000;stroke-width:1.5;stroke-dasharray:5 4;fill:none}</ns0:style>
-<ns0:defs><ns0:marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><ns0:path d="M0 0 L8 4 L0 8 Z" fill="#4A5263" /></ns0:marker></ns0:defs>
-<ns0:text x="24" y="32" class="title">전체 구성 · 음성 회의부터 사람 검토까지</ns0:text>
-<ns0:rect x="30" y="62" width="300" height="94" rx="10" fill="#E5F4EC" stroke="#1F8A5B" stroke-width="1.5" />
-<ns0:text x="44" y="87" class="head">브라우저 · Next.js</ns0:text>
-<ns0:text x="44" y="107" class="body">발표자 보기 · 자막 · 방금 한 말</ns0:text>
-<ns0:text x="44" y="125" class="body">메모 · 발언 → 받아 적기 → 바로 WS 제출</ns0:text>
-<ns0:rect x="400" y="62" width="330" height="94" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<ns0:text x="414" y="87" class="head">FastAPI · 공개 REST / WS</ns0:text>
-<ns0:text x="414" y="107" class="body">인증 · 세션 · 스케줄러 · /voice REST</ns0:text>
-<ns0:text x="414" y="125" class="body">Voice Turn Controller · /internal</ns0:text>
-<ns0:rect x="800" y="62" width="270" height="94" rx="10" fill="#FFFFFF" stroke="#8B939C" stroke-width="1.5" />
-<ns0:text x="814" y="87" class="head">Azure F0 / FakeSpeech</ns0:text>
-<ns0:text x="814" y="107" class="body">TTS: InJoon · SunHi · BongJin</ns0:text>
-<ns0:text x="814" y="125" class="body">STT: ko-KR · F0/listKeys 검증</ns0:text>
-<ns0:path d="M330 106 L400 106" class="line" marker-end="url(#arrow)" />
-<ns0:text x="365.0" y="96" text-anchor="middle" class="small">REST · WS</ns0:text>
-<ns0:path d="M730 106 L800 106" class="line" marker-end="url(#arrow)" />
-<ns0:text x="765.0" y="99.0" text-anchor="middle" class="small">TTS · STT</ns0:text>
-<ns0:rect x="400" y="205" width="330" height="110" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<ns0:text x="414" y="230" class="head">세션 메일박스 → 토론 그래프</ns0:text>
-<ns0:text x="414" y="250" class="body">5자극 직렬 · 의도 분류</ns0:text>
-<ns0:text x="414" y="268" class="body">진행 매니저 + 동료 3</ns0:text>
-<ns0:path d="M565 156 L565 205" class="line" marker-end="url(#arrow)" />
-<ns0:text x="580" y="180" text-anchor="start" class="small">generation · 음성 차례</ns0:text>
-<ns0:rect x="30" y="205" width="300" height="110" rx="10" fill="#EEF0F3" stroke="#5F6873" stroke-width="1.5" />
-<ns0:text x="44" y="230" class="head">PostgreSQL + pgvector</ns0:text>
-<ns0:text x="44" y="250" class="body">voice_states · speech_jobs · speech_quotas</ns0:text>
-<ns0:text x="44" y="268" class="body">messages · slots · agent_runs · reports</ns0:text>
-<ns0:text x="365.0" y="277" text-anchor="middle" class="small">읽기·쓰기</ns0:text>
-<ns0:rect x="785" y="205" width="285" height="110" rx="10" fill="#E8F0FD" stroke="#2459B8" stroke-width="1.5" />
-<ns0:text x="799" y="230" class="head">MCP 서버 3개</ns0:text>
-<ns0:text x="799" y="250" class="body">debate · rag · assessment</ns0:text>
-<ns0:text x="799" y="268" class="body">내부 API로 업무 데이터 접근</ns0:text>
-<ns0:path d="M730 265 L785 265" class="line" marker-end="url(#arrow)" />
-<ns0:text x="757" y="197" text-anchor="middle" class="small">허용 도구</ns0:text>
-<ns0:rect x="30" y="375" width="300" height="105" rx="10" fill="#FDECEB" stroke="#C4362F" stroke-width="1.5" />
-<ns0:text x="44" y="400" class="head">api 세션 서비스</ns0:text>
-<ns0:text x="44" y="420" class="body">마감·합의 칸 확정 · 기획안 제출</ns0:text>
-<ns0:text x="44" y="438" class="body">시스템 공지 · 큐 발행</ns0:text>
-<ns0:path d="M180 315 L180 375" class="line" marker-end="url(#arrow)" />
-<ns0:rect x="400" y="375" width="330" height="105" rx="10" fill="#FDF1DD" stroke="#B26A00" stroke-width="1.5" />
-<ns0:text x="414" y="400" class="head">RabbitMQ</ns0:text>
-<ns0:text x="414" y="420" class="body">report.generate · report.approve</ns0:text>
-<ns0:text x="414" y="438" class="body">재시도 · report.dlq</ns0:text>
-<ns0:path d="M565 480 L565 525" class="line" marker-end="url(#arrow)" />
-<ns0:rect x="400" y="525" width="330" height="95" rx="10" fill="#EEE9FB" stroke="#5B3FB3" stroke-width="1.5" />
-<ns0:text x="414" y="550" class="head">report-worker · 평가 에이전트</ns0:text>
-<ns0:text x="414" y="570" class="body">사실 장면 → 세부 행동 판단</ns0:text>
-<ns0:text x="414" y="588" class="body">초안 → 담당자 검토 → 최종 저장</ns0:text>
-<ns0:rect x="785" y="375" width="285" height="105" rx="10" fill="#FFFBEF" stroke="#E2CF9E" stroke-width="1.5" />
-<ns0:text x="799" y="400" class="head">접근 경계</ns0:text>
-<ns0:text x="799" y="420" class="body">동료에게 assessment 토큰 없음</ns0:text>
-<ns0:text x="799" y="438" class="body">LangSmith 추적 기본 꺼짐</ns0:text>
-<ns0:path d="M330 425 L400 425" class="line" marker-end="url(#arrow)" /><ns0:path d="M330 285 L400 285" class="line" marker-start="url(#arrow)" marker-end="url(#arrow)" /><ns0:path d="M400 568 L365 568 L365 458 L330 458" class="line" marker-end="url(#arrow)" /><ns0:text x="44" y="182" text-anchor="start" class="small">/voice 조회: 보통 750ms · 처리 중 250ms</ns0:text><ns0:text x="380" y="510" text-anchor="start" class="small">평가 결과 · /internal</ns0:text><ns0:text x="532" y="359" text-anchor="middle" class="small">report.generate / report.approve</ns0:text></ns0:svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 716" width="1000" height="716"><style>
+.b-seat{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:.9}
+.b-agentstep{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.4}
+.b-topic2{fill:#FFFFFF;stroke:#D2D2D7;stroke-width:1}
+.edge-xd{stroke:#D70015;stroke-width:1.5;fill:none;stroke-dasharray:5 3}
+.xmark{stroke:#D70015;stroke-width:2.6;fill:none;stroke-linecap:round}
+text{font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;fill:#1D1D1F}
+.t{font-size:12.5px;font-weight:700}
+.s{font-size:10.5px;fill:#4A5263}
+.tier{font-size:12.5px;font-weight:700;fill:#0066CC}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:9.5px;fill:#3C4556}
+.mono-s{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:8.6px;fill:#3C4556}
+.lab{font-size:10.5px;fill:#2F3746}
+.lab-t{font-size:10.5px;font-weight:700;fill:#1D1D1F}
+.lab-b{font-size:10.5px;fill:#D70015;font-weight:700}
+.lab-g{font-size:10.5px;fill:#6E6E73;font-weight:700}
+.st{font-size:10px;font-weight:700;fill:#0066CC;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.numt{font-size:10px;font-weight:700;fill:#fff}
+.halo{paint-order:stroke;stroke:#FFFFFF;stroke-width:3.2px;stroke-linejoin:round}
+.numc{fill:#0071E3}
+.edge{stroke:#3C4556;stroke-width:1.4;fill:none}
+.edge-d{stroke:#3C4556;stroke-width:1.3;fill:none;stroke-dasharray:4 3}
+.edge-x{stroke:#D70015;stroke-width:1.5;fill:none}
+.ah{fill:#3C4556}
+.ahx{fill:#D70015}
+.aho{fill:none;stroke:#3C4556;stroke-width:1.5;stroke-linejoin:round}
+.bnd{fill:none;stroke:#D70015;stroke-width:1.3;stroke-dasharray:7 4}
+.lbnd{fill:none;stroke:#9AA3AD;stroke-width:1.1;stroke-dasharray:3 3}
+.life{stroke:#9AA3AD;stroke-width:1;stroke-dasharray:4 4}
+.b-web{fill:#E5F4EC;stroke:#1F8A5B;stroke-width:1.4}
+.b-web-bar{stroke:#1F8A5B;stroke-width:1}
+.b-web-dot{fill:#1F8A5B}
+.b-api{fill:#FDECEB;stroke:#C4362F;stroke-width:1.4}
+.b-in{fill:#FFFFFF;stroke:#C4362F;stroke-width:1}
+.b-agent{fill:#EEE9FB;stroke:#5B3FB3;stroke-width:1.6}
+.b-agent-in{fill:none;stroke:#5B3FB3;stroke-width:.8}
+.b-mcp{fill:#E8F0FD;stroke:#2459B8;stroke-width:1.4}
+.b-mq{fill:#FDF1DD;stroke:#B26A00;stroke-width:1.4}
+.b-topic{fill:#FFFFFF;stroke:#B26A00;stroke-width:1}
+.b-db{fill:#EEF0F3;stroke:#5F6873;stroke-width:1.4}
+.b-ext{fill:#FFFFFF;stroke:#8B939C;stroke-width:1.4;stroke-dasharray:5 3}
+.b-node{fill:#FFFFFF;stroke:#5F6873;stroke-width:1.3}
+.node-top{fill:#F1F3F6}
+.node-side{fill:#E3E7EC}
+.b-step{fill:#F3F6FB;stroke:#0071E3;stroke-width:1.2}
+.b-state{fill:#E8F2FD;stroke:#0071E3;stroke-width:1.2}
+.b-note{fill:#FFFBEF;stroke:#E2CF9E;stroke-width:1}
+.b-plug{fill:#FFFFFF;stroke:#5B3FB3;stroke-width:1.2}
+.plug{stroke:#5B3FB3;stroke-width:1.3}
+.plug-dot{fill:#5B3FB3}
+.axis{stroke:#5F6873;stroke-width:1.2}
+.tick{stroke:#9AA3AD;stroke-width:1}
+.dot{fill:#0071E3}
+.dot-rel{fill:#FFFFFF;stroke:#0071E3;stroke-width:1.5}
+</style><rect width="1000" height="716" fill="#FFFFFF"/><defs><marker id="mf-v1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker><marker id="mo-v1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9" class="aho"/></marker><marker id="mx-v1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahx"/></marker></defs><rect x="10" y="100" width="812" height="606" rx="10" class="bnd"/><text x="20.0" y="699.0" text-anchor="start" class="lab-b">Trust Boundary · Compose 내부 네트워크 (8001 · 9101 · 9102 · 9103 · 5432 · 5672 미공개)</text><rect x="370" y="8" width="280" height="70" rx="7" class="b-web"/><line x1="370" y1="19" x2="650" y2="19" class="b-web-bar"/><circle cx="378" cy="13.5" r="2" class="b-web-dot"/><circle cx="385" cy="13.5" r="2" class="b-web-dot"/><circle cx="392" cy="13.5" r="2" class="b-web-dot"/><text x="510.0" y="39.0" text-anchor="middle" class="t">web · Next.js :3000</text><text x="510.0" y="54.0" text-anchor="middle" class="s">지원자 /s/[token] 음성 회의 · 발표자 보기 · [발언하기]</text><text x="510.0" y="67.0" text-anchor="middle" class="s">결정 사항 · 기획안 · 자료 · AI 어시스턴트 · 관리자 /admin/*</text><rect x="30" y="118" width="772" height="248" rx="10" class="b-api"/><text x="44.0" y="138.0" text-anchor="start" class="t">api · FastAPI + LangGraph (한 프로세스)</text><text x="788.0" y="138.0" text-anchor="end" class="s">8000 공개 · 8001 /internal</text><rect x="45" y="148" width="180" height="44" rx="8" class="b-in"/><text x="135.0" y="167.0" text-anchor="middle" class="t">인증 · REST · WebSocket</text><text x="135.0" y="182.0" text-anchor="middle" class="s">JWT 역할 · 세션별 seq 송신 큐</text><rect x="233" y="148" width="240" height="44" rx="8" class="b-in"/><text x="353.0" y="167.0" text-anchor="middle" class="t">SessionService</text><text x="353.0" y="182.0" text-anchor="middle" class="s">단계 전환 · 칸 확정 · 시간 초과 채우기</text><rect x="481" y="148" width="140" height="44" rx="8" class="b-in"/><text x="551.0" y="167.0" text-anchor="middle" class="t">스케줄러 (5초)</text><text x="551.0" y="182.0" text-anchor="middle" class="s">마감 · 강제 차례 · 만료</text><rect x="629" y="148" width="158" height="44" rx="8" class="b-in"/><text x="708.0" y="167.0" text-anchor="middle" class="t">Voice Turn Controller</text><text x="708.0" y="182.0" text-anchor="middle" class="s">발언권 · 재생 확인 · 사용량</text><rect x="45" y="214" width="200" height="140" rx="8" class="b-in"/><text x="145.0" y="268.0" text-anchor="middle" class="t">내부 API /internal :8001</text><text x="145.0" y="283.0" text-anchor="middle" class="s">X-Internal-Token</text><text x="145.0" y="296.0" text-anchor="middle" class="s">업무 데이터 쓰기는 api만</text><text x="145.0" y="309.0" text-anchor="middle" class="s">예외: 체크포인트 · 색인</text><rect x="258" y="214" width="531" height="140" rx="10" class="b-agent"/><rect x="261" y="217" width="525" height="134" rx="8" class="b-agent-in"/><text x="778.0" y="232.0" text-anchor="end" class="lab-g">에이전트 모듈</text><rect x="270" y="240" width="124" height="104" rx="6" class="b-plug"/><text x="332.0" y="276.0" text-anchor="middle" class="t">실시간 의도 분류</text><text x="332.0" y="291.0" text-anchor="middle" class="s">MODEL_INTENT</text><text x="332.0" y="304.0" text-anchor="middle" class="s">메일박스 안 · 그래프 전</text><text x="332.0" y="317.0" text-anchor="middle" class="s">high · 유보 없을 때만 지지</text><rect x="404" y="240" width="244" height="104" rx="6" class="b-plug"/><text x="526.0" y="257.0" text-anchor="middle" class="t">토론 그래프</text><rect x="416" y="266" width="220" height="22" rx="4" class="b-seat"/><text x="526.0" y="281.0" text-anchor="middle" class="s">진행 매니저 (결정적 노드 + LLM)</text><rect x="416" y="296" width="68" height="22" rx="4" class="b-seat"/><text x="450.0" y="311.0" text-anchor="middle" class="s">p1 강한결</text><rect x="492" y="296" width="68" height="22" rx="4" class="b-seat"/><text x="526.0" y="311.0" text-anchor="middle" class="s">p2 윤하람</text><rect x="568" y="296" width="68" height="22" rx="4" class="b-seat"/><text x="602.0" y="311.0" text-anchor="middle" class="s">p3 서지안</text><text x="526.0" y="335.0" text-anchor="middle" class="s">세션 메일박스 직렬 · 자극 5종 · 화자 0~2명</text><rect x="658" y="240" width="120" height="104" rx="6" class="b-plug"/><text x="718.0" y="276.0" text-anchor="middle" class="t">AI 어시스턴트</text><text x="718.0" y="291.0" text-anchor="middle" class="s">tool-calling 루프</text><text x="718.0" y="304.0" text-anchor="middle" class="s">search · get ≤ 3회</text><text x="718.0" y="317.0" text-anchor="middle" class="s">숫자 검사 · 쓴 자료만 인용</text><path d="M22,58 C8,58 2,48 7,39 C0,31 6,18 18,20 C20,8 36,2 46,10 C52,1 70,2 74,14 C88,11 99,24 93,36 C100,45 94,58 80,58 Z" transform="translate(842,4) scale(1.500,1.370)" class="b-ext" vector-effect="non-scaling-stroke"/><text x="917.0" y="44.0" text-anchor="middle" class="t">Azure Speech F0</text><text x="917.0" y="58.0" text-anchor="middle" class="s">TTS 3목소리 · STT</text><text x="917.0" y="71.0" text-anchor="middle" class="s">시험은 FakeSpeech</text><path d="M22,58 C8,58 2,48 7,39 C0,31 6,18 18,20 C20,8 36,2 46,10 C52,1 70,2 74,14 C88,11 99,24 93,36 C100,45 94,58 80,58 Z" transform="translate(842,206) scale(1.500,1.370)" class="b-ext" vector-effect="non-scaling-stroke"/><text x="917.0" y="252.6" text-anchor="middle" class="t">LangSmith</text><text x="917.0" y="266.6" text-anchor="middle" class="s">trace · 기본 꺼짐</text><path d="M22,58 C8,58 2,48 7,39 C0,31 6,18 18,20 C20,8 36,2 46,10 C52,1 70,2 74,14 C88,11 99,24 93,36 C100,45 94,58 80,58 Z" transform="translate(842,392) scale(1.500,1.370)" class="b-ext" vector-effect="non-scaling-stroke"/><text x="917.0" y="438.6" text-anchor="middle" class="t">OpenAI</text><text x="917.0" y="452.6" text-anchor="middle" class="s">MODEL_&lt;역할&gt;</text><text x="917.0" y="465.6" text-anchor="middle" class="s">gpt-4o-mini · 제한 키</text><polygon points="52,404 196,404 212,444.0 196,484 52,484 36,444.0" class="b-mcp"/><text x="124.0" y="434.5" text-anchor="middle" class="t">debate-mcp :9101</text><text x="124.0" y="449.5" text-anchor="middle" class="s">손 · 토론 상태 조회·변경</text><text x="124.0" y="462.5" text-anchor="middle" class="s">도구 7</text><polygon points="244,404 372,404 388,444.0 372,484 244,484 228,444.0" class="b-mcp"/><text x="308.0" y="434.5" text-anchor="middle" class="t">rag-mcp :9102</text><text x="308.0" y="449.5" text-anchor="middle" class="s">눈 · 확정 키워드 자료만</text><text x="308.0" y="462.5" text-anchor="middle" class="s">BGE-M3</text><polygon points="420,404 548,404 564,444.0 548,484 420,484 404,444.0" class="b-mcp"/><text x="484.0" y="434.5" text-anchor="middle" class="t">assessment-mcp</text><text x="484.0" y="449.5" text-anchor="middle" class="s">:9103 · 기록자</text><text x="484.0" y="462.5" text-anchor="middle" class="s">X-Assessment-Token</text><rect x="596" y="396" width="166" height="108" rx="8" class="b-mq"/><text x="679.0" y="414.0" text-anchor="middle" class="t">RabbitMQ · dayzero</text><rect x="610" y="422" width="138" height="20" rx="4" class="b-topic"/><text x="679.0" y="436.0" text-anchor="middle" class="mono">report.generate</text><rect x="610" y="448" width="138" height="20" rx="4" class="b-topic"/><text x="679.0" y="462.0" text-anchor="middle" class="mono">report.approve</text><rect x="610" y="474" width="138" height="20" rx="4" class="b-topic"/><text x="679.0" y="488.0" text-anchor="middle" class="mono">report.dlq</text><rect x="596" y="540" width="206" height="146" rx="8" class="b-api"/><text x="699.0" y="584.0" text-anchor="middle" class="t">report-worker</text><text x="699.0" y="599.0" text-anchor="middle" class="s">report:{session_id}:{eval_round}</text><text x="699.0" y="612.0" text-anchor="middle" class="s">collect → aggregate →</text><text x="699.0" y="625.0" text-anchor="middle" class="s">evaluate (평가 에이전트) →</text><text x="699.0" y="638.0" text-anchor="middle" class="s">draft → approval(interrupt) → finalize</text><text x="699.0" y="651.0" text-anchor="middle" class="s">재시도 · DLQ</text><path d="M40,552 A230.0,8 0 0 1 500,552 L500,670 A230.0,8 0 0 1 40,670 Z" class="b-db"/><path d="M40,552 A230.0,8 0 0 0 500,552" class="b-db" fill="none"/><text x="270.0" y="599.0" text-anchor="middle" class="t">PostgreSQL 16 + pgvector</text><text x="270.0" y="614.0" text-anchor="middle" class="s">sessions(generation) · messages · message_intents · options · stances</text><text x="270.0" y="627.0" text-anchor="middle" class="s">slots · proposals · observations · evaluations · evaluation_runs · reports</text><text x="270.0" y="640.0" text-anchor="middle" class="s">agent_runs · materials · material_chunks vector(1024)</text><text x="270.0" y="653.0" text-anchor="middle" class="s">voice_states · speech_jobs · speech_quotas</text><line x1="470" y1="78" x2="470" y2="117" class="edge" marker-end="url(#mf-v1)"/><circle cx="456" cy="90" r="8.5" class="numc"/><text x="456.0" y="93.6" text-anchor="middle" class="numt">1</text><text x="444.0" y="94.0" text-anchor="end" class="lab halo">REST · WebSocket · 음성 REST</text><line x1="550" y1="118" x2="550" y2="80" class="edge" marker-end="url(#mo-v1)"/><circle cx="566" cy="90" r="8.5" class="numc"/><text x="566.0" y="93.6" text-anchor="middle" class="numt">8</text><text x="578.0" y="94.0" text-anchor="start" class="lab halo">WS 푸시 · seq 봉투</text><line x1="332" y1="192" x2="332" y2="239" class="edge" marker-end="url(#mf-v1)"/><circle cx="318" cy="205" r="8.5" class="numc"/><text x="318.0" y="208.6" text-anchor="middle" class="numt">2</text><line x1="455" y1="192" x2="455" y2="239" class="edge" marker-end="url(#mf-v1)"/><circle cx="441" cy="205" r="8.5" class="numc"/><text x="441.0" y="208.6" text-anchor="middle" class="numt">3</text><text x="465.0" y="209.0" text-anchor="start" class="lab halo">enqueue</text><line x1="551" y1="192" x2="551" y2="239" class="edge" marker-end="url(#mf-v1)"/><text x="559.0" y="209.0" text-anchor="start" class="lab halo">idle · turn_elapsed · card_due</text><line x1="789" y1="310" x2="852" y2="418" class="edge" marker-end="url(#mf-v1)"/><circle cx="814" cy="352" r="8.5" class="numc"/><text x="814.0" y="355.6" text-anchor="middle" class="numt">4</text><line x1="789" y1="262" x2="846" y2="262" class="edge" marker-end="url(#mo-v1)"/><line x1="787" y1="160" x2="866" y2="86" class="edge" marker-end="url(#mf-v1)"/><circle cx="818" cy="131" r="8.5" class="numc"/><text x="818.0" y="134.6" text-anchor="middle" class="numt">12</text><polyline points="290,354 290,380 124,380 124,403" class="edge" marker-end="url(#mf-v1)"/><circle cx="206" cy="380" r="8.5" class="numc"/><text x="206.0" y="383.6" text-anchor="middle" class="numt">5</text><text x="228.0" y="384.0" text-anchor="start" class="lab halo">MCP</text><line x1="330" y1="354" x2="330" y2="403" class="edge" marker-end="url(#mf-v1)"/><circle cx="344" cy="382" r="8.5" class="numc"/><text x="344.0" y="385.6" text-anchor="middle" class="numt">5</text><line x1="500" y1="354" x2="500" y2="403" class="edge" marker-end="url(#mf-v1)"/><circle cx="486" cy="382" r="8.5" class="numc"/><text x="486.0" y="385.6" text-anchor="middle" class="numt">5</text><text x="512.0" y="386.0" text-anchor="start" class="lab halo">record_observation</text><line x1="80" y1="404" x2="80" y2="355" class="edge-x" marker-end="url(#mx-v1)"/><circle cx="66" cy="382" r="8.5" class="numc"/><text x="66.0" y="385.6" text-anchor="middle" class="numt">6</text><text x="94.0" y="398.0" text-anchor="start" class="lab halo">:8001</text><line x1="308" y1="484" x2="308" y2="543" class="edge" marker-end="url(#mf-v1)"/><circle cx="294" cy="515" r="8.5" class="numc"/><text x="294.0" y="518.6" text-anchor="middle" class="numt">7</text><text x="320.0" y="519.0" text-anchor="start" class="lab halo">청크 검색 · 재색인</text><polyline points="30,330 20,330 20,612 39,612" class="edge" marker-end="url(#mf-v1)"/><text x="26.0" y="527.0" text-anchor="start" class="lab halo">SQL 쓰기</text><line x1="700" y1="366" x2="700" y2="395" class="edge" marker-end="url(#mo-v1)"/><circle cx="716" cy="381" r="8.5" class="numc"/><text x="716.0" y="384.6" text-anchor="middle" class="numt">9</text><line x1="679" y1="504" x2="679" y2="539" class="edge" marker-end="url(#mo-v1)"/><text x="687.0" y="525.0" text-anchor="start" class="lab halo">consume</text><polyline points="596,612 520,612 520,485" class="edge" marker-end="url(#mf-v1)"/><circle cx="560" cy="612" r="8.5" class="numc"/><text x="560.0" y="615.6" text-anchor="middle" class="numt">10</text><polyline points="785,540 785,367" class="edge-x" marker-end="url(#mx-v1)"/><circle cx="771" cy="522" r="8.5" class="numc"/><text x="771.0" y="525.6" text-anchor="middle" class="numt">11</text><line x1="802" y1="600" x2="858" y2="462" class="edge" marker-end="url(#mf-v1)"/><text x="838.0" y="548.0" text-anchor="start" class="lab halo">MODEL_EVALUATOR</text><line x1="596" y1="662" x2="501" y2="662" class="edge" marker-end="url(#mf-v1)"/><text x="548.0" y="655.0" text-anchor="middle" class="lab halo">체크포인트</text></svg>
