@@ -29,6 +29,6 @@
 
 ## 비밀값과 보관
 
-- API 키·`JWT_SECRET`·`INTERNAL_TOKEN`·`ASSESSMENT_MCP_TOKEN`은 `infra/.env`·`infra/.env.local`·`infra/.env.e2e`(모두 git 무시)에만 둔다. 예시는 `infra/.env.example`이고 문서·로그·커밋·이슈에 값을 쓰지 않는다.
+- API 키·`JWT_SECRET`·`INTERNAL_TOKEN`·`ASSESSMENT_MCP_TOKEN`은 `infra/.env`, 로컬 앱 실행용 `infra/.env.local`, 프로필로 생성되는 `infra/.env.resolved-*`(모두 git 무시)에만 둔다. 예시는 `infra/.env.example`이고 문서·로그·커밋·이슈에 값을 쓰지 않는다.
 - 내부 API(8001)는 compose 네트워크 안에서만 열리고 `X-Internal-Token`이 있어야 한다. 테스트 API(`/internal/test/*`)는 `ENABLE_TEST_API=1`일 때만 열린다.
 - 초대 토큰 원문은 링크에만 있고 DB에는 해시만 둔다. 세션 데이터는 종료 90일 뒤 지운다([data-model.md](data-model.md) "보관과 삭제").

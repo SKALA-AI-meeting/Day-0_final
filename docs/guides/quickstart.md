@@ -77,7 +77,7 @@ LLM 없이 도는 모드가 세 가지 있고, 화면에 `[fake]` 표시가 붙�
 | web `NEXT_PUBLIC_MOCK=1`(로컬 `pnpm dev`만) | api 없이 `apps/web/mocks/`의 예시 데이터 | 예시 대화가 그대로 보이고 입력에 맞춰 바뀌지 않음 | 예시 리포트 |
 | `AGENT_RUNNER=session`, `LLM_FAKE`가 없거나 `0`, mock 아님 | 실제 LLM | 지원자 말에 맞춰 대답 | 실제 평가 |
 
-`LLM_FAKE`는 api와 report-worker가 각각 읽는다. 둘이 다르면 토론과 리포트 중 한쪽만 고정 응답이 된다. 격리 e2e 스택(web `localhost:3100`, `infra/.env.e2e`)은 단계 테스트용이라 기본이 `LLM_FAKE=1`이다.
+`LLM_FAKE`는 api와 report-worker가 각각 읽는다. 둘이 다르면 토론과 리포트 중 한쪽만 고정 응답이 된다. 격리 e2e 스택(web `localhost:3100`, 테스트 프로필의 `infra/.env.resolved-<프로필>`)은 단계 테스트용이라 기본이 `LLM_FAKE=1`이다.
 
 ### 설정 확인
 
