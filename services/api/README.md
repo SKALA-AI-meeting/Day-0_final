@@ -91,6 +91,16 @@ debate-mcp·assessment-mcp도 떠 있어야 토론 그래프와 리포트 평가
 | POST | `/admin/sessions/{session_id}/report/notes` | 검토 완료 뒤 메모 추가 |
 | GET | `/admin/sessions/{session_id}/record` | 전체 기록 타임라인 |
 | WS | `/ws/sessions/{session_id}` | 토론방 실시간 채널(메시지·입력 중·단계 전환) |
+| GET | `/sessions/{session_id}/voice` | 음성 턴·재생·전사 상태 복구 |
+| POST | `/sessions/{session_id}/voice/retry` | 동일 완성 파일 STT 제한 재시도 |
+| POST | `/sessions/{session_id}/voice/rerecord` | 받아 적은 글을 버리고 같은 차례에서 다시 녹음 |
+| POST | `/sessions/{session_id}/voice/capture` | AI 완료 장벽 뒤 사용자 발언권 발급 |
+| POST | `/sessions/{session_id}/voice/abort` | 장치·파일 오류 발언권 복구 |
+| POST | `/sessions/{session_id}/voice/playback` | 실제 재생 결과 확인·재시도 |
+| POST | `/sessions/{session_id}/voice/hand` | 손들기·손 내리기 |
+| POST | `/sessions/{session_id}/voice/stream` | 녹음 중 소리 조각 접수(말하는 동안 받아 적기) |
+| POST | `/sessions/{session_id}/voice/audio` | 최종 PCM WAV 접수·STT 작업 예약 |
+| GET | `/sessions/{session_id}/voice/assets/{job_id}` | 세션 전용 TTS WAV 조회 |
 
 **내부 앱(8001, `X-Internal-Token`)**
 

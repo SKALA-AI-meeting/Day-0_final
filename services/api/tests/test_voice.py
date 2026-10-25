@@ -549,7 +549,7 @@ async def record_once(api, ctx, sess, snap):
 
 
 async def test_voice_rerecord_once_with_fresh_time(api, voice_ctx, clock):
-    """받아 적은 글은 3초 확인 뒤 자동 제출 기준을 주고, 다시 녹음은 한 번만 새 60초로 허용한다."""
+    """받아 적은 글은 확인 시각(기본 0초)을 주고, 다시 녹음은 한 번만 새 60초로 허용한다."""
     ctx = voice_ctx
     sess = await setup(api, ctx)
     snap = await snapshot(api, ctx, sess)
@@ -561,7 +561,7 @@ async def test_voice_rerecord_once_with_fresh_time(api, voice_ctx, clock):
     # 키워드 단계에는 키워드 후보도 넣는다(짧은 말 "물"·"불" 오인식 방지)
     assert {"물", "불", "나무", "바람"} <= set(ctx.speech.phrases)
     wait = (controller.at(u["confirm_deadline_at"]) - ctx.clock.now()).total_seconds()
-    assert 7.9 < wait <= 8  # 기본 확인 8초. 테스트 시계는 호출마다 마이크로초씩 흐른다
+    assert -0.1 < wait <= 0  # 기본 확인 0초. 테스트 시계는 호출마다 마이크로초씩 흐른다
     turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
     r = await post(api, sess, "rerecord", {**turn, "job_id": u["id"]})
     assert r.status_code == 200, r.text
