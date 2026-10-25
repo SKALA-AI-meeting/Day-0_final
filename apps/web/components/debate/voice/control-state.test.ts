@@ -1,6 +1,13 @@
 import { expect, test } from "vitest";
 import { frameErrorText } from "../use-session";
-import { ACTION_LABEL, blockedTrouble, canStartVoice, turnHoldNotice } from "./control-state";
+import {
+  ACTION_LABEL,
+  blockedTrouble,
+  canStartVoice,
+  readingMs,
+  textFallback,
+  turnHoldNotice,
+} from "./control-state";
 
 test("스케줄러가 차례를 넘기기 전에는 유지 시간 이후에도 녹음을 시작할 수 있다", () => {
   expect(canStartVoice("proposal")).toBe(false);
@@ -28,4 +35,14 @@ test("막힌 차례는 이유마다 제목·할 일과 그 일을 하는 버튼 
 test("너무 긴 발언 오류는 비었다는 안내 대신 글자 수 안내를 보인다", () => {
   expect(frameErrorText({ code: "invalid_input", message: "too long" })).toContain("자 이내로");
   expect(frameErrorText({ code: "invalid_input", message: "empty" })).toBe("내용을 입력해 주세요");
+});
+
+test("음성을 만들지 못한 동료 발언만 글로 넘기고, 스피커 재생 실패는 다시 재생한다", () => {
+  expect(textFallback({ status: "error", error: "voice_speech_failed" })).toBe(true);
+  expect(textFallback({ status: "error", error: "voice_quota_exhausted" })).toBe(true);
+  expect(textFallback({ status: "error", error: "voice_playback_failed" })).toBe(false);
+  expect(textFallback({ status: "ready" })).toBe(false);
+  expect(readingMs("짧다")).toBe(2500);
+  expect(readingMs("가".repeat(40))).toBe(5000);
+  expect(readingMs("가".repeat(500))).toBe(12000);
 });

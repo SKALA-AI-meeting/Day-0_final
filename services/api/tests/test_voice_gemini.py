@@ -97,7 +97,9 @@ async def test_gemini_speech_returns_wav(monkeypatch, wav_reply):
     with wave.open(io.BytesIO(audio), "rb") as wav:
         assert (wav.getframerate(), wav.getnframes()) == (24000, 24000)
     sent = json.loads(requests[0].content)
-    assert requests[0].url.path == "/v1beta/models/gemini-2.5-flash-preview-tts:generateContent"
+    # 기본은 가벼운 3.8 TTS이고, 지시문을 소리 내 읽는 모델이라 본문만 보낸다
+    assert requests[0].url.path == "/v1beta/models/gemini-3.8-flash-lite-tts:generateContent"
+    assert sent["contents"][0]["parts"][0]["text"] == "안녕하세요"
     config = sent["generationConfig"]
     assert config["responseModalities"] == ["AUDIO"]
     assert config["speechConfig"]["voiceConfig"]["prebuiltVoiceConfig"]["voiceName"] == "Kore"
@@ -109,3 +111,15 @@ async def test_gemini_speech_rejects_unpinned_voice(monkeypatch):
     with pytest.raises(ServiceError) as error:
         await GeminiSpeech().synthesize("안녕하세요", "ash")
     assert error.value.code == "voice_policy_mismatch" and requests == []
+
+
+async def test_gemini_style_instruction_only_for_models_that_follow_it(monkeypatch):
+    monkeypatch.setattr("app.agent.llm.roles._env", lambda env: {"GEMINI_API_KEY": "fake-key"})
+    monkeypatch.setenv("MODEL_TTS", "gemini-2.5-flash-preview-tts")
+    raw = b"\x01\x00" * 2400
+    requests = mock_gemini(
+        monkeypatch, lambda r: audio_reply(raw, "audio/L16;codec=pcm;rate=24000")
+    )
+    await GeminiSpeech().synthesize("안녕하세요", GEMINI_VOICES["p1"])
+    text = json.loads(requests[0].content)["contents"][0]["parts"][0]["text"]
+    assert text.endswith("안녕하세요") and "차분" in text

@@ -36,7 +36,7 @@ class TurnIn(BaseModel):
 
 class PlaybackIn(TurnIn):
     job_id: uuid.UUID
-    outcome: str = Field(pattern="^(start|ended|error|retry)$")
+    outcome: str = Field(pattern="^(start|ended|error|retry|text)$")
 
 
 class RetryIn(TurnIn):
@@ -255,6 +255,14 @@ async def playback(session_id: uuid.UUID, body: PlaybackIn, ctx: Ctx, _: Candida
                 raise conflict("voice_turn_conflict")  # 재생을 시작하지 않은 발언
             elif body.outcome == "error":
                 data.update(status="error", error="voice_playback_failed")
+            elif body.outcome == "text":
+                # 음성을 만들지 못한 발언(합성 실패·한도 초과)을 화면이 글로 보여 줬다:
+                # 들은 것으로 넘긴다. 스피커 재생 실패는 다시 재생할 수 있으니 받지 않는다
+                if data["status"] != "error" or data.get("error") == "voice_playback_failed":
+                    raise conflict("voice_turn_conflict")
+                data.update(
+                    status="heard", heard_at=controller.iso(ctx.clock.now()), fallback="text"
+                )
             else:
                 if data.get("attempts", 0) >= 2 and not job.audio:
                     raise conflict("voice_retry_exhausted")

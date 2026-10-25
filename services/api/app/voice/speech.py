@@ -39,7 +39,10 @@ OPENAI_SPEECH_INSTRUCTIONS = (
 GEMINI_VOICES = {"p1": "Charon", "p2": "Kore", "p3": "Orus"}
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_STT_MODEL = "gemini-3.5-flash-lite"
-GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts"
+GEMINI_TTS_MODEL = "gemini-3.8-flash-lite-tts"
+# 말투 지시문을 지시로 알아듣는 TTS 모델. 그 밖의 모델(3.8 계열 등)은 지시문까지 소리 내 읽고
+# 시스템 지시도 받지 않으므로(10/25 확인) 본문만 보낸다. 세 자리 말투는 목소리로만 갈린다
+GEMINI_STYLE_TTS_MODELS = frozenset({"gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"})
 GEMINI_TTS_RATE = 24000  # mimeType에 rate가 없을 때(audio/L16;codec=pcm;rate=24000이 기본)
 # 받아 적기 지시. 생성 모델이라 다듬기·요약·지어내기를 막는다(전사가 평가 근거가 된다)
 GEMINI_STT_PROMPT = (
@@ -385,9 +388,14 @@ class GeminiSpeech:
     async def synthesize(self, text: str, voice: str) -> bytes:
         if voice not in GEMINI_VOICES.values():
             raise ServiceError(422, "voice_policy_mismatch", "허용되지 않은 voice")
+        # 말투 지시는 세 자리 모두 같다(성향이 목소리로 드러나지 않게). 알아듣는 모델에만 붙인다
+        spoken = (
+            f"{OPENAI_SPEECH_INSTRUCTIONS}\n\n{text}"
+            if self.tts_model in GEMINI_STYLE_TTS_MODELS
+            else text
+        )
         body = {
-            # 말투 지시는 세 자리 모두 같다(성향이 목소리로 드러나지 않게)
-            "contents": [{"parts": [{"text": f"{OPENAI_SPEECH_INSTRUCTIONS}\n\n{text}"}]}],
+            "contents": [{"parts": [{"text": spoken}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}},

@@ -14,7 +14,9 @@ import {
   ACTION_LABEL,
   blockedTrouble,
   canStartVoice,
+  readingMs,
   spaceShortcutBlocked,
+  textFallback,
   turnHoldNotice,
   type Action,
   type Trouble,
@@ -705,6 +707,40 @@ export function useVoiceTurn(props: Props) {
       const item = snap.items[0];
       // 서버는 맨 앞 발언이 준비되면 재생 상태가 된다. 다음 발언을 아직 만드는 중이면 기다린다.
       if (item.status === "queued" || item.status === "processing") return;
+      // 음성을 만들지 못한 발언(합성 실패·한도 초과)은 소리 없이 글로 보여 주고 넘긴다(대화가 멈추지 않게).
+      // 스피커 재생 실패(voice_playback_failed)는 다시 재생할 수 있으니 아래 오류로 둔다.
+      if (textFallback(item)) {
+        busy.current = true;
+        const op = operation.current;
+        try {
+          const message = latest.current.snap.messages.find((m) => m.id === item.message_id);
+          const text = message?.content ?? "";
+          setActive(item.seat);
+          setSpeaking({ id: item.message_id, text });
+          showNotice("동료 음성을 만들지 못해 글로 보여 드려요");
+          await new Promise((resolve) => setTimeout(resolve, readingMs(text)));
+          if (op !== operation.current) return;
+          await api(`${path}/playback`, {
+            method: "POST",
+            token: token(),
+            body: { turn_id: snap.turn_id, epoch: snap.epoch, job_id: item.id, outcome: "text" },
+          });
+        } catch (e) {
+          if (op === operation.current && !turnMoved(e))
+            setError({
+              title: "동료 발언을 넘기지 못했어요",
+              detail: "연결을 확인하고 다시 시도해 주세요.",
+              action: "replay",
+            });
+        } finally {
+          if (op === operation.current) {
+            busy.current = false;
+            setActive(null);
+            setSpeaking(null);
+          }
+        }
+        return;
+      }
       if (item.status !== "ready") {
         setError({
           title: "동료 음성을 준비하지 못했어요",
@@ -794,7 +830,7 @@ export function useVoiceTurn(props: Props) {
         }
       }
     },
-    [path],
+    [path, showNotice],
   );
 
   useEffect(() => {

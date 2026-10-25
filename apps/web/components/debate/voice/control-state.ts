@@ -76,3 +76,16 @@ export function spaceShortcutBlocked(
   const el = target as HTMLElement;
   return el.isContentEditable || !!el.closest(INTERACTIVE);
 }
+
+/**
+ * 음성을 만들지 못한 동료 발언인지(합성 실패·한도 초과). 이런 발언은 소리 없이 글로 보여 주고 넘긴다.
+ * 스피커 재생 실패(voice_playback_failed)는 다시 재생할 수 있으므로 아니다.
+ */
+export function textFallback(item: { status: string; error?: string | null }): boolean {
+  return item.status === "error" && item.error !== "voice_playback_failed";
+}
+
+/** 글로 보여 줄 때 읽을 시간(ms): 한국어 초당 약 8자, 2.5~12초 */
+export function readingMs(text: string): number {
+  return Math.min(12000, Math.max(2500, text.length * 125));
+}

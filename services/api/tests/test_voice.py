@@ -1024,3 +1024,42 @@ def test_quota_scope_auto_uses_utc_month(monkeypatch):
     monkeypatch.setenv("VOICE_QUOTA_PERIOD", "")
     with pytest.raises(ServiceError):
         quota.scope(datetime(2026, 2, 1, tzinfo=UTC))
+
+
+async def test_voice_text_fallback_when_speech_cannot_be_made(api, voice_ctx):
+    """동료 음성을 만들지 못하면(합성 실패·한도 초과) 화면이 글로 보여 준 뒤 text로 넘긴다.
+    들은 것으로 남아 대화가 이어진다."""
+    ctx = voice_ctx
+
+    class NoVoice(FakeSpeech):
+        async def synthesize(self, text, voice):
+            raise RuntimeError("429 quota")
+
+    ctx.speech = NoVoice("물에 관한 의견입니다")
+    sess = await setup(api, ctx)
+    first = await api.post_ai(sess, "p1", "물 부족을 생각해 봐요")
+    await snapshot(api, ctx, sess)
+    snap = await snapshot(api, ctx, sess)
+    item = snap["items"][0]
+    assert (item["status"], item["error"]) == ("error", "voice_speech_failed")
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    r = await post(api, sess, "playback", {**turn, "job_id": item["id"], "outcome": "text"})
+    assert r.status_code == 200, r.text
+    snap = await snapshot(api, ctx, sess)
+    assert first["id"] in snap["heard_message_ids"]
+    assert all(i["id"] != item["id"] for i in snap["items"])
+
+
+async def test_voice_text_fallback_not_for_speaker_failure(api, voice_ctx):
+    """스피커 재생 실패(voice_playback_failed)는 다시 재생할 수 있으므로 text로 넘길 수 없다."""
+    ctx = voice_ctx
+    sess = await setup(api, ctx)
+    await api.post_ai(sess, "p3", "다른 의견도 있어요")
+    await snapshot(api, ctx, sess)
+    snap = await snapshot(api, ctx, sess)
+    item = snap["items"][0]
+    turn = {"turn_id": snap["turn_id"], "epoch": snap["epoch"]}
+    body = {**turn, "job_id": item["id"]}
+    assert (await post(api, sess, "playback", {**body, "outcome": "error"})).status_code == 200
+    r = await post(api, sess, "playback", {**body, "outcome": "text"})
+    assert r.status_code == 409

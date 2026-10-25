@@ -337,7 +337,7 @@ class Profile:
                 ("openai", "STT"): "gpt-4o-mini-transcribe",
                 ("openai", "TTS"): "gpt-4o-mini-tts",
                 ("gemini", "STT"): "gemini-3.5-flash-lite",
-                ("gemini", "TTS"): "gemini-2.5-flash-preview-tts",
+                ("gemini", "TTS"): "gemini-3.8-flash-lite-tts",
             }
             keys = {"openai": "OPENAI_API_KEY", "gemini": "GEMINI_API_KEY"}
             shown = []
