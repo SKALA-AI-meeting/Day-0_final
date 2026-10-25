@@ -45,6 +45,11 @@ export function ProfileStage({
   const people = snap.participants
     .filter((p) => p.id !== "candidate")
     .concat(snap.participants.filter((p) => p.id === "candidate"));
+  // 화면 읽기 도구용 자막: 늘 붙어 있는 한 곳에서 내용만 바꿔 첫 문장부터 읽히게 한다.
+  // 카드 아래 보이는 자막은 aria-hidden이라 두 번 읽지 않고, 프로필 버튼 이름에도 섞이지 않는다.
+  const captionSpeaker = caption
+    ? people.find((p) => p.id !== "candidate" && speaking.includes(p.id as Seat))
+    : undefined;
   return (
     <div className="flex size-full justify-center [container-type:size]">
       <section
@@ -65,6 +70,9 @@ export function ProfileStage({
             </Button>
           </header>
         )}
+        <p aria-live="polite" aria-atomic="true" className="sr-only" data-testid="caption-live">
+          {captionSpeaker ? `${captionSpeaker.display_name}: ${caption}` : ""}
+        </p>
         <ul className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-[3cqmin]">
           {people.map((person) => (
             <ProfileTile
@@ -136,8 +144,7 @@ function ProfileTile({
           </span>
           {!me && speaking && (
             <span
-              aria-live="polite"
-              aria-atomic="true"
+              aria-hidden="true"
               className="max-h-[5em] w-full overflow-y-auto px-2 text-center text-footnote"
             >
               {caption}

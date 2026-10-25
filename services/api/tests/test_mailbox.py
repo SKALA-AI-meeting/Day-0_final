@@ -273,3 +273,22 @@ async def test_intent_reservation_and_excluded_are_stored(api, classifier):
     found = next(m["intent"] for m in messages if m["sender"] == "candidate")
     assert found["addressed_to"] == ["p2"] and found["excluded"] == ["p3"]
     assert found["reservation"] is False
+
+
+async def test_text_message_over_limit_is_rejected(api, ctx):
+    """텍스트 발언도 같은 글자 수 상한을 넘으면 저장하지 않고 invalid_input으로 알린다."""
+    from app.models import Message
+    from app.services.debate import CANDIDATE_MESSAGE_MAX_CHARS
+
+    sess = await api.new_session()
+    mark = api.mark(sess)
+    await api.say(sess, "가" * (CANDIDATE_MESSAGE_MAX_CHARS + 1))
+    frames = api.frames_since(sess, mark)
+    assert [f["payload"]["code"] for f in frames if f["type"] == "error"] == ["invalid_input"]
+    async with ctx.session_factory() as db:
+        mine = (
+            await db.scalars(
+                select(Message).where(Message.session_id == sess.id, Message.sender == "candidate")
+            )
+        ).all()
+        assert mine == []

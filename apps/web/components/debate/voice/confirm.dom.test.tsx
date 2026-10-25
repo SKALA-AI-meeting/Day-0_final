@@ -3,7 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, test, vi } from "vitest";
 
-import { TranscriptConfirm } from "./voice-room";
+import { CANDIDATE_MESSAGE_MAX_CHARS } from "../state";
+import { TranscriptConfirm, UnsentSpeech } from "./voice-room";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -52,6 +53,54 @@ test("받아 적은 글을 고쳐 제출하고 빈 인식 결과에도 직접 �
     area.dispatchEvent(new Event("input", { bubbles: true }));
   });
   expect(host.querySelector<HTMLButtonElement>("button")!.disabled).toBe(false);
+  act(() => root.unmount());
+  host.remove();
+});
+
+test("수정 중에는 남은 제출 시간과 글자 수를 보이고, 상한을 넘으면 제출을 막는다", () => {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  const render = (text: string) =>
+    root.render(
+      <TranscriptConfirm
+        text={text}
+        changed
+        empty={false}
+        seconds={0}
+        submitSeconds={12.2}
+        rerecorded
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onRerecord={vi.fn()}
+      />,
+    );
+  act(() => render("고친 발언"));
+  expect(host.textContent).toContain("13초 안에 보내지 않으면 이번 발언은 들어가지 않아요");
+  expect(host.textContent).toContain(`5/${CANDIDATE_MESSAGE_MAX_CHARS}자`);
+  expect(host.querySelector("textarea")!.maxLength).toBe(CANDIDATE_MESSAGE_MAX_CHARS);
+  act(() => render("가".repeat(CANDIDATE_MESSAGE_MAX_CHARS + 1)));
+  expect(host.textContent).toContain("줄여야 제출할 수 있어요");
+  expect(host.querySelector<HTMLButtonElement>("button")!.disabled).toBe(true);
+  act(() => root.unmount());
+  host.remove();
+});
+
+test("제출하지 못한 발언은 읽기 전용으로 남고 닫을 수 있다", () => {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  const dismiss = vi.fn();
+  act(() => root.render(<UnsentSpeech text="못 보낸 발언" onDismiss={dismiss} />));
+  expect(host.querySelector('[role="alert"]')!.textContent).toContain(
+    "제출하지 못한 발언이 있어요",
+  );
+  const area = host.querySelector("textarea")!;
+  expect(area.readOnly).toBe(true);
+  expect(area.value).toBe("못 보낸 발언");
+  const close = [...host.querySelectorAll("button")].find((b) => b.textContent === "닫기")!;
+  act(() => close.click());
+  expect(dismiss).toHaveBeenCalledOnce();
   act(() => root.unmount());
   host.remove();
 });

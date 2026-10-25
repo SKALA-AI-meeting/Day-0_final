@@ -125,6 +125,13 @@ async def voice_state(session_id: uuid.UUID, ctx: Ctx, _: Candidate):
                             controller.at(snap["ready_at"])
                             + controller.ready_hold(position, state.data)
                         )
+                    if job.data["status"] in ("ready", "empty"):
+                        # 수정하는 동안 남은 제출 시간을 보이게 한다(지나면 발언이 버려짐)
+                        snap["utterance"]["submit_deadline_at"] = iso(
+                            controller.submit_deadline(
+                                session, snap, job.data["status"], snap.get("turn_until_at")
+                            )
+                        )
             await db.commit()
     for jid in pending:
         ctx.spawn(controller.run_job(ctx, jid))

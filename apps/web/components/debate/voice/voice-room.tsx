@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_URL, ApiError, api } from "@/lib/api";
 import { Button } from "@/components/ui";
-import type { Seat, StateSnapshot } from "../types";
+import { CANDIDATE_MESSAGE_MAX_CHARS } from "../state";
+import type { Message, Seat, StateSnapshot } from "../types";
 import type { SessionAuth } from "../use-session";
 import { heardMessages, sentences, spokenCount } from "./caption";
 import { canStartVoice, turnHoldNotice } from "./control-state";
@@ -37,6 +38,8 @@ export type VoiceSnapshot = {
     message_id?: string;
     /** 받아 적은 글을 자동 제출하는 시각. 예전 채용 건이면 없음(바로 제출) */
     confirm_deadline_at?: string;
+    /** 이 발언을 제출할 수 있는 마지막 시각(ready·empty). 지나면 발언이 버려진다 */
+    submit_deadline_at?: string;
   };
   /** 이 차례에서 다시 녹음을 이미 썼는지 */
   rerecorded?: boolean;
@@ -115,7 +118,7 @@ export function TranscriptConfirm({
   changed,
   empty,
   seconds,
-  holdSeconds,
+  submitSeconds,
   rerecorded,
   onChange,
   onSubmit,
@@ -126,19 +129,24 @@ export function TranscriptConfirm({
   empty: boolean;
   /** 자동 제출까지 남은 초 */
   seconds: number;
-  /** 빈 인식 결과일 때 내 차례가 지켜지는 남은 초(지나면 동료가 이어 말한다) */
-  holdSeconds?: number;
+  /** 이 발언을 제출할 수 있는 남은 초(서버 submit_deadline_at 기준). 지나면 들어가지 않는다 */
+  submitSeconds?: number;
   rerecorded: boolean;
   onChange: (text: string) => void;
   onSubmit: () => void;
   onRerecord: () => void;
 }) {
+  const left = submitSeconds !== undefined ? Math.ceil(submitSeconds) : undefined;
+  const length = text.trim().length;
+  const tooLong = length > CANDIDATE_MESSAGE_MAX_CHARS;
   const hint = empty
-    ? holdSeconds !== undefined && holdSeconds > 0
-      ? `직접 입력해 [발언 제출]을 누르세요. ${Math.ceil(holdSeconds)}초 안에 제출하지 않으면 동료가 이어서 말해요`
+    ? left !== undefined
+      ? `직접 입력해 [발언 제출]을 누르세요. ${left}초 안에 제출하지 않으면 동료가 이어서 말해요`
       : "직접 입력해 [발언 제출]을 누르세요"
     : changed
-      ? "수정한 내용은 [발언 제출]을 눌러 보내세요"
+      ? left !== undefined
+        ? `수정한 내용은 [발언 제출]을 눌러 보내세요. ${left}초 안에 보내지 않으면 이번 발언은 들어가지 않아요`
+        : "수정한 내용은 [발언 제출]을 눌러 보내세요"
       : `${Math.ceil(seconds)}초 뒤 자동으로 제출돼요. 수정하면 자동 제출이 멈춰요`;
   return (
     <div className="flex flex-col gap-2">
@@ -149,13 +157,20 @@ export function TranscriptConfirm({
         id="voice-transcript"
         rows={3}
         value={text}
+        maxLength={CANDIDATE_MESSAGE_MAX_CHARS}
         onChange={(event) => onChange(event.target.value)}
-        aria-describedby="voice-transcript-hint"
+        aria-describedby="voice-transcript-hint voice-transcript-count"
         className="w-full rounded-xl border border-line bg-surface p-3"
         placeholder="인식된 말이 없어요. 직접 입력해 제출할 수 있어요."
       />
+      <p
+        id="voice-transcript-count"
+        className={`self-end text-caption tabular-nums ${tooLong ? "font-semibold text-warning" : "text-muted"}`}
+      >
+        {length}/{CANDIDATE_MESSAGE_MAX_CHARS}자{tooLong ? " · 줄여야 제출할 수 있어요" : ""}
+      </p>
       <div className="flex flex-wrap gap-2">
-        <Button disabled={!text.trim()} onClick={onSubmit}>
+        <Button disabled={!text.trim() || tooLong} onClick={onSubmit}>
           발언 제출
         </Button>
         {!rerecorded && !empty && (
@@ -170,6 +185,52 @@ export function TranscriptConfirm({
     </div>
   );
 }
+
+/**
+ * 차례가 끝나 제출하지 못한 발언. 고치거나 직접 쓴 글이 말없이 사라지지 않게 읽기 전용으로 남기고
+ * 복사할 수 있게 한다. 지원자가 닫을 때까지 보인다.
+ */
+export function UnsentSpeech({ text, onDismiss }: { text: string; onDismiss: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warning/40 p-3">
+      <p className="text-footnote font-semibold text-warning">제출하지 못한 발언이 있어요</p>
+      <p className="text-footnote text-muted">
+        차례가 끝나 아래 글은 토론에 들어가지 않았어요. 필요하면 복사해 다음 발언에 써 주세요.
+      </p>
+      <textarea
+        readOnly
+        rows={3}
+        value={text}
+        aria-label="제출하지 못한 발언"
+        className="w-full rounded-xl border border-line bg-surface-sunken p-3"
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={() => void copy()}>
+          {copied ? "복사했어요" : "복사"}
+        </Button>
+        <Button variant="secondary" onClick={onDismiss}>
+          닫기
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** 지원자 발언 수. 제출이 실제로 저장됐는지(message.new) 확인하는 데 쓴다 */
+function candidateCount(messages: Message[]): number {
+  return messages.filter((m) => m.sender === "candidate").length;
+}
+/** 제출을 보낸 뒤 저장 확인(message.new)을 기다리는 시간(ms). 지나도 없으면 제출하지 못한 것으로 본다 */
+const SENT_CONFIRM_MS = 3000;
 
 /** 음성 토론의 차례·녹음·재생·확인 동작. 화면 조각과 상태를 돌려주고, 배치는 토론 화면(debate-view)이 정한다. */
 export function useVoiceTurn(props: Props) {
@@ -191,11 +252,17 @@ export function useVoiceTurn(props: Props) {
   // [발언 제출]을 누른 발언 id. 확인 시간이 남아도 바로 제출한다(ref는 polling용, state는 화면용)
   const confirmed = useRef("");
   const [confirmedId, setConfirmedId] = useState("");
-  const edit = useRef<{ id: string; text: string; changed: boolean }>({
+  // 확인 중인 발언의 글. base는 이 발언이 나타났을 때의 지원자 발언 수(제출 저장 확인용)
+  const edit = useRef<{ id: string; text: string; changed: boolean; base: number }>({
     id: "",
     text: "",
     changed: false,
+    base: 0,
   });
+  // message.send를 보낸 발언 id
+  const sentIds = useRef(new Set<string>());
+  // 차례가 끝나 제출하지 못한 글(읽기 전용으로 남김)
+  const [unsent, setUnsent] = useState("");
   const [draft, setDraft] = useState("");
   const [draftChanged, setDraftChanged] = useState(false);
   const stream = useRef<MediaStream | null>(null);
@@ -219,6 +286,25 @@ export function useVoiceTurn(props: Props) {
   const cleanupRecorder = useRef<() => void>(() => {});
   const path = `/sessions/${props.auth.sessionId}/voice`;
   const token = () => latest.current.auth.getToken();
+
+  /**
+   * 확인 중이던 발언이 서버에서 사라졌을 때(제출·차례 종료·단계 전환·세션 종료) 한 번 부른다.
+   * 저장된 지원자 발언이 늘지 않았으면 제출하지 못한 글로 남긴다. 보낸 발언은 저장 확인을 잠시 기다린다.
+   */
+  const settleEdit = useCallback(() => {
+    const e = edit.current;
+    edit.current = { id: "", text: "", changed: false, base: 0 };
+    if (!e.id || !e.text.trim()) return;
+    const check = () => {
+      if (candidateCount(latest.current.snap.messages) <= e.base) setUnsent(e.text);
+    };
+    if (sentIds.current.has(e.id)) setTimeout(check, SENT_CONFIRM_MS);
+    else check();
+  }, []);
+
+  useEffect(() => {
+    if (props.locked) settleEdit();
+  }, [props.locked, settleEdit]);
 
   const showNotice = useCallback((text: string) => {
     setNotice(text);
@@ -537,18 +623,37 @@ export function useVoiceTurn(props: Props) {
         // 녹음 종료/업로드 중에는 서버의 직전 USER_SPEAKING 스냅샷을 표시하지 않는다.
         if (!busy.current || waitingMic.current || player.current) setVoice(next);
         const u = next.utterance;
-        if (u && u.id !== edit.current.id && (u.status === "ready" || u.status === "empty")) {
-          edit.current = { id: u.id, text: u.transcript ?? "", changed: false };
+        // 확인 중이던 발언이 없어졌거나(제출·마감) 기획안 단계로 넘어갔으면 제출됐는지 확인한다
+        if (
+          edit.current.id &&
+          (u?.id !== edit.current.id || next.blocked_reason === "proposal_phase")
+        )
+          settleEdit();
+        if (
+          u &&
+          u.id !== edit.current.id &&
+          (u.status === "ready" || u.status === "empty") &&
+          next.blocked_reason !== "proposal_phase"
+        ) {
+          edit.current = {
+            id: u.id,
+            text: u.transcript ?? "",
+            changed: false,
+            base: candidateCount(latest.current.snap.messages),
+          };
           setDraft(u.transcript ?? "");
           setDraftChanged(false);
         }
         // 수정을 시작하면 자동 제출하지 않는다. 빈 인식 결과도 직접 쓴 뒤 제출할 수 있다.
+        // 글자 수 상한을 넘으면 서버가 받지 않으므로 줄일 때까지 보내지 않는다.
         const reviewed =
           confirmed.current === u?.id || (!edit.current.changed && confirmLeft(next) <= 0);
         if (
           u &&
+          u.id === edit.current.id &&
           (u.status === "ready" || u.status === "empty") &&
           edit.current.text.trim() &&
+          edit.current.text.trim().length <= CANDIDATE_MESSAGE_MAX_CHARS &&
           reviewed
         ) {
           pending.current = {
@@ -564,6 +669,7 @@ export function useVoiceTurn(props: Props) {
           const p = pending.current;
           p.sent = Date.now();
           setVoice({ ...next, state: "PROCESSING" });
+          sentIds.current.add(p.id);
           latest.current.onSend(p.id, p.text, p.turn, p.epoch);
         }
         if (enabled && !error && !busy.current && next.epoch) {
@@ -606,6 +712,7 @@ export function useVoiceTurn(props: Props) {
     error,
     play,
     record,
+    settleEdit,
     stopMedia,
   ]);
 
@@ -679,13 +786,14 @@ export function useVoiceTurn(props: Props) {
   };
 
   const submitNow = (id: string) => {
-    if (!edit.current.text.trim()) return;
+    const text = edit.current.text.trim();
+    if (!text || text.length > CANDIDATE_MESSAGE_MAX_CHARS) return;
     confirmed.current = id;
     setConfirmedId(id);
   };
 
   const changeDraft = (id: string, text: string) => {
-    edit.current = { id, text, changed: true };
+    edit.current = { ...edit.current, id, text, changed: true };
     setDraft(text);
     setDraftChanged(true);
   };
@@ -700,7 +808,7 @@ export function useVoiceTurn(props: Props) {
       pending.current = null;
       confirmed.current = "";
       setConfirmedId("");
-      edit.current = { id: "", text: "", changed: false };
+      edit.current = { id: "", text: "", changed: false, base: 0 };
       lastTurn.current = "";
       void record({ ...snap, ...next });
     } catch {
@@ -826,10 +934,12 @@ export function useVoiceTurn(props: Props) {
           changed={draftChanged}
           empty={review.status === "empty"}
           seconds={confirmLeft(voice)}
-          holdSeconds={
-            review.status === "empty" && voice.turn_until_at
-              ? secondsUntil(voice, voice.turn_until_at)
-              : undefined
+          submitSeconds={
+            review.submit_deadline_at
+              ? secondsUntil(voice, review.submit_deadline_at)
+              : review.status === "empty" && voice.turn_until_at
+                ? secondsUntil(voice, voice.turn_until_at)
+                : undefined
           }
           rerecorded={!!voice.rerecorded}
           onChange={(text) => changeDraft(review.id, text)}
@@ -837,6 +947,7 @@ export function useVoiceTurn(props: Props) {
           onRerecord={() => void rerecord(voice, review.id)}
         />
       )}
+      {unsent && <UnsentSpeech text={unsent} onDismiss={() => setUnsent("")} />}
       {props.snap.session.phase !== "proposal" &&
         !props.locked &&
         voice?.state === "USER_SPEAKING" && (

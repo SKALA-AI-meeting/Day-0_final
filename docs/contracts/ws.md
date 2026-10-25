@@ -27,7 +27,7 @@
 
 | type | payload |
 |---|---|
-| message.send | {client_msg_id, content}. 토론방 하나라 채널 없음. 같은 client_msg_id 재전송은 기존 메시지로 ack. in_progress의 모든 단계에서 허용(proposal 단계 포함) |
+| message.send | {client_msg_id, content}. content는 앞뒤 공백을 뺀 1~500자(지원자 발언 상한, 텍스트·음성 공통). 비었거나 500자를 넘으면 저장하지 않고 error `invalid_input`(음성은 발언권도 소비하지 않아 줄여 다시 보낼 수 있다). 토론방 하나라 채널 없음. 같은 client_msg_id 재전송은 기존 메시지로 ack. in_progress의 모든 단계에서 허용(proposal 단계 포함) |
 | typing | {state: "start"∣"stop"}. 지원자 입력 중 여부. 입력창에 글자가 있는 동안 **5초마다 `start`를 다시 보내 갱신**하고, 비거나 전송하면 `stop`. 서버는 저장하지 않고 메모리에 `candidate_typing_until = 마지막 start + 6초`를 둔다. `stop`이나 6초 동안 갱신 없음이면 입력 중이 아니다. 끼어들기 대기(최대 10초 뒤 미게시·재큐)와 스케줄러 enqueue 보류에만 쓴다 |
 
 close code: 4401(토큰 문제 → resume 후 재연결), 4403(다른 세션, 재연결 안 함), 4000(교체됨, 재연결 안 함). 같은 세션에 WS가 둘이면 마지막만 유효. 연결 없는 구간은 `connection_gaps`에 기록(평가하지 않음. 사실 지표·확신도 참고).

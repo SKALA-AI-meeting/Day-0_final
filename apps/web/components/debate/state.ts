@@ -2,6 +2,9 @@
 // 화면(reducer)과 mock 서버가 같은 함수로 상태를 굴려, mock의 /state 재조회가 화면과 어긋나지 않는다.
 import type { Phase, ServerFrame, SlotPhase, StateSnapshot } from "./types";
 
+/** 지원자 발언 한 건의 최대 글자 수(텍스트·음성 공통). 서버 debate.CANDIDATE_MESSAGE_MAX_CHARS와 같은 값 */
+export const CANDIDATE_MESSAGE_MAX_CHARS = 500;
+
 /** 지원자 화면 단계 이름(R7 지원자 말) */
 export const PHASE_LABEL: Record<Phase, string> = {
   keyword: "키워드",

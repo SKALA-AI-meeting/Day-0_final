@@ -8,7 +8,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Avatar, AvatarGroup, cn, toast } from "@/components/ui";
 
 import type { Pending } from "./reducer";
-import { nameOf, officeTime, roughDuration } from "./state";
+import { CANDIDATE_MESSAGE_MAX_CHARS, nameOf, officeTime, roughDuration } from "./state";
 import type { Message, Seat, StateSnapshot } from "./types";
 import type { VoiceInput } from "./voice";
 import { Elapsed, LevelBars, LevelGlow, useVoiceState, voiceErrorText } from "./voice-ui";
@@ -402,9 +402,11 @@ export function Composer({
     } else if (!value.trim() && had) onTyping("stop");
   };
 
+  const length = text.trim().length;
+  const tooLong = length > CANDIDATE_MESSAGE_MAX_CHARS;
   const send = () => {
     const content = text.trim();
-    if (!content || locked) return;
+    if (!content || locked || content.length > CANDIDATE_MESSAGE_MAX_CHARS) return;
     onSend(content);
     onTyping("stop");
     lastStart.current = 0;
@@ -455,6 +457,7 @@ export function Composer({
           value={text}
           disabled={locked}
           aria-label="메시지 입력"
+          maxLength={CANDIDATE_MESSAGE_MAX_CHARS}
           placeholder={locked ? "세션이 끝났어요" : "메시지 입력"}
           onChange={(event) => change(event.target.value)}
           onKeyDown={(event) => {
@@ -501,11 +504,22 @@ export function Composer({
           <Mic size={20} />
         </button>
       )}
+      {!talking && length > CANDIDATE_MESSAGE_MAX_CHARS - 100 && (
+        // 상한에 가까울 때만 글자 수를 보인다(말하기로 붙인 글은 상한을 넘을 수 있어 줄여야 보낼 수 있다)
+        <span
+          className={cn(
+            "shrink-0 text-caption tabular-nums",
+            tooLong ? "font-semibold text-warning" : "text-muted",
+          )}
+        >
+          {length}/{CANDIDATE_MESSAGE_MAX_CHARS}
+        </span>
+      )}
       {!talking && (
         <button
           type="submit"
           aria-label="보내기"
-          disabled={locked || !text.trim()}
+          disabled={locked || !text.trim() || tooLong}
           className="press flex size-10 shrink-0 items-center justify-center rounded-full bg-accent-fill text-on-accent not-disabled:hover:bg-accent-fill-hover disabled:bg-surface-sunken disabled:text-subtle"
         >
           <ArrowUp size={20} />

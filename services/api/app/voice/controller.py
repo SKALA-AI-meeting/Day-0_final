@@ -98,6 +98,25 @@ def speech_cutoff(session, data: dict) -> datetime:
     return cutoff
 
 
+# 녹음 마감 뒤 업로드·받아 적기·확인·제출에 허용하는 시간(초). 지나면 그 발언은 버려진다
+PROCESSING_GRACE_SECONDS = 100
+
+
+def submit_deadline(session, data: dict, status: str, turn_until_at: str | None) -> datetime:
+    """받아 적은 글(ready·empty)을 message.send로 제출할 수 있는 마지막 시각.
+
+    단계 마감·세션 종료(validate)와, ready는 녹음 마감 + 처리 여유(sync가 발언을 버리는 시각),
+    empty는 내 차례를 지켜 주는 끝 시각 중 이른 것.
+    """
+    deadline = min(session.phase_deadline_at, session.ends_at)
+    if status == "ready" and data.get("speech_deadline_at"):
+        grace = timedelta(seconds=PROCESSING_GRACE_SECONDS)
+        deadline = min(deadline, at(data["speech_deadline_at"]) + grace)
+    if status == "empty" and turn_until_at:
+        deadline = min(deadline, at(turn_until_at))
+    return deadline
+
+
 def speech_limit_seconds(session, position, data: dict, now) -> int | None:
     """내 차례에서 녹음을 시작하면 말할 수 있는 초. 발언 한도보다 짧을 때만(마감이 가까움) 준다."""
     turn = position.scenario["voice_policy"]["user_turn_seconds"]
@@ -243,8 +262,9 @@ async def sync(db, session, position, now):
         state.data = data
         return {**data, "items": [], "server_now": iso(now)}, []
     if data["state"] in ("USER_SPEAKING", "TRANSCRIBING", "PROCESSING"):
-        # 녹음 한도 뒤 업로드·전사에 최대 100초만 허용한다. 늦은 결과는 fence로 거부.
-        if now > at(data["speech_deadline_at"]) + timedelta(seconds=100):
+        # 녹음 한도 뒤 업로드·전사·확인에 PROCESSING_GRACE_SECONDS만 허용한다.
+        # 늦은 결과는 fence로 거부.
+        if now > at(data["speech_deadline_at"]) + timedelta(seconds=PROCESSING_GRACE_SECONDS):
             data.update(
                 state="AI_GENERATING", utterance_id=None, blocked_reason="voice_interrupted"
             )
@@ -427,7 +447,8 @@ async def blocked(ctx, session_id):
             and ctx.clock.now() < session.phase_deadline_at
             and (
                 not state.data.get("speech_deadline_at")
-                or ctx.clock.now() < at(state.data["speech_deadline_at"]) + timedelta(seconds=100)
+                or ctx.clock.now()
+                < at(state.data["speech_deadline_at"]) + timedelta(seconds=PROCESSING_GRACE_SECONDS)
             )
         )
 

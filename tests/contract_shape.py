@@ -1322,6 +1322,7 @@ SHAPES["voice_state"] = {
         "message_id": Opt(str),
         "error": Opt(str),
         "confirm_deadline_at?": str,
+        "submit_deadline_at?": str,
     },
 }
 

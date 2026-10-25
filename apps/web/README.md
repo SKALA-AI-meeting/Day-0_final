@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 98개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 104개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -153,9 +153,10 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>components/debate/composer.test.tsx</code> (1)</summary>
+<details><summary><code>components/debate/composer.test.tsx</code> (2)</summary>
 
 - 글자가 있는 동안 5초마다 start를 갱신하고, 비우면 stop을 보낸다
+- 발언 글자 수 상한을 입력 칸에 걸고, 넘는 글은 보내지 않는다
 
 </details>
 
@@ -187,6 +188,12 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 - 가로 1024px 이상이면 안내 없이 화면이 보인다
 - 어시스턴트 안내는 주어가 어시스턴트이고 평가 방식 문구와 모순되지 않는다
 - 프로필 카드: 음성 토론의 AI 동료는 말하는 중, 글 토론은 입력 중
+
+</details>
+
+<details><summary><code>components/debate/profile-stage.dom.test.tsx</code> (1)</summary>
+
+- 자막 영역은 발언 전후로 유지되고 내용만 바뀐다
 
 </details>
 
@@ -237,9 +244,11 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>components/debate/voice/confirm.dom.test.tsx</code> (1)</summary>
+<details><summary><code>components/debate/voice/confirm.dom.test.tsx</code> (3)</summary>
 
 - 받아 적은 글을 고쳐 제출하고 빈 인식 결과에도 직접 입력할 수 있다
+- 수정 중에는 남은 제출 시간과 글자 수를 보이고, 상한을 넘으면 제출을 막는다
+- 제출하지 못한 발언은 읽기 전용으로 남고 닫을 수 있다
 
 </details>
 

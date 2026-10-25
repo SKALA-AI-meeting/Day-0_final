@@ -48,6 +48,10 @@ from app.services.common import (
 from app.services.phases import advance_phase, keyword_key, queue_run, save_message
 
 SEATS = ("p1", "p2", "p3")
+# 지원자 발언 한 건의 최대 글자 수(텍스트·음성 공통, 앞뒤 공백 제외).
+# 60초 발언을 받아 적은 글(약 300~450자)은 들어가고, 동료·의도 분류·평가 LLM 입력이
+# 한 발언으로 지나치게 커지지 않게 한다. 화면 입력 칸도 같은 값을 쓴다.
+CANDIDATE_MESSAGE_MAX_CHARS = 500
 CONSENSUS_FILL_SEQ = 5
 Classifier = Callable[..., Awaitable[tuple[dict[str, Any], bool]]]
 
@@ -292,6 +296,8 @@ async def save_candidate_message(
         return existing, run_id, None
     if session.status != "in_progress":
         raise conflict("session_ending", "session is not in progress")
+    if len(content.strip()) > CANDIDATE_MESSAGE_MAX_CHARS:
+        raise invalid("invalid_input", "too long")
     content = mask(content.strip())
     if not content:
         raise invalid("invalid_input", "empty message")

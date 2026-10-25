@@ -29,6 +29,10 @@ async def handle_send(ctx: AppContext, session_id: uuid.UUID, payload: dict[str,
     if not client_msg_id or not content.strip():
         await ctx.hub.send(session_id, "error", {"code": "invalid_input", "message": "empty"})
         return
+    if len(content.strip()) > debate.CANDIDATE_MESSAGE_MAX_CHARS:
+        # 음성 제출도 발언권을 소비하기 전에 거부해 지원자가 줄여서 다시 보낼 수 있게 한다
+        await ctx.hub.send(session_id, "error", {"code": "invalid_input", "message": "too long"})
+        return
     async with ctx.ordered(session_id):
         try:
             async with ctx.session_factory() as db:
