@@ -14,7 +14,7 @@
 ## 2. 받기와 의존성
 
 ```
-git clone <저장소 주소> && cd Day-0_zaeho
+git clone <저장소 주소> && cd Day-0_final
 for s in services/api services/debate-mcp services/rag-mcp services/assessment-mcp services/report-worker; do (cd $s && uv sync); done
 (cd apps/web && pnpm install)
 make test && make lint
