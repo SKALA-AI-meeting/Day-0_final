@@ -488,7 +488,8 @@ try {
   await step("지원자 입장 → 동의 → 시작 → 오피스", async () => {
     await pageA.goto(`${WEB}/s/${token}`);
     await pageA.getByRole("button", { name: "다음" }).click();
-    await pageA.getByLabel("위 내용에 동의").check();
+    for (let i = 0; i < 5; i++) await pageA.getByRole("button", { name: "확인했어요" }).click();
+    await pageA.getByLabel("위 내용을 읽었고 동의합니다").check();
     const consent = waitApi(pageA, "POST", /\/consent$/);
     await pageA.getByRole("button", { name: "동의하고 계속" }).click();
     check("consent 200", (await consent).status() === 200);

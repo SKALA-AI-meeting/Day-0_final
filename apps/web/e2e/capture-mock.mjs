@@ -92,6 +92,7 @@ try {
   // 2. 동의: 표시 이름(기본값 초대 이름)을 바꾸고 동의
   const name = page.getByRole("textbox");
   await name.fill("김지원");
+  for (let i = 0; i < 5; i++) await page.getByRole("button", { name: "확인했어요" }).click();
   await page.getByRole("checkbox").check();
   await shot("02-consent", { fullPage: true });
   await page.getByRole("button", { name: "동의하고 계속" }).click();

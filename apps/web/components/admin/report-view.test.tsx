@@ -10,9 +10,10 @@ import { adminMockRequest as mockRequest, resetAdminMock } from "@/mocks/admin";
 import recordJson from "@/mocks/fixtures/admin_record.json";
 
 import { NO_RECORD_TEXT, RECORD_STATE_TEXT, REPORT_TERMS } from "./format";
-import { RecordView } from "./record-view";
+import { RecordView, visiblePhaseAnchors } from "./record-view";
 import {
   AI_HEADER,
+  countedRecordCount,
   DESIGNED_SCENE_NOTICE,
   FACTS_NOTE,
   PARTIAL_DELIVERY,
@@ -124,6 +125,50 @@ test("리포트 draft 렌더: 안내·요약·타임라인·차원·근거·사�
   const printed = renderToStaticMarkup(<ReportView report={draft} recordHref={href} printing />);
   expect(printed.match(/<details id="dim-[^"]*"[^>]* open=""/g)).toHaveLength(19);
   expect(printed).toMatch(/<details id="terms"[^>]* open=""/); // 용어 설명도 펼침
+  expect(printed).not.toContain('role="tablist"');
+  for (const title of ["사실 지표", "제출 기획안", "AI 활용"]) {
+    expect(printed).toContain(`>${title}</h3>`);
+  }
+});
+
+test("같은 기록이 여러 세부 행동의 근거여도 개요와 요소에서 한 번 센다", () => {
+  const source = sample.dimensions.flatMap((d) => d.evidence).find((e) => e.counted)!;
+  const original = countedRecordCount(sample.dimensions);
+  const duplicated: Report = {
+    ...sample,
+    dimensions: sample.dimensions.map((d) => ({ ...d, evidence: [...d.evidence, source] })),
+  };
+  expect(countedRecordCount(duplicated.dimensions)).toBe(original);
+  for (const element of sample.elements) {
+    expect(
+      countedRecordCount(duplicated.dimensions.filter((d) => d.element === element.element)),
+    ).toBe(
+      countedRecordCount(sample.dimensions.filter((d) => d.element === element.element)) +
+        (sample.dimensions.some(
+          (d) =>
+            d.element === element.element &&
+            d.evidence.some(
+              (e) =>
+                e.record_ref.type === source.record_ref.type &&
+                e.record_ref.id === source.record_ref.id &&
+                e.counted,
+            ),
+        )
+          ? 0
+          : 1),
+    );
+  }
+});
+
+test("종류·사람 필터로 단계 줄이 빠져도 남은 기록이 단계 기준점이 된다", () => {
+  const anchors = visiblePhaseAnchors(recordJson as RecordEntry[], {
+    type: "message",
+    by: "candidate",
+    phase: "all",
+  });
+  expect(anchors.length).toBeGreaterThan(1);
+  expect(anchors.every((item) => item.anchor.startsWith("message-"))).toBe(true);
+  expect(new Set(anchors.map((item) => item.phase)).size).toBe(anchors.length);
 });
 
 test("차원 조정은 메모 필수, 요소 수준 재계산, 검토 완료 → 확정 중 → final → 메모 추가", async () => {

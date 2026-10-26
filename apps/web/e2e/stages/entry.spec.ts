@@ -16,7 +16,17 @@ test("입장 → 동의 → 대기(참여자) → 시작", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "시작 전에 확인해 주세요" })).toBeVisible();
   await page.getByLabel("토론방에서 보일 이름").fill("하늘");
-  await page.getByLabel("위 내용을 읽었고 동의합니다").check();
+  const agreement = page.getByLabel("위 내용을 읽었고 동의합니다");
+  await expect(agreement).toBeDisabled();
+  for (const title of ["형식", "기록되는 것", "평가 방식", "AI 어시스턴트", "만들지 않는 것"]) {
+    await expect(page.getByRole("button", { name: title })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await page.getByRole("button", { name: "확인했어요" }).click();
+  }
+  await expect(agreement).toBeEnabled();
+  await agreement.check();
   await shot(page, "entry", "02-동의");
   await page.getByRole("button", { name: "동의하고 계속" }).click();
 
