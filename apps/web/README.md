@@ -79,7 +79,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 <!-- gen:tests -->
 > 생성 블록이다. 코드를 바꾸면 `make docs-gen`으로 갱신한다.
 
-**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 113개(정적 파싱)
+**단위·컴포넌트 테스트(vitest, `pnpm test`)**: 테스트 제목 120개(정적 파싱)
 
 <details><summary><code>app/api/health/route.test.ts</code> (1)</summary>
 
@@ -231,12 +231,20 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
-<details><summary><code>components/debate/stage-layout.test.ts</code> (4)</summary>
+<details><summary><code>components/debate/stage-layout.test.ts</code> (5)</summary>
 
 - 세션 첫 화면은 프로필 카드만 크게 보이고, 지원자 차례가 오면 토론방이 결정 사항과 함께 열린다
 - 자료가 열리면 결정 사항 아래에 자료·AI 어시스턴트 묶음이 생긴다
+- 오른쪽 영역은 보이는 칸 수에 따라 폭을 바꾼다
 - 기획안 단계는 오른쪽 위가 기획안으로 바뀌고 단계 안내가 왼쪽 아래에 남는다
 - 상단 바에서 직접 켜거나 끈 영역은 자동 판단보다 앞서고, 인사 화면에서는 무시된다
+
+</details>
+
+<details><summary><code>components/debate/theme.test.ts</code> (2)</summary>
+
+- 확정된 키워드 라벨을 테마 키로 바꾸고, 미확정·자유 키워드는 테마가 없다
+- 인사 동안은 dawn, 키워드 단계는 keyword, 그 뒤는 테마-단계, 끝나면 테마-debrief
 
 </details>
 
@@ -308,6 +316,13 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
+<details><summary><code>components/debate/voice/status-symbols.dom.test.tsx</code> (2)</summary>
+
+- 상태 표시는 네 가지이고 각각 심볼과 글자가 함께 보인다
+- 발표자 보기에서 자리별 상태가 카드에 붙고, 상태가 없으면 말하는 자리만 표시한다
+
+</details>
+
 <details><summary><code>components/debate/voice/streamer.test.ts</code> (1)</summary>
 
 - 정리를 두 번 불러도 예외 없이 끝난다(녹음 종료 뒤 메시지 제출 때 다시 불림)
@@ -343,11 +358,18 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 </details>
 
+<details><summary><code>components/ui/split-layout.dom.test.tsx</code> (2)</summary>
+
+- {px} 칸 옆 경계를 끌 수 있고 숨어 있던 칸이 생기면 떠오른다
+- {px} 모드에서 다른 경계를 끌거나 키보드로 조절해도 왼쪽 칸의 실제 폭을 유지한다
+
+</details>
+
 <details><summary><code>components/ui/split-layout.test.ts</code> (3)</summary>
 
 - 사용자 비율은 보이는 칸 구성과 구간(epoch)이 같을 때만 기본 비율을 덮는다
 - 경계를 끌면 두 칸의 합은 그대로이고 최소 크기 밑으로 줄지 않는다
-- 사용자가 끈 분할의 칸은 fit·square 대신 비율로 나뉜다
+- 사용자가 끈 분할의 칸은 처음 px 크기 대신 비율로 나뉜다
 
 </details>
 
@@ -464,7 +486,7 @@ mock 모드의 데이터 구성은 `mocks/README.md`에 있다. `?data=worst`를
 
 토론 화면(`components/debate/debate-view.tsx`)은 크기를 바꿀 수 있는 분할 레이아웃이다. 음성 모드(기본)의 지원자 화면은 이 배치를 따른다.
 
-- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 가운데 칸이 음성 회의로 바뀐다. 처음에는 네 명이 2×2 균등 배치이고, 발언이 시작되면 그 사람의 큰 칸과 아래 참가자 세 칸으로 바뀌고, 칸은 원래 자리에서 새 자리로 280ms 동안 옮겨 간다(`components/debate/tile-flip.ts`, 움직임 줄이기 설정이면 바로 바뀜). 내 차례 대기 중에는 마지막 동료를 유지하고 내 발언·처리 중에 내 칸을 크게 보인다. 동료 발언 중 현재 문장을 자막으로 보이고 재생 후에는 마지막 문장 하나를 흐리게 남긴다. 아래에는 발언 조작([발언하기]·손들기·남은 시간·음량·[발언 완료])과 새 시스템 안내·제출 확인이 있다. 왼쪽은 지원자 메모장(`voice/memo-pad.tsx`, 이 브라우저에만 저장하고 서버·평가에 보내지 않음)과 첫 확정 뒤의 단계 안내(인사가 끝나면 왼쪽 프로필 칸은 비운다), 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
-- 크기 조절: 영역 사이 경계를 끌거나 화살표 키로 바꾸고, 두 번 누르면 원래대로 돌아간다. 엔진은 `components/ui/split-layout.tsx`, 단계별 규칙은 `components/debate/stage-layout.ts`.
+- 배치: 시작하면 프로필 카드만 크게 보이고(인사 차례), 지원자 차례가 오면 가운데 칸이 음성 회의로 바뀐다. 처음에는 네 명이 2×2 균등 배치이고, 발언이 시작되면 그 사람의 큰 칸과 아래 참가자 세 칸으로 바뀌고, 칸은 원래 자리에서 새 자리로 280ms 동안 옮겨 간다(`components/debate/tile-flip.ts`, 움직임 줄이기 설정이면 바로 바뀜). 내 차례 대기 중에는 마지막 동료를 유지하고 내 발언·처리 중에 내 칸을 크게 보인다. 발언 중인 타일은 빛나는 테두리와 움직이는 파형으로 표시하고, 준비 중·손 듦·내 차례도 심볼과 글자 배지를 함께 보인다. 지원자가 말할 때도 발언 중 배지를 쓴다. 동료 발언 중 현재 문장을 자막으로 보이고 재생 후에는 마지막 문장 하나를 흐리게 남긴다. 아래에는 발언 조작([발언하기]·손들기·남은 시간·음량·[발언 완료])과 새 시스템 안내·제출 확인이 있다. 왼쪽은 지원자 메모장(`voice/memo-pad.tsx`, 이 브라우저에만 저장하고 서버·평가에 보내지 않음)과 인사 뒤부터 보이는 단계 안내(확정 전에는 지금 단계 안내, 인사가 끝나면 왼쪽 프로필 칸은 비움), 오른쪽은 위가 결정 사항(기획안 단계는 기획안), 아래가 자료·AI 어시스턴트 탭이다. 상단 바에서 오른쪽 영역을 켜고 끈다.
+- 크기 조절: 왼쪽 열은 처음 272px, 진행 상황은 처음 높이 210px이며 경계를 끌어 바꿀 수 있다. 오른쪽 영역을 모두 끄면 가운데 칸이 넓어진다. 영역 사이 경계를 끌거나 화살표 키로 바꾸고, 두 번 누르면 원래대로 돌아간다. 엔진은 `components/ui/split-layout.tsx`, 단계별 규칙은 `components/debate/stage-layout.ts`. 키워드를 확정하면 해당 키워드의 무드 색이 단계에 따라 바뀌고, 단계가 바뀔 때 전환 장면이 잠깐 나타난다.
 - 말하기(STT): 내 차례(일반·손들기·강제, 자동 녹음 없음)에 20초 안에 [발언하기]나 Space로 시작해 최대 60초 말하고([발언 완료]와 타이머가 같은 종료 함수), 서버가 전사한 글을 보여 주거나 고치게 하지 않고 바로 전달한다(서버도 다른 글은 거부). 저장되면 "전달했어요"를 잠깐 보인다. 빈 인식 결과에는 [다시 말하기]를 안내한다. 구현은 `components/debate/voice/voice-room.tsx`·`recorder.ts`이고 계약은 [음성 계약](../../docs/contracts/voice.md)이다.
 - AI 동료 음성(TTS): 서버가 만든 검증된 AI 메시지를 순서대로 재생하고(실제 재생 종료를 확인한 뒤 다음 항목·내 차례), 말하는 동료를 프로필에서 강조하며 재생 중인 문장을 자막으로 보인다. 목소리는 자리별로 고정한다.

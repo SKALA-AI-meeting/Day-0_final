@@ -43,10 +43,10 @@ test("경계를 끌면 두 칸의 합은 그대로이고 최소 크기 밑으로
   expect(dragPair([1, 2], -500, 100, [80, 80])[0] * 100).toBeCloseTo(80);
 });
 
-test("사용자가 끈 분할의 칸은 fit·square 대신 비율로 나뉜다", () => {
+test("사용자가 끈 분할의 칸은 처음 px 크기 대신 비율로 나뉜다", () => {
   const preset = { a: 1, b: 1, c: 0 };
-  const modes = { a: "fit" as const };
-  expect(resolveLayout(TREE, preset, {}, "", modes).modes).toEqual({ a: "fit" });
+  const modes = { a: { px: 272 } };
+  expect(resolveLayout(TREE, preset, {}, "", modes).modes).toEqual(modes);
   const overrides = { root: { key: visibleKey(ROOT, preset), weights: { a: 0.4, b: 1.6 } } };
   expect(resolveLayout(TREE, preset, overrides, "", modes)).toEqual({
     weights: { a: 0.4, b: 1.6, c: 0 },

@@ -262,6 +262,11 @@ def test_persona_keyword_stances_are_keywords(personas, keywords):
 
 
 def test_persona_files_and_avatars(personas):
+    assert {p["seat"]: p["avatar"] for p in personas["session"]} == {
+        "p1": "avatar-04.png",
+        "p2": "avatar-05.png",
+        "p3": "avatar-06.png",
+    }
     for p in personas["session"]:
         assert (MISSION / p["prompt"]).is_file()
         assert (MISSION / p["safe_phrase"]).is_file()

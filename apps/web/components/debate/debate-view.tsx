@@ -24,6 +24,7 @@ import { resolutionLabel } from "@/lib/resolution";
 import { DecisionPanel } from "./decision-panel";
 import { ChatRoom } from "./chat";
 import { SessionGuide } from "./link-screens";
+import { PhaseInterlude } from "./phase-interlude";
 import { PhaseSummary, ProfileStage } from "./profile-stage";
 import { ProposalEditor } from "./proposal-editor";
 import { phaseRemaining, typingSeats, type PanelTab, type View } from "./reducer";
@@ -37,6 +38,7 @@ import {
   type RightPane,
 } from "./stage-layout";
 import { PHASE_LABEL, clock, warnSeconds } from "./state";
+import { moodFor, themeKey } from "./theme";
 import { PHASES, type EndReason, type Seat, type StateSnapshot } from "./types";
 import { useDebateSession, type SessionAuth } from "./use-session";
 import { MemoPad } from "./voice/memo-pad";
@@ -63,7 +65,11 @@ export function PhaseBar({ snap }: { snap: StateSnapshot }) {
               aria-current={now ? "step" : undefined}
               className={cn(
                 "inline-flex items-center gap-1 text-footnote whitespace-nowrap transition-colors duration-200",
-                now ? "font-semibold text-accent" : done ? "text-ink" : "text-muted",
+                now
+                  ? "mood-underline pb-0.5 font-semibold text-accent"
+                  : done
+                    ? "text-ink"
+                    : "text-muted",
               )}
             >
               {done &&
@@ -362,11 +368,20 @@ export function DebateView({
     setLibraryTab(tab);
     activate(tab);
   };
+  const theme = themeKey(snap);
 
   return (
-    <div className="relative isolate flex h-dvh min-w-[1024px] flex-col bg-canvas">
+    <div
+      data-mood={moodFor({ intro: flags.intro, ended: locked, phase: snap.session.phase, theme })}
+      className="relative isolate flex h-dvh min-w-[1024px] flex-col bg-canvas"
+    >
       {/* 배경은 블록과 따로 둔 레이어다. 무늬를 바꿀 때는 globals.css의 .debate-backdrop만 고친다 */}
       <div aria-hidden className="debate-backdrop pointer-events-none absolute inset-0 -z-10" />
+      <PhaseInterlude
+        phase={locked || flags.intro ? null : snap.session.phase}
+        theme={theme}
+        minutes={snap.phases.find((p) => p.phase === snap.session.phase)?.budget_min}
+      />
       <header className="vibrancy sticky top-0 z-30 flex h-13 shrink-0 items-center gap-6 border-b border-line px-5">
         <Wordmark className="h-4" />
         <PhaseBar snap={snap} />
@@ -411,6 +426,7 @@ export function DebateView({
             <ProfileStage
               snap={voice.chatSnap}
               speaking={speaking}
+              status={voice.seatStatus}
               intro={flags.intro}
               onSkipIntro={() => setIntroDone(true)}
             />
@@ -431,6 +447,7 @@ export function DebateView({
                 <ProfileStage
                   snap={voice.chatSnap}
                   speaking={speaking}
+                  status={voice.seatStatus}
                   fill
                   voice={voice.mic}
                   candidateTalking={voice.recording}

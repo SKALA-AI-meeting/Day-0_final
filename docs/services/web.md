@@ -43,7 +43,7 @@ apps/web/
 | `admin_candidates.json` | 상태 묶음 5종 각 1행 이상, 요소별 수준 칩(1~5·기록 없음·담당자 조정 1행 이상)과 low 차원 수, 실패 행. 합계 필드 없음 |
 | `fixtures/sample-report.json` | Report(계약 형태): `elements[]` 5개(element·level·summary·dimension_count·no_record_count), `dimensions[]` 19개([product/rubric.md](../product/rubric.md) 3장 id, level·no_record_reason·evidence_refs·rationale·confidence, 확신도 high·medium·low 모두, 수준 4·5는 근거 2개 이상), 근거 참조 4종(`msg:`·`slot:`·`proposal:`·`contribution:`)과 메시지 근거의 앞 5·뒤 3 맥락, 기록 없음 사유 5종, 담당자 조정 차원 1개(memo 포함), 카드 6장(미발생 1), contribution_check, facts, ai_usage. 총점·합계 필드 없음 |
 | `admin_record.json` | 전체 기록. `record_ref`가 sample-report와 맞음 |
-| `public/mock-avatars/avatar-01~05.png` | 임시 프로필 이미지(가로·세로 비율이 서로 다른 파일을 섞어 원형 크롭 검증). 실제 앱은 api의 `avatar_url` |
+| `public/mock-avatars/avatar-01~06.png` | 임시 프로필 이미지(카탈로그 `assets/avatars/`와 같은 구성). 실제 앱은 api의 `avatar_url` |
 | `worst.ts` | break-ui용: 긴 별칭·긴 표시 이름, 300자 메시지, 빈 자료, 모든 칸 timeout, 모든 차원 기록 없음인 요소, 깨진 `avatar_url` |
 
 샘플 리포트(/admin/sample-report)는 sample-report·record 픽스처를 그대로 렌더한 정적 페이지다.

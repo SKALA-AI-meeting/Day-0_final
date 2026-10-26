@@ -22,7 +22,7 @@
 - 지원자가 직접 정하면 mock이 `slot.confirmed`·`phase.changed`·`timer`·`materials.opened`·단계 안내를 만들고, 대본의 같은 전환 프레임은 건너뛴다.
 - 대본의 지원자 발언(ack + `message.new` candidate)도 재생된다(한 세션 전체를 보여 주는 데모). 직접 보낸 메시지는 ack 뒤 같은 모양으로 쌓인다.
 - `keywords`: 카탈로그(`scenarios/missions/debate/keywords.yaml`·`materials/`)의 후보 4개와 자료 본문 복사본. **State 계약에 키워드 후보 목록이 없어** 화면의 키워드 버튼도 여기서 읽는다(열린 문제: 계약에 후보 목록 필드가 필요). `default_problem`·`default_solution`은 키워드별 첫 문제 상황·해결책 안(P1·S1)이다. mock은 안·지지를 기록하지 않으므로 대본 밖 시간 초과(재입장 링크·조작 패널)는 늘 "나온 안 없음" 규칙으로 단계 기준안을 고르고 그 규칙의 시스템 안내를 낸다.
-- 프로필 이미지: 계약의 `/assets/missions/<id>/avatars/<file>`을 `public/mock-avatars/<file>`로 바꿔 보인다. 파일마다 가로·세로 비율이 달라 원형 크롭을 검증한다.
+- 프로필 이미지: 계약의 `/assets/missions/<id>/avatars/<file>`을 `public/mock-avatars/<file>`로 바꿔 보인다. 파일 구성은 카탈로그 `assets/avatars/`와 같다.
 
 ## 링크 토큰(지원자)
 

@@ -9,6 +9,7 @@
 import {
   Fragment,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -29,8 +30,8 @@ export type Weights = Record<string, number>;
 /** 분할 id → 사용자가 바꾼 비율과, 그때의 보이는 칸 구성(key) */
 export type Overrides = Record<string, { key: string; weights: Weights }>;
 
-/** 칸 id → 크기 모드. 없으면 비율(weight) */
-export type PaneModes = Record<string, "fit" | "square">;
+/** 칸 id → 크기 모드. 없으면 비율(weight). { px }는 처음 크기이며 경계를 끌면 비율로 바뀐다. */
+export type PaneModes = Record<string, "fit" | "square" | { px: number }>;
 
 const DEFAULT_MIN_PX = 160;
 /** 키보드로 한 번에 옮기는 양(두 칸 합의 비율) */
@@ -165,6 +166,7 @@ type ItemProps = Omit<SplitLayoutProps, "tree" | "className"> & { node: SplitNod
 
 function itemStyle(hidden: boolean, weight: number, mode: PaneModes[string] | undefined) {
   if (hidden) return { flexGrow: 0, flexShrink: 1, flexBasis: 0 };
+  if (typeof mode === "object") return { flexGrow: 0, flexShrink: 1, flexBasis: `${mode.px}px` };
   // fit·square는 늘지 않고 내용(또는 폭)만큼 차지하며, 자리가 모자라면 줄어든다
   if (mode === "fit") return { flexGrow: 0, flexShrink: 1, flexBasis: "auto" };
   if (mode === "square")
@@ -174,20 +176,36 @@ function itemStyle(hidden: boolean, weight: number, mode: PaneModes[string] | un
 
 function Item({ node, weight, ...rest }: ItemProps) {
   const hidden = !(weight > 0);
+  const ref = useRef<HTMLDivElement>(null);
+  const wasHidden = useRef(hidden);
+  // 숨어 있던 칸이 생기면 잠깐 떠오르며 테두리가 빛난다(어느 칸이 새로 들어왔는지 보이게, globals.css .split-enter)
+  useEffect(() => {
+    const el = ref.current;
+    const appeared = wasHidden.current && !hidden;
+    wasHidden.current = hidden;
+    if (!el || !appeared) return;
+    el.classList.remove("split-enter");
+    void el.offsetWidth;
+    el.classList.add("split-enter");
+    const done = () => el.classList.remove("split-enter");
+    el.addEventListener("animationend", done, { once: true });
+    return () => el.removeEventListener("animationend", done);
+  }, [hidden]);
   // 자리만 차지하고 보이는 칸이 하나도 없는 분할(예: 비어 있는 오른쪽 열)도 낭독·키보드에서 뺀다
   const empty =
     node.kind === "split" && node.children.every((child) => !((rest.weights[child.id] ?? 0) > 0));
   const mode = rest.modes?.[node.id];
   return (
     <div
+      ref={ref}
       data-split-item={node.id}
-      data-mode={(!hidden && mode) || undefined}
+      data-mode={hidden || mode === undefined ? undefined : typeof mode === "object" ? "px" : mode}
       // 숨긴 칸은 키보드·낭독에서 빠진다. 내용은 남겨 다시 보일 때 스크롤·입력이 그대로다
       inert={hidden || empty}
       aria-hidden={hidden || empty || undefined}
       style={itemStyle(hidden, weight, mode)}
       className={cn(
-        "split-item flex min-h-0 min-w-0 overflow-hidden",
+        "split-item relative flex min-h-0 min-w-0 overflow-hidden",
         hidden ? "pointer-events-none opacity-0" : "opacity-100",
       )}
     >
@@ -215,6 +233,7 @@ function Split({
       {node.children.map((child, i) => {
         const j = nextVisible(i);
         const gutter = i < node.children.length - 1;
+        const active = visible[i] && j >= 0;
         return (
           <Fragment key={child.id}>
             <Item node={child} weight={weights[child.id] ?? 0} {...rest} />
@@ -223,7 +242,7 @@ function Split({
                 split={node}
                 a={child}
                 b={j >= 0 ? node.children[j] : null}
-                active={visible[i] && j >= 0}
+                active={active}
                 {...rest}
               />
             )}
@@ -253,50 +272,46 @@ function Gutter({
   const wa = weights[a.id] ?? 0;
   const wb = b ? (weights[b.id] ?? 0) : 0;
 
-  const visibleWeights = (): Weights =>
-    Object.fromEntries(
-      split.children
-        .filter((child) => (weights[child.id] ?? 0) > 0)
-        .map((child) => [child.id, weights[child.id]]),
-    );
-
-  // 두 칸의 실제 크기(px). 경계 폭·중첩 분할·fit/square 모드와 상관없이 지금 보이는 대로다
-  const pairPx = (): [number, number] => {
+  // 보이는 형제 칸을 모두 실제 크기에서 비율로 환산한다. 모드가 해제되어도 다른 칸은 제자리에 남는다.
+  const startFromPx = (): { start: Weights; pxPerWeight: number } => {
     const parent = ref.current?.parentElement;
-    if (!parent || !b) return [0, 0];
-    const size = (id: string) => {
-      const el = parent.querySelector<HTMLElement>(`:scope > [data-split-item="${id}"]`);
+    const children = split.children.filter((child) => (weights[child.id] ?? 0) > 0);
+    const fallback = Object.fromEntries(children.map((child) => [child.id, weights[child.id]]));
+    if (!parent) return { start: fallback, pxPerWeight: 0 };
+    const sizes = children.map((child) => {
+      const el = parent.querySelector<HTMLElement>(`:scope > [data-split-item="${child.id}"]`);
       const rect = el?.getBoundingClientRect();
       return rect ? (row ? rect.width : rect.height) : 0;
+    });
+    const totalPx = sizes.reduce((sum, size) => sum + size, 0);
+    const totalWeight = children.reduce((sum, child) => sum + weights[child.id], 0);
+    if (!(totalPx > 0) || sizes.some((size) => !(size > 0)))
+      return { start: fallback, pxPerWeight: 0 };
+    const pxPerWeight = totalPx / totalWeight;
+    return {
+      start: Object.fromEntries(children.map((child, i) => [child.id, sizes[i] / pxPerWeight])),
+      pxPerWeight,
     };
-    return [size(a.id), size(b.id)];
   };
 
-  // 끌기 시작 비율은 지금 보이는 크기 비로 정한다(fit/square 칸도 그 크기에서 이어서 움직인다)
-  const startFromPx = (): { start: [number, number]; pxPerWeight: number } => {
-    const [pa, pb] = pairPx();
-    const total = wa + wb;
-    const sum = pa + pb;
-    if (!(sum > 0)) return { start: [wa, wb], pxPerWeight: 0 };
-    return { start: [(total * pa) / sum, (total * pb) / sum], pxPerWeight: sum / total };
-  };
-
-  const apply = (start: [number, number], deltaPx: number, pxPerWeight: number) => {
+  const apply = (start: Weights, deltaPx: number, pxPerWeight: number) => {
     if (!b) return;
-    const [na, nb] = dragPair(start, deltaPx, pxPerWeight, [
+    const [na, nb] = dragPair([start[a.id], start[b.id]], deltaPx, pxPerWeight, [
       minPx(a, split.dir),
       minPx(b, split.dir),
     ]);
-    onResize(split, { ...visibleWeights(), [a.id]: na, [b.id]: nb });
+    onResize(split, { ...start, [a.id]: na, [b.id]: nb });
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!active || !b || e.button !== 0) return;
     e.preventDefault();
     const el = e.currentTarget;
-    el.setPointerCapture(e.pointerId);
     const origin = row ? e.clientX : e.clientY;
     const { start, pxPerWeight } = startFromPx();
+    if (!(pxPerWeight > 0)) return;
+    el.setPointerCapture(e.pointerId);
+    onResize(split, start);
     // 끄는 동안은 칸 전환 애니메이션을 끈다(globals.css [data-split-dragging])
     document.documentElement.dataset.splitDragging = row ? "row" : "col";
     const move = (ev: PointerEvent) =>
@@ -319,7 +334,12 @@ function Gutter({
     if (e.key !== back && e.key !== fwd) return;
     e.preventDefault();
     const { start, pxPerWeight } = startFromPx();
-    apply(start, (e.key === fwd ? 1 : -1) * KEY_STEP * pxPerWeight * (wa + wb), pxPerWeight);
+    if (!(pxPerWeight > 0)) return;
+    apply(
+      start,
+      (e.key === fwd ? 1 : -1) * KEY_STEP * pxPerWeight * (start[a.id] + start[b.id]),
+      pxPerWeight,
+    );
   };
 
   const percent = active ? Math.round((wa / (wa + wb)) * 100) : undefined;
@@ -340,7 +360,7 @@ function Gutter({
       data-active={active || undefined}
       className={cn(
         "split-gutter group relative flex shrink-0 touch-none items-center justify-center outline-none",
-        row ? "cursor-col-resize" : "cursor-row-resize",
+        active ? (row ? "cursor-col-resize" : "cursor-row-resize") : "cursor-default",
         active ? (row ? "w-3" : "h-3") : row ? "w-0" : "h-0",
       )}
     >

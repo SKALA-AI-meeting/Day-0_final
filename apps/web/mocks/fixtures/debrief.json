@@ -73,21 +73,21 @@
     {
       "seat": "p1",
       "display_name": "강한결",
-      "avatar_url": "/assets/missions/debate/avatars/avatar-01.png",
+      "avatar_url": "/assets/missions/debate/avatars/avatar-04.png",
       "persona_type": "stubborn",
       "persona_description": "고집형으로 설정된 AI 동료였습니다. 입장을 밝힌 뒤에는 확정 전까지 자기 안을 바꾸지 않았습니다."
     },
     {
       "seat": "p2",
       "display_name": "윤하람",
-      "avatar_url": "/assets/missions/debate/avatars/avatar-02.png",
+      "avatar_url": "/assets/missions/debate/avatars/avatar-05.png",
       "persona_type": "quiet",
       "persona_description": "소극형으로 설정된 AI 동료였습니다. 이름이 불리거나 의견을 물을 때만 자기 안을 말했습니다."
     },
     {
       "seat": "p3",
       "display_name": "서지안",
-      "avatar_url": "/assets/missions/debate/avatars/avatar-03.png",
+      "avatar_url": "/assets/missions/debate/avatars/avatar-06.png",
       "persona_type": "critic",
       "persona_description": "비판형으로 설정된 AI 동료였습니다. 지지가 모이는 안의 약점을 묻고, 반대가 이어지면 지지를 옮길 수 있었습니다."
     }

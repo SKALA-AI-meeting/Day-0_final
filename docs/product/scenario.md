@@ -22,7 +22,7 @@
 | `keywords.yaml` | 키워드 세트. 키워드마다 `problems[]`(순서 = P1·P2·P3), `solutions[]`(방향: 데이터·참여·인프라), `materials[]`(자료 id) |
 | `materials/<keyword>/*.md` | 키워드별 참고 자료 본문. 조립 때 `catalog_version`별로 DB에 시드되어 목록·검색·본문이 같은 버전을 쓴다 |
 | `personas.yaml` | 세션 페르소나 3명: `id`, `seat`, `name`, `avatar`(프로필 이미지 경로, `assets/avatars/` 기준), `tone`, `rules`, `must_not`, `stances`(단계·키워드별 고정 입장), `persona_description`(디브리핑용) |
-| `assets/avatars/*` | 페르소나 프로필 이미지. 실존 인물이 아닌 일관된 스타일의 일러스트, 유형을 암시하지 않는 중립 표정·파일 이름(`avatar-01.png` 등). **지금 이미지는 임시**이고 교체는 파일과 `avatar` 경로만 바꾼다. api 공개 앱이 `/assets/missions/<mission_id>/avatars/<file>`로 서빙 |
+| `assets/avatars/*` | 페르소나 프로필 이미지. 실존 인물이 아닌 일관된 스타일의 일러스트, 유형을 암시하지 않는 중립 표정·파일 이름(`avatar-04.png` 등). **지금 이미지는 임시**이며 교체할 때 기존 파일을 두고 새 이름으로 추가한 뒤 `avatar` 경로를 바꾼다. api 공개 앱이 `/assets/missions/<mission_id>/avatars/<file>`로 서빙 |
 | `cards.yaml` | 카드 6장: `card_id`, `element`, `stage_id`, `offset_min`(단계 시작 기준 시각, 유일한 트리거), `actor`, `content`, `window`, `preempt_ban`, `debrief`, `purpose`(카드 차례에 담당에게 보이는 장면 목적), `steer`(카드 전 복선·연결 내용, 4.2 "카드 이끎"), `report_template`(리포트 요소 섹션의 "관련 카드 장면"에 "설계된 장면" 표시와 함께 보이는 고정 설명 문장. 평가 판단이 아님). 흐름 이벤트 문구 |
 | `rubric.yaml` | BARS 척도: `rubric_version`, 요소별 차원(`dimension_id`·이름·정의·핵심 카드), 차원별 수준 1~5 앵커와 담당자 참고 문구, 기록 없음 사유. 내용과 id는 [product/rubric.md](rubric.md)가 정본 |
 | `prompts/<역할>/` | 역할 폴더(`manager`·`persona`·`intent`·`assistant`·`evaluator`, 공용 `shared`, 픽스처 `fixtures`)별 프롬프트([architecture/agents.md](../architecture/agents.md) "프롬프트와 카탈로그"). 페르소나 system prompt, 진행 매니저 prompt, 시간 초과 고정 문장, 디브리핑 문장, 평가 에이전트 프롬프트 `evaluator/common.md`(공통 지침: 판단 순서·근거 규칙·출력 형식, [product/rubric.md](rubric.md) 2장) + `evaluator/<element>.md`(요소별 특수 지침). `prompt_versions` = 공통 파일과 요소 파일 5개 각각의 해시 맵(파일별 개별 해시, 형식은 [contracts/internal.md](../contracts/internal.md) EvaluationSave) |
@@ -259,7 +259,7 @@ MVP는 5요소·카드 6장·페르소나 3명 고정이다. 아래는 문서로
 ```json
 {"mission_id": "debate", "catalog_version": "…", "session_minutes": 60,
  "elements": ["persuasion","listening","inclusion","flexibility","honesty"],
- "seats": [{"seat":"p1","persona_type":"stubborn","name":"강한결","avatar":"avatar-01.png"},{"seat":"p2","persona_type":"quiet","name":"윤하람","avatar":"avatar-02.png"},{"seat":"p3","persona_type":"critic","name":"서지안","avatar":"avatar-03.png"}],
+ "seats": [{"seat":"p1","persona_type":"stubborn","name":"강한결","avatar":"avatar-04.png"},{"seat":"p2","persona_type":"quiet","name":"윤하람","avatar":"avatar-05.png"},{"seat":"p3","persona_type":"critic","name":"서지안","avatar":"avatar-06.png"}],
  "stages": [
   {"stage_id":"keyword","deadline_min":10,"slot":"keyword"},
   {"stage_id":"problem","deadline_min":28,"slot":"problem"},

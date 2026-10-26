@@ -43,7 +43,7 @@ test("자막 영역은 발언 전후로 유지되고 내용만 바뀐다", () =>
   expect(host.querySelector('[data-testid="caption-live"]')).toBe(live);
   expect(live.textContent).toBe("강한결: 물이 먼저예요.");
   // 보이는 자막은 버튼 밖 읽기 영역과 겹치지 않게 숨기고, 버튼 안에는 live 영역이 없다
-  const trigger = host.querySelector('[aria-label="강한결 프로필 보기"]')!;
+  const trigger = host.querySelector('[aria-label="강한결 프로필 보기 · 발언 중"]')!;
   expect(trigger.textContent).toContain("발언 중");
   expect(trigger.querySelector("[aria-live]")).toBeNull();
   const visible = [...trigger.querySelectorAll("span")].find(

@@ -14,19 +14,19 @@
     {
       "seat": "p1",
       "display_name": "강한결",
-      "avatar_url": "/assets/missions/debate/avatars/avatar-01.png",
+      "avatar_url": "/assets/missions/debate/avatars/avatar-04.png",
       "persona_type": "stubborn"
     },
     {
       "seat": "p2",
       "display_name": "윤하람",
-      "avatar_url": "/assets/missions/debate/avatars/avatar-02.png",
+      "avatar_url": "/assets/missions/debate/avatars/avatar-05.png",
       "persona_type": "quiet"
     },
     {
       "seat": "p3",
       "display_name": "서지안",
-      "avatar_url": "/assets/missions/debate/avatars/avatar-03.png",
+      "avatar_url": "/assets/missions/debate/avatars/avatar-06.png",
       "persona_type": "critic"
     }
   ],

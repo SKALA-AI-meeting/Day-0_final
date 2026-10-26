@@ -39,7 +39,7 @@ test("15분 데모: 표시 이름이 토론방에 쓰이고, 정하기·자료·
     "서지안",
   ]);
   // 프로필 이미지는 중립 파일 이름(유형이 URL에 나오지 않음)
-  expect(pre.participants[1].avatar_url).toBe("/mock-avatars/avatar-01.png");
+  expect(pre.participants[1].avatar_url).toBe("/mock-avatars/avatar-04.png");
 
   await call("POST", "/s/demo/start");
   await vi.advanceTimersByTimeAsync(60_000); // 1분: 시작 안내·동료 발언·침묵 초대
