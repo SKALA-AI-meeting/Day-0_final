@@ -286,7 +286,7 @@
 
     /* ── 영상: 화면에서는 재생, 인쇄에서는 같은 장면의 정지 화면 ── */
     .shot video,.analysis-figure video{display:block;width:100%;height:100%;object-fit:contain;background:var(--paper)}
-    .shot.portrait{width:316px;height:388px}
+    .shot.wide{height:auto;aspect-ratio:16/10}
     .shot.fit{height:auto}
     .shot.fit img{height:auto}
     .print-only{display:none}
@@ -360,13 +360,11 @@
     <!-- 3 · 패턴 M 화면 + 콜아웃 -->
     <section class="slide" data-title="해결책">
       <header class="slide-head"><div><p class="kicker">SOLUTION</p><h2>AI 동료 3명과의 60분 음성 토론</h2></div><span class="badge">구현됨</span></header>
-      <div class="content shot-split" style="grid-template-columns:316px 1fr;gap:48px">
+      <div class="content shot-split" style="grid-template-columns:672px 1fr;gap:40px;align-items:center">
         <div>
-          <figure class="shot portrait">
+          <figure class="shot wide">
             <video class="screen-only" src="assets/clip-voice-turn.mp4" poster="assets/clip-voice-turn-poster.jpg" muted loop playsinline preload="auto"></video>
-            <img class="print-only" src="assets/clip-voice-turn-poster.jpg" alt="음성 회의 화면: 말하는 동료가 큰 칸에 보이고 자막이 나오며, 아래 줄에 다른 동료와 지원자 칸이 있다">
-            <span class="pin" style="left:2%;top:3%">1</span>
-            <span class="pin" style="left:2%;top:54%">2</span>
+            <img class="print-only" src="assets/clip-voice-turn-poster.jpg" alt="음성 회의 화면 전체: 왼쪽 메모, 가운데 말하는 동료가 크게 보이는 무대와 다른 동료·지원자 칸, 오른쪽 결정 사항">
           </figure>
           <p class="shot-caption">실제 음성 회의 화면 (데모 세션 녹화)</p>
         </div>
