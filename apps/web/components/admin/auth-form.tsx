@@ -102,7 +102,7 @@ export function AuthForm({ mode, pending, error, onSubmit }: AuthFormProps) {
   ].filter(Boolean);
 
   return (
-    <div className="relative isolate flex min-h-dvh flex-col bg-canvas">
+    <div data-mood="studio" className="relative isolate flex min-h-dvh flex-col bg-canvas">
       <div aria-hidden className="page-backdrop pointer-events-none fixed inset-0 -z-10" />
       <main className="mx-auto grid w-full max-w-5xl flex-1 items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_minmax(0,26rem)] lg:gap-16">
         <section aria-label="Day Zero 소개" className="hidden flex-col gap-8 lg:flex">

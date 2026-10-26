@@ -88,6 +88,9 @@ async def load_context(
     return session, position, invite
 
 
+PUBLIC_MESSAGE_KINDS = frozenset({"greeting"})
+
+
 def serialize_message(session: Session, m: Message) -> dict[str, Any]:
     out = {
         "id": str(m.id),
@@ -102,6 +105,12 @@ def serialize_message(session: Session, m: Message) -> dict[str, Any]:
     # /state로 그 발언이 저장됐는지 확인한다
     if m.sender == "candidate" and m.client_msg_id:
         out["client_msg_id"] = m.client_msg_id
+    # 공개해도 되는 종류만 내보낸다. 세션 시작 인사(greeting)는 화면이 인사를 다 들을 때까지
+    # 인사 화면을 두는 데 쓴다. 카드 고정 문장(card_fixed_line) 같은 설계된 장면 표시는
+    # 지원자에게 보이지 않게 내보내지 않는다
+    kind = (m.meta or {}).get("kind")
+    if kind in PUBLIC_MESSAGE_KINDS:
+        out["kind"] = kind
     return out
 
 

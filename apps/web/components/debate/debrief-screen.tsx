@@ -141,7 +141,7 @@ function Survey({
       <div className="flex items-center gap-3" aria-hidden>
         <div className="h-1 flex-1 overflow-hidden rounded-full bg-line">
           <div
-            className="progress-fill h-full rounded-full bg-accent"
+            className="progress-fill mood-fill h-full rounded-full"
             style={{ width: `${(answered / Math.max(1, survey.questions.length)) * 100}%` }}
           />
         </div>
@@ -240,7 +240,7 @@ export function DebriefScreen({
               <DrawnCheck size={24} delay={260} />
             )}
           </span>
-          <h1 className="text-large font-bold tracking-tight">
+          <h1 className="mood-ink text-large font-bold tracking-tight">
             {failed ? "세션이 중단됐어요" : "수고하셨습니다"}
           </h1>
         </Reveal>

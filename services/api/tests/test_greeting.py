@@ -50,3 +50,13 @@ async def test_greeting_skipped_for_position_without_lines(api, ctx):
             )
         ).all()
     assert "greeting" not in kinds and "stage_start" in kinds
+
+
+async def test_state_marks_only_greetings_with_kind(api, ctx):
+    """/state 메시지에 인사만 kind=greeting이 붙고, 다른 종류(단계 안내 등)는 내보내지 않는다."""
+    sess = await api.new_session(display_name="하늘")
+    r = await api.public.get(f"/sessions/{sess.id}/state", headers=sess.auth)
+    messages = r.json()["messages"]
+    greetings = [m for m in messages if m.get("kind") == "greeting"]
+    assert [m["sender"] for m in greetings] == ["p1", "p2", "p3"]
+    assert all("kind" not in m for m in messages if m["sender"] == "system")

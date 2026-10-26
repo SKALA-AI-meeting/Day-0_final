@@ -163,6 +163,7 @@
     --color-part5-ink: #c3a6ff;
     --color-person-system: #8e8e93;
     --shadow-float: 0 0 0 1px var(--color-line);
+    --mood-strength: 24%; /* 검은 바탕에서는 무드 번짐을 더 짙게 */
     color-scheme: dark;
   }
 }
@@ -208,6 +209,7 @@
   --color-part5-ink: #c3a6ff;
   --color-person-system: #8e8e93;
   --shadow-float: 0 0 0 1px var(--color-line);
+  --mood-strength: 24%;
   color-scheme: dark;
 }
 /* 강제 라이트(.light)는 시스템이 다크여도 네이티브 컨트롤(스크롤바·입력)까지 라이트로 그린다 */
@@ -274,12 +276,17 @@
   background:
     radial-gradient(
       60% 50% at 0% 0%,
-      color-mix(in srgb, var(--color-accent) 10%, transparent),
+      color-mix(in srgb, var(--mood-1) var(--mood-strength), transparent),
       transparent 70%
     ),
     radial-gradient(
       50% 45% at 100% 100%,
-      color-mix(in srgb, var(--color-accent) 7%, transparent),
+      color-mix(in srgb, var(--mood-2) var(--mood-strength), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      35% 30% at 92% 6%,
+      color-mix(in srgb, var(--mood-3) calc(var(--mood-strength) * 0.8), transparent),
       transparent 70%
     ),
     var(--color-canvas);
@@ -312,7 +319,7 @@
   inset: 0;
   border-radius: 0.75rem;
   pointer-events: none;
-  box-shadow: inset 0 0 0 2px var(--color-accent);
+  box-shadow: inset 0 0 0 2px var(--mood-1);
   animation: split-ring 1100ms var(--ease-out) forwards;
 }
 @keyframes split-enter {
@@ -693,7 +700,7 @@
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  box-shadow: inset 0 0 0 2px var(--color-accent);
+  box-shadow: inset 0 0 0 2px var(--mood-1);
   opacity: 0;
   animation: split-ring 1100ms var(--ease-out) both;
   animation-delay: var(--reveal-delay, 0ms);
@@ -752,12 +759,17 @@
   background:
     radial-gradient(
       55% 45% at 0% 0%,
-      color-mix(in srgb, var(--color-accent) 8%, transparent),
+      color-mix(in srgb, var(--mood-1) calc(var(--mood-strength) * 0.8), transparent),
       transparent 70%
     ),
     radial-gradient(
       45% 40% at 100% 100%,
-      color-mix(in srgb, var(--color-accent) 6%, transparent),
+      color-mix(in srgb, var(--mood-2) calc(var(--mood-strength) * 0.7), transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      30% 28% at 90% 8%,
+      color-mix(in srgb, var(--mood-3) calc(var(--mood-strength) * 0.6), transparent),
       transparent 70%
     ),
     var(--color-canvas);
@@ -799,6 +811,309 @@
   .fold {
     grid-template-rows: 1fr !important;
     opacity: 1 !important;
+  }
+}
+
+/*
+  무드(색 계층). 1층은 위 중립·강조 토큰(글자·버튼, 대비 고정), 2층은 화면·단계마다 정한 무드 세 색이다:
+  --mood-1 주색(배경 번짐·진행선 시작·새 칸 테두리), --mood-2 보조색(아래쪽 번짐·진행선 가운데),
+  --mood-3 포인트색(작은 번짐·진행선 끝·전환 장면의 반짝임). 무드 색은 장식(배경·선·빛)에만 쓰고 글자에는
+  쓰지 않는다. data-mood를 바꾸면 세 색이 1.2초 동안 서서히 옮겨 간다(@property로 색 보간).
+  무드: dawn(입장·인사·첫 화면) · keyword(발상) · problem(긴장) · solution(성장) · proposal(정리) ·
+  debrief(마무리) · studio(관리 화면).
+*/
+@property --mood-1 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #3b82f6;
+}
+@property --mood-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #8b5cf6;
+}
+@property --mood-3 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f59e8b;
+}
+:root {
+  --mood-1: #3b82f6;
+  --mood-2: #8b5cf6;
+  --mood-3: #f59e8b;
+  --mood-strength: 13%; /* 다크는 위 다크 블록에서 24% */
+}
+[data-mood] {
+  transition:
+    --mood-1 1200ms var(--ease-out),
+    --mood-2 1200ms var(--ease-out),
+    --mood-3 1200ms var(--ease-out);
+}
+[data-mood="dawn"] {
+  --mood-1: #3b82f6;
+  --mood-2: #8b5cf6;
+  --mood-3: #f59e8b;
+}
+[data-mood="keyword"] {
+  /* 고르기 전: 네 키워드(물·나무·불)의 빛을 조금씩 섞은 프리즘 */
+  --mood-1: #0a84ff;
+  --mood-2: #22b573;
+  --mood-3: #f5893b;
+}
+[data-mood="problem"] {
+  --mood-1: #5b5bd6;
+  --mood-2: #e8607a;
+  --mood-3: #f59e0b;
+}
+[data-mood="solution"] {
+  --mood-1: #0ea5a4;
+  --mood-2: #34c759;
+  --mood-3: #38bdf8;
+}
+[data-mood="proposal"] {
+  --mood-1: #7c5cf0;
+  --mood-2: #2f7cf6;
+  --mood-3: #e9b20e;
+}
+[data-mood="debrief"] {
+  --mood-1: #10b981;
+  --mood-2: #0ea5e9;
+  --mood-3: #a78bfa;
+}
+[data-mood="studio"] {
+  --mood-1: #2563eb;
+  --mood-2: #0d9488;
+  --mood-3: #f97316;
+}
+/*
+  테마 × 톤(3층). 키워드 단계에서 고른 키워드가 테마, 그 뒤 단계가 톤이다(components/debate/theme.ts).
+  톤: problem은 짙고 긴장된 빛, solution은 밝고 맑은 빛, proposal은 가라앉은 깊은 빛과 금속성 포인트, debrief는 옅고 부드러운 빛.
+  물: 푸른 물빛·청록·모래(따뜻한 포인트 하나).
+  불: 붉은빛·주황·호박, 연기 보라.
+  나무: 숲 초록·나무 갈색·새잎 연두·햇빛.
+  바람: 남보라·하늘·은회색·민트.
+*/
+[data-mood="water-problem"] {
+  --mood-1: #2c4fb8;
+  --mood-2: #1f9ec2;
+  --mood-3: #f08a5d;
+}
+[data-mood="water-solution"] {
+  --mood-1: #0e9be0;
+  --mood-2: #22c3b4;
+  --mood-3: #f6c453;
+}
+[data-mood="water-proposal"] {
+  --mood-1: #1d4ed8;
+  --mood-2: #5fd3e6;
+  --mood-3: #d9b47a;
+}
+[data-mood="water-debrief"] {
+  --mood-1: #38bdf8;
+  --mood-2: #5eead4;
+  --mood-3: #c4b5fd;
+}
+[data-mood="fire-problem"] {
+  --mood-1: #d93a43;
+  --mood-2: #f26a1b;
+  --mood-3: #7c3aed;
+}
+[data-mood="fire-solution"] {
+  --mood-1: #f5781f;
+  --mood-2: #f8b31c;
+  --mood-3: #ef4f6e;
+}
+[data-mood="fire-proposal"] {
+  --mood-1: #b8410e;
+  --mood-2: #e9a00b;
+  --mood-3: #8b5cf6;
+}
+[data-mood="fire-debrief"] {
+  --mood-1: #fb7185;
+  --mood-2: #fdba74;
+  --mood-3: #a78bfa;
+}
+[data-mood="tree-problem"] {
+  --mood-1: #3f7d3a;
+  --mood-2: #a86a12;
+  --mood-3: #7cbf1b;
+}
+[data-mood="tree-solution"] {
+  --mood-1: #1fb057;
+  --mood-2: #8fd12a;
+  --mood-3: #f2c21b;
+}
+[data-mood="tree-proposal"] {
+  --mood-1: #15803d;
+  --mood-2: #c08a0a;
+  --mood-3: #6ee7a8;
+}
+[data-mood="tree-debrief"] {
+  --mood-1: #4ade80;
+  --mood-2: #bef264;
+  --mood-3: #fde68a;
+}
+[data-mood="wind-problem"] {
+  --mood-1: #5457e8;
+  --mood-2: #7f8ea8;
+  --mood-3: #2fb3ec;
+}
+[data-mood="wind-solution"] {
+  --mood-1: #4f9bf5;
+  --mood-2: #9aa6f8;
+  --mood-3: #4fd8c4;
+}
+[data-mood="wind-proposal"] {
+  --mood-1: #4338ca;
+  --mood-2: #86b8f7;
+  --mood-3: #e98be8;
+}
+[data-mood="wind-debrief"] {
+  --mood-1: #93c5fd;
+  --mood-2: #c4b5fd;
+  --mood-3: #99f6e4;
+}
+/* 진행선·막대: 무드 세 색이 이어지는 띠 */
+.mood-fill {
+  background: linear-gradient(90deg, var(--mood-1), var(--mood-2) 60%, var(--mood-3));
+}
+/* 큰 제목 한두 곳에만: 글자색(ink)에 무드를 섞은 그라데이션 글자(대비를 위해 ink 비중을 높게) */
+.mood-ink {
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--mood-1) 55%, var(--color-ink)),
+    color-mix(in srgb, var(--mood-2) 55%, var(--color-ink))
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* 지금 단계 표시 아래 무드 밑줄 */
+.mood-underline {
+  background-image: linear-gradient(90deg, var(--mood-1), var(--mood-2));
+  background-size: 100% 2px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+}
+
+/*
+  단계 전환 장면(components/debate/phase-interlude.tsx). 화면 위를 무드 색 띠가 왼쪽에서 쓸고 지나가며,
+  가운데에 단계 그림(선이 그려지는 SVG)과 단계 이름이 떠올랐다가 함께 사라진다. 누르기를 막지 않는다.
+  전체 2.4초: 띠 들어옴 0~0.5초 · 그림 그리기 0.3~1.3초 · 글자 0.5초 · 머묾 · 사라짐 1.8~2.4초.
+*/
+.interlude {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: interlude-out 600ms var(--ease-in-out) 1800ms both;
+}
+.interlude-wash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      60% 60% at 50% 50%,
+      color-mix(in srgb, var(--mood-3) 22%, transparent),
+      transparent 70%
+    ),
+    linear-gradient(
+      110deg,
+      color-mix(in srgb, var(--mood-1) 30%, var(--color-surface)),
+      color-mix(in srgb, var(--mood-2) 26%, var(--color-surface))
+    );
+  opacity: 0.94;
+  animation: interlude-wipe 560ms var(--ease-out) both;
+}
+.interlude-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-ink);
+}
+.interlude-motif {
+  color: var(--mood-1);
+}
+.interlude-motif .draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: interlude-draw 1000ms var(--ease-out) forwards;
+  animation-delay: calc(300ms + var(--i, 0) * 90ms);
+}
+.interlude-motif .accent {
+  color: var(--mood-3);
+}
+.interlude-motif .spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: interlude-spark 900ms var(--ease-out) both;
+  animation-delay: calc(700ms + var(--i, 0) * 80ms);
+}
+.interlude-title {
+  animation: reveal 500ms var(--ease-out) 500ms both;
+}
+.interlude-sub {
+  animation: reveal 500ms var(--ease-out) 650ms both;
+}
+@keyframes interlude-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes interlude-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes interlude-spark {
+  from {
+    opacity: 0;
+    transform: scale(0.2) rotate(-40deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.25) rotate(10deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes interlude-out {
+  to {
+    opacity: 0;
+    clip-path: inset(0 0 0 100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-mood] {
+    transition: none;
+  }
+  .interlude,
+  .interlude-wash,
+  .interlude-title,
+  .interlude-sub,
+  .interlude-motif .spark {
+    animation: none;
+  }
+  .interlude-motif .draw {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .interlude {
+    animation: interlude-fade 1200ms ease 600ms both;
+  }
+}
+@keyframes interlude-fade {
+  to {
+    opacity: 0;
   }
 }
 

@@ -118,7 +118,7 @@ export function ProposalEditor({
               data-section={id}
               placeholder={locked ? "비어 있음" : "여기에 적어요"}
               onChange={(event) => onChange(id, event.target.value)}
-              className="mt-1 resize-none rounded-md border border-subtle bg-surface px-3 py-2 text-body outline-none field-sizing-content placeholder:text-muted focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 disabled:border-transparent disabled:bg-surface-sunken disabled:text-ink"
+              className="mt-1 resize-y rounded-md border border-subtle bg-surface px-3 py-2 text-body outline-none field-sizing-content placeholder:text-muted focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/30 disabled:border-transparent disabled:bg-surface-sunken disabled:text-ink"
             />
           </label>
         ))}

@@ -63,8 +63,13 @@ export type StageInput = {
   snap: StateSnapshot;
   /** 지원자가 보낸 메시지가 있음(아직 ack 전인 것 포함) */
   candidateSpoke: boolean;
-  /** 인사 차례를 화면에서 끝냄(바로 대화하기·대기 시간 경과). TTS가 붙으면 인사 재생 끝이 이것을 세운다 */
+  /** 인사 차례를 화면에서 끝냄(바로 대화하기·대기 시간 경과) */
   introDone: boolean;
+  /**
+   * 세션 시작 인사(kind greeting)를 끝까지 다 들었는지. 주면 이것으로 인사 차례 끝을 정하고, 없으면(인사가 없는
+   * 옛 채용 건·글 토론) AI 동료 셋이 한 번씩 말했는지로 정한다
+   */
+  greetingDone?: boolean;
   ended: boolean;
   /** 말하기(음성 입력)를 쓸 수 있음. 왼쪽 음성 패널을 둔다 */
   voice?: boolean;
@@ -78,14 +83,16 @@ export function stageFlags({
   snap,
   candidateSpoke,
   introDone,
+  greetingDone,
   ended,
   voice = false,
   pinned = {},
 }: StageInput): StageFlags {
   const phase = snap.session.phase;
   const confirmed = snap.slots.some((s) => s.status === "confirmed");
-  // AI 동료 세 명이 한 번씩 말했으면 인사 차례가 끝난 것으로 본다
-  const greeted = SEATS.every((seat) => snap.messages.some((m) => m.sender === seat));
+  // 인사를 다 들었거나(음성), 인사가 없으면 AI 동료 세 명이 한 번씩 말했을 때 인사 차례가 끝난다
+  const greeted =
+    greetingDone ?? SEATS.every((seat) => snap.messages.some((m) => m.sender === seat));
   const intro =
     !ended &&
     !introDone &&
@@ -148,20 +155,20 @@ export function stageWeights(flags: StageFlags): Weights {
   };
 }
 
-/** 왼쪽 열(메모·진행 상황) 폭과 진행 상황 높이(px). 오른쪽 칸을 켜고 꺼도 바뀌지 않는다 */
+/** 왼쪽 열(메모·진행 상황)의 처음 폭과 진행 상황의 처음 높이(px). 경계를 끌어 바꿀 수 있다 */
 export const LEFT_PX = 272;
 export const SUMMARY_PX = 210;
 
 /**
- * 인사 화면이 아니면 왼쪽 열 폭과 진행 상황 높이를 고정하고(끌 수 없음), 프로필은 왼쪽 열 폭만큼의
- * 정사각형, 결정 사항은 내용 높이만큼
+ * 인사 화면이 아니면 왼쪽 열 폭과 진행 상황 높이를 처음 크기로 두고(경계를 끌어 메모 칸을 넓히거나 줄일 수 있음),
+ * 프로필은 왼쪽 열 폭만큼의 정사각형, 결정 사항·조작부는 내용 높이만큼
  */
 export function stageModes(flags: StageFlags): PaneModes {
   return flags.intro
     ? {}
     : {
-        left: LEFT_PX,
-        summary: SUMMARY_PX,
+        left: { px: LEFT_PX },
+        summary: { px: SUMMARY_PX },
         profiles: "square",
         decisions: "fit",
         controls: "fit",

@@ -111,7 +111,11 @@ export function FlowFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="page-backdrop relative isolate flex min-h-dvh flex-col">
+    // 무드: 시작 전 화면은 dawn, 마무리는 debrief(globals.css 색 계층). 단계가 바뀌면 배경색이 서서히 옮겨 간다
+    <div
+      data-mood={current === "debrief" ? "debrief" : "dawn"}
+      className="page-backdrop relative isolate flex min-h-dvh flex-col"
+    >
       <header className="vibrancy sticky top-0 z-20 border-b border-line">
         <div className="mx-auto flex h-14 w-full max-w-4xl items-center gap-6 px-4 sm:px-6">
           <Wordmark className="h-4 shrink-0" />
@@ -202,7 +206,7 @@ export function EntryScreen({ entry, onNext }: { entry: Entry; onNext: () => voi
         <Reveal as="p" className="text-footnote font-semibold text-accent">
           {entry.company_name}
         </Reveal>
-        <Reveal as="h1" index={1} className="text-large font-bold tracking-tight">
+        <Reveal as="h1" index={1} className="mood-ink w-fit text-large font-bold tracking-tight">
           새 프로젝트 팀 토론
         </Reveal>
         <Reveal index={2} className="flex flex-wrap gap-2">
@@ -270,7 +274,7 @@ function ConsentChecklist({ items, onAllRead }: { items: ConsentItem[]; onAllRea
         </p>
         <div aria-hidden className="h-1 w-32 overflow-hidden rounded-full bg-line">
           <div
-            className="progress-fill h-full rounded-full bg-accent"
+            className="progress-fill mood-fill h-full rounded-full"
             style={{ width: `${(read.size / items.length) * 100}%` }}
           />
         </div>

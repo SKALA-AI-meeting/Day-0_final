@@ -50,6 +50,8 @@ export type Message = {
   created_at: string;
   /** 지원자 메시지만: 보낸 message.send의 client_msg_id(음성은 발언 id) */
   client_msg_id?: string;
+  /** 세션 시작 인사만 "greeting"(그 밖의 종류는 서버가 내보내지 않음) */
+  kind?: "greeting";
 };
 
 export type Slot = {

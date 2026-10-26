@@ -24,6 +24,8 @@ import { resolutionLabel } from "@/lib/resolution";
 import { DecisionPanel } from "./decision-panel";
 import { ChatRoom } from "./chat";
 import { SessionGuide } from "./link-screens";
+import { PhaseInterlude } from "./phase-interlude";
+import { moodFor, themeKey } from "./theme";
 import { PhaseSummary, ProfileStage } from "./profile-stage";
 import { ProposalEditor } from "./proposal-editor";
 import { phaseRemaining, typingSeats, type PanelTab, type View } from "./reducer";
@@ -64,7 +66,11 @@ export function PhaseBar({ snap }: { snap: StateSnapshot }) {
               aria-current={now ? "step" : undefined}
               className={cn(
                 "inline-flex items-center gap-1 text-footnote whitespace-nowrap transition-colors duration-200",
-                now ? "font-semibold text-accent" : done ? "text-ink" : "text-muted",
+                now
+                  ? "mood-underline pb-0.5 font-semibold text-accent"
+                  : done
+                    ? "text-ink"
+                    : "text-muted",
               )}
             >
               {done &&
@@ -337,9 +343,19 @@ export function DebateView({
   // 인사 차례: TTS가 붙기 전에는 [바로 대화하기]나 대기 시간(INTRO_MAX_MS)으로 끝낸다
   const [introDone, setIntroDone] = useState(false);
   const [libraryTab, setLibraryTab] = useState<LibraryTab>("materials");
+  // 세션 시작 인사(kind greeting)를 끝까지 다 들었는지. 재생 중인 인사는 아직 안 들은 것이다(세 번째 인사가
+  // 시작되자마자 토론 화면으로 넘어가 인사가 토론 화면에서 들리지 않게). 인사가 없는 옛 채용 건은 undefined
+  const greetings = snap.messages.filter((m) => m.kind === "greeting");
+  const greetingDone =
+    voiceEnabled && greetings.length > 0
+      ? greetings.every(
+          (g) => g.id !== voice.liveMessageId && voice.chatSnap.messages.some((m) => m.id === g.id),
+        )
+      : undefined;
   const flags = stageFlags({
     // 음성에서는 들은 발언 기준이다: 동료 셋의 인사를 다 들을 때까지 프로필 카드를 크게 둔다
     snap: voiceEnabled ? voice.chatSnap : snap,
+    greetingDone,
     // 음성에서는 지원자 차례가 처음 오면 토론방(대화 기록)을 연다
     candidateSpoke: voice.candidateTurn || snap.messages.some((m) => m.sender === "candidate"),
     introDone,
@@ -347,11 +363,12 @@ export function DebateView({
     voice: voiceEnabled,
     pinned,
   });
+  // 대기 시간은 인사 하나가 재생을 시작할 때마다 다시 센다(합성이 느려도 인사 도중에 끊지 않게)
   useEffect(() => {
     if (!flags.intro) return;
     const timer = setTimeout(() => setIntroDone(true), INTRO_MAX_MS);
     return () => clearTimeout(timer);
-  }, [flags.intro]);
+  }, [flags.intro, voice.liveMessageId]);
   const flagKey = JSON.stringify(flags);
   /* eslint-disable react-hooks/exhaustive-deps -- flags는 매 렌더 새 객체라 값(flagKey)으로 묶는다 */
   const preset = useMemo(() => stageWeights(flags), [flagKey]);
@@ -363,15 +380,33 @@ export function DebateView({
   const activate = (id: PanelTab) => {
     if (view.tab !== id) session.setTab(id);
   };
+  // 키워드 단계에서 고른 키워드(물·불·나무·바람). 그 뒤 화면 색과 단계 전환 장면이 이 테마를 따른다
+  const theme = themeKey(snap);
   const openLibraryTab = (tab: LibraryTab) => {
     setLibraryTab(tab);
     activate(tab);
   };
 
   return (
-    <div className="relative isolate flex h-dvh min-w-[1024px] flex-col bg-canvas">
+    // 무드(색 계층, globals.css·theme.ts): 인사 동안 dawn, 키워드 단계 keyword, 키워드를 고른 뒤로는
+    // 그 키워드 테마의 단계 톤(예: water-problem), 끝나면 테마의 debrief. 바뀌면 색이 서서히 옮겨 간다
+    <div
+      data-mood={moodFor({
+        intro: flags.intro,
+        ended: locked,
+        phase: snap.session.phase,
+        theme,
+      })}
+      className="relative isolate flex h-dvh min-w-[1024px] flex-col bg-canvas"
+    >
       {/* 배경은 블록과 따로 둔 레이어다. 무늬를 바꿀 때는 globals.css의 .debate-backdrop만 고친다 */}
       <div aria-hidden className="debate-backdrop pointer-events-none absolute inset-0 -z-10" />
+      {/* 단계가 바뀔 때(인사가 끝나 키워드로 들어설 때 포함) 무드 색 띠와 단계 그림이 지나간다 */}
+      <PhaseInterlude
+        phase={locked || flags.intro ? null : snap.session.phase}
+        theme={theme}
+        minutes={snap.phases.find((p) => p.phase === snap.session.phase)?.budget_min}
+      />
       <header className="vibrancy sticky top-0 z-30 flex h-13 shrink-0 items-center gap-6 border-b border-line px-5">
         <Wordmark className="h-4" />
         <PhaseBar snap={snap} />

@@ -217,7 +217,7 @@ export function Checkpoints({
     <nav aria-label={label} className={cn("relative", className)}>
       <div aria-hidden className="absolute top-3 right-3 left-3 h-0.5 rounded-full bg-line">
         <div
-          className="progress-fill h-full rounded-full bg-accent"
+          className="progress-fill mood-fill h-full rounded-full"
           style={{ width: `${progress * 100}%` }}
         />
       </div>

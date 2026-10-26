@@ -32,7 +32,8 @@ export type Overrides = Record<string, { key: string; weights: Weights }>;
 
 /** 칸 id → 크기 모드. 없으면 비율(weight) */
 /** 숫자는 부모 분할 방향으로 고정 크기(px): 늘거나 줄지 않고, 옆 경계도 끌 수 없다 */
-export type PaneModes = Record<string, "fit" | "square" | number>;
+/** { px }는 처음 크기만 정한다(px): 늘지 않고 자리가 모자라면 줄며, 옆 경계를 끌면 그 분할이 비율로 바뀐다 */
+export type PaneModes = Record<string, "fit" | "square" | number | { px: number }>;
 
 const DEFAULT_MIN_PX = 160;
 /** 키보드로 한 번에 옮기는 양(두 칸 합의 비율) */
@@ -168,6 +169,7 @@ type ItemProps = Omit<SplitLayoutProps, "tree" | "className"> & { node: SplitNod
 function itemStyle(hidden: boolean, weight: number, mode: PaneModes[string] | undefined) {
   if (hidden) return { flexGrow: 0, flexShrink: 1, flexBasis: 0 };
   if (typeof mode === "number") return { flexGrow: 0, flexShrink: 0, flexBasis: `${mode}px` };
+  if (typeof mode === "object") return { flexGrow: 0, flexShrink: 1, flexBasis: `${mode.px}px` };
   // fit·square는 늘지 않고 내용(또는 폭)만큼 차지하며, 자리가 모자라면 줄어든다
   if (mode === "fit") return { flexGrow: 0, flexShrink: 1, flexBasis: "auto" };
   if (mode === "square")
@@ -200,7 +202,7 @@ function Item({ node, weight, ...rest }: ItemProps) {
     <div
       ref={ref}
       data-split-item={node.id}
-      data-mode={(!hidden && mode) || undefined}
+      data-mode={hidden || mode === undefined ? undefined : typeof mode === "object" ? "px" : mode}
       // 숨긴 칸은 키보드·낭독에서 빠진다. 내용은 남겨 다시 보일 때 스크롤·입력이 그대로다
       inert={hidden || empty}
       aria-hidden={hidden || empty || undefined}

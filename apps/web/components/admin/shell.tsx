@@ -43,7 +43,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   if (!token && !isPublic) return null;
 
   return (
-    <div className="relative isolate min-h-dvh bg-canvas">
+    <div data-mood="studio" className="relative isolate min-h-dvh bg-canvas">
       {/* 배경 레이어. 무늬는 globals.css의 .page-backdrop만 고친다 */}
       <div aria-hidden className="page-backdrop no-print pointer-events-none fixed inset-0 -z-10" />
       <header className="vibrancy no-print sticky top-0 z-30 border-b border-line">

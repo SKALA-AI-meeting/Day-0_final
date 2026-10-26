@@ -8,7 +8,7 @@ import { MOCK } from "@/lib/api";
 // mock에서는 15분 데모 링크를 함께 보인다. 안내가 먼저 떠오르고 갈 곳 카드가 차례로 들어온다.
 export default function Home() {
   return (
-    <main className="page-backdrop flex min-h-dvh flex-col">
+    <main data-mood="dawn" className="page-backdrop flex min-h-dvh flex-col">
       <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center gap-8 px-6 py-24">
         <Reveal>
           <Wordmark className="h-6" />

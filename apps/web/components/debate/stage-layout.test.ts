@@ -51,8 +51,8 @@ test("세션 첫 화면은 프로필 카드만 크게 보이고, 지원자 차�
   expect(w.chat).toBe(0);
   // 메모·진행 상황(왼쪽 열)은 크기를 고정하고, 결정 사항은 내용 높이만큼
   expect(stageModes(talk)).toEqual({
-    left: LEFT_PX,
-    summary: SUMMARY_PX,
+    left: { px: LEFT_PX },
+    summary: { px: SUMMARY_PX },
     profiles: "square",
     decisions: "fit",
     controls: "fit",
@@ -95,4 +95,25 @@ test("상단 바에서 직접 켜거나 끈 영역은 자동 판단보다 앞서
     false,
   );
   expect(stageFlags(input({ pinned: { decisions: true } })).decisions).toBe(false);
+});
+
+test("인사를 끝까지 다 듣기 전에는 동료 셋이 말했어도 인사 화면이 이어진다", () => {
+  const spoke = input({}).snap;
+  const said = {
+    ...spoke,
+    messages: (["p1", "p2", "p3"] as const).map((sender, i) => ({
+      id: `g${i}`,
+      sender,
+      content: "안녕하세요",
+      phase: "keyword" as const,
+      is_invite: false,
+      t_min: 0,
+      created_at: "",
+      kind: "greeting" as const,
+    })),
+  };
+  expect(stageFlags(input({ snap: said, greetingDone: false })).intro).toBe(true);
+  expect(stageFlags(input({ snap: said, greetingDone: true })).intro).toBe(false);
+  // 인사가 없는 옛 채용 건은 동료 셋이 한 번씩 말하면 끝난다
+  expect(stageFlags(input({ snap: said })).intro).toBe(false);
 });
