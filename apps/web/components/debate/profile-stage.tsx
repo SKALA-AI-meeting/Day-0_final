@@ -7,7 +7,6 @@
 // 큰 칸 주인이 바뀌거나 2x2 ↔ 발표자 보기로 바뀌면 칸이 제자리에서 새 자리로 움직인다(tile-flip.ts).
 // 칸 크기는 무대(목록) 크기 비율로만 정해지고 자막·상태 글자는 칸 안 고정 영역에 들어가 칸 크기를 바꾸지 않는다.
 import { Popover } from "@base-ui/react/popover";
-import { Hand } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Avatar, Button, cn } from "@/components/ui";
@@ -17,6 +16,7 @@ import { VOICE_ENABLED } from "./link-screens";
 import { PHASE_LABEL, SLOT_LABEL, officeTime } from "./state";
 import { useTileFlip } from "./tile-flip";
 import type { Participant, Phase, Seat, StateSnapshot } from "./types";
+import { SeatStatusBadge, statusLabel, type SeatStatus } from "./voice/status-symbols";
 import { LevelGlow, useVoiceState, type VoiceSource } from "./voice-ui";
 
 export function ProfileStage({
@@ -31,6 +31,7 @@ export function ProfileStage({
   fill = false,
   featuredSeat = null,
   hand = false,
+  status = {},
   onJump,
 }: {
   snap: StateSnapshot;
@@ -49,6 +50,8 @@ export function ProfileStage({
   featuredSeat?: Seat | "candidate" | null;
   /** 동료 차례에 지원자가 든 손 */
   hand?: boolean;
+  /** 자리별 음성 상태. 발언 중인 자리는 상태가 없을 때도 표시한다. */
+  status?: Partial<Record<string, SeatStatus>>;
   /** 프로필 안 메시지를 누르면 토론방의 그 말풍선으로. 토론방이 숨어 있으면 없음 */
   onJump?: (messageId: string) => void;
 }) {
@@ -121,6 +124,7 @@ export function ProfileStage({
                   : ""
               }
               hand={hand && person.id === "candidate"}
+              status={status[person.id]}
               voiceMode={VOICE_ENABLED}
               onJump={onJump}
             />
@@ -140,6 +144,7 @@ function ProfileTile({
   recentCaption,
   position,
   hand,
+  status: givenStatus,
   voiceMode,
   onJump,
 }: {
@@ -152,10 +157,14 @@ function ProfileTile({
   recentCaption: string;
   position?: number;
   hand: boolean;
+  status?: SeatStatus;
   voiceMode: boolean;
   onJump?: (messageId: string) => void;
 }) {
   const me = person.id === "candidate";
+  const status = voiceMode
+    ? (givenStatus ?? (speaking ? "speaking" : hand ? "hand" : undefined))
+    : undefined;
   const [open, setOpen] = useState(false);
   return (
     <li
@@ -177,12 +186,13 @@ function ProfileTile({
     >
       <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger
-          aria-label={`${person.display_name} 프로필 보기${hand ? " · 손 듦" : ""}`}
+          aria-label={`${person.display_name} 프로필 보기${status ? ` · ${statusLabel(status)}` : ""}`}
           data-speaking={speaking || undefined}
+          data-status={status}
           className={cn(
-            "press relative flex size-full overflow-visible rounded-lg bg-surface-sunken [container-type:size]",
+            "profile-tile press relative flex size-full overflow-visible rounded-lg bg-surface-sunken [container-type:size]",
             "transition-shadow duration-200 hover:bg-line/40 data-[popup-open]:ring-2 data-[popup-open]:ring-accent/50",
-            speaking && (me ? "ring-2 ring-danger" : "ring-2 ring-accent"),
+            speaking && (me && !voiceMode ? "ring-2 ring-danger" : "ring-2 ring-accent"),
           )}
         >
           {voice && <LevelGlow voice={voice} />}
@@ -191,8 +201,9 @@ function ProfileTile({
             data-tile-content
             className="flex size-full flex-col items-center justify-center gap-[5cqmin]"
           >
+            {status && <SeatStatusBadge status={status} className="absolute top-2 right-2 z-10" />}
             <span
-              className="block shrink-0"
+              className="profile-avatar block shrink-0"
               style={{ width: "44cqmin", height: "44cqmin", fontSize: "18cqmin" }}
             >
               <Avatar
@@ -202,17 +213,17 @@ function ProfileTile({
                 name={person.display_name}
               />
             </span>
-            {hand && (
-              <span className="absolute right-2 top-2 flex items-center gap-1 rounded-md bg-accent-soft px-2 py-1 text-footnote text-accent">
-                <Hand size={14} aria-hidden />손 듦
-              </span>
-            )}
             <span
               className="flex max-w-full flex-col items-center px-1 text-center leading-tight"
               style={{ fontSize: "max(11px, 9cqmin)" }}
             >
               <span className="max-w-full truncate font-semibold">{person.display_name}</span>
-              <span className={cn("text-[0.8em]", speaking && me ? "text-danger" : "text-muted")}>
+              <span
+                className={cn(
+                  "text-[0.8em]",
+                  speaking ? (me && !voiceMode ? "text-danger" : "text-accent") : "text-muted",
+                )}
+              >
                 {speaking ? "발언 중" : me ? "나" : "AI 동료"}
               </span>
             </span>

@@ -24,6 +24,7 @@ import { MicLevel } from "./mic-level";
 import { MICROPHONE_HELP, isMicrophoneError, requestMicrophone } from "./microphone";
 import { finishOnce, normalize } from "./recorder";
 import { startPcmStream, type PcmStream } from "./streamer";
+import type { SeatStatus } from "./status-symbols";
 
 type Item = {
   id: string;
@@ -1047,6 +1048,16 @@ export function useVoiceTurn(props: Props) {
     seat ? props.snap.participants.find((p) => p.id === seat)?.display_name : undefined;
   const speakerName = nameOf(active);
   const recording = debating && voice?.state === "USER_SPEAKING";
+  const seatStatus = useMemo(() => {
+    const out: Partial<Record<string, SeatStatus>> = {};
+    const preparing = voice?.state === "AI_GENERATING" ? voice.items?.[0]?.seat : undefined;
+    if (active) out[active] = "speaking";
+    else if (preparing) out[preparing] = "preparing";
+    if (recording) out.candidate = "speaking";
+    else if (debating && showRaisedHand(voice?.hand, voice?.priority)) out.candidate = "hand";
+    else if (canSpeak) out.candidate = "myturn";
+    return out;
+  }, [active, voice, recording, debating, canSpeak]);
   useEffect(() => {
     if (recording && focusFinish.current && finishButton.current) {
       finishButton.current.focus();
@@ -1257,6 +1268,7 @@ export function useVoiceTurn(props: Props) {
       awaitingSaved && !active,
     ),
     hand: showRaisedHand(voice?.hand, voice?.priority),
+    seatStatus,
     /** 들은 만큼만 보이는 대화(토론방용) */
     chatSnap: heard,
     currentCaption: speaking,

@@ -7,19 +7,19 @@
       "seat": "p1",
       "name": "강한결",
       "persona_type": "stubborn",
-      "avatar_url": "/assets/missions/debate/avatars/avatar-01.png"
+      "avatar_url": "/assets/missions/debate/avatars/avatar-04.png"
     },
     {
       "seat": "p2",
       "name": "윤하람",
       "persona_type": "quiet",
-      "avatar_url": "/assets/missions/debate/avatars/avatar-02.png"
+      "avatar_url": "/assets/missions/debate/avatars/avatar-05.png"
     },
     {
       "seat": "p3",
       "name": "서지안",
       "persona_type": "critic",
-      "avatar_url": "/assets/missions/debate/avatars/avatar-03.png"
+      "avatar_url": "/assets/missions/debate/avatars/avatar-06.png"
     }
   ],
   "keywords": ["물", "불", "나무", "바람"],

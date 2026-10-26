@@ -44,3 +44,17 @@ export {
 export { Toaster, toast } from "./toaster";
 export { DropMenu, type DropMenuProps, type MenuEntry } from "./menu";
 export { Wordmark, type WordmarkProps } from "./wordmark";
+export {
+  Checkpoints,
+  Collapse,
+  CountUp,
+  DrawnCheck,
+  Reveal,
+  RevealOnView,
+  ScreenTransition,
+  Skeleton,
+  Stagger,
+  useReducedMotion,
+  useSequence,
+  type Checkpoint,
+} from "./motion";

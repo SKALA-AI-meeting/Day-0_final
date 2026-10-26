@@ -1,6 +1,6 @@
 // 토론 화면의 칸 배치(고정 트리)와, 세션 상태에서 정하는 칸별 비율·크기 모드.
 // 처음에는 프로필 카드만 크게 띄우고(intro), 지원자 차례가 오면 토론방이 가운데에 열리며 프로필은 왼쪽 위로 줄어든다.
-// 왼쪽은 위에서부터 프로필(정사각형)·음성 패널·단계 안내(한 단계가 끝난 뒤), 오른쪽은 역할별 고정 영역이다:
+// 왼쪽은 위에서부터 프로필(정사각형)·음성 패널·단계 안내, 오른쪽은 역할별 고정 영역이다:
 // 위는 하는 일(토론 단계는 결정 사항을 내용 높이만큼, 기획안 단계는 기획안), 아래는 자료·AI 어시스턴트 묶음 탭.
 import type { PaneModes, SplitNode, Weights } from "@/components/ui/split-layout";
 
@@ -95,7 +95,7 @@ export function stageFlags({
   return {
     intro,
     proposalPhase: !intro && proposalPhase,
-    summary: !intro && confirmed,
+    summary: !intro,
     voice: !intro && voice,
     decisions: show("decisions"),
     proposal: show("proposal"),
@@ -112,16 +112,16 @@ export function stageEpoch(flags: StageFlags) {
 export function stageWeights(flags: StageFlags): Weights {
   if (flags.intro) return { left: 1, profiles: 1 };
   const p = flags.proposalPhase || flags.proposal;
-  const anyRight = flags.decisions || flags.proposal || flags.library;
+  const count = [flags.decisions, flags.proposal, flags.library].filter(Boolean).length;
   return {
-    left: 0.85,
+    left: 1,
     // 음성 토론은 4명 프로필을 가운데 말하기 칸에 크게 두므로 인사 뒤 왼쪽 프로필 칸은 숨긴다
     profiles: flags.voice ? 0 : 1,
     voice: flags.voice ? 1 : 0,
     summary: flags.summary ? 1 : 0,
     chat: p ? 2 : 2.4,
-    // 오른쪽이 비어 있어도 같은 폭을 두어 토론방이 가운데에 오게 한다
-    right: p ? 2.2 : anyRight ? 1.7 : 0.85,
+    // 오른쪽 영역을 모두 끄면 폭을 0으로 줄여 가운데 토론방이 넓어진다
+    right: count === 0 ? 0 : p ? 2.2 : count === 1 ? 1.2 : 1.7,
     // 결정 사항은 내용 높이만큼(stageModes), 비율은 보이기 여부와 끌기 시작점에만 쓴다
     decisions: flags.decisions ? 1 : 0,
     proposal: flags.proposal ? 1.5 : 0,
@@ -129,7 +129,18 @@ export function stageWeights(flags: StageFlags): Weights {
   };
 }
 
-/** 인사 화면이 아니면 프로필은 왼쪽 열 폭만큼의 정사각형, 결정 사항은 내용 높이만큼 */
+/** 처음 폭과 진행 상황 높이. 끌면 분할 비율로 바뀐다. */
+export const LEFT_PX = 272;
+export const SUMMARY_PX = 210;
+
+/** 인사 화면이 아니면 왼쪽 열·진행 상황에 처음 크기를 주고 경계를 끌 수 있게 둔다. */
 export function stageModes(flags: StageFlags): PaneModes {
-  return flags.intro ? {} : { profiles: "square", decisions: "fit" };
+  return flags.intro
+    ? {}
+    : {
+        left: { px: LEFT_PX },
+        summary: { px: SUMMARY_PX },
+        profiles: "square",
+        decisions: "fit",
+      };
 }
