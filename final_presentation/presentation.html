@@ -210,10 +210,11 @@
     .api-row small{color:var(--muted);font-size:var(--fs-label)}
 
     /* ── 11 동작 화면 ───────────────────────────────────── */
-    .screens{width:100%;display:grid;grid-template-columns:repeat(5,1fr);gap:14px;align-items:start}
-    .screen{position:relative}
-    .screen::after{content:"\2192";position:absolute;right:-.55em;top:0;margin-top:calc(37.5% - .5em);font-size:var(--fs-h3);color:var(--pending);z-index:3}
-    .screen:last-child::after{display:none}
+    .screens{width:100%;display:grid;grid-template-columns:repeat(4,1fr) 84px;gap:22px;align-items:start}
+    .screen{position:relative;margin:0}
+    .screen::after{content:"\2192";position:absolute;right:-.8em;top:0;margin-top:calc(37.5% - .5em);font-size:var(--fs-h3);color:var(--pending);z-index:3}
+    .flow-end{padding-top:68px;color:var(--muted);font-size:var(--fs-label);line-height:1.4;word-break:keep-all}
+    .flow-end strong{display:block;color:var(--muted)}
     .frame{aspect-ratio:4/3;border-radius:2px;border:1px solid var(--line);background:var(--paper);overflow:hidden;box-shadow:0 12px 24px rgba(20,20,19,.08)}
     .browserbar{height:25px;background:var(--card);display:flex;align-items:center;gap:4px;padding:0 9px}
     .browserbar i{width:6px;height:6px;border-radius:50%;background:var(--muted)}
@@ -228,7 +229,7 @@
 
     /* ── 11b 제품 화면 + 콜아웃 (패턴 M) ────────────────── */
     .shot-split{width:100%;display:grid;grid-template-columns:1.35fr 1fr;gap:26px;align-items:start}
-    .shot{position:relative;height:330px;border-radius:3px;border:1px solid var(--line);background:var(--paper);
+    .shot{position:relative;margin:0;height:330px;border-radius:3px;border:1px solid var(--line);background:var(--paper);
           overflow:hidden;box-shadow:0 14px 28px rgba(20,20,19,.10)}
     .shot img{display:block;width:100%;height:100%;object-fit:cover;object-position:top left}
     .pin{position:absolute;width:1.6em;height:1.6em;border-radius:50%;background:var(--accent-dark);color:var(--paper);
@@ -285,7 +286,9 @@
 
     /* ── 영상: 화면에서는 재생, 인쇄에서는 같은 장면의 정지 화면 ── */
     .shot video,.analysis-figure video{display:block;width:100%;height:100%;object-fit:contain;background:var(--paper)}
-    .shot.square{width:380px;height:380px}
+    .shot.portrait{width:316px;height:388px}
+    .shot.fit{height:auto}
+    .shot.fit img{height:auto}
     .print-only{display:none}
 
     /* ── 푸터·컨트롤 ────────────────────────────────────── */
@@ -357,9 +360,9 @@
     <!-- 3 · 패턴 M 화면 + 콜아웃 -->
     <section class="slide" data-title="해결책">
       <header class="slide-head"><div><p class="kicker">SOLUTION</p><h2>AI 동료 3명과의 60분 음성 토론</h2></div><span class="badge">구현됨</span></header>
-      <div class="content shot-split" style="grid-template-columns:380px 1fr;gap:48px">
+      <div class="content shot-split" style="grid-template-columns:316px 1fr;gap:48px">
         <div>
-          <figure class="shot square">
+          <figure class="shot portrait">
             <video class="screen-only" src="assets/clip-voice-turn.mp4" poster="assets/clip-voice-turn-poster.jpg" muted loop playsinline preload="auto"></video>
             <img class="print-only" src="assets/clip-voice-turn-poster.jpg" alt="음성 회의 화면: 말하는 동료가 큰 칸에 보이고 자막이 나오며, 아래 줄에 다른 동료와 지원자 칸이 있다">
             <span class="pin" style="left:2%;top:3%">1</span>
@@ -497,7 +500,7 @@
           <figure class="screen"><div class="frame"><img src="assets/flow-2-invite.jpg" alt="지원자 초대 목록 화면" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block"></div><figcaption><strong>② 지원자 초대</strong><span>담당자 · 링크</span></figcaption></figure>
           <figure class="screen"><div class="frame"><img src="assets/flow-3-voice.jpg" alt="음성 회의 화면" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block"></div><figcaption><strong>③ 토론</strong><span>지원자 · 60분</span></figcaption></figure>
           <figure class="screen"><div class="frame"><img src="assets/flow-4-report.jpg" alt="담당자 리포트 요소 요약 화면" style="width:100%;height:100%;object-fit:cover;object-position:top left;display:block"></div><figcaption><strong>④ 리포트 검토</strong><span>담당자 · 조정</span></figcaption></figure>
-          <figure class="screen" style="opacity:.45"><div class="frame"><div class="browserbar"><i></i><i></i><i></i></div><div class="wire"><div class="line accent"></div><div class="line"></div><div class="block"></div><div class="line"></div></div></div><figcaption><strong>⑤ 면접</strong><span>서비스 밖</span></figcaption></figure>
+          <div class="flow-end"><strong>⑤ 면접</strong>서비스 밖</div>
         </div>
         <p class="matrix-outcome">→ 채용 건을 만들 때 시나리오·프롬프트를 복사해 고정한다. 그래서 같은 채용 건의 지원자는 모두 같은 조건을 받는다.</p>
       </div>
@@ -535,12 +538,12 @@
       <header class="slide-head"><div><p class="kicker">RECRUITER</p><h2>근거 확인과 담당자의 조정·확정</h2></div><span class="badge">구현됨</span></header>
       <div class="content shot-split">
         <div>
-          <figure class="shot">
+          <figure class="shot fit">
             <img src="assets/report-crop.jpg" alt="실제 리포트의 세부 행동 근거 제시: 수준 4, 확신도 높음, 판단 이유, 설계된 장면">
-            <span class="pin" style="left:1%;top:0%">1</span>
-            <span class="pin" style="left:1%;top:20%">2</span>
-            <span class="pin" style="left:1%;top:42%">3</span>
-            <span class="pin" style="left:1%;top:87%">4</span>
+            <span class="pin" style="left:.6%;top:1.4%">1</span>
+            <span class="pin" style="left:.6%;top:16.5%">2</span>
+            <span class="pin" style="left:.6%;top:32.6%">3</span>
+            <span class="pin" style="left:.6%;top:65.8%">4</span>
           </figure>
           <p class="shot-caption">실제 LLM 세션 리포트의 세부 행동 하나 (가상 지원자) · 정확도는 파일럿에서 검증</p>
         </div>
