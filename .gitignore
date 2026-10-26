@@ -12,6 +12,7 @@ node_modules/
 apps/web/.agents/
 apps/web/.claude/
 apps/web/skills-lock.json
+apps/asset
 
 # stage-e2e 기록: 영상·trace·HTML 리포트는 커밋하지 않고 스크린샷·summary만 남긴다
 tests/e2e/records/stages/.artifacts/
@@ -32,3 +33,6 @@ output/
 # 가상 지원자 원자료(세션 export·transcript). 요약만 기준선 기록으로 옮긴다
 tests/e2e/records/virtual/
 .tools/
+
+# 개인 프로젝트: 에이전트 작업 트리
+.claude/worktrees/

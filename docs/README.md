@@ -29,6 +29,7 @@ Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론해 키
 | 서비스별 구현 | [services/api.md](services/api.md), [services/web.md](services/web.md), [services/report-worker.md](services/report-worker.md), [services/mcp.md](services/mcp.md) |
 | 시나리오·척도·프롬프트 바꾸기 | [guides/scenario-changes.md](guides/scenario-changes.md) |
 | 결정과 그 이유 | [decisions.md](decisions.md) |
+| 로컬 LLM 전환 계획(미구현) | [architecture/local-llm-plan.md](architecture/local-llm-plan.md) |
 
 서비스 폴더의 `README.md`(`services/*/README.md`, `apps/web/README.md`)는 그 서비스에서 바로 실행·검증하는 명령의 입구이고, `docs/services/`는 모듈을 잇는 상세 설계다.
 
