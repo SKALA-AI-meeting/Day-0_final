@@ -214,7 +214,7 @@ export function Checkpoints({
       );
   const progress = steps.length > 1 ? Math.min(1, at / (steps.length - 1)) : 1;
   return (
-    <nav aria-label={label} className={cn("relative", className)}>
+    <div role="group" aria-label={label} className={cn("relative", className)}>
       <div aria-hidden className="absolute top-3 right-3 left-3 h-0.5 rounded-full bg-line">
         <div
           className="progress-fill mood-fill h-full rounded-full"
@@ -254,7 +254,7 @@ export function Checkpoints({
           );
         })}
       </ol>
-    </nav>
+    </div>
   );
 }
 

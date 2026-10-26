@@ -18,12 +18,13 @@ export type TabsProps = {
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
-  /** underline: 밑줄 탭(기본). segmented: 분절 컨트롤(우측 패널·세션 길이 선택) */
-  variant?: "underline" | "segmented";
+  /** underline: 밑줄 탭(기본). segmented: 분절 컨트롤. reference: 리포트 참고 기록 */
+  variant?: "underline" | "segmented" | "reference";
   className?: string;
   /** 숨긴 탭의 패널도 남겨 스크롤·입력 중 내용을 지킨다 */
   keepMounted?: boolean;
   panelClassName?: string;
+  ariaLabel?: string;
 };
 
 export function Tabs({
@@ -35,8 +36,10 @@ export function Tabs({
   className,
   keepMounted = false,
   panelClassName,
+  ariaLabel,
 }: TabsProps) {
   const segmented = variant === "segmented";
+  const reference = variant === "reference";
   return (
     <BaseTabs.Root
       value={value}
@@ -45,11 +48,14 @@ export function Tabs({
       className={cn("flex min-h-0 flex-col", className)}
     >
       <BaseTabs.List
+        aria-label={ariaLabel}
         className={cn(
           "flex shrink-0",
-          segmented
-            ? "relative z-0 mx-3 my-2 rounded-md bg-surface-sunken p-0.5"
-            : "gap-1 border-b border-line px-3",
+          reference
+            ? "inline-flex w-fit max-w-full overflow-x-auto rounded-lg bg-surface-sunken p-0.5"
+            : segmented
+              ? "relative z-0 mx-3 my-2 rounded-md bg-surface-sunken p-0.5"
+              : "gap-1 border-b border-line px-3",
         )}
       >
         {items.map((item) => (
@@ -58,19 +64,23 @@ export function Tabs({
             value={item.value}
             className={cn(
               "text-sm text-muted transition-colors duration-150 aria-selected:text-ink",
-              segmented
-                ? "flex flex-1 items-center justify-center rounded-[calc(var(--radius-md)-2px)] px-3 py-1 aria-selected:font-semibold"
-                : "-mb-px border-b-2 border-transparent px-3 py-2 aria-selected:border-accent aria-selected:font-medium",
+              reference
+                ? "press inline-flex items-center gap-1.5 rounded-[calc(var(--radius-lg)-2px)] border border-transparent px-3 py-1.5 whitespace-nowrap hover:text-ink aria-selected:border-line aria-selected:bg-surface aria-selected:font-semibold aria-selected:shadow-float"
+                : segmented
+                  ? "flex flex-1 items-center justify-center rounded-[calc(var(--radius-md)-2px)] px-3 py-1 aria-selected:font-semibold"
+                  : "-mb-px border-b-2 border-transparent px-3 py-2 aria-selected:border-accent aria-selected:font-medium",
             )}
           >
             {item.label}
-            {!!item.count &&
+            {((reference && item.count != null) || !!item.count) &&
               (segmented ? (
                 // 분절 컨트롤의 배지: 작은 accent 점 + 숫자
                 <span className="ml-1.5 inline-flex items-center gap-1 text-xs font-medium text-accent tabular-nums">
                   <span aria-hidden className="size-1.5 rounded-full bg-accent" />
                   {item.count}
                 </span>
+              ) : reference ? (
+                <span className="text-xs font-normal text-muted tabular-nums">{item.count}</span>
               ) : (
                 <span className="ml-1.5 rounded-sm bg-accent-fill px-1.5 text-xs text-on-accent tabular-nums">
                   {item.count}
