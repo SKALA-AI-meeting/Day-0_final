@@ -145,7 +145,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
   <header class="top">
     <div class="eyebrow">Day Zero · 토론형 채용 MVP</div>
     <h1>Day Zero 테스트 기록</h1>
-    <p>지원자가 AI 동료 3명(강한결 고집형 · 윤하람 소극형 · 서지안 비판형)과 턴 기반 음성으로 키워드 → 문제 상황 → 해결책을 정하고 기획안을 내는 흐름을, 음성 병합 전후의 실제 LLM 측정과 단계별 화면 테스트, 페르소나 playtest로 확인한 기록입니다. 수치는 음성 병합 직전 기준선과 병합 뒤 최종 측정을 같은 명령으로 한 번씩 잰 값이고, 단계 화면과 playtest 영상은 10-22 텍스트 모드 기록입니다. 제품 전체 흐름과 규칙은 <a href="../product-guide/index.html">제품 가이드</a>에 있습니다.</p>
+    <p>지원자가 AI 동료 3명(강한결 고집형 · 윤하람 소극형 · 서지안 비판형)과 턴 기반 음성으로 키워드 → 문제 상황 → 해결책을 정하고 기획안을 내는 흐름을, 음성 병합 전후의 실제 LLM 측정과 단계별 화면 테스트, 페르소나 playtest로 확인한 기록입니다. 수치는 음성 병합 직전 기준선과 병합 뒤 최종 측정을 같은 명령으로 한 번씩 잰 값이고, 단계 화면과 playtest 영상은 10-26 텍스트 모드 기록입니다(음성 회의 두 장과 해결책 합의 채우기 한 건 제외). 제품 전체 흐름과 규칙은 <a href="../product-guide/index.html">제품 가이드</a>에 있습니다.</p>
     <div class="meta"><span>2026-10-25</span><span>LLM gpt-4o-mini (제한 키)</span><span>측정 프로필 eval-text · eval-voice</span><span>음성 Azure F0 · 테스트 FakeSpeech</span></div>
   </header>
 
@@ -231,20 +231,20 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
     <div class="lede">
       <div class="eyebrow">단계별 화면 · Playwright e2e</div>
       <h2>단계마다 시작점을 만들고 그 단계만 확인합니다</h2>
-      <p class="muted">음성 회의 화면 두 장은 10-25 <code>test-voice</code> 캡처(발표자 보기 적용 전 2×2 배치)이고, 나머지 영상과 스크린샷은 10-22 텍스트 모드(<code>VOICE_ENABLED=0</code>) 기록입니다. 지금 토론방은 채팅 대신 음성 회의 화면이지만 결정 사항 · 기획안 · 디브리핑 · 관리자 리포트의 흐름은 같습니다. 처음부터 15분을 다 돌지 않고, 단계 시드(<code>scenarios/e2e/stages/*.yaml</code>)로 그 단계 직전 상태의 세션을 만든 뒤 시간을 당겨 카드·마감·침묵을 일으킵니다. 결정적 LLM 모드라 동료 문장이 매번 같습니다. 영상은 실제 속도, 스크린샷은 눌러서 크게 봅니다.</p>
+      <p class="muted">음성 회의 화면 두 장은 10-26 <code>test-voice</code> 캡처(발표자 보기)이고, 나머지 영상과 스크린샷은 10-26 텍스트 모드(<code>VOICE_ENABLED=0</code>) 기록입니다. 해결책의 AI 합의 채우기는 10-26에도 실패해 그 영상과 "합의 채움" 한 장만 10-22 기록(이전 화면)을 둡니다. 지금 토론방은 채팅 대신 음성 회의 화면이지만 결정 사항 · 기획안 · 디브리핑 · 관리자 리포트의 흐름은 같습니다. 스크린샷은 움직임 줄이기 설정으로, 단계 전환 장면이 지나간 뒤에 찍었습니다. 처음부터 15분을 다 돌지 않고, 단계 시드(<code>scenarios/e2e/stages/*.yaml</code>)로 그 단계 직전 상태의 세션을 만든 뒤 시간을 당겨 카드·마감·침묵을 일으킵니다. 결정적 LLM 모드라 동료 문장이 매번 같습니다. 영상은 실제 속도, 스크린샷은 눌러서 크게 봅니다.</p>
     </div>
 
     <article class="stage">
-      <div class="about"><h3>음성 회의 <span class="chip pass">test-voice</span></h3><p class="muted">내 차례에 [발언하기]를 누르면 녹음이 시작되고 남은 발언 시간과 [발언 완료]가 보입니다. 받아 적은 글은 지원자에게 보이지 않고 그대로 제출됩니다. 현재 화면은 말하는 사람을 크게 보여 주는 발표자 보기이고, 동료 발언은 실시간 자막과 방금 한 말 한 문장만 보입니다. 이 두 장은 그 변경 전 2×2 배치입니다.</p></div>
+      <div class="about"><h3>음성 회의 <span class="chip pass">test-voice</span></h3><p class="muted">내 차례에 [발언하기]를 누르면 녹음이 시작되고 내 칸이 큰 칸으로 바뀌며 남은 발언 시간과 [발언 완료]가 보입니다. 받아 적은 글은 지원자에게 보이지 않고 그대로 제출되며 "전달했어요"만 잠깐 보입니다. 동료 발언은 실시간 자막과 방금 한 말 한 문장만 보이고, 칸마다 상태 배지가 붙습니다.</p></div>
       <div class="shots">
-        <figure><img src="media/shots/voice/01.png" alt="음성 회의 녹음 중" loading="lazy"><figcaption>녹음 중 · 내 발언 60초 남음</figcaption></figure>
-        <figure><img src="media/shots/voice/02.png" alt="발언 제출 중" loading="lazy"><figcaption>발언 제출 중</figcaption></figure>
+        <figure><img src="media/shots/voice/01.png" alt="음성 회의 발언 중" loading="lazy"><figcaption>발언 중 · 0:01 / 1:00</figcaption></figure>
+        <figure><img src="media/shots/voice/02.png" alt="전달했어요 뒤 동료 차례" loading="lazy"><figcaption>전달했어요 · 동료 차례</figcaption></figure>
       </div>
     </article>
 
     <article class="stage">
-      <div class="about"><h3>입장 <span class="chip pass">통과</span></h3><p class="muted">초대 링크 → 표시 이름과 동의 → 대기실에서 참여자 확인 → 시작.</p></div>
-      <div class="media"><video src="media/stage/entry.mp4" controls muted playsinline preload="metadata"></video><span class="cap">entry.spec.ts · 0.7초</span></div>
+      <div class="about"><h3>입장 <span class="chip pass">통과</span></h3><p class="muted">초대 링크 → 동의 항목 다섯 개 확인과 표시 이름 → 대기실에서 참여자 확인 → 시작.</p></div>
+      <div class="media"><video src="media/stage/entry.mp4" controls muted playsinline preload="metadata"></video><span class="cap">entry.spec.ts · 5.7초</span></div>
       <div class="shots">
         <figure><img src="media/shots/entry/01.jpg" alt="입장 화면" loading="lazy"><figcaption>입장</figcaption></figure>
         <figure><img src="media/shots/entry/02.jpg" alt="동의 화면" loading="lazy"><figcaption>동의</figcaption></figure>
@@ -255,7 +255,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
 
     <article class="stage">
       <div class="about"><h3>키워드 <span class="chip pass">통과</span></h3><p class="muted">후보 4개 중 하나를 고르고 확인 창에서 [네, 정할게요] → 결정 사항에 "지원자 결정"으로 표시되고 그 키워드 자료가 열립니다.</p></div>
-      <div class="media"><video src="media/stage/keyword.mp4" controls muted playsinline preload="metadata"></video><span class="cap">keyword.spec.ts</span></div>
+      <div class="media"><video src="media/stage/keyword.mp4" controls muted playsinline preload="metadata"></video><span class="cap">keyword.spec.ts · 7.9초</span></div>
       <div class="shots">
         <figure><img src="media/shots/keyword/01.jpg" alt="키워드 확정 전" loading="lazy"><figcaption>확정 전 · 자료 닫힘</figcaption></figure>
         <figure><img src="media/shots/keyword/02.jpg" alt="확인 창" loading="lazy"><figcaption>확인 창</figcaption></figure>
@@ -266,7 +266,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
 
     <article class="stage">
       <div class="about"><h3>문제 상황 <span class="chip pass">통과</span></h3><p class="muted">다수 의견 카드(수용 장면)에서 동료 두 명이 기준안을 밀고, 마감까지 정하지 않으면 시간 초과로 가장 많이 모인 안이 채워지고 입력이 닫힙니다.</p></div>
-      <div class="media"><video src="media/stage/problem.mp4" controls muted playsinline preload="metadata"></video><span class="cap">problem.spec.ts · 6.2초</span></div>
+      <div class="media"><video src="media/stage/problem.mp4" controls muted playsinline preload="metadata"></video><span class="cap">problem.spec.ts · 10.0초</span></div>
       <div class="shots">
         <figure><img src="media/shots/problem/01.jpg" alt="문제 상황 시작" loading="lazy"><figcaption>시작</figcaption></figure>
         <figure><img src="media/shots/problem/02.jpg" alt="수용 카드 발언" loading="lazy"><figcaption>수용 카드 발언</figcaption></figure>
@@ -275,15 +275,15 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
     </article>
 
     <article class="stage">
-      <div class="about"><h3>해결책 <span class="chip pass">10-22 3 / 3</span> <span class="chip crit">10-25 AI 합의 채우기 실패 · 수정 중</span></h3><p class="muted">세 가지 경우를 따로 봅니다. 동료 셋 중 둘 이상이 지원자 안을 지지하면 AI가 합의 공지와 함께 칸을 채우고, 지원자가 침묵하면 비판형이 한 번 초대하고, 반대가 남아도 지원자가 혼자 정하면 "지원자 결정"이 됩니다.</p></div>
+      <div class="about"><h3>해결책 <span class="chip pass">10-22 3 / 3</span> <span class="chip crit">10-25 · 10-26 AI 합의 채우기 실패 · 수정 중</span></h3><p class="muted">세 가지 경우를 따로 봅니다. 동료 셋 중 둘 이상이 지원자 안을 지지하면 AI가 합의 공지와 함께 칸을 채우고, 지원자가 침묵하면 비판형이 한 번 초대하고, 반대가 남아도 지원자가 혼자 정하면 "지원자 결정"이 됩니다.</p></div>
       <div class="media">
-        <video src="media/stage/solution-consensus.mp4" controls muted playsinline preload="metadata"></video><span class="cap">AI 합의 채우기 · 21.8초</span>
-        <video src="media/stage/solution-silent.mp4" controls muted playsinline preload="metadata"></video><span class="cap">침묵 → 초대 1건</span>
-        <video src="media/stage/solution-solo.mp4" controls muted playsinline preload="metadata"></video><span class="cap">지원자 혼자 확정</span>
+        <video src="media/stage/solution-consensus.mp4" controls muted playsinline preload="metadata"></video><span class="cap">AI 합의 채우기 · 21.8초 (10-22)</span>
+        <video src="media/stage/solution-silent.mp4" controls muted playsinline preload="metadata"></video><span class="cap">침묵 → 초대 1건 · 7.1초</span>
+        <video src="media/stage/solution-solo.mp4" controls muted playsinline preload="metadata"></video><span class="cap">지원자 혼자 확정 · 15.1초</span>
       </div>
       <div class="shots">
         <figure><img src="media/shots/solution/01.jpg" alt="합의 직전" loading="lazy"><figcaption>합의 직전</figcaption></figure>
-        <figure><img src="media/shots/solution/02.jpg" alt="합의 채움" loading="lazy"><figcaption>합의 채움 · 공지</figcaption></figure>
+        <figure><img src="media/shots/solution/02.jpg" alt="합의 채움" loading="lazy"><figcaption>합의 채움 · 공지 (10-22)</figcaption></figure>
         <figure><img src="media/shots/solution/03.jpg" alt="침묵 초대" loading="lazy"><figcaption>침묵 초대</figcaption></figure>
         <figure><img src="media/shots/solution/04.jpg" alt="혼자 확정" loading="lazy"><figcaption>혼자 확정 · 지원자 결정</figcaption></figure>
       </div>
@@ -291,19 +291,19 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
 
     <article class="stage">
       <div class="about"><h3>기획안 <span class="chip pass">통과</span></h3><p class="muted">입력은 잠시 멈추면 자동 저장됩니다. 제출하면 빈 칸이 있을 때 경고 창, 이어서 "제출하면 수정할 수 없어요" 확인 창이 뜨고, 제출 뒤 잠기고 디브리핑으로 갑니다.</p></div>
-      <div class="media"><video src="media/stage/proposal.mp4" controls muted playsinline preload="metadata"></video><span class="cap">proposal.spec.ts · 3.1초</span></div>
+      <div class="media"><video src="media/stage/proposal.mp4" controls muted playsinline preload="metadata"></video><span class="cap">proposal.spec.ts · 5.2초</span></div>
       <div class="shots">
         <figure><img src="media/shots/proposal/01.jpg" alt="기획안 시작" loading="lazy"><figcaption>시작 · 앞 3칸 자동 채움</figcaption></figure>
         <figure><img src="media/shots/proposal/02.jpg" alt="저장됨" loading="lazy"><figcaption>저장됨</figcaption></figure>
         <figure><img src="media/shots/proposal/03.jpg" alt="제출 확인" loading="lazy"><figcaption>제출 확인</figcaption></figure>
         <figure><img src="media/shots/proposal/04.jpg" alt="잠김" loading="lazy"><figcaption>잠김</figcaption></figure>
-        <figure><img src="media/shots/proposal/05-blank-warning.jpg" alt="빈칸 경고 창" loading="lazy"><figcaption>빈칸 경고 창 · playtest 화면(실제 LLM)</figcaption></figure>
+        <figure><img src="media/shots/proposal/05-blank-warning.jpg" alt="빈칸 경고 창" loading="lazy"><figcaption>빈칸 경고 창 · 실제 LLM 세션(10-26)</figcaption></figure>
       </div>
     </article>
 
     <article class="stage">
       <div class="about"><h3>디브리핑 <span class="chip pass">통과</span></h3><p class="muted">첫 문장은 "같은 채용 건의 모든 지원자가 같은 장면을 겪었고, 정답 없이 반응을 봅니다". 내 발언 돌아보기(접힘)와 설문. 평가 결과는 보여 주지 않습니다.</p></div>
-      <div class="media"><video src="media/stage/debrief.mp4" controls muted playsinline preload="metadata"></video><span class="cap">debrief.spec.ts</span></div>
+      <div class="media"><video src="media/stage/debrief.mp4" controls muted playsinline preload="metadata"></video><span class="cap">debrief.spec.ts · 2.3초</span></div>
       <div class="shots">
         <figure><img src="media/shots/debrief/01.jpg" alt="디브리핑 첫 문장" loading="lazy"><figcaption>첫 문장</figcaption></figure>
         <figure><img src="media/shots/debrief/02.jpg" alt="내 발언" loading="lazy"><figcaption>내 발언 돌아보기</figcaption></figure>
@@ -313,7 +313,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
 
     <article class="stage">
       <div class="about"><h3>관리자 리포트 <span class="chip pass">통과</span></h3><p class="muted">담당자가 차원 하나를 메모와 함께 조정하면 요소 수준이 다시 계산되고 "담당자 조정"이 붙습니다. 이 시드 세션은 카드 장면이 없어 처음에는 차원이 기록 없음입니다.</p></div>
-      <div class="media"><video src="media/stage/admin-report.mp4" controls muted playsinline preload="metadata"></video><span class="cap">admin-report.spec.ts · 4.9초</span></div>
+      <div class="media"><video src="media/stage/admin-report.mp4" controls muted playsinline preload="metadata"></video><span class="cap">admin-report.spec.ts · 6.1초</span></div>
       <div class="shots">
         <figure><img src="media/shots/admin-report/01.jpg" alt="리포트" loading="lazy"><figcaption>리포트</figcaption></figure>
         <figure><img src="media/shots/admin-report/02.jpg" alt="조정" loading="lazy"><figcaption>차원 조정 · 메모 필수</figcaption></figure>
@@ -327,17 +327,17 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
     <div class="lede">
       <div class="eyebrow">페르소나 playtest · 실제 LLM</div>
       <h2>사용자 성향을 가진 에이전트가 화면만 보고 직접 써 봤습니다</h2>
-      <p class="muted">10-22 텍스트 모드 기록입니다. 저장소 문서와 코드를 읽지 않는 블라인드 에이전트가 Playwright 드라이버로 브라우저를 조작하고, 불편한 순간을 심각도와 함께 기록했습니다. S4.5 수정 뒤 바뀐 화면을 겪는 단계만 다시 돌렸습니다. 영상은 4배속입니다.</p>
+      <p class="muted">10-26 텍스트 모드 기록입니다. 저장소 문서와 코드를 읽지 않는 블라인드 에이전트가 Playwright 드라이버로 브라우저를 조작하고, 불편한 순간을 심각도와 함께 기록했습니다. 새 화면 디자인에서 앞선 기록과 같은 단계 · 페르소나 조합만 한 번씩 다시 돌렸고, 채용 담당자는 첫 시도에서 마지막 확인을 누르지 않아 한 번 더 돌렸습니다. 시드 세션은 15분이라 단계 시간이 짧습니다. 영상은 4배속입니다.</p>
     </div>
     <div class="table-box">
       <table>
         <thead><tr><th>단계</th><th>정석형</th><th>서두르는 형</th><th>헤매는 형</th><th>채용 담당자</th></tr></thead>
         <tbody>
-          <tr><td>키워드</td><td>—</td><td>—</td><td><span class="chip pass">달성</span> 중 0</td><td>—</td></tr>
-          <tr><td>해결책</td><td><span class="chip pass">달성</span> 중 3</td><td>—</td><td><span class="chip pass">달성</span> 중 2</td><td>—</td></tr>
-          <tr><td>기획안</td><td><span class="chip pass">달성</span> 중 1</td><td><span class="chip pass">달성</span> 중 1</td><td>—</td><td>—</td></tr>
-          <tr><td>디브리핑</td><td>—</td><td><span class="chip pass">달성</span> 중 1</td><td>—</td><td>—</td></tr>
-          <tr><td>리포트 검토</td><td>—</td><td>—</td><td>—</td><td><span class="chip pass">달성</span> <span class="chip crit">상 2</span> 중 5</td></tr>
+          <tr><td>키워드</td><td>—</td><td>—</td><td><span class="chip pass">달성</span> 중 2</td><td>—</td></tr>
+          <tr><td>해결책</td><td><span class="chip pass">달성</span> 중 1</td><td>—</td><td><span class="chip pass">달성</span> 중 0</td><td>—</td></tr>
+          <tr><td>기획안</td><td><span class="chip pass">달성</span> 중 0</td><td><span class="chip pass">달성</span> 중 0</td><td>—</td><td>—</td></tr>
+          <tr><td>디브리핑</td><td>—</td><td><span class="chip pass">달성</span> 중 0</td><td>—</td><td>—</td></tr>
+          <tr><td>리포트 검토</td><td>—</td><td>—</td><td>—</td><td><span class="chip pass">달성</span> 중 2</td></tr>
         </tbody>
       </table>
     </div>
@@ -345,41 +345,42 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
     <article class="persona">
       <div class="media"><video src="media/playtest/keyword-lost.mp4" controls muted playsinline preload="metadata"></video><span class="cap">키워드 · 헤매는 형 · 4배속</span></div>
       <div class="notes"><h3>헤매는 형 · 키워드</h3><ul>
-        <li>어디서 고르는지 몰라 채팅으로 물었고, 윤하람이 "결정 사항에서 직접 하시면 돼요"라고 위치를 알려 줘 "나무"를 확정했습니다(약 5분).</li>
-        <li>첫 동료 메시지에는 결정 사항 위치 힌트가 없었습니다(하).</li>
+        <li>채팅으로 진행 방법을 묻자 윤하람이 "후보 중 하나 고르면 돼요"라고 바로 답했고, 결정 사항의 후보 버튼과 확인 창으로 "바람"을 정했습니다.</li>
+        <li>인사 화면이 보이는 동안에도 키워드 단계 시간이 흘러, 토론방에 들어왔을 때 남은 시간이 1분이 안 됐고 [바로 대화하기]는 누르기 전에 화면이 저절로 넘어갔습니다(중 2).</li>
+        <li>서지안이 같은 답을 두 번 보냈습니다(하).</li>
       </ul></div>
     </article>
 
     <article class="persona">
       <div class="media"><video src="media/playtest/solution-steady.mp4" controls muted playsinline preload="metadata"></video><span class="cap">해결책 · 정석형 · 4배속</span></div>
       <div class="notes"><h3>정석형 · 해결책</h3><ul>
-        <li>진행 방법을 묻자 정해진 안내가 바로 나왔고, 혼자 정한 결과는 "지원자 결정"으로 표시됐습니다.</li>
-        <li>서지안을 불렀는데 강한결이 먼저 답했습니다. 카드 화자가 먼저인 규칙의 결과입니다(중).</li>
-        <li>확정 직전에 만들어진 서지안 발언이 확정 뒤 화면에 도착했습니다(중, MVP 이후).</li>
+        <li>윤하람에게 의견을 청하고 강한결에게 근거를 물은 뒤 절충안을 내자 두 동료가 호응했고, 해결책을 정하자 기획안 앞 칸이 자동으로 채워졌습니다.</li>
+        <li>서지안이 윤하람이 말하지 않은 "주민 절수 캠페인"을 윤하람의 안처럼 언급했습니다(중).</li>
+        <li>고집형 강한결이 절충안에 바로 수긍했습니다(하).</li>
       </ul></div>
     </article>
 
     <article class="persona">
       <div class="media"><video src="media/playtest/solution-lost.mp4" controls muted playsinline preload="metadata"></video><span class="cap">해결책 · 헤매는 형 · 4배속</span></div>
       <div class="notes"><h3>헤매는 형 · 해결책</h3><ul>
-        <li>후보 없이 빈 입력칸만 있어 무엇을 쓸지 막막했습니다(중, 입력 예시는 MVP 이후).</li>
-        <li>윤하람이 강한결의 제안을 "지원자님이 말씀하신 것처럼"이라고 인용했습니다(중). 인용 규칙을 더해 고쳤습니다.</li>
+        <li>해결책 칸의 "지금 정할 항목" 표시로 적을 곳을 바로 찾았고, 진행 방법을 묻자 서지안이 결정 사항에서 정하면 된다고 안내했습니다.</li>
+        <li>그 안내 문장이 두 번 나왔고, 기획안 단계로 넘어간 직후 "7분 전 저장됨"이 보였습니다(하).</li>
       </ul></div>
     </article>
 
     <article class="persona">
       <div class="media"><video src="media/playtest/proposal-hurry.mp4" controls muted playsinline preload="metadata"></video><span class="cap">기획안 · 서두르는 형 · 4배속</span></div>
       <div class="notes"><h3>서두르는 형 · 기획안</h3><ul>
-        <li>칸 일부를 비우고 제출하자 비운 칸 이름이 나오는 경고 창, 이어서 수정 불가 확인 창이 떴습니다.</li>
-        <li>확인 창이 연달아 두 번이라 번거롭다고 적었습니다(중, MVP 이후).</li>
+        <li>근거만 쓰고 제출하자 비운 칸(기대효과, 아이디어 기여) 이름이 나오는 경고 창, 이어서 수정 불가 확인 창이 떴습니다.</li>
+        <li>확인 창이 연달아 두 번이라 클릭이 늘었고, 제출 뒤에도 왼쪽 단계 안내가 "기획안 작성"으로 남았습니다(하).</li>
       </ul></div>
     </article>
 
     <article class="persona">
       <div class="media"><video src="media/playtest/proposal-steady.mp4" controls muted playsinline preload="metadata"></video><span class="cap">기획안 · 정석형 · 4배속</span></div>
       <div class="notes"><h3>정석형 · 기획안</h3><ul>
-        <li>빈 칸 3개를 채워 제출했고 종료 화면까지 갔습니다.</li>
-        <li>확인 창이 떠 있는 동안 뒤쪽 버튼이 이미 "제출 중…"으로 보였습니다(중). 확인 뒤에만 보이게 고쳤습니다.</li>
+        <li>미리 채워진 앞 세 칸 아래 나머지 칸을 모두 채워 제출했고 "제출했어요. 세션이 끝났습니다."를 확인했습니다.</li>
+        <li>기획안 패널이 작아 아래 칸은 스크롤해야 보이고, 막 열린 단계에 "11분 전 저장됨"이 보였습니다(하).</li>
       </ul></div>
     </article>
 
@@ -387,17 +388,16 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       <div class="media"><video src="media/playtest/debrief-hurry.mp4" controls muted playsinline preload="metadata"></video><span class="cap">디브리핑 · 서두르는 형 · 4배속</span></div>
       <div class="notes"><h3>서두르는 형 · 디브리핑</h3><ul>
         <li>설문을 내고 내 발언 돌아보기와 제출한 기획안을 펼쳐 봤습니다.</li>
-        <li>"평가 결과는 보여 드리지 않습니다"가 설문 아래 중간쯤이라 늦게 알았습니다(중, MVP 이후).</li>
+        <li>제출한 기획안은 제목 줄을 눌러야 펼쳐졌고, 위쪽 개요 칸의 "3 종료 설문"이 무슨 숫자인지 헷갈렸습니다(하).</li>
       </ul></div>
     </article>
 
     <article class="persona">
       <div class="media"><video src="media/playtest/admin-report-admin.mp4" controls muted playsinline preload="metadata"></video><span class="cap">리포트 검토 · 채용 담당자 · 4배속</span></div>
       <div class="notes"><h3>채용 담당자 · 리포트 검토</h3><ul>
-        <li>칸 결과(지원자 결정·정한 사람·최초 제안자)와 제출 때 빈 칸·경고 확인 표시는 정확히 보였습니다. 조정과 검토 완료도 정상 반영됐습니다.</li>
-        <li><span class="chip crit">상</span> 요소 요약이 차원 상세와 어긋났습니다. 검증으로 바뀐 요소만 요약을 다시 쓰게 고쳤습니다.</li>
-        <li><span class="chip crit">상</span> 머뭇거림 카드가 없었는데 "초대하지 않음"으로 수준 1이었습니다. 보조 장면 표시가 없으면 이벤트 미발생으로 바꾸게 고쳤습니다.</li>
-        <li>"미흡했다" 같은 서술이 점수처럼 읽혔습니다(중). 평가 프롬프트에 어조 규칙을 더했습니다.</li>
+        <li>근거가 발언 1개뿐이고 확신도가 낮은 설득/논리력 세부 행동 하나를 메모와 함께 조정했고, "AI 판단 2 → 담당자 1" 비교와 검토 완료 표시를 확인했습니다.</li>
+        <li>카드 장면이 모두 "장면 없음"인데 판단 이유의 관련 카드 장면에 같은 장면이 나와 근거인지 헷갈렸습니다(중, 이 시드 세션은 카드가 발동하지 않음).</li>
+        <li>요약 개수 칸의 "12/19", "근거 약함 10"과 수준 옆 "*"는 설명을 읽어야 뜻을 알았습니다(하).</li>
       </ul></div>
     </article>
   </section>
@@ -440,7 +440,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
 
   <footer>
     <span>원본: 기준선 <code>tests/e2e/records/baseline-pre-voice-20261025.md</code> · 최종 평가셋 <code>tests/e2e/records/eval-live-20261025-1311.md</code>(0908 회차도 같은 날 측정) · 페르소나 <code>tests/e2e/records/eval-live-persona-20261025-131120-run.md</code> · 가상 세션 <code>tests/e2e/records/virtual/</code>(git 무시)</span>
-    <span>단계 화면 <code>tests/e2e/records/stages/</code> · playtest 로그 <code>tests/playtest/records/rerun-20261022/</code>. 영상은 H.264 960px로 압축했습니다(단계 테스트 실제 속도, playtest 4배속). 원본 영상은 용량 때문에 커밋하지 않았습니다.</span>
+    <span>단계 화면 <code>tests/e2e/records/stages/</code> · playtest 로그 <code>tests/playtest/records/rerun-20261022/</code>(10-22, 10-26 재실행 로그는 커밋하지 않음). 영상은 H.264 960px로 압축했습니다(단계 테스트 실제 속도, playtest 4배속). 원본 영상은 용량 때문에 커밋하지 않았습니다.</span>
   </footer>
 </div>
 

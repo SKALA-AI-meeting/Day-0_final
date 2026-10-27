@@ -1,6 +1,12 @@
 # 단계별 화면 테스트 결과 (stage-e2e, LLM_FAKE=1)
 
-실행: `make e2e-stages` (스택 `make e2e-stack-up`, 자료 시드 `make e2e-stack-seed`). 7개 spec 9개 테스트 모두 통과(약 45초). 영상·trace·HTML 리포트는 `.artifacts/`와 `html-report/`에 생기고 git에는 없다(`npx playwright show-report tests/e2e/records/stages/html-report`).
+## 최신 재실행 (2026-10-26 11:47 KST)
+
+`test-text` 화면 테스트 10건 중 8건 통과, 1건 실패, 음성 프로필 전용 1건 건너뜀. 실패한 `solution.spec.ts`의 "AI 합의 채우기: 공지 메시지 → 결정 사항 칸 확정 → 기획안 단계"는 합의 공지 메시지를 20초 기다린 뒤 시간 초과됐다. 현재 해결책 AI 합의 채우기의 최신 검증 결과다. 영상·trace·HTML 리포트는 `html-report/` 등 Git에서 제외한 로컬 산출물에 남는다.
+
+## 이전 기록 (2026-10-22)
+
+실행: `make e2e-stages` (스택 `make e2e-stack-up`, 자료 시드 `make e2e-stack-seed`). 7개 spec 9개 테스트 모두 통과(약 45초). 아래 표와 기준 캡처는 이 실행의 기록이다.
 
 | spec | 테스트 | 스크린샷 |
 |---|---|---|

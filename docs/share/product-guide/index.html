@@ -226,7 +226,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
     <h1>Day Zero 제품 가이드</h1>
     <p>지원자가 AI 동료 3명(강한결 · 윤하람 · 서지안)과 턴 기반 음성 회의로 토론해 키워드 → 문제 상황 → 해결책을 정하고 기획안을 내면, 그 과정의 행동으로 토론 태도를 보는 채용 서비스입니다. 이 페이지 하나로 화면과 규칙, 뒤에서 도는 방식, 확장할 때 고칠 곳을 훑을 수 있게 정본 문서를 요약했습니다. 규칙의 정본은 각 절 끝에 링크한 문서입니다.</p>
     <p class="notice"><b>실제 세션은 60분</b>(단계 10 · 18 · 18 · 14분)입니다. 이 페이지의 화면 예시는 <b>15분 시연 세션</b>(같은 비율, 2.5 · 4.5 · 4.5 · 3.5분)을 격리 스택의 <code>test-voice</code> 프로필(가짜 LLM <code>LLM_FAKE=1</code> · 가짜 음성 FakeSpeech)로 찍은 것이라 동료 문장과 리포트 서술이 고정 문장이고 동료 목소리는 무음입니다. 실제 모델 화면은 "실제 LLM" 표시가 붙은 한 장입니다.</p>
-    <div class="meta"><span>2026-10-25</span><span>main 45650f8 기준</span><span>LLM 기본 gpt-4o-mini</span><span>공유용 요약 · 정본 아님</span></div>
+    <div class="meta"><span>2026-10-26</span><span>main 9f2fd7c 기준</span><span>LLM 기본 gpt-4o-mini</span><span>공유용 요약 · 정본 아님</span></div>
     <div class="paths"><span><b>제품을 이해하려면</b><a href="#why">1 왜</a> → <a href="#flow">2 전체 흐름</a> → <a href="#stages">3 단계별</a></span><span><b>확장을 시작하려면</b><a href="#flow">2 전체 흐름</a> → <a href="#inside">5 뒤에서 도는 방식</a> → <a href="#run">6 처음 띄워 보기</a> → <a href="#extend">7 확장하려면</a></span></div>
   </header>
 
@@ -420,7 +420,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
         <tbody>
           <tr><td data-label="용어"><b>칸</b> · 지원자 화면 "정할 항목"</td><td data-label="뜻">단계마다 하나씩 정하는 값(키워드 · 문제 상황 · 해결책). 상태는 비어 있음과 확정 두 가지이고, 확정하면 다음 단계로 넘어갑니다.</td></tr>
           <tr><td data-label="용어"><b>합의 패널</b> · "결정 사항"</td><td data-label="뜻">확정된 칸 결과만 쌓이는 오른쪽 위 영역. 후보안과 지지 현황은 보이지 않고 토론은 음성 회의로만 합니다. 확정 버튼은 "이걸로 정하기"이고, 내가 말하거나 발언을 전달하는 동안에는 잠깁니다.</td></tr>
-          <tr><td data-label="용어"><b>음성 회의</b> · 발표자 보기</td><td data-label="뜻">토론 화면 가운데. 말을 시작한 사람이 큰 칸, 나머지 3명이 아래 줄에 보이고(처음 인사 때는 4명이 같은 크기), 화자가 바뀌면 칸이 280ms 동안 자리를 옮기며 커지고 작아집니다. 동료 발언은 큰 칸의 실시간 자막과 방금 한 말 한 문장으로만 보이고, 글 입력칸·대화 기록 목록은 없습니다.</td></tr>
+          <tr><td data-label="용어"><b>음성 회의</b> · 발표자 보기</td><td data-label="뜻">토론 화면 가운데. 말을 시작한 사람이 큰 칸, 나머지 3명이 아래 줄에 보이고(처음 인사 때는 4명이 같은 크기), 칸마다 지금 상태가 배지(발언 중 · 내 차례 · 손 듦 등)로 붙으며, 화자가 바뀌면 칸이 280ms 동안 자리를 옮기며 커지고 작아집니다. 동료 발언은 큰 칸의 실시간 자막과 방금 한 말 한 문장으로만 보이고, 글 입력칸·대화 기록 목록은 없습니다.</td></tr>
           <tr><td data-label="용어"><b>내 차례 · 손들기 · 강제 차례</b></td><td data-label="뜻">동료 음성이 모두 재생된 뒤 내 차례가 열리고, 20초 안에 [발언하기]나 Space로 말을 시작합니다(최대 60초, [발언 완료]). 시작하지 않으면 동료 한 명이 이어 말합니다. 손들기는 지금 발언이 끝난 뒤의 차례 예약이고, 강제 차례는 그 단계에 아직 말하지 않은 지원자에게 단계 후반에 한 번 옵니다. 세 경우 모두 녹음은 [발언하기]를 눌러야 시작됩니다.</td></tr>
           <tr><td data-label="용어"><b>합의 · 지원자 결정 · 시간 초과</b></td><td data-label="뜻">칸 결과 표시. 단계 마감에 시스템이 채우면 "시간 초과". 그 밖에는 확정 순간 그 안의 지지자가 참여자 4명(지원자 + 동료 3명) 중 3명 이상이면 "합의", 아니면(반대가 남은 채 혼자 확정 등) "지원자 결정"입니다.</td></tr>
           <tr><td data-label="용어"><b>AI 합의 채우기</b></td><td data-label="뜻">세 토론 단계(키워드 · 문제 상황 · 해결책) 모두에서, 한 안의 지지가 4명 중 3명 이상이고 지원자가 그 안을 지지하는 순간 동료가 "그럼 X로 정리할게요"와 함께 칸을 채웁니다. 결과는 늘 "합의"입니다.</td></tr>
@@ -464,12 +464,12 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       <h3>준비: 담당자가 채용 건을 만들고 초대합니다 <span class="chip admin">담당자</span></h3>
       <p>관리자 화면(<code>/admin</code>)에서 이름과 세션 길이(60분 · 데모 15분)만 정해 채용 건을 만듭니다. 요소 선택 UI는 없고, 5요소의 뜻과 "이렇게 봅니다"가 안내로만 보입니다. 페르소나·카드·척도 세부는 보이지 않습니다. 지원자는 별칭과 이메일로 초대하고, 72시간짜리 1회용 링크를 담당자가 복사해 직접 전달합니다(이메일 발송 없음). 만든 채용 건은 그 시점 시나리오의 복사본으로 고정됩니다.</p>
       <div class="thumbs">
-        <figure><button class="zoomable" type="button" aria-label="채용 건 목록 크게 보기"><span class="frame"><img src="media/admin-positions.jpg" alt="관리자 채용 건 목록: 이름, 세션 길이 15분(데모), 지원자 수, 만든 시각 열과 샘플 리포트 보기·채용 건 만들기 버튼" loading="lazy" width="1100" height="258"></span></button><figcaption><span class="chip warn">테스트 데이터</span> 채용 건 목록</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="채용 건 만들기 화면 크게 보기"><span class="frame"><img src="media/admin-new.jpg" alt="채용 건 만들기: 이름 입력, 세션 길이 60분 또는 15분(데모), 보는 요소 5개의 뜻과 이렇게 봅니다 안내(선택 UI 없음)" loading="lazy" width="1100" height="688"></span></button><figcaption>채용 건 만들기: 이름·세션 길이만</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="지원자 목록 크게 보기"><span class="frame"><img src="media/admin-candidates-1.jpg" alt="지원자 목록: 상태 묶음 필터(전체·대기·진행·검토 필요·완료·문제), 링크 재발급과 재응시 초대 설명, 검토 완료된 지원자 하늘의 요소별 수준 칩(경청 5 · 조정)과 출처 담당자 조정, 지원자 초대 폼" loading="lazy" width="1100" height="688"></span></button><figcaption><span class="chip warn">테스트 데이터</span> 지원자 목록: 상태 묶음과 수준 칩</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="지원자 목록 아래쪽과 초대 폼 크게 보기"><span class="frame"><img src="media/admin-candidates-2.jpg" alt="지원자 목록 아래쪽: 검토 필요·완료 행의 요소별 수준 칩과 근거 약함·출처, 문제 묶음의 세션 실패 행과 재응시 초대, 지원자 초대 폼(별칭·이메일)" loading="lazy" width="1100" height="640"></span></button><figcaption><span class="chip warn">예시 데이터(mock)</span> 수준 칩·실패 행·초대 폼</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="채용 건 목록 크게 보기"><span class="frame"><img src="media/admin-positions.jpg" alt="관리자 채용 건 목록: 위쪽 메뉴(채용 건 · 샘플 리포트), 채용 건 · 초대한 지원자 · 60분 세션 개수 칸, 채용 건 카드(이름 e2e, 15분 · 데모, 지원자 수, 만든 시각)와 채용 건 만들기 버튼" loading="lazy" width="1100" height="336"></span></button><figcaption><span class="chip warn">테스트 데이터</span> 채용 건 목록</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="채용 건 만들기 화면 크게 보기"><span class="frame"><img src="media/admin-new.jpg" alt="채용 건 만들기: 진행 체크포인트(이름 · 세션 길이 · 확인), 채용 건 이름 입력, 세션 길이 60분 또는 15분(데모), 채용 건 만들기 버튼, 오른쪽 보는 요소 5개와 뜻(펼치면 이렇게 봅니다 안내, 선택 UI 없음)" loading="lazy" width="1100" height="688"></span></button><figcaption>채용 건 만들기: 이름·세션 길이만</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="지원자 목록 크게 보기"><span class="frame"><img src="media/admin-candidates-1.jpg" alt="지원자 목록: 채용 건 e2e, 위쪽 지원자 초대 폼(별칭 · 이메일 · 초대 링크 만들기), 지원자 · 채용 건 정보 탭, 상태 묶음 칸(전체 · 대기 · 진행 · 검토 필요 · 완료 · 문제)과 개수, 버튼 안내, 검토 완료된 지원자 하늘의 요소별 수준 칩(경청 5 · 조정)과 출처 담당자 조정" loading="lazy" width="1100" height="688"></span></button><figcaption><span class="chip warn">테스트 데이터</span> 지원자 목록: 상태 묶음과 수준 칩</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="지원자 목록 아래쪽 크게 보기"><span class="frame"><img src="media/admin-candidates-2.jpg" alt="지원자 목록 아래쪽: 진행 묶음의 진행 중 행과 세션 취소, 검토 필요·완료 행의 요소별 수준 칩과 근거 약함·출처, 문제 묶음의 세션 실패 행과 재응시 초대" loading="lazy" width="1100" height="509"></span></button><figcaption><span class="chip warn">예시 데이터(mock)</span> 수준 칩·실패 행</figcaption></figure>
       </div>
-      <p class="small muted">관리자 화면은 격리 테스트 스택에서 찍어 채용 건 이름이 "e2e"이고, 네 번째 장(실패 행·초대 폼)만 web을 mock 모드(<code>NEXT_PUBLIC_MOCK=1</code>)로 띄워 찍은 예시 데이터입니다. 지원자 목록은 수준이 아니라 초대한 순서로 보이고, 요소별 수준 칩은 1~5 요약이며 합계 열이 없습니다.</p>
+      <p class="small muted">관리자 화면은 격리 테스트 스택에서 찍어 채용 건 이름이 "e2e"이고, 네 번째 장(수준 칩·실패 행)만 web을 mock 모드(<code>NEXT_PUBLIC_MOCK=1</code>)로 띄워 찍은 예시 데이터입니다. 지원자 목록은 수준이 아니라 초대한 순서로 보이고, 요소별 수준 칩은 1~5 요약이며 합계 열이 없습니다.</p>
       <p class="small muted">F-08 채용 건 생성 <span class="chip pass">구현</span> · F-02 지원자 초대 <span class="chip pass">구현</span>(이메일 발송 없음, 링크 복사) · F-01 가입·로그인 <span class="chip pass">구현</span> · F-03 지원자 목록 <span class="chip pass">구현</span></p>
     </div>
 
@@ -477,37 +477,39 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
     <article class="stage" id="s-entry">
       <div class="stage-head">
         <h3>① 입장 · 동의 · 대기 <span class="chip cand">지원자</span></h3>
-        <p class="muted">초대 링크 → 안내 → 표시 이름과 동의 → 대기 화면에서 팀 소개와 음성 사용법 → 마이크 권한 확인 → 시작.</p>
+        <p class="muted">초대 링크 → 안내 → 동의 항목 다섯 개 확인과 표시 이름 → 대기 화면에서 팀 소개·단계 시간표와 음성 사용법 → 마이크 권한 확인 → 시작. 위쪽 체크포인트(입장 · 확인 · 준비 · 토론 · 마무리)가 지금 위치를 보여 줍니다.</p>
       </div>
       <div class="screen">
         <figure>
           <button class="zoomable" type="button" aria-label="대기 화면 크게 보기">
-            <span class="frame"><img src="media/entry-03.jpg" alt="대기 화면: 시작할 준비가 됐어요, 새 프로젝트 팀(하늘(나), 강한결, 윤하람, 서지안), 진행 한 줄, 음성 회의 4칸과 우측 탭이 있는 화면 구성 그림, 음성 사용법, 시작하기 버튼" loading="lazy" width="1100" height="688">
-              <span class="mk" style="left:31.6%;top:17.9%" aria-hidden="true">1</span>
-              <span class="mk" style="left:31.6%;top:27.3%" aria-hidden="true">2</span>
-              <span class="mk" style="left:31.6%;top:44.4%" aria-hidden="true">3</span>
-              <span class="mk" style="left:31.6%;top:67.8%" aria-hidden="true">4</span>
-              <span class="mk" style="left:31.6%;top:90.7%" aria-hidden="true">5</span>
+            <span class="frame"><img src="media/entry-03.jpg" alt="대기 화면: 위쪽 진행 체크포인트(준비), 시작할 준비가 됐어요, 새 프로젝트 팀(강한결, 윤하람, 서지안, 하늘(나))과 4 / 4명 입장, 진행 한 줄과 단계 시간표(키워드 2분 30초 · 문제 상황 4분 30초 · 해결책 4분 30초 · 기획안 작성 3분 30초), 음성 회의 4칸과 우측 탭이 있는 화면 구성 그림, 음성 사용법, 시작하기 버튼" loading="lazy" width="1100" height="834">
+              <span class="mk" style="left:23.8%;top:21.3%" aria-hidden="true">1</span>
+              <span class="mk" style="left:23.8%;top:41.5%" aria-hidden="true">2</span>
+              <span class="mk" style="left:23.8%;top:52.8%" aria-hidden="true">3</span>
+              <span class="mk" style="left:23.8%;top:79.1%" aria-hidden="true">4</span>
+              <span class="mk" style="left:23.8%;top:93.8%" aria-hidden="true">5</span>
+              <span class="mk b" style="left:47.0%;top:3.6%" aria-hidden="true">6</span>
             </span>
           </button>
           <figcaption>대기 화면(15분 시연)</figcaption>
         </figure>
         <ol class="marks">
-          <li><b class="n">1</b><span>팀 소개: AI 동료 3명의 이름과 고정 프로필 이미지, 내 표시 이름과 이니셜 아바타. "사람 팀원 역할을 맡은 AI입니다." 성향 유형은 보이지 않습니다.</span></li>
-          <li><b class="n">2</b><span>진행 한 줄: 키워드 → 문제 상황 → 해결책을 함께 정하고 마지막 단계(60분 기준 14분)에 기획안을 혼자 써서 제출.</span></li>
+          <li><b class="n">1</b><span>팀 소개: AI 동료 3명의 이름과 고정 프로필 그림, 내 표시 이름과 이니셜 아바타, "4 / 4명 입장". "사람 팀원 역할을 맡은 AI입니다." 성향 유형은 보이지 않습니다.</span></li>
+          <li><b class="n">2</b><span>진행 한 줄과 단계 시간표: 키워드 → 문제 상황 → 해결책을 함께 정하고 마지막 단계(60분 기준 14분)에 기획안을 혼자 써서 제출. 단계마다 길이를 막대로 보여 줍니다(15분 시연은 2분 30초 · 4분 30초 · 4분 30초 · 3분 30초).</span></li>
           <li><b class="n">3</b><span>화면 구성 그림: 상단 단계 진행바와 남은 시간, 가운데 음성 회의(나와 동료 3명, 말하는 사람이 크게 보임 · 발언하기 · 손들기), 우측 탭(결정 사항 · 자료 · AI 어시스턴트 · 기획안).</span></li>
           <li><b class="n">4</b><span>음성 사용법: 내 차례에 정해진 시간 안에 [발언하기]나 Space로 말하고, 최대 60초 · [발언 완료]로 끝냅니다. 내 말은 글로 보이지 않고 바로 전달되며, 손들기는 다음 차례 예약입니다. 이 설명은 토론 화면의 ? 버튼으로 다시 봅니다.</span></li>
           <li><b class="n">5</b><span>시작하기: 누르면 브라우저가 마이크 권한을 묻고, 확인되는 순간 시간이 흐릅니다. 접속이 끊겨도 시간은 멈추지 않습니다.</span></li>
+          <li><b class="n">6</b><span>위쪽 진행 체크포인트: 입장 · 확인 · 준비 · 토론 · 마무리 중 지금 위치. 입장 · 동의 · 대기 · 디브리핑 화면이 함께 씁니다.</span></li>
         </ol>
       </div>
       <div class="thumbs">
-        <figure><button class="zoomable" type="button" aria-label="입장 화면 크게 보기"><span class="frame"><img src="media/entry-01.jpg" alt="입장 화면: 새 프로젝트 팀 토론, 15분 · AI 동료 3명과 음성 토론, 연속 진행, PC 권장, 마이크 발언을 텍스트로 기록하고 원음은 처리 후 삭제, 끊겨도 시간은 흐름, 외부 도구와 어시스턴트 기록 안내, 다음 버튼" loading="lazy" width="1100" height="688"></span></button><figcaption>입장: 고정 안내와 [다음]</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="동의 화면 크게 보기"><span class="frame"><img src="media/entry-02.jpg" alt="동의 화면: 기록되는 것(음성 발언을 글로 남긴 내용, 원음은 기록 뒤 삭제), 평가 방식, AI 어시스턴트, 만들지 않는 것 안내와 토론방에서 보일 이름 하늘 입력, 동의 체크" loading="lazy" width="1100" height="688"></span></button><figcaption>동의: 음성 기록·평가 방식 안내와 표시 이름</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="입장 화면 크게 보기"><span class="frame"><img src="media/entry-01.jpg" alt="입장 화면: 위쪽 진행 체크포인트(입장), 회사 이름, 새 프로젝트 팀 토론, 15분 · AI 동료 3명 · 음성 토론 칩, 번호를 붙인 안내 카드(연속 진행, PC 권장, 마이크 발언을 텍스트로 기록하고 원음은 처리 후 삭제, 끊겨도 시간은 흐름, 외부 도구와 어시스턴트 기록 안내, 문의), 다음 버튼" loading="lazy" width="1100" height="749"></span></button><figcaption>입장: 고정 안내와 [다음]</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="동의 화면 크게 보기"><span class="frame"><img src="media/entry-02.jpg" alt="동의 화면: 시작 전에 확인해 주세요, 확인한 항목 0 / 5, 형식 · 기록되는 것 · 평가 방식 · AI 어시스턴트 · 만들지 않는 것 다섯 항목 중 첫 항목이 펼쳐져 확인했어요 버튼, 보조 안내 3줄, 토론방에서 보일 이름 하늘 입력, 꺼진 동의 체크와 항목을 모두 확인하면 동의할 수 있어요 안내" loading="lazy" width="1100" height="812"></span></button><figcaption>동의: 다섯 항목을 차례로 [확인했어요]한 뒤 동의</figcaption></figure>
         <figure><button class="zoomable" type="button" aria-label="토론 시작 화면 크게 보기"><span class="frame"><img src="media/entry-04.jpg" alt="토론 시작 직후 인사 화면: 새 프로젝트 팀, 팀원들이 먼저 인사하고 있어요, 바로 대화하기 버튼, 강한결·윤하람·서지안·하늘 네 칸이 같은 크기" loading="lazy" width="1100" height="688"></span></button><figcaption>시작 직후: 동료 인사(네 칸 같은 크기)</figcaption></figure>
       </div>
       <div class="info">
-        <div class="box"><h4>사용자가 하는 일</h4><ul><li>링크를 열고 안내를 읽은 뒤 [다음].</li><li>표시 이름(기본값은 초대 이름, 1~20자)을 정하고 동의.</li><li>대기 화면에서 팀과 화면 구성, 음성 사용법을 보고 [시작하기] → 마이크 권한 허용.</li><li>동료 인사를 듣거나 [바로 대화하기].</li></ul></div>
-        <div class="box"><h4>규칙</h4><ul><li>링크는 72시간 1회용. 만료·취소된 링크는 안내 문구로, 끝난 세션은 디브리핑으로 갑니다. 가로 1024px 미만이면 PC의 Chrome으로 열라는 안내만 나옵니다.</li><li>동의하지 않으면 시작할 수 없습니다. 표시 이름은 시작 뒤 바꾸지 않습니다.</li><li>동의 화면이 알리는 것: 토론 결과가 내 제안과 다를 수 있고 안의 질이 아니라 과정의 태도를 본다, 음성 발언은 글로 기록하고 원음은 기록되면 지운다(처리 실패 시 최대 24시간 임시 보관), 기록 대상과 90일 보관, 어시스턴트 기록은 사실로만 제공.</li><li>마이크 권한을 확인하지 못하면 세션 시계를 시작하지 않고 허용 안내와 [다시 시도]를 보입니다.</li><li>인사는 세 동료가 한 번씩 말하거나, 내 차례가 오거나, [바로 대화하기]를 누르거나, 15초가 지나면 끝나고 음성 회의가 열립니다.</li><li>동료가 AI라는 사실과 관찰 요소 이름은 알리고, 동료 성향과 카드는 알리지 않습니다.</li></ul></div>
+        <div class="box"><h4>사용자가 하는 일</h4><ul><li>링크를 열고 안내를 읽은 뒤 [다음].</li><li>동의 항목 다섯 개를 하나씩 펼쳐 [확인했어요]로 확인하고, 표시 이름(기본값은 초대 이름, 1~20자)을 정한 뒤 동의.</li><li>대기 화면에서 팀과 화면 구성, 음성 사용법을 보고 [시작하기] → 마이크 권한 허용.</li><li>동료 인사를 듣거나 [바로 대화하기].</li></ul></div>
+        <div class="box"><h4>규칙</h4><ul><li>링크는 72시간 1회용. 만료·취소된 링크는 안내 문구로, 끝난 세션은 디브리핑으로 갑니다. 가로 1024px 미만이면 PC의 Chrome으로 열라는 안내만 나옵니다.</li><li>다섯 항목을 모두 확인하기 전에는 동의 체크박스가 꺼져 있고, 동의하지 않으면 시작할 수 없습니다. 표시 이름은 시작 뒤 바꾸지 않습니다.</li><li>동의 화면이 알리는 것: 토론 결과가 내 제안과 다를 수 있고 안의 질이 아니라 과정의 태도를 본다, 음성 발언은 글로 기록하고 원음은 기록되면 지운다(처리 실패 시 최대 24시간 임시 보관), 기록 대상과 90일 보관, 어시스턴트 기록은 사실로만 제공.</li><li>마이크 권한을 확인하지 못하면 세션 시계를 시작하지 않고 허용 안내와 [다시 시도]를 보입니다.</li><li>인사는 세 동료가 한 번씩 말하거나, 내 차례가 오거나, [바로 대화하기]를 누르거나, 15초가 지나면 끝나고 음성 회의가 열립니다.</li><li>동료가 AI라는 사실과 관찰 요소 이름은 알리고, 동료 성향과 카드는 알리지 않습니다.</li></ul></div>
         <div class="box"><h4>관찰하는 행동</h4><p>없음. 관찰은 시작 뒤 음성 회의에서부터입니다.</p></div>
       </div>
       <details class="req"><summary>구현·검증 근거 · F-10 F-11 · 모두 구현</summary>
@@ -525,15 +527,15 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       <div class="screen">
         <figure>
           <button class="zoomable" type="button" aria-label="키워드 단계 화면 크게 보기">
-            <span class="frame"><img src="media/keyword-01.jpg" alt="키워드 단계 음성 회의: 상단 진행바와 이 단계 2:29 남음, 왼쪽 메모, 가운데 큰 칸에 강한결 발언 중과 자막 '저는 불이 좋다고 봐요.', 아래 줄 윤하람·서지안·하늘, 조작부 '강한결님이 발언 중'과 손들기, 우측 결정 사항의 후보 4개 버튼과 이걸로 정하기" loading="lazy" width="1100" height="688">
-              <span class="mk b" style="left:8.5%;top:4.4%" aria-hidden="true">1</span>
-              <span class="mk b" style="left:89.3%;top:4.4%" aria-hidden="true">2</span>
-              <span class="mk r" style="left:4.2%;top:10.1%" aria-hidden="true">3</span>
-              <span class="mk" style="left:37.7%;top:56.3%" aria-hidden="true">4</span>
-              <span class="mk" style="left:19.6%;top:73.6%" aria-hidden="true">5</span>
-              <span class="mk" style="left:19.4%;top:89.6%" aria-hidden="true">6</span>
-              <span class="mk" style="left:67.6%;top:26.7%" aria-hidden="true">7</span>
-              <span class="mk b" style="left:81.5%;top:4.4%" aria-hidden="true">8</span>
+            <span class="frame"><img src="media/keyword-01.jpg" alt="키워드 단계 음성 회의: 상단 진행바와 이 단계 2:10 남음, 왼쪽 메모와 단계 안내, 가운데 큰 칸에 서지안과 오른쪽 위 '발언 중' 상태 배지, 자막 '저는 물이 좋다고 봐요.', 아래 줄 강한결·윤하람·하늘, 조작부 '서지안님이 발언 중'과 손들기, 우측 결정 사항의 후보 4개 버튼과 이걸로 정하기, 아래 자료 탭은 키워드를 정하기 전이라 잠김" loading="lazy" width="1100" height="688">
+              <span class="mk b" style="left:9.5%;top:5.2%" aria-hidden="true">1</span>
+              <span class="mk b" style="left:92.0%;top:5.2%" aria-hidden="true">2</span>
+              <span class="mk r" style="left:2.2%;top:9.0%" aria-hidden="true">3</span>
+              <span class="mk" style="left:23.2%;top:11.5%" aria-hidden="true">4</span>
+              <span class="mk" style="left:22.7%;top:50.9%" aria-hidden="true">5</span>
+              <span class="mk" style="left:21.2%;top:66.9%" aria-hidden="true">6</span>
+              <span class="mk" style="left:68.6%;top:26.6%" aria-hidden="true">7</span>
+              <span class="mk b" style="left:84.5%;top:5.2%" aria-hidden="true">8</span>
             </span>
           </button>
           <figcaption>키워드 단계 음성 회의(15분 시연)</figcaption>
@@ -542,8 +544,8 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
           <li><b class="n">1</b><span>단계 진행바: 키워드 · 문제 상황 · 해결책 · 기획안 작성 4칸. 지난 단계에는 결과(합의/지원자 결정/시간 초과)가 붙습니다.</span></li>
           <li><b class="n">2</b><span>이 단계 남은 시간. 마감 2분 전(압축 비율)부터 경고 색입니다.</span></li>
           <li><b class="n">3</b><span>메모: 이 브라우저에만 저장되고 서버로 보내지 않으며 평가에 쓰지 않습니다.</span></li>
-          <li><b class="n">4</b><span>큰 칸(발표자): 실제로 말을 시작한 동료와 "발언 중", 재생 위치까지의 실시간 자막. 재생이 끝나면 방금 한 말 한 문장만 흐리게 남고, 아무도 말하지 않으면 마지막 동료를 그대로 둡니다.</span></li>
-          <li><b class="n">5</b><span>아래 줄: 나머지 3명. 화자가 바뀌면 칸이 280ms 동안 자리를 옮기며 커지고 작아지고, 큰 칸 크기는 상태와 상관없이 같습니다.</span></li>
+          <li><b class="n">4</b><span>큰 칸(발표자): 실제로 말을 시작한 동료와 오른쪽 위 상태 배지 "발언 중", 재생 위치까지의 실시간 자막. 재생이 끝나면 방금 한 말 한 문장만 흐리게 남고, 아무도 말하지 않으면 마지막 동료를 그대로 둡니다.</span></li>
+          <li><b class="n">5</b><span>아래 줄: 나머지 3명. 칸마다 지금 상태가 배지로 붙습니다(내 차례 · 준비 중 · 손 듦 등). 화자가 바뀌면 칸이 280ms 동안 자리를 옮기며 커지고 작아지고, 큰 칸 크기는 상태와 상관없이 같습니다.</span></li>
           <li><b class="n">6</b><span>조작부: 첫 줄이 지금 상태("강한결님이 발언 중", "내 차례예요"). 동료 차례에는 [손들기], 시스템 안내는 회색 한 줄로 잠깐 보입니다.</span></li>
           <li><b class="n">7</b><span>키워드 후보 4개 버튼과 [이걸로 정하기] → 확인 창 하나 → 확정되면 다음 단계로 넘어갑니다. 후보 밖 키워드는 정할 수 없습니다.</span></li>
           <li><b class="n">8</b><span>영역 켜고 끄기(결정 사항 · 자료와 AI 어시스턴트 · 기획안). 자료는 키워드가 정해지기 전에는 잠겨 있습니다.</span></li>
@@ -551,7 +553,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       </div>
       <div class="thumbs">
         <figure><button class="zoomable" type="button" aria-label="키워드 확정 뒤 화면 크게 보기"><span class="frame"><img src="media/keyword-03.jpg" alt="키워드 확정 뒤 문제 상황 단계: 진행바 '키워드 · 지원자 결정', 결정 사항에 물 · 지원자 결정 · 정한 사람 나, 문제 상황 입력 칸이 열림, 왼쪽 단계 안내, 오른쪽 아래 「물」 자료 4개" loading="lazy" width="1100" height="688"></span></button><figcaption>확정 뒤: "지원자 결정" 표시, 다음 정할 항목, 열린 자료</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="정하기 확인 창 크게 보기"><span class="frame"><img src="media/keyword-04.jpg" alt="키워드 확인 창: 이걸로 정하면 다음 단계로 넘어가요, 키워드: 물, 취소와 네 정할게요 버튼" loading="lazy" width="1100" height="688"></span></button><figcaption>[이걸로 정하기] 뒤 확인 창 하나</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="정하기 확인 창 크게 보기"><span class="frame"><img src="media/keyword-04.jpg" alt="키워드 확인 창: 이걸로 정하면 다음 단계로 넘어가요, 키워드: 물, 취소와 네 정할게요 버튼, 뒤쪽 결정 사항에 물이 골라져 있음" loading="lazy" width="1100" height="688"></span></button><figcaption>[이걸로 정하기] 뒤 확인 창 하나</figcaption></figure>
       </div>
       <div class="info">
         <div class="box"><h4>사용자가 하는 일</h4><ul><li>동료의 말을 듣고, 내 차례에 [발언하기]로 말해 키워드를 토론합니다.</li><li>결정 사항에서 후보 하나를 고르고 [이걸로 정하기] → 확인(내 발언을 전달하는 중에는 잠김).</li><li>또는 동료가 합의로 채우거나 마감에 시간 초과로 정해집니다.</li></ul></div>
@@ -560,7 +562,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
           <li><b>결과 표시</b>: 시간 초과면 "시간 초과". 그 밖에는 확정 순간 그 안의 지지자가 4명 중 3명 이상이면 "합의", 아니면(혼자 확정 등) "지원자 결정". AI 합의 채우기는 늘 "합의"입니다.</li>
           <li>지원자는 반대가 남아도 혼자 정할 수 있고, 확정 순간의 지지 현황은 기록에만 남습니다.</li>
           <li><b>카드</b> 경쟁 키워드 반론(L/20, 3분 · 0.75분): 지원자와 다른 키워드를 민 동료(서지안 우선, 다음 강한결)가 이유 하나와 함께 자기 안을 밀고 지원자 안의 약점을 묻습니다.</li>
-          <li>키워드가 정해지면 그 키워드의 자료만 자료 탭과 AI 어시스턴트에 열립니다.</li>
+          <li>키워드가 정해지면 그 키워드의 자료만 자료 탭과 AI 어시스턴트에 열립니다. 단계가 바뀔 때마다 무드 색 띠와 단계 이름·시간이 잠깐(약 2.4초) 지나가는 전환 장면이 나오고, 키워드를 정한 뒤에는 그 키워드(물 · 불 · 나무 · 바람)의 무드 색과 문양을 씁니다. 전환 장면은 누르기를 막지 않습니다.</li>
           <li><b>발언권</b>(토론 세 단계 공통): 동료 음성은 하나씩 재생되고, 진행 중인 동료 실행과 재생이 모두 끝나야 내 차례가 됩니다. 동시 발언과 동료 말을 끊는 끼어들기는 없습니다.</li>
         </ul></div>
         <div class="box"><h4>관찰하는 행동</h4><p><b>설득/논리력</b>: 근거 제시 · 반론 대응 · 경쟁 안 비교 · 논의 수렴</p><p class="small muted">해결책 단계의 반론 카드와 함께 이 요소의 핵심 장면입니다.</p></div>
@@ -583,13 +585,13 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       <div class="screen">
         <figure>
           <button class="zoomable" type="button" aria-label="문제 상황 시간 초과 화면 크게 보기">
-            <span class="frame"><img src="media/problem-03.jpg" alt="문제 상황 시간 초과 뒤 해결책 단계: 진행바 '문제 상황 · 시간 초과', 결정 사항에 가뭄으로 생활용수 제한이 잦아짐 · 시간 초과, 해결책 입력 칸, 큰 칸에 강한결 발언 중과 자막, 조작부의 해결책 단계 시스템 안내 한 줄, 왼쪽 단계 안내" loading="lazy" width="1100" height="688">
-              <span class="mk b" style="left:19.0%;top:4.4%" aria-hidden="true">1</span>
-              <span class="mk" style="left:92.8%;top:26.7%" aria-hidden="true">2</span>
-              <span class="mk" style="left:67.6%;top:42.9%" aria-hidden="true">3</span>
-              <span class="mk" style="left:33.0%;top:54.1%" aria-hidden="true">4</span>
-              <span class="mk" style="left:19.4%;top:89.9%" aria-hidden="true">5</span>
-              <span class="mk r" style="left:5.2%;top:59.1%" aria-hidden="true">6</span>
+            <span class="frame"><img src="media/problem-03.jpg" alt="문제 상황 시간 초과 뒤 해결책 단계: 진행바 '문제 상황 · 시간 초과', 결정 사항에 가뭄으로 생활용수 제한이 잦아짐 · 시간 초과, 해결책 입력 칸, 큰 칸에 마지막 동료 서지안과 흐린 방금 한 말, 조작부 '동료의 발언을 듣고 있어요'와 해결책 단계 시스템 안내 한 줄, 왼쪽 단계 안내, 오른쪽 아래 「물」 자료 4개" loading="lazy" width="1100" height="688">
+              <span class="mk b" style="left:22.5%;top:5.0%" aria-hidden="true">1</span>
+              <span class="mk" style="left:92.1%;top:26.7%" aria-hidden="true">2</span>
+              <span class="mk" style="left:68.6%;top:36.6%" aria-hidden="true">3</span>
+              <span class="mk" style="left:23.2%;top:11.5%" aria-hidden="true">4</span>
+              <span class="mk" style="left:21.8%;top:72.5%" aria-hidden="true">5</span>
+              <span class="mk r" style="left:2.2%;top:77.5%" aria-hidden="true">6</span>
             </span>
           </button>
           <figcaption>마감 시간 초과 직후(15분 시연)</figcaption>
@@ -598,14 +600,14 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
           <li><b class="n">1</b><span>진행바에 "문제 상황 · 시간 초과"가 남습니다.</span></li>
           <li><b class="n">2</b><span>결정 사항에 결과 줄 "시간 초과"가 쌓입니다(오피스 시각 없음). 시간 초과 안내는 적용된 선택 규칙의 고정 문장으로 남고 음성으로도 재생됩니다.</span></li>
           <li><b class="n">3</b><span>다음 정할 항목(해결책)이 열립니다. 문제 상황·해결책은 짧은 글로 적고, 형식 안내만 있습니다.</span></li>
-          <li><b class="n">4</b><span>동료 발언은 큰 칸의 음성과 자막으로만 나옵니다. 카드 뒤 강한결이 기준안을 지지하는 말도 여기서 듣습니다. 카드 전에는 강한결·서지안도 입장을 밝히지 않습니다.</span></li>
+          <li><b class="n">4</b><span>동료 발언은 큰 칸의 음성과 자막으로만 나오고, 재생이 끝나면 방금 한 말만 흐리게 남습니다. 카드 뒤 강한결이 기준안을 지지하는 말도 여기서 듣습니다. 카드 전에는 강한결·서지안도 입장을 밝히지 않습니다.</span></li>
           <li><b class="n">5</b><span>시스템 안내: 단계 전환·마감 임박 안내가 조작부에 회색 한 줄로 잠깐 보입니다. 할 일과 남은 시간만 알리고 진행·중재·평가하지 않습니다.</span></li>
           <li><b class="n">6</b><span>단계 안내: 지금 단계와 한 줄 설명, 이미 정한 항목과 결과가 왼쪽에 남습니다.</span></li>
         </ol>
       </div>
       <div class="thumbs">
-        <figure><button class="zoomable" type="button" aria-label="손들기 화면 크게 보기"><span class="frame"><img src="media/problem-02.jpg" alt="동료 발언 중 손들기: 큰 칸에 서지안 발언 중, 내 칸 오른쪽 위에 손 듦 표시, 조작부 '손 듦 · 지금 발언이 끝나면 말할 수 있어요'와 손 내리기" loading="lazy" width="1100" height="688"></span></button><figcaption>손들기: 지금 발언이 끝난 뒤의 차례 예약</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="내 차례 화면 크게 보기"><span class="frame"><img src="media/voice-my-turn.jpg" alt="내 차례: 큰 칸은 마지막 동료 서지안과 방금 한 말, 조작부 '내 차례예요'와 발언하기 버튼, 20초 안에 시작하지 않으면 동료가 이어서 말해요, 줄어드는 막대, Space 키 안내" loading="lazy" width="1100" height="688"></span></button><figcaption>내 차례: 20초 안에 [발언하기] 또는 Space</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="손들기 화면 크게 보기"><span class="frame"><img src="media/problem-02.jpg" alt="동료 발언 중 손들기: 큰 칸에 서지안과 '발언 중' 배지, 내 칸 오른쪽 위에 '손 듦' 배지, 조작부 '서지안님이 발언 중'과 '손 듦 · 지금 발언이 끝나면 말할 수 있어요', 손 내리기" loading="lazy" width="1100" height="688"></span></button><figcaption>손들기: 지금 발언이 끝난 뒤의 차례 예약</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="내 차례 화면 크게 보기"><span class="frame"><img src="media/voice-my-turn.jpg" alt="내 차례: 큰 칸은 마지막 동료 서지안과 흐린 방금 한 말, 내 칸 오른쪽 위 '내 차례' 배지, 조작부 '내 차례예요'와 발언하기 버튼, 20초 안에 시작하지 않으면 동료가 이어서 말해요, 줄어드는 막대, Space 키 안내" loading="lazy" width="1100" height="688"></span></button><figcaption>내 차례: 20초 안에 [발언하기] 또는 Space</figcaption></figure>
       </div>
       <div class="info">
         <div class="box"><h4>사용자가 하는 일</h4><ul><li>자료 탭과 AI 어시스턴트로 자료를 보며 문제 상황을 토론합니다.</li><li>강한결의 압박과 다른 안 지지를 듣고, 내 차례나 손들기로 반응합니다.</li><li>정할 항목에 문제 상황을 적고 [이걸로 정하기], 또는 합의·시간 초과로 정해집니다.</li></ul></div>
@@ -640,13 +642,13 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       <div class="screen">
         <figure>
           <button class="zoomable" type="button" aria-label="해결책 단계 동료 발언 화면 크게 보기">
-            <span class="frame"><img src="media/solution-02.jpg" alt="해결책 단계 음성 회의: 진행바 '키워드 · 지원자 결정', '문제 상황 · 지원자 결정', 큰 칸에 서지안 발언 중과 자막, 아래 줄 강한결·윤하람·하늘, 조작부 '서지안님이 발언 중'과 손들기, 결정 사항의 해결책 입력 칸, 왼쪽 단계 안내" loading="lazy" width="1100" height="688">
-              <span class="mk" style="left:34.4%;top:56.3%" aria-hidden="true">1</span>
-              <span class="mk r" style="left:43.2%;top:78.4%" aria-hidden="true">2</span>
-              <span class="mk" style="left:19.4%;top:89.6%" aria-hidden="true">3</span>
-              <span class="mk" style="left:67.6%;top:45.3%" aria-hidden="true">4</span>
-              <span class="mk b" style="left:19.0%;top:4.4%" aria-hidden="true">5</span>
-              <span class="mk r" style="left:5.2%;top:59.1%" aria-hidden="true">6</span>
+            <span class="frame"><img src="media/solution-02.jpg" alt="해결책 단계 음성 회의: 진행바 '키워드 · 지원자 결정', '문제 상황 · 시간 초과', 큰 칸에 서지안과 '발언 중' 배지, 자막 '하늘님은 어떻게 생각하세요?', 아래 줄 강한결·윤하람·하늘, 조작부 '서지안님이 발언 중'과 손들기, 결정 사항의 해결책 입력 칸, 왼쪽 단계 안내" loading="lazy" width="1100" height="688">
+              <span class="mk" style="left:35.9%;top:40.1%" aria-hidden="true">1</span>
+              <span class="mk" style="left:38.2%;top:53.1%" aria-hidden="true">2</span>
+              <span class="mk" style="left:21.8%;top:68.8%" aria-hidden="true">3</span>
+              <span class="mk" style="left:68.6%;top:36.6%" aria-hidden="true">4</span>
+              <span class="mk b" style="left:22.5%;top:5.0%" aria-hidden="true">5</span>
+              <span class="mk r" style="left:2.2%;top:77.5%" aria-hidden="true">6</span>
             </span>
           </button>
           <figcaption>해결책 단계 동료 차례(15분 시연, 자막은 시연용 고정 문장)</figcaption>
@@ -661,8 +663,8 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
         </ol>
       </div>
       <div class="thumbs">
-        <figure><button class="zoomable" type="button" aria-label="발언 중 화면 크게 보기"><span class="frame"><img src="media/solution-03.jpg" alt="발언 중: 내 칸이 큰 칸으로 붉은 테두리와 발언 중, 조작부 '발언 중 0:02 / 1:00'과 음량 막대, 발언 완료 버튼, 시간이 끝나면 자동으로 전달해요" loading="lazy" width="1100" height="688"></span></button><figcaption>발언 중: 최대 60초, [발언 완료]로 끝내면 "전달했어요"</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="강제 차례 화면 크게 보기"><span class="frame"><img src="media/solution-04.jpg" alt="강제 차례: 조작부 '내 차례예요', 이번 단계에 하늘님 의견도 들려주세요, 발언하기 버튼과 남은 시간 막대, 단계 마감이 가까워 이번 발언은 최대 50초예요" loading="lazy" width="1100" height="688"></span></button><figcaption>강제 차례: 이번 단계에 아직 말하지 않았을 때 한 번</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="발언 중 화면 크게 보기"><span class="frame"><img src="media/solution-03.jpg" alt="발언 중: 내 칸이 큰 칸으로 '발언 중' 배지, 조작부 '발언 중 0:02 / 1:00'과 음량 막대, 발언 완료 버튼, 시간이 끝나면 자동으로 전달해요" loading="lazy" width="1100" height="688"></span></button><figcaption>발언 중: 최대 60초, [발언 완료]로 끝내면 "전달했어요"</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="강제 차례 화면 크게 보기"><span class="frame"><img src="media/solution-04.jpg" alt="강제 차례: 내 칸 '내 차례' 배지, 조작부 '내 차례예요', 이번 단계에 하늘님 의견도 들려주세요, 발언하기 버튼과 20초 남은 시간 막대, Space 키 안내" loading="lazy" width="1100" height="688"></span></button><figcaption>강제 차례: 이번 단계에 아직 말하지 않았을 때 한 번</figcaption></figure>
       </div>
       <div class="info">
         <div class="box"><h4>사용자가 하는 일</h4><ul><li>해결 방향을 토론하고, 내 차례에 머뭇거린 동료를 부르거나 반론을 낸 동료에게 답합니다.</li><li>정할 항목에 해결책을 적고 [이걸로 정하기], 또는 합의·시간 초과로 정해집니다.</li></ul></div>
@@ -692,13 +694,13 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       <div class="screen">
         <figure>
           <button class="zoomable" type="button" aria-label="기획안 작성 화면 크게 보기">
-            <span class="frame"><img src="media/proposal-02.jpg" alt="기획안 작성 단계: 오른쪽 위 기획안의 키워드·문제 상황·해결책 미리 채움, '10분 전 저장됨'과 제출 버튼, 가운데 네 칸 같은 크기와 조작부 '토론이 끝났어요. 정한 내용으로 기획안을 써 주세요'와 기획안으로 이동, 왼쪽 단계 안내, 상단 남은 시간" loading="lazy" width="1100" height="688">
-              <span class="mk b" style="left:89.3%;top:4.4%" aria-hidden="true">1</span>
-              <span class="mk" style="left:58.8%;top:22.9%" aria-hidden="true">2</span>
-              <span class="mk r" style="left:64.3%;top:57.9%" aria-hidden="true">3</span>
-              <span class="mk" style="left:93.9%;top:57.9%" aria-hidden="true">4</span>
-              <span class="mk" style="left:19.1%;top:89.6%" aria-hidden="true">5</span>
-              <span class="mk r" style="left:7.3%;top:59.1%" aria-hidden="true">6</span>
+            <span class="frame"><img src="media/proposal-02.jpg" alt="기획안 작성 단계: 오른쪽 위 기획안의 키워드·문제 상황·해결책 미리 채움, '2분 전 저장됨'과 제출 버튼, 가운데 마지막 동료 서지안이 큰 칸에 남고 조작부 '토론이 끝났어요. 정한 내용으로 기획안을 써 주세요'와 기획안으로 이동, 왼쪽 단계 안내, 상단 남은 시간, 오른쪽 아래 자료 탭" loading="lazy" width="1100" height="688">
+              <span class="mk b" style="left:92.3%;top:5.0%" aria-hidden="true">1</span>
+              <span class="mk" style="left:59.5%;top:22.8%" aria-hidden="true">2</span>
+              <span class="mk" style="left:59.3%;top:57.8%" aria-hidden="true">3</span>
+              <span class="mk" style="left:93.9%;top:57.8%" aria-hidden="true">4</span>
+              <span class="mk" style="left:21.8%;top:68.8%" aria-hidden="true">5</span>
+              <span class="mk r" style="left:2.2%;top:77.5%" aria-hidden="true">6</span>
             </span>
           </button>
           <figcaption>기획안 작성(15분 시연)</figcaption>
@@ -708,14 +710,14 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
           <li><b class="n">2</b><span>키워드 · 문제 상황 · 해결책은 확정 값으로 미리 채워 두고 고칠 수 있습니다. 아래의 근거 · 기대효과 · 아이디어 기여는 빈칸으로 시작하고 예시·추천 문구는 없습니다.</span></li>
           <li><b class="n">3</b><span>1초 디바운스 자동 저장과 마지막 저장 시각.</span></li>
           <li><b class="n">4</b><span>[제출]은 이 단계에서만. 빈 칸 경고 → "제출하면 수정할 수 없어요" 확인 → 세션 종료.</span></li>
-          <li><b class="n">5</b><span>가운데: 발언 차례가 없어 네 칸이 같은 크기로 돌아가고, 조작부에는 작성 안내와 [기획안으로 이동]만 있습니다. [발언하기]·[손들기]는 없습니다.</span></li>
+          <li><b class="n">5</b><span>가운데: 발언 차례가 없어 마지막으로 말한 동료가 큰 칸에 그대로 남고, 조작부에는 작성 안내와 [기획안으로 이동]만 있습니다. [발언하기]·[손들기]는 없습니다.</span></li>
           <li><b class="n">6</b><span>단계 안내에 지금까지 정한 키워드·문제 상황·해결책과 결과가 남습니다.</span></li>
         </ol>
       </div>
       <div class="thumbs">
         <figure><button class="zoomable" type="button" aria-label="빈 칸 경고 창 크게 보기"><span class="frame"><img src="media/proposal-03.jpg" alt="빈 칸 경고 창: 비워 둔 칸이 있어요. 그대로 제출할까요? 기대효과, 돌아가서 쓰기와 그대로 제출 버튼" loading="lazy" width="1100" height="688"></span></button><figcaption>빈 칸 경고 창</figcaption></figure>
         <figure><button class="zoomable" type="button" aria-label="실제 LLM 빈 칸 경고 크게 보기"><span class="frame"><img src="media/real-blank-warning.jpg" alt="실제 LLM 세션의 빈 칸 경고 창: 근거, 기대효과, 아이디어 기여가 비어 있음" loading="lazy" width="1100" height="352"></span></button><figcaption><span class="chip warn">실제 LLM</span> 세 칸이 빈 채 제출하려 할 때</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="제출 뒤 잠긴 화면 크게 보기"><span class="frame"><img src="media/proposal-04.jpg" alt="제출 뒤: 상단 '제출했어요. 세션이 끝났습니다'와 나가기 버튼, 기획안 칸이 잠기고 빈 칸은 비어 있음, 제출했어요 표시, 조작부 '토론이 종료됐어요'" loading="lazy" width="1100" height="688"></span></button><figcaption>제출 뒤 잠김 → [나가기]로 디브리핑</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="제출 뒤 잠긴 화면 크게 보기"><span class="frame"><img src="media/proposal-04.jpg" alt="제출 뒤: 상단 '제출했어요. 세션이 끝났습니다.'와 나가기 버튼, 기획안 칸이 잠기고 빈 칸은 비어 있음, 제출했어요 표시, 조작부 '토론이 종료됐어요'" loading="lazy" width="1100" height="688"></span></button><figcaption>제출 뒤 잠김 → [나가기]로 디브리핑</figcaption></figure>
       </div>
       <div class="info">
         <div class="box"><h4>사용자가 하는 일</h4><ul><li>오른쪽 위 기획안의 6칸(키워드 · 문제 상황 · 해결책 · 근거 · 기대효과 · 아이디어 기여)을 씁니다.</li><li>필요하면 자료를 다시 읽거나 AI 어시스턴트에 묻습니다.</li><li>[제출] → 확인. 제출하지 않으면 종료 시각에 자동 제출됩니다.</li></ul></div>
@@ -742,12 +744,13 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       <div class="screen">
         <figure>
           <button class="zoomable" type="button" aria-label="디브리핑 화면 크게 보기">
-            <span class="frame"><img src="media/debrief-01.jpg" alt="디브리핑: 수고하셨습니다, 같은 채용 건의 모든 지원자가 같은 장면을 겪었고 정답 없이 반응을 봅니다, 성향 공개 안내, 평가 결과는 보여 드리지 않습니다, 문의 경로, 종료 설문 2문항과 자유 의견" loading="lazy" width="1100" height="688">
-              <span class="mk" style="left:28.2%;top:20.1%" aria-hidden="true">1</span>
-              <span class="mk" style="left:28.2%;top:24.3%" aria-hidden="true">2</span>
-              <span class="mk" style="left:28.2%;top:28.3%" aria-hidden="true">3</span>
-              <span class="mk" style="left:28.2%;top:33.3%" aria-hidden="true">4</span>
-              <span class="mk" style="left:28.2%;top:44.7%" aria-hidden="true">5</span>
+            <span class="frame"><img src="media/debrief-01.jpg" alt="디브리핑: 위쪽 진행 체크포인트(모두 완료), 수고하셨습니다와 기획안 제출 확인 띠, 같은 채용 건의 모든 지원자가 같은 장면을 겪었고 정답 없이 반응을 봅니다, 성향 공개 안내, 평가 결과는 보여 드리지 않습니다, 문의 경로, 개요 칸 5개(종료 설문 · 이번 세션의 장면 · 보는 요소 · 내 발언 · 함께한 AI 동료), 종료 설문 2문항" loading="lazy" width="1100" height="688">
+              <span class="mk" style="left:23.8%;top:27.2%" aria-hidden="true">1</span>
+              <span class="mk" style="left:23.8%;top:31.8%" aria-hidden="true">2</span>
+              <span class="mk" style="left:23.8%;top:36.3%" aria-hidden="true">3</span>
+              <span class="mk" style="left:23.8%;top:41.9%" aria-hidden="true">4</span>
+              <span class="mk" style="left:23.8%;top:62.5%" aria-hidden="true">5</span>
+              <span class="mk" style="left:23.8%;top:51.3%" aria-hidden="true">6</span>
             </span>
           </button>
           <figcaption>디브리핑 머리와 설문</figcaption>
@@ -758,11 +761,12 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
           <li><b class="n">3</b><span>평가 결과는 보여 주지 않습니다.</span></li>
           <li><b class="n">4</b><span>장면이 불공정했거나 연결이 끊겼으면 알리는 이의 제기·문의 경로.</span></li>
           <li><b class="n">5</b><span>종료 설문 2문항(자연스러웠나 · 공정했나, 1~5)과 자유 의견 한 칸. 건너뛸 수 있고 한 번만 냅니다.</span></li>
+          <li><b class="n">6</b><span>개요 칸: 종료 설문 · 이번 세션의 장면 · 보는 요소 · 내 발언 · 함께한 AI 동료의 개수. 누르면 그 구역으로 갑니다.</span></li>
         </ol>
       </div>
       <div class="thumbs">
-        <figure><button class="zoomable" type="button" aria-label="보는 요소와 내 발언 돌아보기 크게 보기"><span class="frame"><img src="media/debrief-02.jpg" alt="디브리핑: 보는 요소별 '이렇게 봅니다' 한 줄과 내 발언 돌아보기(키워드·문제 상황·해결책 단계별로 받아 적은 발언 하나씩과 회의 속 시각), 함께한 AI 동료" loading="lazy" width="1100" height="688"></span></button><figcaption>보는 요소와 내 발언 돌아보기</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="평가와 기록 안내 크게 보기"><span class="frame"><img src="media/debrief-03.jpg" alt="디브리핑: 설문 제출 확인, 평가와 기록(결과를 보여 주지 않는 이유, 기업이 보는 것, 90일 보관, 기획안 7일 열람)" loading="lazy" width="1100" height="688"></span></button><figcaption>평가와 기록 안내</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="보는 요소와 내 발언 돌아보기 크게 보기"><span class="frame"><img src="media/debrief-02.jpg" alt="디브리핑: 보는 요소별 설명 한 줄, 내 발언 돌아보기(펼침, 단계와 회의 속 시각이 붙은 받아 적은 발언), 함께한 AI 동료" loading="lazy" width="1100" height="688"></span></button><figcaption>보는 요소와 내 발언 돌아보기</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="평가와 기록 안내 크게 보기"><span class="frame"><img src="media/debrief-03.jpg" alt="디브리핑: 설문 제출 확인(설문에 답해 주셔서 고마워요), 평가와 기록(결과를 보여 주지 않는 이유, 기업이 보는 것, 90일 보관, 기획안 7일 열람), 이번 세션의 장면" loading="lazy" width="1100" height="688"></span></button><figcaption>평가와 기록 안내</figcaption></figure>
       </div>
       <div class="info">
         <div class="box"><h4>사용자가 하는 일</h4><ul><li>장면 설명과 동료 소개를 읽습니다.</li><li>내 발언을 돌아보고 설문을 냅니다.</li><li>제출한 기획안을 다시 봅니다(종료 후 7일).</li></ul></div>
@@ -783,14 +787,16 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
       <div class="screen">
         <figure>
           <button class="zoomable" type="button" aria-label="리포트 화면 크게 보기">
-            <span class="frame"><img src="media/admin-report-01.jpg" alt="관리자 리포트 머리: 검토 대기 배지와 삭제 예정일, 인쇄, 전체 기록 보기, 참고 자료 고정 문구, 설계된 장면 안내, 참여자 하늘과 동료 유형, 요소 요약표(수준, 서술, 기록 없음 세부 행동 수, 근거 약함)" loading="lazy" width="1100" height="688">
-              <span class="mk" style="left:23.2%;top:16.3%" aria-hidden="true">1</span>
-              <span class="mk" style="left:71.5%;top:10.8%" aria-hidden="true">2</span>
-              <span class="mk" style="left:23.2%;top:28.7%" aria-hidden="true">3</span>
-              <span class="mk" style="left:23.2%;top:35.1%" aria-hidden="true">4</span>
-              <span class="mk" style="left:23.2%;top:48.2%" aria-hidden="true">5</span>
-              <span class="mk r" style="left:29.9%;top:61.2%" aria-hidden="true">6</span>
-              <span class="mk" style="left:69.7%;top:61.2%" aria-hidden="true">7</span>
+            <span class="frame"><img src="media/admin-report-01.jpg" alt="관리자 리포트 개요: 왼쪽 목차(개요 · 토론 흐름 · 요소별 판단 · 참고 기록 · 검토), 검토 대기 배지와 삭제 예정일, 인쇄, 전체 기록 보기, 하늘 리포트와 참여자·동료 유형, 검토 단계(근거 읽기 · 조정(선택) · 검토 제출 · 확정), 참고 자료 고정 문구, 설계된 장면 안내, 용어 설명, 요소 요약의 개수 칸 4개(수준을 매긴 세부 행동 · 근거로 쓴 기록 · 근거 약함 · 발동한 카드 장면)와 요약표 시작" loading="lazy" width="1100" height="688">
+              <span class="mk" style="left:31.6%;top:18.6%" aria-hidden="true">1</span>
+              <span class="mk" style="left:76.5%;top:10.3%" aria-hidden="true">2</span>
+              <span class="mk" style="left:30.0%;top:51.6%" aria-hidden="true">3</span>
+              <span class="mk" style="left:30.0%;top:57.6%" aria-hidden="true">4</span>
+              <span class="mk" style="left:31.6%;top:33.3%" aria-hidden="true">5</span>
+              <span class="mk" style="left:30.0%;top:74.1%" aria-hidden="true">6</span>
+              <span class="mk" style="left:58.2%;top:81.4%" aria-hidden="true">7</span>
+              <span class="mk b" style="left:15.2%;top:19.0%" aria-hidden="true">8</span>
+              <span class="mk" style="left:40.9%;top:40.8%" aria-hidden="true">9</span>
             </span>
           </button>
           <figcaption>리포트 머리와 요소 요약(시드 세션, 고정 출력)</figcaption>
@@ -801,19 +807,21 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
           <li><b class="n">3</b><span>고정 문구: 담당자가 평가할 때 보는 참고 자료이고, 수준은 AI 평가 에이전트의 판단이며 담당자가 세부 행동 단위로 조정해 최종 평가합니다.</span></li>
           <li><b class="n">4</b><span>"설계된 장면": 반대·압박·머뭇거림은 모든 지원자에게 같게 설계된 장면입니다.</span></li>
           <li><b class="n">5</b><span>참여자와 동료 유형. 유형은 관리자 리포트와 디브리핑에서만 보입니다.</span></li>
-          <li><b class="n">6</b><span>요약표: 요소마다 "수준 N (1~5)"(차원 평균 반올림) 또는 기록 없음과 사유. 합계 행은 없습니다.</span></li>
-          <li><b class="n">7</b><span>기록 없음 세부 행동 수와 근거 약함(확신도 low 세부 행동 수).</span></li>
+          <li><b class="n">6</b><span>요소 요약: 개수 칸 4개(수준을 매긴 세부 행동 · 근거로 쓴 서로 다른 기록 · 근거 약함 · 발동한 카드 장면) 아래 요약표. 요소마다 "수준 N (1~5)"(차원 평균 반올림) 또는 기록 없음과 사유. 합계 행은 없습니다.</span></li>
+          <li><b class="n">7</b><span>근거 약함 칸: 확신도 low 세부 행동 수("원문 확인 권장"). 요약표 오른쪽 열에는 요소별 기록 없음 세부 행동 수와 근거 약함이 붙습니다.</span></li>
+          <li><b class="n">8</b><span>왼쪽 목차: 스크롤 위치를 따라 지금 구역을 표시하고, 누르면 그 구역으로 갑니다.</span></li>
+          <li><b class="n">9</b><span>검토 단계: 근거 읽기 → 조정(선택) → 검토 제출 → 확정 중 지금 위치.</span></li>
         </ol>
       </div>
       <div class="thumbs">
         <figure><button class="zoomable" type="button" aria-label="세부 행동 조정 화면 크게 보기"><span class="frame"><img src="media/admin-report-02.jpg" alt="세부 행동 펼침: 경청/존중 응답성의 판단 이유와 관련 카드 장면(설계된 장면, 장면 없음), 담당자 조정 패널(수준 1~5 · 기록 없음 선택, 메모 필수)" loading="lazy" width="1100" height="688"></span></button><figcaption>세부 행동 조정: 수준과 메모(필수)</figcaption></figure>
         <figure><button class="zoomable" type="button" aria-label="요소 수준 재계산 화면 크게 보기"><span class="frame"><img src="media/admin-report-04.jpg" alt="조정 저장 뒤: 경청/존중 '수준 5 (1~5) 담당자 조정됨', 응답성의 AI 판단(장면 없음)과 담당자 조정(수준 5와 메모) 나란히, 조정 고치기·조정 되돌리기" loading="lazy" width="1100" height="688"></span></button><figcaption>조정한 세부 행동으로 요소 수준 재계산</figcaption></figure>
-        <figure><button class="zoomable" type="button" aria-label="검토 완료 화면 크게 보기"><span class="frame"><img src="media/admin-report-03.jpg" alt="검토 완료 뒤: 제출 기획안 원문, AI 활용 '사용하지 않음', 검토 완료 시각과 검토자 박담당, 메모 추가만 가능" loading="lazy" width="1100" height="688"></span></button><figcaption>검토 완료 뒤에는 메모 추가만</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="검토 완료 화면 크게 보기"><span class="frame"><img src="media/admin-report-03.jpg" alt="검토 완료 뒤: 참고 기록(사실 지표 · 제출 기획안 · AI 활용 탭 중 사실 지표), 검토 완료 시각과 검토자 박담당, 메모 추가만 가능" loading="lazy" width="1100" height="688"></span></button><figcaption>검토 완료 뒤에는 메모 추가만</figcaption></figure>
       </div>
       <div class="info">
-        <div class="box"><h4>사용자가 하는 일</h4><ul><li>지원자 목록에서 상태와 요소별 수준 칩을 봅니다.</li><li>리포트에서 세부 행동(차원)을 펼쳐 근거 원문과 앞 5·뒤 3 맥락을 확인합니다.</li><li>필요한 세부 행동만 [조정](수준 또는 기록 없음 + 메모 필수).</li><li>검토자 이름을 적고 [검토 완료] → 확정 중 → 검토 완료.</li></ul></div>
+        <div class="box"><h4>사용자가 하는 일</h4><ul><li>지원자 목록에서 상태와 요소별 수준 칩을 봅니다.</li><li>리포트에서 세부 행동(차원)을 펼쳐 근거 원문과 앞 5·뒤 3 맥락을 확인합니다. 근거는 처음 2개가 보이고 [더 보기]로 나머지를 펼칩니다.</li><li>필요한 세부 행동만 [조정](수준 또는 기록 없음 + 메모 필수).</li><li>검토자 이름을 적고 [검토 완료] → 확정 중 → 검토 완료.</li></ul></div>
         <div class="box"><h4>규칙</h4><ul>
-          <li>리포트 순서: 요약표 → 토론 흐름(칸 결과·지지 현황·카드·끊김) → 요소 섹션(차원 접힘) → 사실 지표 → 제출 기획안 → AI 활용. 화면에서는 차원을 "세부 행동"이라고 부릅니다.</li>
+          <li>리포트 순서: 개요(검토 단계 · 개수 칸 4개 · 요약표) → 토론 흐름(칸 확정·카드 장면·접속 끊김을 시간 위치에 놓은 흐름 띠, 단계별 칸 결과·지지 현황, 카드 장면 목록) → 요소별 판단(세부 행동 접힘, 근거는 처음 2개와 [더 보기]) → 참고 기록(사실 지표 · 제출 기획안 · AI 활용 탭) → 검토. 왼쪽 목차가 지금 구역을 따라가고, 인쇄할 때는 접힌 근거를 펼치고 참고 기록 세 탭을 모두 보입니다. 화면에서는 차원을 "세부 행동"이라고 부릅니다.</li>
           <li>평가 근거는 받아 적은 지원자 발언이고 척도·앵커·평가 모델은 음성 여부와 상관없이 같습니다. 음색·억양·발음·말의 속도와 마이크·장치 오류는 평가하지 않습니다.</li>
           <li>차원마다 수준, 근거, 판단 이유, 확신도. 확신도 low면 "근거 약함, 원문 확인 권장".</li>
           <li>기록 없음 사유는 5종이고 화면 문구는 「지원자 활동 없음」「판단 보류 · 근거 부족 — 원문 기록 확인 권장」「해당 없음」「이벤트 미발생」「자동 제출로 기여 칸 미작성」입니다. 판단 보류는 평가 에이전트가 형식·근거 검증을 두 번 통과하지 못한 차원입니다.</li>
@@ -880,7 +888,7 @@ footer { font-size: var(--step--1); color: var(--muted); border-top: 1px solid v
           <li>[리포트 다시 생성]: 초안 전 실패면 같은 기록으로 다시 만들고 저장된 차원 판단을 재사용합니다. 판단 보류 차원이 있으면 새 회차로 다시 평가합니다.</li>
           <li>확정 단계 실패면 조정은 그대로 두고 확정만 다시 합니다("조정은 저장되어 있습니다. 확정만 다시 시도합니다.").</li>
         </ul>
-        <figure><button class="zoomable" type="button" aria-label="리포트 생성 실패 화면 크게 보기"><span class="frame"><img src="media/admin-report-failed.jpg" alt="리포트 화면의 생성 실패 안내: 리포트를 만들지 못했어요, 다시 만들기 버튼, 전체 기록 보기" loading="lazy" width="1100" height="223"></span></button><figcaption><span class="chip warn">예시 데이터(mock)</span> 리포트 생성 실패 화면</figcaption></figure>
+        <figure><button class="zoomable" type="button" aria-label="리포트 생성 실패 화면 크게 보기"><span class="frame"><img src="media/admin-report-failed.jpg" alt="리포트 화면의 생성 실패 안내: 리포트를 만들지 못했어요, 다시 만들기를 누르면 새로 만들기 시작하고 준비되면 바로 나타난다는 안내, 다시 만들기 버튼, 전체 기록 보기" loading="lazy" width="1100" height="250"></span></button><figcaption><span class="chip warn">예시 데이터(mock)</span> 리포트 생성 실패 화면</figcaption></figure>
         <p class="small muted">F-36 생성 실패 처리 <span class="chip pass">구현</span></p>
       </div>
     </div>
@@ -1079,7 +1087,7 @@ make e2e SUITE=stages PROFILE=test-text            # 단계별 화면(음성은 
 
   <footer>
     <span>이 페이지는 공유용 요약이고 정본이 아닙니다. 규칙이 다르게 보이면 <a href="../../../PRD.md">PRD.md</a>와 <a href="../../README.md">docs/README.md</a> 색인의 정본 문서가 맞습니다.</span>
-    <span>화면 출처: 격리 스택 <code>test-voice</code> 프로필(가짜 LLM · FakeSpeech, Playwright 가짜 마이크, 15분 시연 세션)에서 1440×900으로 찍은 캡처, mock 모드 관리자 화면 두 장, 실제 LLM 세션 캡처 한 장. 이미지는 폭 1100px JPEG로 줄였습니다.</span>
+    <span>화면 출처: 격리 스택 <code>test-voice</code> 프로필(가짜 LLM · FakeSpeech, Playwright 가짜 마이크, 15분 시연 세션)에서 1440×900·2배 해상도로 찍은 캡처, mock 모드 관리자 화면 두 장, 실제 LLM 세션 캡처 한 장(2026-10-26). 이미지는 폭 1100px JPEG로 줄였습니다.</span>
   </footer>
 </div>
 
