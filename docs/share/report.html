@@ -479,18 +479,18 @@
   <p class="lede">회의, 결정, 기획안 작성이 한 화면에서 이어진다.</p>
   <p class="bal">가운데에 지원자와 AI 동료 3명의 프로필과 발언 조작, 오른쪽 위에 결정 사항(기획안 단계는 기획안), 오른쪽 아래에 자료 · AI 어시스턴트, 왼쪽에 메모장, 상단에 단계 진행바와 남은 시간을 둡니다.</p>
   <figure>
-    <img src="report-assets/real-voice.png" alt="음성 회의 화면, 지원자 녹음 중" style="width:90%;margin:auto">
-    <figcaption><b>그림 7-1</b>음성 회의 화면, 지원자가 녹음하는 중. 4명 프로필, 남은 발언 시간, [발언 완료], 결정 사항 패널 <span class="nw">(test-voice 화면 테스트, 가짜 LLM · FakeSpeech)</span>. 발표자 보기 적용 전 2×2 배치 캡처입니다.</figcaption>
+    <img src="report-assets/real-voice.png" alt="음성 회의 화면, 지원자 발언 중" style="width:90%;margin:auto">
+    <figcaption><b>그림 7-1</b>음성 회의 화면, 지원자가 발언하는 중. 큰 칸의 내 칸과 "발언 중" 배지, 아래 줄 동료 3명, 발언 시간과 음량, [발언 완료], 결정 사항 · 자료 패널 <span class="nw">(2026-10-26 test-voice 화면 테스트, 가짜 LLM · FakeSpeech)</span></figcaption>
   </figure>
-  <div class="note"><div class="t">현재 화면(발표자 보기)</div><p class="bal">실제 발언이 시작된 사람을 큰 칸으로, 나머지 셋을 작은 칸으로 보여 줍니다. 동료가 말하는 동안 재생 중인 문장이 실시간 자막으로 보이고, 재생이 끝나면 방금 한 말 한 문장만 남습니다. 발언 기록 목록은 없습니다. 지원자는 자기 발언을 글로 보거나 고치지 않습니다. 조작부 첫 줄은 "강한결님이 말하는 중", "● 녹음 중 0:12 / 1:00"처럼 지금 상태를 말하고, 진행을 막는 오류는 짧은 제목과 버튼 하나로 보입니다.</p></div>
+  <div class="note"><div class="t">현재 화면(발표자 보기)</div><p class="bal">실제 발언이 시작된 사람을 큰 칸으로, 나머지 셋을 작은 칸으로 보여 줍니다. 동료가 말하는 동안 재생 중인 문장이 실시간 자막으로 보이고, 재생이 끝나면 방금 한 말 한 문장만 남습니다. 발언 기록 목록은 없습니다. 지원자는 자기 발언을 글로 보거나 고치지 않습니다. 칸마다 지금 상태가 배지(발언 중 · 내 차례 · 준비 중 · 손 듦)로 붙고, 조작부 첫 줄은 "강한결님이 발언 중", "● 발언 중 0:12 / 1:00"처럼 지금 상태를 말하며, 진행을 막는 오류는 짧은 제목과 버튼 하나로 보입니다. 단계가 바뀌면 정한 키워드의 무드 색으로 전환 장면이 잠깐 지나갑니다.</p></div>
   <div class="grid2">
     <figure style="margin:0">
       <img src="report-assets/real-decisions.png" alt="결정 사항 패널">
-      <figcaption><b>그림 7-2</b>결정 사항 패널. 칸마다 결과(지원자 결정 · 시간 초과)와 정한 사람, 현재 항목의 <span class="nw">[이걸로 정하기]</span> <span class="nw">(10-22 텍스트 모드 캡처)</span></figcaption>
+      <figcaption><b>그림 7-2</b>오른쪽 위 결정 사항 패널. 칸마다 결과(지원자 결정 · 시간 초과)와 정한 사람, 현재 항목의 <span class="nw">[이걸로 정하기]</span> <span class="nw">(2026-10-26 test-voice 화면 테스트)</span></figcaption>
     </figure>
     <figure style="margin:0">
       <img src="report-assets/real-proposal.png" alt="기획안 탭">
-      <figcaption><b>그림 7-3</b>기획안. 앞 세 칸 자동 채움, 6칸 폼, 자동 저장 시각, 제출 <span class="nw">(10-22 텍스트 모드 캡처)</span></figcaption>
+      <figcaption><b>그림 7-3</b>기획안. 앞 세 칸 자동 채움, 6칸 폼, 자동 저장 시각, 제출 <span class="nw">(2026-10-26 test-voice 화면 테스트)</span></figcaption>
     </figure>
   </div>
   <div class="foot"><span>Day Zero 최종 보고서</span><span>14</span></div>
@@ -502,15 +502,15 @@
   <p class="lede">자료는 키워드를 정한 뒤에 열리고, 어시스턴트는 열린 자료만 인용해 답한다.</p>
   <figure>
     <img src="report-assets/real-materials.png" alt="자료 탭" style="width:70%;margin:auto">
-    <figcaption><b>그림 7-4</b>자료 탭. 확정한 키워드 "물"의 자료 4건이 열립니다 <span class="nw">(10-22 실 스택 캡처, 가짜 LLM 응답)</span></figcaption>
+    <figcaption><b>그림 7-4</b>자료 탭. 확정한 키워드 "물"의 자료 4건이 열립니다 <span class="nw">(2026-10-26 test-voice 화면 테스트, 가짜 LLM)</span></figcaption>
   </figure>
   <figure style="margin-top:4mm">
     <img src="report-assets/real-assistant.png" alt="AI 어시스턴트 탭" style="width:84%;margin:auto">
-    <figcaption><b>그림 7-5</b>AI 어시스턴트. 자료에 대한 요청에 인용(자료 이름)과 함께 답합니다. 토론 동료는 이 대화를 보지 않습니다 <span class="nw">(10-22 실 스택 캡처, 실제 LLM)</span></figcaption>
+    <figcaption><b>그림 7-5</b>AI 어시스턴트. 자료에 대한 요청에 인용(자료 이름)과 함께 답합니다. 토론 동료는 이 대화를 보지 않습니다 <span class="nw">(2026-10-26 test-voice 화면 테스트, 가짜 LLM 응답)</span></figcaption>
   </figure>
   <figure style="margin-top:4mm">
     <img src="report-assets/real-blank-warning.png" alt="빈 칸 제출 경고 창" style="width:62%;margin:auto">
-    <figcaption><b>그림 7-6</b>빈 칸 제출 경고. 비운 칸 이름과 함께 [돌아가서 쓰기] · [그대로 제출]을 묻습니다 <span class="nw">(10-22 playtest 캡처, 실제 LLM)</span></figcaption>
+    <figcaption><b>그림 7-6</b>빈 칸 제출 경고. 비운 칸 이름과 함께 [돌아가서 쓰기] · [그대로 제출]을 묻습니다 <span class="nw">(2026-10-26 실제 LLM 세션 캡처)</span></figcaption>
   </figure>
   <div class="foot"><span>Day Zero 최종 보고서</span><span>15</span></div>
 </section>
@@ -522,22 +522,22 @@
   <div class="grid2">
     <figure style="margin:0">
       <img src="report-assets/real-debrief.png" alt="디브리핑 화면">
-      <figcaption><b>그림 7-7</b>디브리핑. 같은 장면을 겪었다는 안내와 종료 설문 <span class="nw">(10-22 실 스택 캡처)</span></figcaption>
+      <figcaption><b>그림 7-7</b>디브리핑. 같은 장면을 겪었다는 안내, 구역 개요 칸과 종료 설문 <span class="nw">(2026-10-26 test-voice 화면 테스트)</span></figcaption>
     </figure>
     <figure style="margin:0">
       <img src="report-assets/real-admin.png" alt="관리자 리포트 화면">
-      <figcaption><b>그림 7-8</b>관리자 리포트. 근거 원문과 "기록에서 보기", AI 판단과 담당자 조정 <span class="nw">(10-22 실 스택 캡처)</span></figcaption>
+      <figcaption><b>그림 7-8</b>관리자 리포트. 왼쪽 목차, 세부 행동의 판단 이유와 관련 카드 장면, 근거 원문과 "앞뒤 맥락 보기 · 기록에서 보기" <span class="nw">(2026-10-23 가상 지원자 실제 LLM 세션)</span></figcaption>
     </figure>
   </div>
 
   <h3><span class="n">표 7-1</span>화면별 주요 기능</h3>
   <table>
     <tr><th style="width:22%">화면</th><th>주요 기능</th></tr>
-    <tr><td><b>음성 회의</b></td><td>발표자 보기(말하는 사람 큰 칸), 실시간 자막과 방금 한 말, [발언하기] · 손들기 · [발언 완료], 녹음 시간 · 음량, 내 차례 남은 시간 막대, 오류는 제목과 버튼 하나, 왼쪽 메모장(이 브라우저에만 저장)</td></tr>
+    <tr><td><b>음성 회의</b></td><td>발표자 보기(말하는 사람 큰 칸)와 칸별 상태 배지, 실시간 자막과 방금 한 말, 키워드 무드 색과 단계 전환 장면, [발언하기] · 손들기 · [발언 완료], 녹음 시간 · 음량, 내 차례 남은 시간 막대, 오류는 제목과 버튼 하나, 왼쪽 메모장(이 브라우저에만 저장)</td></tr>
     <tr><td><b>결정 사항 패널</b></td><td>정한 결과 줄과 결과 표시(합의 · 지원자 결정 · 시간 초과), 정한 사람. 현재 항목에만 입력, 키워드는 후보 버튼, 정하기는 확인 창 하나</td></tr>
     <tr><td><b>기획안</b></td><td>키워드 · 문제 상황 · 해결책 · 근거 · 기대효과 · 아이디어 기여 6칸, 자동 저장 시각 표시, 빈 칸 경고 창, 제출 확인 창</td></tr>
-    <tr><td><b>디브리핑</b></td><td>"같은 채용 건의 모든 지원자가 같은 장면을 겪었다"로 시작, 이번 세션의 장면, 보는 요소, 내 발언 돌아보기, 이의 제기 경로, 종료 설문. 척도 세부와 수준은 공개하지 않음</td></tr>
-    <tr><td><b>관리자 리포트</b></td><td>요소 수준 요약(총점 없음), 차원별 확신도와 기록 상태 표식, 근거 앞뒤 맥락과 "기록에서 보기", 빈 칸 · 경고 확인, 음성 사용량 · 장애 사실, 차원 단위 조정(메모 필수), 인쇄. 제출 글이 곧 받아 적은 글이라 별도 인식 원문은 없음</td></tr>
+    <tr><td><b>디브리핑</b></td><td>"같은 채용 건의 모든 지원자가 같은 장면을 겪었다"로 시작, 구역 개요 칸, 이번 세션의 장면, 보는 요소, 내 발언 돌아보기, 이의 제기 경로, 종료 설문. 척도 세부와 수준은 공개하지 않음</td></tr>
+    <tr><td><b>관리자 리포트</b></td><td>왼쪽 목차, 개요의 개수 칸 4개와 요소 수준 요약(총점 없음), 세션 흐름 띠, 차원별 확신도와 기록 상태 표식, 근거 처음 2개와 더 보기 · 앞뒤 맥락 · "기록에서 보기", 참고 기록 탭(사실 지표 · 제출 기획안 · AI 활용), 빈 칸 · 경고 확인, 음성 사용량 · 장애 사실, 차원 단위 조정(메모 필수), 인쇄. 제출 글이 곧 받아 적은 글이라 별도 인식 원문은 없음</td></tr>
   </table>
   <div class="foot"><span>Day Zero 최종 보고서</span><span>16</span></div>
 </section>
