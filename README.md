@@ -1,5 +1,10 @@
 # Day Zero
 
+AI 동료 3명과 음성으로 토론하는 모습에서 협업 태도를 보는 채용 평가 서비스 MVP
+*A hiring assessment MVP: candidates debate with three AI teammates by voice, and recruiters review evidence-based reports.*
+
+SK AX SKALA 팀 프로젝트(6명) · 2026.10 · [결과 보고서](docs/share/report.pdf) · [제품 가이드](docs/share/product-guide/index.html)
+
 Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론하는 과정에서 드러나는 행동으로 인성(토론 태도)을 보고, 기업의 인사담당자가 그 행동 근거로 면접·채용 판단을 하도록 돕는 채용 서비스의 MVP다.
 
 지원자는 초대 링크로 들어와 안내에 동의한 뒤, AI 동료 3명(고집형·소극형·비판형)과 한 토론방에서 키워드 → 문제 상황 → 해결책을 차례로 합의하고 마지막에 기획안을 써서 제출한다. 세션은 60분(데모 15분)이고, 단계마다 남은 시간이 보이며, 키워드가 정해지면 그 키워드의 참고 자료와 AI 어시스턴트를 쓸 수 있다.
@@ -19,12 +24,7 @@ Day Zero는 지원자가 AI 동료 3명과 턴 기반 음성으로 토론하는 
 | postgres | PostgreSQL 16 + pgvector | [docs/architecture/data-model.md](docs/architecture/data-model.md) |
 | rabbitmq | 리포트 생성 큐(재시도·DLQ) | [docs/contracts/queue.md](docs/contracts/queue.md) |
 
-```
-web ──REST·WS──▶ api ◀──내부 API(8001)── debate-mcp · rag-mcp · assessment-mcp · report-worker
-                  │                                                         ▲
-                  ├──▶ postgres                                             │
-                  └──▶ rabbitmq ──── report.generate ───────────────────────┘
-```
+![Day Zero 시스템 구성](docs/share/architecture-assets/system-overview.svg)
 
 전체 구조와 원칙은 [docs/architecture/overview.md](docs/architecture/overview.md).
 
@@ -71,27 +71,6 @@ make stage STAGE=keyword MIN=15    # 단계 시드 세션의 초대 링크 출�
 | 에이전트·하네스 | [docs/architecture/agents.md](docs/architecture/agents.md), [docs/architecture/harness.md](docs/architecture/harness.md) |
 | 결정과 이유 | [docs/decisions.md](docs/decisions.md) |
 
-## 테스트
-
-| 명령 | 무엇을 보나 | 선행 조건 |
-|---|---|---|
-| `make test` | 계약 픽스처·프로필 해석기·카탈로그·서비스 5개 pytest·web vitest(LLM mock)와 e2e 러너·eval 픽스처 형태(가짜 api). `SUITE=unit\|tools`로 나눠 돌린다 | `uv`·`pnpm install`. api DB 테스트는 postgres가 없으면 skip |
-| `make lint` | ruff, web eslint·prettier | 없음 |
-| `make docs-check` | README 생성 블록과 features.md 테스트 참조가 코드와 같은지 | 없음 |
-| `make e2e SUITE=stages PROFILE=test-text` | 단계별 화면(Playwright) | 격리 스택(`make up PROFILE=test-text`·`make seed PROFILE=test-text`) |
-| `make e2e` | 실 스택 15분 세션 전체·리포트·검토 | 스택 기동·시드 |
-| `make eval PROFILE=eval-text SUITE=api\|fixtures ALLOW_API=1` | 실제 LLM 호출(의도 분류·평가 BARS·유출 질문·페르소나 품질) | 제한 API 키, `ALLOW_API=1` |
-
-범위와 단언 목록은 [docs/guides/testing.md](docs/guides/testing.md).
-
 ## 기여
 
 브랜치·PR·병합 전 필수 검사·계약·DB 변경 규칙은 [docs/guides/contributing.md](docs/guides/contributing.md). 코딩 에이전트는 [AGENTS.md](AGENTS.md)를 따른다.
-
-## 현재 상태
-
-PRD의 지원자 흐름(입장·동의·토론 4단계·참고 자료·어시스턴트·기획안 제출·디브리핑)과 담당자 흐름(가입·채용 건·초대·지원자 목록·리포트·전체 기록·조정·검토 완료)이 MVP 범위에서 구현되어 있다. 참고 자료 관리와 면접 확인 질문 제안은 MVP 이후다.
-
-최근 실측(`eval-text` 프로필·gpt-4o-mini·1회): 의도 분류 20문장 0.80(목표 0.85), 페르소나 응답률 0.938·이름 부름 응답 1.0, 어시스턴트 근거 12/12. 기록은 [tests/e2e/records/eval-live-20261025-1311.md](tests/e2e/records/eval-live-20261025-1311.md)·[eval-live-persona-20261025-131120-run.md](tests/e2e/records/eval-live-persona-20261025-131120-run.md), 기준선 비교는 [baseline-pre-voice-20261025.md](tests/e2e/records/baseline-pre-voice-20261025.md)와 [docs/architecture/harness.md](docs/architecture/harness.md) "실측 기준선". 알려진 제한은 [docs/features.md](docs/features.md) "MVP 이후·알려진 제한".
-
-결과 보고서(공유용, 정본 아님)는 [docs/share/report.html](docs/share/report.html)·[report.pdf](docs/share/report.pdf), 시각 보고서(공유용)는 [docs/share/visual-report/index.html](docs/share/visual-report/index.html).
